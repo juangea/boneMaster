@@ -20,7 +20,7 @@
 CCL_NAMESPACE_BEGIN
 
 /* TODO(sergey): In theory CUDA might work with own static assert
- * implementation since it's just pure C++.
+ * implementation since it's just pure C++. 
  */
 #  ifdef __KERNEL_GPU__
 #    ifndef static_assert
