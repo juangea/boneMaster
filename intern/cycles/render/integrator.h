@@ -85,6 +85,9 @@ class Integrator : public Node {
   Method method;
 
   SamplingPattern sampling_pattern;
+  float scrambling_distance;
+
+  bool use_dithered_sampling;
 
   bool need_update;
 

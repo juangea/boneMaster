@@ -231,7 +231,7 @@ class CYCLES_RENDER_PT_sampling_advanced(CyclesButtonsPanel, Panel):
         row.prop(cscene, "use_animated_seed", text="", icon='TIME')
 
         layout.prop(cscene, "sampling_pattern", text="Pattern")
-
+        layout.prop(cscene, "scrambling_distance")
         layout.prop(cscene, "use_square_samples")
 
         layout.separator()
@@ -623,7 +623,7 @@ class CYCLES_RENDER_PT_performance_tiles(CyclesButtonsPanel, Panel):
         sub.prop(rd, "tile_x", text="Tiles X")
         sub.prop(rd, "tile_y", text="Y")
         col.prop(cscene, "tile_order", text="Order")
-
+        col.prop(cscene, "use_auto_tiles", text="Auto tiles")
         sub = col.column()
         sub.active = not rd.use_save_buffers
         for view_layer in scene.view_layers:

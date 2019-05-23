@@ -265,9 +265,26 @@ void BlenderSync::sync_integrator()
     }
   }
 
-  integrator->sampling_pattern = (SamplingPattern)get_enum(
-      cscene, "sampling_pattern", SAMPLING_NUM_PATTERNS, SAMPLING_PATTERN_SOBOL);
+/*  integrator->sampling_pattern = (SamplingPattern)get_enum(*/
+/*      cscene, "sampling_pattern", SAMPLING_NUM_PATTERNS, SAMPLING_PATTERN_SOBOL);*/
+    int sampling_pattern = get_enum(cscene, "sampling_pattern");
+    switch(sampling_pattern) {
+        case 1: /* Dithered Sobol */
+            integrator->sampling_pattern = SAMPLING_PATTERN_SOBOL;
+            integrator->use_dithered_sampling = true;
+            break;
+        case 2: /* Correlated Multi-Jittered */
+            integrator->sampling_pattern = SAMPLING_PATTERN_CMJ;
+            integrator->use_dithered_sampling = false;
+            break;
+        case 0: /* Sobol */
+        default:
+            integrator->sampling_pattern = SAMPLING_PATTERN_SOBOL;
+            integrator->use_dithered_sampling = false;
+            break;
+    }
 
+  integrator->scrambling_distance = get_float(cscene, "scrambling_distance");
   integrator->sample_clamp_direct = get_float(cscene, "sample_clamp_direct");
   integrator->sample_clamp_indirect = get_float(cscene, "sample_clamp_indirect");
   if (!preview) {
@@ -786,10 +803,40 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine &b_engine,
     int tile_x = b_engine.tile_x();
     int tile_y = b_engine.tile_y();
 
+    if(get_boolean(cscene, "use_auto_tiles"))
+    {
+        if (!is_cpu)
+        {
+            if (samples > 60)
+            {
+                tile_x = 64;
+                tile_y = 64;
+            }
+            else if (samples > 250) {
+                tile_x = 32;
+                tile_y = 32;
+            }
+            else if (samples > 1000) {
+				tile_x = 16;
+				tile_y = 16;
+            }
+            else
+            {
+                tile_x = 128;
+                tile_y = 128;
+            }
+        }
+        else {
+			tile_x = 16;
+			tile_y = 16;
+        }
+    }
+
     params.tile_size = make_int2(tile_x, tile_y);
+
   }
 
-  if ((BlenderSession::headless == false) && background) {
+  if ((BlenderSession::headless == false) && background && !(get_boolean(cscene, "use_auto_tiles"))) {
     params.tile_order = (TileOrder)get_enum(cscene, "tile_order");
   }
   else {
