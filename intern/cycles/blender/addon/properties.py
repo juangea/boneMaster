@@ -109,6 +109,7 @@ enum_use_layer_samples = (
 
 enum_sampling_pattern = (
     ('SOBOL', "Sobol", "Use Sobol random sampling pattern"),
+    ('DITHERED_SOBOL', "Dithered Sobol", "Use dithered Sobol random sampling pattern"),
     ('CORRELATED_MUTI_JITTER', "Correlated Multi-Jitter", "Use Correlated Multi-Jitter random sampling pattern"),
 )
 
@@ -263,6 +264,14 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         description="Random sampling pattern used by the integrator",
         items=enum_sampling_pattern,
         default='SOBOL',
+    )
+
+    scrambling_distance: FloatProperty(
+        name="Scrambling distance",
+        description="The amount of pixel-dependent scrambling applied to the Sobol sequence,"
+        "lower values might speed up rendering but can cause visible artifacts",
+        min=0.0, max=1.0,
+        default=1.0,
     )
 
     use_layer_samples: EnumProperty(
@@ -549,6 +558,11 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         items=enum_tile_order,
         default='HILBERT_SPIRAL',
         options=set(),  # Not animatable!
+    )
+    use_auto_tiles: BoolProperty(
+        name="Auto tiles",
+        description="Will optimize tile size and order",
+        default=False,
     )
     use_progressive_refine: BoolProperty(
         name="Progressive Refine",

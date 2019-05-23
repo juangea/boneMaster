@@ -680,6 +680,7 @@ kernel_volume_integrate(KernelGlobals *kg,
                         ccl_addr_space float3 *throughput,
                         bool heterogeneous)
 {
+  //RNG tmp_rng = path_rng_hash(*rng, state->rng_offset);
   shader_setup_from_volume(kg, sd, ray);
 
   if (heterogeneous)
