@@ -231,9 +231,8 @@ class CYCLES_RENDER_PT_sampling_advanced(CyclesButtonsPanel, Panel):
         row = layout.row(align=True)
         row.prop(cscene, "seed")
         row.prop(cscene, "use_animated_seed", text="", icon='TIME')
-
-        layout.prop(cscene, "sampling_pattern", text="Pattern")
-        layout.prop(cscene, "scrambling_distance")
+        if cscene.sampling_pattern != "PROGRESSIVE_MULTI_JITTER" or cscene.use_adaptive_sampling:
+            layout.prop(cscene, "scrambling_distance")
         col = layout.column(align=True)
         col.active = not(cscene.use_adaptive_sampling)
         col.prop(cscene, "sampling_pattern", text="Pattern")
