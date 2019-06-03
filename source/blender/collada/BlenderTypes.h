@@ -12,38 +12,36 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2016 by Mike Erwin.
- * All rights reserved.
  */
 
 /** \file
- * \ingroup gpu
- *
- * This interface allow GPU to manage VAOs for multiple context and threads.
+ * \ingroup collada
  */
 
-#ifndef __GPU_CONTEXT_H__
-#define __GPU_CONTEXT_H__
+#ifndef __BLENDERTYPES_H__
+#define __BLENDERTYPES_H__
 
-#ifdef __cplusplus
-extern "C" {
+typedef float(Vector)[3];
+typedef float(Quat)[4];
+typedef float(Matrix)[4][4];
+typedef double(DMatrix)[4][4];
+
+typedef enum BC_global_forward_axis {
+  BC_GLOBAL_FORWARD_X = 0,
+  BC_GLOBAL_FORWARD_Y = 1,
+  BC_GLOBAL_FORWARD_Z = 2,
+  BC_GLOBAL_FORWARD_MINUS_X = 3,
+  BC_GLOBAL_FORWARD_MINUS_Y = 4,
+  BC_GLOBAL_FORWARD_MINUS_Z = 5
+} BC_global_forward_axis;
+
+typedef enum BC_global_up_axis {
+  BC_GLOBAL_UP_X = 0,
+  BC_GLOBAL_UP_Y = 1,
+  BC_GLOBAL_UP_Z = 2,
+  BC_GLOBAL_UP_MINUS_X = 3,
+  BC_GLOBAL_UP_MINUS_Y = 4,
+  BC_GLOBAL_UP_MINUS_Z = 5
+} BC_global_up_axis;
+
 #endif
-
-#include "GPU_common.h"
-#include "GPU_batch.h"
-#include "GPU_shader_interface.h"
-
-typedef struct GPUContext GPUContext;
-
-GPUContext *GPU_context_create(GLuint default_framebuffer);
-void GPU_context_discard(GPUContext *);
-
-void GPU_context_active_set(GPUContext *);
-GPUContext *GPU_context_active_get(void);
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif /* __GPU_CONTEXT_H__ */
