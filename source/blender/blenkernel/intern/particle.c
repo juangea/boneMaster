@@ -3599,6 +3599,15 @@ void object_remove_particle_system(Main *bmain, Scene *UNUSED(scene), Object *ob
     }
   }
 
+  if ((md = modifiers_findByType(ob, eModifierType_ParticleMesher))) {
+    ParticleMesherModifierData *pmmd = (ParticleMesherModifierData *)md;
+    if (pmmd->psys) {
+      if (pmmd->psys == psys) {
+        pmmd->psys = NULL;
+      }
+    }
+  }
+
   /* clear modifier */
   psmd = psys_get_modifier(ob, psys);
   BLI_remlink(&ob->modifiers, psmd);

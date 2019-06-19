@@ -257,6 +257,10 @@ void ED_operatortypes_object(void)
   WM_operatortype_append(OBJECT_OT_hide_view_clear);
   WM_operatortype_append(OBJECT_OT_hide_view_set);
   WM_operatortype_append(OBJECT_OT_hide_collection);
+
+  WM_operatortype_append(OBJECT_OT_levelset_filter_add);
+  WM_operatortype_append(OBJECT_OT_levelset_filter_remove);
+  WM_operatortype_append(OBJECT_OT_levelset_filter_move);
 }
 
 void ED_operatormacros_object(void)

@@ -1134,6 +1134,12 @@ void BKE_object_copy_particlesystems(Object *ob_dst, const Object *ob_src, const
           }
         }
       }
+      else if (md->type == eModifierType_ParticleMesher) {
+        ParticleMesherModifierData *pmmd = (ParticleMesherModifierData *)md;
+         if (pmmd->psys == psys) {
+            pmmd->psys = npsys;
+         }
+      }
     }
   }
 }

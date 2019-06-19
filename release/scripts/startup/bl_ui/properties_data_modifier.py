@@ -18,7 +18,7 @@
 
 # <pep8 compliant>
 import bpy
-from bpy.types import Panel
+from bpy.types import Panel, UIList
 from bpy.app.translations import pgettext_iface as iface_
 
 
@@ -27,6 +27,16 @@ class ModifierButtonsPanel:
     bl_region_type = 'WINDOW'
     bl_context = "modifier"
     bl_options = {'HIDE_HEADER'}
+
+
+class DATA_UL_level_set_filters(UIList):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        if self.layout_type in {'DEFAULT', 'COMPACT'}:
+            layout.prop(item, "name", text="", emboss=False, icon_value=icon)
+            layout.prop(item, "mute", text="", emboss=False)
+        elif self.layout_type in {'GRID'}:
+            layout.alignment = 'CENTER'
+            layout.label(text="", icon_value=icon)
 
 
 class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
@@ -1641,6 +1651,91 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         col.prop(md, "thresh", text="Threshold")
         col.prop(md, "face_influence")
 
+    def PARTICLE_MESHER(self, layout, ob, md):
+        if not bpy.app.build_options.openvdb:
+            layout.label("Built without OpenVDB support")
+            return
+
+        if not bpy.app.build_options.mod_partmesher:
+            layout.label("Built without the particle mesher modifier")
+            return
+
+        row = layout.row()
+        row.label(text="Particle System:")
+        row.prop_search(md, "particle_system", ob, "particle_systems", text="")
+        layout.separator()
+
+        split = layout.split()
+        col = split.column()
+        col.prop(md, "voxel_size")
+        col.prop(md, "half_width")
+        col.prop(md, "part_scale_factor")
+        col.prop(md, "min_part_radius")
+        col = split.column()
+        sub = col.row()
+        subsub = sub.column()
+        subsub.active = md.generate_trails
+        subsub.prop(md, "generate_trails")
+        subsub.prop(md, "trail_size")
+        subsub.prop(md, "part_vel_factor")
+        sub = col.row()
+        subsub = sub.column()
+        subsub.active = md.generate_mask
+        subsub.prop(md, "generate_mask")
+        subsub.prop(md, "mask_width")
+        layout.separator()
+
+        row = layout.row()
+        row.label(text="Mesher Options:")
+        row = layout.row()
+        row.prop(md, "adaptivity")
+        row.prop(md, "isovalue")
+        row = layout.row()
+        row.label(text="Mask Object:")
+        row.prop(md, "invert_mask")
+        row = layout.row()
+        row.prop(md, "object", text="")
+        row.prop(md, "mask_offset")
+        row = layout.row()
+        row.prop(md, "ext_band")
+        row.prop(md, "int_band")
+        layout.separator()
+
+        row = layout.row()
+        row.label(text="Level Set Filters:")
+        row = layout.row()
+        row.template_list("DATA_UL_level_set_filters", "levelset_filter_items", md, "filter",
+                          md, "active_levelset_filter_index", rows=3)
+
+        col = row.column()
+        sub = col.row()
+        subsub = sub.column(align=True)
+        subsub.operator("object.levelset_filter_add", icon='ADD', text="")
+        subsub.operator("object.levelset_filter_remove", icon='REMOVE', text="")
+        sub = col.row()
+        subsub = sub.column(align=True)
+        subsub.operator("object.levelset_filter_move",
+                        icon='TRIA_UP', text="").direction = 'UP'
+        subsub.operator("object.levelset_filter_move",
+                        icon='TRIA_DOWN', text="").direction = 'DOWN'
+
+        filter = md.active_levelset_filter
+
+        if filter:
+            split = layout.split()
+            col = split.column()
+            col.label(text="Type:")
+            col.prop(filter, "type", text="")
+            col.label(text="Accuracy:")
+            col.prop(filter, "accuracy", text="")
+            col = split.column()
+            col.label(text="Settings:")
+            col.prop(filter, "iterations")
+            if filter.type in {'MEDIAN', 'MEAN', 'GAUSSIAN'}:
+                col.prop(filter, "width")
+            if filter.type in {'OFFSET'}:
+                col.prop(filter, "offset")
+
 
 class DATA_PT_gpencil_modifiers(ModifierButtonsPanel, Panel):
     bl_label = "Modifiers"
@@ -2221,6 +2316,7 @@ class DATA_PT_gpencil_modifiers(ModifierButtonsPanel, Panel):
 
 
 classes = (
+    DATA_UL_level_set_filters,
     DATA_PT_modifiers,
     DATA_PT_gpencil_modifiers,
 )

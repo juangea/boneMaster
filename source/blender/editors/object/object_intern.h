@@ -169,6 +169,11 @@ void OBJECT_OT_skin_armature_create(struct wmOperatorType *ot);
 void OBJECT_OT_laplaciandeform_bind(struct wmOperatorType *ot);
 void OBJECT_OT_surfacedeform_bind(struct wmOperatorType *ot);
 
+/*particle mesher modifier operators*/
+void OBJECT_OT_levelset_filter_add(struct wmOperatorType *ot);
+void OBJECT_OT_levelset_filter_remove(struct wmOperatorType *ot);
+void OBJECT_OT_levelset_filter_move(struct wmOperatorType *ot);
+
 /* grease pencil modifiers */
 void OBJECT_OT_gpencil_modifier_add(struct wmOperatorType *ot);
 void OBJECT_OT_gpencil_modifier_remove(struct wmOperatorType *ot);

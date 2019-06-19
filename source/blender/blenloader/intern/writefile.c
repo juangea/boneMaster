@@ -1758,6 +1758,13 @@ static void write_modifiers(WriteData *wd, ListBase *modbase)
         }
       }
     }
+    else if (md->type == eModifierType_ParticleMesher) {
+      ParticleMesherModifierData *pmmd = (ParticleMesherModifierData *)md;
+      LevelSetFilter *filter;
+      for (filter = pmmd->filters.first; filter; filter = filter->next) {
+        writestruct(wd, DATA, LevelSetFilter, 1, filter);
+      }
+    }
   }
 }
 

@@ -56,13 +56,20 @@ if(WITH_OPENVDB)
     intern/openvdb_dense_convert.cc
     intern/openvdb_reader.cc
     intern/openvdb_writer.cc
+    intern/openvdb_filter_level_set.cpp
+    intern/openvdb_mesh_convert.cpp
+    intern/openvdb_primitive.cpp
+    #intern/openvdb_render.cpp
+    intern/particle_tools.cpp
     openvdb_capi.cc
     openvdb_util.cc
 
     intern/openvdb_dense_convert.h
     intern/openvdb_reader.h
     intern/openvdb_writer.h
-    openvdb_util.h
+    intern/particle_tools.h
+    openvdb_util.h 
+    openvdb_intern.h
   )
 
   if(WITH_OPENVDB_BLOSC)

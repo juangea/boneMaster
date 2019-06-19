@@ -88,6 +88,7 @@ typedef enum ModifierType {
   eModifierType_MeshSequenceCache = 52,
   eModifierType_SurfaceDeform = 53,
   eModifierType_WeightedNormal = 54,
+  eModifierType_ParticleMesher = 55,
   NUM_MODIFIER_TYPES,
 } ModifierType;
 
@@ -1952,5 +1953,50 @@ enum {
 
 #define MOD_MESHSEQ_READ_ALL \
   (MOD_MESHSEQ_READ_VERT | MOD_MESHSEQ_READ_POLY | MOD_MESHSEQ_READ_UV | MOD_MESHSEQ_READ_COLOR)
+
+typedef struct LevelSetFilter {
+    struct LevelSetFilter *next, *prev;
+
+    int iterations;
+    int width;
+    float offset;
+    char name[64];
+    short type, accuracy, flag, _pad[3];
+} LevelSetFilter;
+
+#define LVLSETFILTER_CURRENT 1
+#define LVLSETFILTER_MUTE     2
+
+typedef struct ParticleMesherModifierData {
+    ModifierData modifier;
+
+    struct ParticleSystem *psys;
+    struct ParticleList *part_list; /* OpenVDB particle list */
+    struct OpenVDBPrimitive *level_set, *mesher_mask;
+    struct Object *mesher_mask_ob;
+    ListBase filters;
+
+    /* particles converter options */
+    float voxel_size;
+    float min_part_radius;
+    float half_width;
+    float part_scale_factor;
+    float part_vel_factor;
+    float trail_size;
+    short generate_trails;
+    short generate_mask;
+    float mask_width;
+
+    /* mesh <-> volume options */
+    float isovalue;
+    float adaptivity;
+    float mask_offset;
+    float ext_band;
+    float int_band;
+    short invert_mask;
+
+    /* Padding */
+    short draw_vdb_tree;
+} ParticleMesherModifierData;
 
 #endif /* __DNA_MODIFIER_TYPES_H__ */

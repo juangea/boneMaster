@@ -1906,6 +1906,9 @@ TreeElementIcon tree_element_get_icon(TreeStoreElem *tselem, TreeElement *te)
             case eModifierType_ParticleInstance:
               data.icon = ICON_MOD_PARTICLES;
               break;
+            case eModifierType_ParticleMesher:
+              data.icon = ICON_MOD_PARTICLES;
+              break;
             case eModifierType_EdgeSplit:
               data.icon = ICON_MOD_EDGESPLIT;
               break;

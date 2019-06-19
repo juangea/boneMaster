@@ -305,6 +305,7 @@ option(WITH_MOD_REMESH          "Enable Remesh Modifier" ON)
 # option(WITH_MOD_CLOTH_ELTOPO    "Enable Experimental cloth solver" OFF)  # this is now only available in a branch
 # mark_as_advanced(WITH_MOD_CLOTH_ELTOPO)
 option(WITH_MOD_OCEANSIM        "Enable Ocean Modifier" OFF)
+option(WITH_MOD_PARTMESHER      "Enable Particle Mesher Modifier" OFF)
 
 # Image format support
 option(WITH_OPENIMAGEIO         "Enable OpenImageIO Support (http://www.openimageio.org)" ON)
@@ -675,6 +676,19 @@ elseif(WITH_CYCLES OR WITH_OPENIMAGEIO OR WITH_INTERNATIONAL OR
 else()
   # Disable boost if not needed.
   set(WITH_BOOST OFF)
+endif()
+
+if(NOT WITH_OPENVDB)
+	# Explicitly disabled. so disable all deps.
+	macro(set_and_warn
+		_setting _val)
+		if(${${_setting}})
+			message(STATUS "'WITH_OPENVDB' is disabled: forceing 'set(${_setting} ${_val})'")
+		endif()
+		set(${_setting} ${_val})
+	endmacro()
+
+	set_and_warn(WITH_MOD_PARTMESHER OFF)
 endif()
 
 # auto enable openimageio for cycles

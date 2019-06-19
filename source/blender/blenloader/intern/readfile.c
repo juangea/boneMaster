@@ -5794,6 +5794,15 @@ static void direct_link_modifiers(FileData *fd, ListBase *lb)
         }
       }
     }
+    else if (md->type == eModifierType_ParticleMesher) {
+      ParticleMesherModifierData *pmmd = (ParticleMesherModifierData *)md;
+      link_list(fd, &pmmd->filters);
+      pmmd->psys = newdataadr(fd, pmmd->psys);
+      pmmd->mesher_mask_ob = newdataadr(fd, pmmd->mesher_mask_ob);
+      pmmd->part_list = NULL;
+      pmmd->level_set = NULL;
+      pmmd->mesher_mask = NULL;
+    }
   }
 }
 

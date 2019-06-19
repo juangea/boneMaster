@@ -87,6 +87,7 @@
 #include "WM_types.h"
 
 #include "object_intern.h"
+#include "openvdb_capi.h"
 
 static void modifier_skin_customdata_delete(struct Object *ob);
 
@@ -2523,4 +2524,211 @@ void OBJECT_OT_surfacedeform_bind(wmOperatorType *ot)
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
   edit_modifier_properties(ot);
+}
+
+/***************** ParticleMesher level set filter operator *****************/
+
+static bool particlemesher_poll(bContext *C)
+{
+	return edit_modifier_poll_generic(C, &RNA_ParticleMesherModifier, 0);
+}
+
+static LevelSetFilter *levelset_get_current_filter(ParticleMesherModifierData *mesher)
+{
+	LevelSetFilter *filter = mesher->filters.first;
+
+	for (; filter; filter = filter->next) {
+		if (filter->flag & LVLSETFILTER_CURRENT) {
+			break;
+		}
+	}
+
+	return filter;
+}
+
+static LevelSetFilter *levelset_filter_new(void)
+{
+	LevelSetFilter *filter = NULL;
+
+	filter = MEM_callocN(sizeof(LevelSetFilter), "LevelSetFilter");
+	filter->iterations = 3;
+	filter->accuracy = LEVEL_FILTER_ACC_FISRT;
+	filter->type = LEVEL_FILTER_MEDIAN;
+	filter->width = 1;
+	filter->offset = 1.0f;
+
+	BLI_strncpy(filter->name,
+	            part_mesher_filter_items[filter->type].name,
+				sizeof(filter->name));
+
+	return filter;
+}
+
+static int levelset_filter_add_exec(bContext *C, wmOperator *op)
+{
+	Object *ob = ED_object_active_context(C);
+	ParticleMesherModifierData *pmmd = (ParticleMesherModifierData *)edit_modifier_property_get(op, ob, eModifierType_ParticleMesher);
+	LevelSetFilter *filter, *filter_new;
+
+	if (!pmmd) {
+		return OPERATOR_CANCELLED;
+	}
+
+	filter = levelset_get_current_filter(pmmd);
+
+	if (filter) {
+		filter->flag &= ~LVLSETFILTER_CURRENT;
+	}
+
+	filter_new = levelset_filter_new();
+	filter_new->flag |= LVLSETFILTER_CURRENT;
+
+	BLI_addtail(&pmmd->filters, filter_new);
+
+	DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
+	WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, ob);
+
+	return OPERATOR_FINISHED;
+}
+
+static int particlemesher_filter_add_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
+{
+	if (edit_modifier_invoke_properties(C, op))
+		return levelset_filter_add_exec(C, op);
+	else
+		return OPERATOR_CANCELLED;
+}
+
+void OBJECT_OT_levelset_filter_add(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Add Level Set Filter";
+	ot->description = "Add a level set filter to the generated mesh";
+	ot->idname = "OBJECT_OT_levelset_filter_add";
+
+	/* api callbacks */
+	ot->poll = particlemesher_poll;
+	ot->invoke = particlemesher_filter_add_invoke;
+	ot->exec = levelset_filter_add_exec;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+	edit_modifier_properties(ot);
+}
+
+static int levelset_filter_remove_exec(bContext *C, wmOperator *op)
+{
+	Object *ob = ED_object_active_context(C);
+	ParticleMesherModifierData *pmmd = (ParticleMesherModifierData *)edit_modifier_property_get(op, ob, eModifierType_ParticleMesher);
+	LevelSetFilter *filter, *filter_prev = NULL;
+
+	if (!pmmd) {
+		return OPERATOR_CANCELLED;
+	}
+
+	filter = levelset_get_current_filter(pmmd);
+
+	if (filter) {
+		filter_prev = filter->prev;
+		BLI_remlink(&pmmd->filters, filter);
+		MEM_freeN(filter);
+	}
+
+	if (filter_prev) {
+		filter_prev->flag |= LVLSETFILTER_CURRENT;
+	}
+
+	DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
+
+	return OPERATOR_FINISHED;
+}
+
+static int particlemesher_filter_remove_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
+{
+	if (edit_modifier_invoke_properties(C, op))
+		return levelset_filter_remove_exec(C, op);
+	else
+		return OPERATOR_CANCELLED;
+}
+
+void OBJECT_OT_levelset_filter_remove(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Remove Level Set Filter";
+	ot->description = "Remove the currently selected level set filter";
+	ot->idname = "OBJECT_OT_levelset_filter_remove";
+
+	/* api callbacks */
+	ot->invoke = particlemesher_filter_remove_invoke;
+	ot->exec = levelset_filter_remove_exec;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+	edit_modifier_properties(ot);
+}
+
+enum {
+	LVLSET_FILTER_MOVE_UP = 0,
+	LVLSET_FILTER_MOVE_DOWN,
+};
+
+static int levelset_filter_move_exec(bContext *C, wmOperator *op)
+{
+	Object *ob = ED_object_active_context(C);
+	ParticleMesherModifierData *pmmd = (ParticleMesherModifierData *)edit_modifier_property_get(op, ob, eModifierType_ParticleMesher);
+	LevelSetFilter *filter;
+	int direction = RNA_enum_get(op->ptr, "direction");
+
+	if (!pmmd) {
+		return OPERATOR_CANCELLED;
+	}
+
+	filter = levelset_get_current_filter(pmmd);
+
+	if (direction == LVLSET_FILTER_MOVE_UP) {
+		if (filter->prev) {
+			BLI_remlink(&pmmd->filters, filter);
+			BLI_insertlinkbefore(&pmmd->filters, filter->prev, filter);
+		}
+	}
+	else if (direction == LVLSET_FILTER_MOVE_DOWN) {
+		if (filter->next) {
+			BLI_remlink(&pmmd->filters, filter);
+			BLI_insertlinkafter(&pmmd->filters, filter->next, filter);
+		}
+	}
+
+	DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
+
+	return OPERATOR_FINISHED;
+}
+
+static int particlemesher_filter_move_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
+{
+	if (edit_modifier_invoke_properties(C, op))
+		return levelset_filter_move_exec(C, op);
+	else
+		return OPERATOR_CANCELLED;
+}
+
+void OBJECT_OT_levelset_filter_move(wmOperatorType *ot)
+{
+	static EnumPropertyItem filter_move[] = {
+		{LVLSET_FILTER_MOVE_UP, "UP", 0, "Up", ""},
+		{LVLSET_FILTER_MOVE_DOWN, "DOWN", 0, "Down", ""},
+		{ 0, NULL, 0, NULL, NULL }
+	};
+
+	ot->name = "Move Levelset Filter";
+	ot->description = "Move levelset filter up or down the list";
+	ot->idname = "OBJECT_OT_levelset_filter_move";
+
+	ot->invoke = particlemesher_filter_move_invoke;
+	ot->exec = levelset_filter_move_exec;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+	ot->prop = RNA_def_enum(ot->srna, "direction", filter_move, LVLSET_FILTER_MOVE_UP, "Direction", "");
+	edit_modifier_properties(ot);
 }
