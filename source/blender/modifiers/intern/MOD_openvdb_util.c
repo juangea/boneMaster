@@ -59,15 +59,6 @@ static void populate_particle_list(ParticleMesherModifierData *pmmd, Scene *scen
 		ParticleKey state;
 		int p;
 
-		if (psys->part->size > 0.0f) {
-//			part_list.has_radius(true);
-		}
-
-		/* TODO(kevin): this isn't right at all */
-		if (psys->part->normfac > 0.0f) {
-//			part_list.has_velocity(true);
-		}
-
 		sim.depsgraph = depsgraph;
 		sim.scene = scene;
 		sim.ob = ob;
