@@ -192,7 +192,7 @@ static Mesh *Mesh_from_VDBGeom(struct OpenVDBGeom *geom, Object *ob)
 		int j;
 
 		OpenVDBGeom_get_quad(geom, i, quad);
-		for (j = 0; j < 4; j++) {
+		for (j = 3; j >= 0; j--) {
 			MLoop *loop = &mloops[loop_index++];
 			loop->v = quad[j];
 		}
@@ -209,7 +209,7 @@ static Mesh *Mesh_from_VDBGeom(struct OpenVDBGeom *geom, Object *ob)
 		int j;
 
 		OpenVDBGeom_get_triangle(geom, i, triangle);
-		for (j = 0; j < 3; j++) {
+		for (j = 2; j >= 0; j--) {
 			MLoop *loop = &mloops[loop_index++];
 			loop->v = triangle[j];
 		}
