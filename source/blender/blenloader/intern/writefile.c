@@ -1763,6 +1763,12 @@ static void write_modifiers(WriteData *wd, ListBase *modbase)
       LevelSetFilter *filter;
       for (filter = pmmd->filters.first; filter; filter = filter->next) {
         writestruct(wd, DATA, LevelSetFilter, 1, filter);
+    }
+    else if (md->type == eModifierType_Remesh) {
+      RemeshModifierData *rmd = (RemeshModifierData *)md;
+      CSGVolume_Object *vcob;
+      for (vcob = rmd->csg_operands.first; vcob; vcob = vcob->next) {
+        writestruct(wd, DATA, CSGVolume_Object, 1, vcob);
       }
     }
   }

@@ -21,6 +21,7 @@
 set(INC
   .
   intern
+  ../guardedalloc
 )
 
 set(INC_SYS
@@ -61,6 +62,8 @@ if(WITH_OPENVDB)
     intern/openvdb_primitive.cpp
     #intern/openvdb_render.cpp
     intern/particle_tools.cpp
+    intern/openvdb_level_set.cc
+    intern/openvdb_transform.cc
     openvdb_capi.cc
     openvdb_util.cc
 
@@ -70,6 +73,8 @@ if(WITH_OPENVDB)
     intern/particle_tools.h
     openvdb_util.h 
     openvdb_intern.h
+    intern/openvdb_level_set.h
+    intern/openvdb_transform.h
   )
 
   if(WITH_OPENVDB_BLOSC)

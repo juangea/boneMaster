@@ -285,4 +285,13 @@ void TRANSFORM_OT_vertex_random(struct wmOperatorType *ot);
 void OBJECT_OT_data_transfer(struct wmOperatorType *ot);
 void OBJECT_OT_datalayout_transfer(struct wmOperatorType *ot);
 
+void OBJECT_OT_remesh(struct wmOperatorType *ot);
+void OBJECT_OT_vertex_to_loop_colors(struct wmOperatorType *ot);
+void OBJECT_OT_loop_to_vertex_colors(struct wmOperatorType *ot);
+
+void REMESH_OT_csg_add(struct wmOperatorType *ot);
+void REMESH_OT_csg_remove(struct wmOperatorType *ot);
+void REMESH_OT_csg_move_up(struct wmOperatorType *ot);
+void REMESH_OT_csg_move_down(struct wmOperatorType *ot);
+
 #endif /* __OBJECT_INTERN_H__ */

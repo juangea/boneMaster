@@ -12,26 +12,32 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ *
+ * The Original Code is Copyright (C) 2015 Blender Foundation.
+ * All rights reserved.
  */
-#ifndef __BKE_MBALL_TESSELLATE_H__
-#define __BKE_MBALL_TESSELLATE_H__
 
-/** \file
- * \ingroup bke
- */
-struct Depsgraph;
-struct Main;
-struct Object;
-struct Scene;
-struct Mesh;
+#include "openvdb_transform.h"
 
-void BKE_mball_polygonize(
-        struct Depsgraph *depsgraph, struct Scene *scene,
-        struct Object *ob, struct ListBase *dispbase);
+OpenVDBTransform::OpenVDBTransform()
+{
+}
 
-void BKE_mball_cubeTable_free(void);
+OpenVDBTransform::~OpenVDBTransform()
+{
+}
 
-struct Mesh* BKE_repolygonize_dm(struct Mesh *dm, float thresh, float basesize[3], float wiresize, float rendersize,
-                                 bool render, bool override_size, int defgrp_size);
+void OpenVDBTransform::OpenVDB_transform_create_linear_transform(double voxel_size)
+{
+  this->transform = openvdb::math::Transform::createLinearTransform(voxel_size);
+}
 
-#endif  /* __BKE_MBALL_TESSELLATE_H__ */
+openvdb::math::Transform::Ptr OpenVDBTransform::OpenVDB_transform_get_transform()
+{
+  return this->transform;
+}
+
+void OpenVDBTransform::OpenVDB_transform_set_transform(openvdb::math::Transform::Ptr transform)
+{
+  this->transform = transform;
+}
