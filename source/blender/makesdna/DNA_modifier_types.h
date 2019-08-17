@@ -1490,6 +1490,10 @@ enum {
 typedef enum eRemeshModifierFlags {
   MOD_REMESH_FLOOD_FILL = (1 << 0),
   MOD_REMESH_SMOOTH_SHADING = (1 << 1),
+  MOD_REMESH_SMOOTH_NORMALS = (1 << 2),
+  MOD_REMESH_RELAX_TRIANGLES = (1 << 3),
+  MOD_REMESH_REPROJECT_VPAINT = (1 << 4),
+  MOD_REMESH_LIVE_REMESH = (1 << 5)
 } RemeshModifierFlags;
 
 typedef enum eRemeshModifierMode {
@@ -1499,7 +1503,77 @@ typedef enum eRemeshModifierMode {
   MOD_REMESH_MASS_POINT = 1,
   /* keeps sharp edges */
   MOD_REMESH_SHARP_FEATURES = 2,
+  /* OpenVDB voxel remesh */
+  MOD_REMESH_VOXEL = 3,
+  /* metaball remesh, turns vertices or particles into metaballs */
+  MOD_REMESH_METABALL = 4,
 } eRemeshModifierMode;
+
+typedef enum MetaballRemeshFlags {
+	MOD_REMESH_VERTICES = (1 << 0),
+	MOD_REMESH_PARTICLES = (1 << 1),
+} MetaballRemeshFlags;
+
+typedef enum {
+	eRemeshFlag_Alive    = (1 << 0),
+	eRemeshFlag_Dead     = (1 << 1),
+	eRemeshFlag_Unborn   = (1 << 2),
+	eRemeshFlag_Size     = (1 << 3),
+	eRemeshFlag_Verts    = (1 << 4),
+} MetaballRemeshPsysFlag;
+
+typedef enum {
+  eRemeshModifierOp_Union = 0,
+  eRemeshModifierOp_Difference = 1,
+  eRemeshModifierOp_Intersect = 2,
+} RemeshModifierOp;
+
+typedef enum {
+  eRemeshModifierSampler_None = 0,
+  eRemeshModifierSampler_Point = 1,
+  eRemeshModifierSampler_Box = 2,
+  eRemeshModifierSampler_Quadratic = 3,
+} RemeshModifierSampler;
+
+typedef enum eVoxelFilterType {
+  VOXEL_FILTER_NONE = 0,
+  VOXEL_FILTER_GAUSSIAN = 1,
+  VOXEL_FILTER_MEAN = 2,
+  VOXEL_FILTER_MEDIAN = 3,
+  VOXEL_FILTER_MEAN_CURVATURE = 4,
+  VOXEL_FILTER_LAPLACIAN = 5,
+  VOXEL_FILTER_DILATE = 6,
+  VOXEL_FILTER_ERODE = 7,
+} eVoxelFilterType;
+
+/*filter bias, aligned to openvdb */
+typedef enum eVoxelFilterBias {
+  VOXEL_BIAS_FIRST = 0,
+  VOXEL_BIAS_SECOND,
+  VOXEL_BIAS_THIRD,
+  VOXEL_BIAS_WENO5,
+  VOXEL_BIAS_HJWENO5,
+} eVoxelFilterBias;
+
+typedef enum eCSGVolumeOperandFlags {
+  MOD_REMESH_CSG_OBJECT_ENABLED = (1 << 0),
+  MOD_REMESH_CSG_SYNC_VOXEL_SIZE = (1 << 1),
+  MOD_REMESH_CSG_VOXEL_PERCENTAGE = (1 << 2),
+} eCSGVolumeOperandFlags;
+
+typedef struct CSGVolume_Object {
+  struct CSGVolume_Object *next, *prev;
+  struct RemeshModifierData *md;
+  // modifier we belong to (currently unused, probably should be deprecated/removed ?)
+  struct Object *object;
+  float voxel_size;
+  float voxel_percentage;
+  char operation;
+  char flag;
+  char sampler;
+  char _pad[5];
+
+} CSGVolume_Object;
 
 typedef struct RemeshModifierData {
   ModifierData modifier;
@@ -1511,6 +1585,29 @@ typedef struct RemeshModifierData {
   float scale;
 
   float hermite_num;
+
+  /* for voxelremesher */
+  float voxel_size;
+  float isovalue;
+  float adaptivity;
+  int filter_type;
+  int filter_bias;
+  int filter_width;
+  int filter_iterations;
+
+  /* volume csg */
+  struct ListBase csg_operands;
+  struct Mesh *mesh_cached;
+
+  /*for metaball remesher*/
+  float rendersize;
+  float wiresize;
+  float thresh;
+  float basesize[3];
+  int input;
+  int pflag;
+  int psys;
+  char size_defgrp_name[64];  /* MAX_VGROUP_NAME */
 
   /* octree depth */
   char depth;

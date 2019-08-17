@@ -1195,25 +1195,88 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         col.prop(md, "width", slider=True)
         col.prop(md, "narrowness", slider=True)
 
-    def REMESH(self, layout, _ob, md):
+    def REMESH(self, layout, ob, md):
         if not bpy.app.build_options.mod_remesh:
             layout.label(text="Built without Remesh modifier")
             return
 
         layout.prop(md, "mode")
 
-        row = layout.row()
-        row.prop(md, "octree_depth")
-        row.prop(md, "scale")
+        if md.mode not in {'VOXEL', 'METABALL'}:
+            row = layout.row()
+            row.prop(md, "octree_depth")
+            row.prop(md, "scale")
 
         if md.mode == 'SHARP':
             layout.prop(md, "sharpness")
 
-        layout.prop(md, "use_smooth_shade")
-        layout.prop(md, "use_remove_disconnected")
-        row = layout.row()
-        row.active = md.use_remove_disconnected
-        row.prop(md, "threshold")
+        if md.mode == 'VOXEL':
+            col = layout.column(align=True)
+            col.prop(md, "voxel_size")
+            col.prop(md, "isovalue")
+            col.prop(md, "adaptivity")
+            layout.prop(md, "filter_type")
+            if md.filter_type != "NONE":
+                layout.prop(md, "filter_bias")
+                if md.filter_type in {"GAUSSIAN", "MEDIAN", "MEAN"}:
+                    layout.prop(md, "filter_width")
+                if md.filter_type in {"DILATE", "ERODE"}:
+                    layout.prop(md, "filter_iterations")
+            row = layout.row()
+            row.prop(md, "live_remesh")
+            row.prop(md, "smooth_normals")
+            row = layout.row()
+            row.prop(md, "relax_triangles")
+            row.prop(md, "reproject_vertex_paint")
+            layout.label(text="CSG Operands")
+            layout.operator("remesh.csg_add", text="", icon="ADD")
+            for i,csg in enumerate(md.csg_operands):
+                box = layout.box()
+                row = box.row(align=True)
+                icon = "HIDE_ON"
+                if csg.enabled:
+                    icon = "HIDE_OFF"
+                row.prop(csg, "enabled", text="", icon=icon, emboss=True)
+                row.prop(csg, "object", text="")
+                row.prop(csg, "operation", text="")
+                row = box.row(align=True)
+                icon = "RESTRICT_VIEW_ON"
+                if csg.sync_voxel_size:
+                    icon = "RESTRICT_VIEW_OFF"
+                row.prop(csg, "use_voxel_percentage", text="", icon='CANCEL', emboss=True)
+                if not csg.use_voxel_percentage:
+                    row.prop(csg, "sync_voxel_size", text="", icon=icon, emboss=True)
+                    row.prop(csg, "voxel_size")
+                else:
+                    row.prop(csg, "voxel_percentage")
+                row.prop(csg, "sampler", text="")
+                row.operator("remesh.csg_remove", text="", icon="REMOVE").index = i
+                row.operator("remesh.csg_move_up", text="", icon="TRIA_UP").index = i
+                row.operator("remesh.csg_move_down", text="", icon="TRIA_DOWN").index = i
+        elif md.mode == 'METABALL':
+            row = layout.row()
+            row.prop(md, "input")
+            if 'PARTICLES' in md.input:
+                row = layout.row()
+                row.prop(md, "psys")
+                row = layout.row()
+                row.prop(md, "filter")
+            row = layout.row()
+            col = row.column(align=True)
+            col.prop(md, "mball_size")
+            col = row.column(align=True)
+            col.label(text="Display Parameters:")
+            col.prop(md, "mball_threshold")
+            col.prop(md, "mball_resolution")
+            col.prop(md, "mball_render_resolution")
+            layout.prop_search(md, "size_vertex_group", ob, "vertex_groups", text = "Size Vertex Group")
+            layout.prop(md, "use_smooth_shade")
+        else:
+            layout.prop(md, "use_smooth_shade")
+            layout.prop(md, "use_remove_disconnected")
+            row = layout.row()
+            row.active = md.use_remove_disconnected
+            row.prop(md, "threshold")
 
     @staticmethod
     def vertex_weight_mask(layout, ob, md):

@@ -32,6 +32,7 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_blenlib.h"
+#include "BLI_math.h"
 #include "BLI_utildefines.h"
 #include "BLI_ghash.h"
 
@@ -79,6 +80,11 @@
 #include "BKE_report.h"
 #include "BKE_scene.h"
 #include "BKE_workspace.h"
+#include "BKE_mesh_runtime.h"
+#include "BKE_library.h"
+#include "BKE_customdata.h"
+#include "BKE_bvhutils.h"
+#include "BKE_remesh.h"
 
 #include "DEG_depsgraph.h"
 #include "DEG_depsgraph_build.h"
@@ -111,6 +117,10 @@
 #include "WM_toolsystem.h"
 
 #include "object_intern.h"  // own include
+
+#ifdef WITH_OPENVDB
+#  include "openvdb_capi.h"
+#endif
 
 /* prototypes */
 typedef struct MoveToCollectionData MoveToCollectionData;

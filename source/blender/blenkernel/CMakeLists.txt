@@ -177,6 +177,7 @@ set(SRC
   intern/pbvh.c
   intern/pbvh_bmesh.c
   intern/pointcache.c
+  intern/remesh_voxel.c
   intern/report.c
   intern/rigidbody.c
   intern/scene.c

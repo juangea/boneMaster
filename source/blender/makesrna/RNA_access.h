@@ -509,6 +509,7 @@ extern StructRNA RNA_RadarSensor;
 extern StructRNA RNA_RandomSensor;
 extern StructRNA RNA_RaySensor;
 extern StructRNA RNA_Region;
+extern StructRNA RNA_RemeshModifier;
 extern StructRNA RNA_RenderEngine;
 extern StructRNA RNA_RenderEngineSettings;
 extern StructRNA RNA_RenderEngineSettingsClay;
