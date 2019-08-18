@@ -546,6 +546,7 @@ static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mes
   Mesh *result = NULL;
   DualConFlags flags = 0;
   DualConMode mode = 0;
+  Mesh *me = NULL;
 
   rmd = (RemeshModifierData *)md;
 
@@ -564,11 +565,47 @@ static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mes
       }
     }
 
+    if (rmd->flag & MOD_REMESH_ACCUMULATE) {
+      me = rmd_orig->mesh_cached;
+    }
+    else {
+      me = mesh;
+    }
+
     if (rmd->voxel_size > 0.0f) {
 
       struct OpenVDBTransform *xform = OpenVDBTransform_create();
       OpenVDBTransform_create_linear_transform(xform, rmd->voxel_size);
-      level_set = BKE_remesh_voxel_ovdb_mesh_to_level_set_create(mesh, xform);
+
+      if (rmd->input & MOD_REMESH_VERTICES) {
+        level_set = OpenVDBLevelSet_create(false, 0.0f, 0.0f);
+        BKE_remesh_voxel_ovdb_mesh_to_level_set(level_set, me, xform);
+      }
+
+      if (rmd->input & MOD_REMESH_PARTICLES) {
+        bool render = ctx->flag & MOD_APPLY_RENDER;
+        Scene *scene = DEG_get_input_scene(ctx->depsgraph);
+        Object *ob = ctx->object;
+        ParticleSystem *psys = get_psys(rmd, ob, scene, render);
+        if (psys) {
+
+          if (!level_set) {
+            level_set = OpenVDBLevelSet_create(true, rmd->voxel_size, 3.0f);
+          }
+
+          BKE_remesh_voxel_ovdb_particles_to_level_set(level_set,
+                                                       psys,
+                                                       scene,
+                                                       ob,
+                                                       ctx->depsgraph,
+                                                       rmd->part_scale_factor,
+                                                       rmd->part_vel_factor,
+                                                       rmd->part_min_radius,
+                                                       rmd->part_trail,
+                                                       rmd->part_trail_size);
+        }
+      }
+
       OpenVDBTransform_free(xform);
 
       for (vcob = rmd->csg_operands.first; vcob; vcob = vcob->next) {
@@ -577,7 +614,7 @@ static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mes
         }
       }
 
-      result = voxel_remesh(rmd, mesh, level_set);
+      result = voxel_remesh(rmd, me, level_set);
 
       if (result) {
         // update cache

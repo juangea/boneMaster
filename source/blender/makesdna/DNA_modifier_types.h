@@ -1493,7 +1493,8 @@ typedef enum eRemeshModifierFlags {
   MOD_REMESH_SMOOTH_NORMALS = (1 << 2),
   MOD_REMESH_RELAX_TRIANGLES = (1 << 3),
   MOD_REMESH_REPROJECT_VPAINT = (1 << 4),
-  MOD_REMESH_LIVE_REMESH = (1 << 5)
+  MOD_REMESH_LIVE_REMESH = (1 << 5),
+  MOD_REMESH_ACCUMULATE = (1 << 6),
 } RemeshModifierFlags;
 
 typedef enum eRemeshModifierMode {
