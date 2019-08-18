@@ -218,6 +218,15 @@ struct OpenVDBLevelSet *OpenVDBLevelSet_transform_and_resample(struct OpenVDBLev
                                                                char sampler,
                                                                float isolevel);
 
+struct OpenVDBLevelSet *OpenVDB_level_set_copy(struct OpenVDBLevelSet *level_set);
+
+
+void OpenVDBLevelSet_particles_to_level_set(struct OpenVDBLevelSet *level_set,
+                                            struct ParticleList *part_list,
+                                            float min_radius,
+                                            bool trail,
+                                            float trail_size);
+
 #ifdef __cplusplus
 }
 #endif

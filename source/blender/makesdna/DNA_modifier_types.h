@@ -1599,6 +1599,7 @@ typedef struct RemeshModifierData {
   /* volume csg */
   struct ListBase csg_operands;
   struct Mesh *mesh_cached;
+  struct OpenVDBLevelSet *levelset_cached;
 
   /*for metaball remesher*/
   float rendersize;

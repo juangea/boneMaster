@@ -242,11 +242,7 @@ OpenVDBLevelSet *OpenVDBLevelSet_create(bool initGrid, OpenVDBTransform *xform)
 {
   OpenVDBLevelSet *level_set = new OpenVDBLevelSet();
   if (initGrid) {
-    openvdb::FloatGrid::Ptr grid = openvdb::FloatGrid::create();
-    grid->setGridClass(openvdb::GRID_LEVEL_SET);
-    if (xform) {
-      grid->setTransform(xform->OpenVDB_transform_get_transform());
-    }
+    openvdb::FloatGrid::Ptr grid = createLevelSet<FloatGrid>(voxel_size, half_width);
     level_set->OpenVDB_level_set_set_grid(grid);
   }
   return level_set;
@@ -379,4 +375,22 @@ OpenVDBLevelSet *OpenVDBLevelSet_transform_and_resample(struct OpenVDBLevelSet *
   level_set->OpenVDB_level_set_set_grid(targetGrid);
 
   return level_set;
+}
+
+void OpenVDBLevelSet_particles_to_level_set(OpenVDBLevelSet *level_set,
+                                            struct ParticleList *part_list,
+                                            float min_radius,
+                                            bool trail,
+                                            float trail_size)
+{
+  level_set->OpenVDB_particles_to_level_set(*part_list, min_radius, trail, trail_size);
+}
+
+struct OpenVDBLevelSet *OpenVDB_level_set_copy(struct OpenVDBLevelSet *level_set)
+{
+  struct OpenVDBLevelSet *lvl_copy = OpenVDBLevelSet_create(false, 0.0f, 0.0f);
+  openvdb::FloatGrid::Ptr grid_copy = level_set->OpenVDB_level_set_get_grid()->deepCopy();
+  lvl_copy->OpenVDB_level_set_set_grid(grid_copy);
+
+  return lvl_copy;
 }

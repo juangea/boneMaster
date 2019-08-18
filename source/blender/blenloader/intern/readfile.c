@@ -5786,7 +5786,8 @@ static void direct_link_modifiers(FileData *fd, ListBase *lb)
     else if (md->type == eModifierType_Remesh) {
       RemeshModifierData *rmd = (RemeshModifierData *)md;
       link_list(fd, &rmd->csg_operands);
-      rmd->mesh_cached = newdataadr(fd, rmd->mesh_cached);
+      rmd->mesh_cached = NULL;
+      rmd->levelset_cached = NULL;
     }
   }
 }

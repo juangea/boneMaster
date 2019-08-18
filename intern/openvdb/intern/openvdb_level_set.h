@@ -69,6 +69,7 @@ struct OpenVDBLevelSet {
   openvdb::FloatGrid::Ptr OpenVDB_CSG_operation(openvdb::FloatGrid::Ptr gridA,
                                                 openvdb::FloatGrid::Ptr gridB,
                                                 OpenVDBLevelSet_CSGOperation operation);
+
 };
 
 #endif /* __OPENVDB_LEVEL_SET_H__ */
