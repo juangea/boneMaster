@@ -34,8 +34,8 @@ ParticleList::ParticleList(size_t size, Real rad_scale, Real vel_scale)
     : m_radius_scale(rad_scale)
     , m_velocity_scale(vel_scale)
 {
-	m_has_radius = false;
-	m_has_velocity = false;
+    m_has_radius = true;
+	m_has_velocity = true;
 	m_particle_list.reserve(size);
 }
 
