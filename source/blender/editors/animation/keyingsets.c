@@ -154,7 +154,7 @@ static int remove_active_keyingset_exec(bContext *C, wmOperator *op)
    * - return error if it doesn't exist
    */
   if (scene->active_keyingset == 0) {
-    BKE_report(op->reports, RPT_ERROR, "No active keying set to remove");
+    BKE_report(op->reports, RPT_ERROR, "No active Keying Set to remove");
     return OPERATOR_CANCELLED;
   }
   else if (scene->active_keyingset < 0) {
@@ -203,7 +203,7 @@ static int add_empty_ks_path_exec(bContext *C, wmOperator *op)
    * - return error if it doesn't exist
    */
   if (scene->active_keyingset == 0) {
-    BKE_report(op->reports, RPT_ERROR, "No active keying set to add empty path to");
+    BKE_report(op->reports, RPT_ERROR, "No active Keying Set to add empty path to");
     return OPERATOR_CANCELLED;
   }
   else {
@@ -253,12 +253,12 @@ static int remove_active_ks_path_exec(bContext *C, wmOperator *op)
       ks->active_path--;
     }
     else {
-      BKE_report(op->reports, RPT_ERROR, "No active keying set path to remove");
+      BKE_report(op->reports, RPT_ERROR, "No active Keying Set path to remove");
       return OPERATOR_CANCELLED;
     }
   }
   else {
-    BKE_report(op->reports, RPT_ERROR, "No active keying set to remove a path from");
+    BKE_report(op->reports, RPT_ERROR, "No active Keying Set to remove a path from");
     return OPERATOR_CANCELLED;
   }
 
@@ -409,7 +409,7 @@ static int remove_keyingset_button_exec(bContext *C, wmOperator *op)
    * - return error if it doesn't exist
    */
   if (scene->active_keyingset == 0) {
-    BKE_report(op->reports, RPT_ERROR, "No active keying set to remove property from");
+    BKE_report(op->reports, RPT_ERROR, "No active Keying Set to remove property from");
     return OPERATOR_CANCELLED;
   }
   else if (scene->active_keyingset < 0) {
@@ -712,9 +712,9 @@ int ANIM_scene_get_keyingset_index(Scene *scene, KeyingSet *ks)
     }
   }
 
-  /* still here, so try builtins list too
-   * - builtins are from (<= -1)
-   * - none/invalid is (= 0)
+  /* Still here, so try built-ins list too:
+   * - Built-ins are from (<= -1).
+   * - None/Invalid is (= 0).
    */
   index = BLI_findindex(&builtin_keyingsets, ks);
   if (index != -1) {
@@ -1030,7 +1030,6 @@ static short keyingset_apply_keying_flags(const short base_flags,
 int ANIM_apply_keyingset(
     bContext *C, ListBase *dsources, bAction *act, KeyingSet *ks, short mode, float cfra)
 {
-  Depsgraph *depsgraph = CTX_data_depsgraph(C);
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ReportList *reports = CTX_wm_reports(C);
@@ -1125,7 +1124,6 @@ int ANIM_apply_keyingset(
       /* action to take depends on mode */
       if (mode == MODIFYKEY_MODE_INSERT) {
         success += insert_keyframe(bmain,
-                                   depsgraph,
                                    reports,
                                    ksp->id,
                                    act,

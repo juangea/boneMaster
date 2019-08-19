@@ -75,6 +75,9 @@ void BKE_armature_copy_data(struct Main *bmain,
                             const int flag);
 struct bArmature *BKE_armature_copy(struct Main *bmain, const struct bArmature *arm);
 
+void BKE_armature_copy_bone_transforms(struct bArmature *armature_dst,
+                                       const struct bArmature *armature_src);
+
 /* Bounding box. */
 struct BoundBox *BKE_armature_boundbox_get(struct Object *ob);
 
@@ -89,6 +92,8 @@ void BKE_armature_bone_hash_make(struct bArmature *arm);
 void BKE_armature_bone_hash_free(struct bArmature *arm);
 
 bool BKE_armature_bone_flag_test_recursive(const struct Bone *bone, int flag);
+
+void BKE_armature_refresh_layer_used(struct bArmature *arm);
 
 float distfactor_to_bone(
     const float vec[3], const float b1[3], const float b2[3], float r1, float r2, float rdist);

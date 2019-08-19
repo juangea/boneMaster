@@ -254,7 +254,10 @@ void ED_operatormacros_mesh(void);
 void ED_keymap_mesh(struct wmKeyConfig *keyconf);
 
 /* editmesh_tools.c (could be moved) */
-void EDBM_project_snap_verts(struct bContext *C, struct ARegion *ar, struct BMEditMesh *em);
+void EDBM_project_snap_verts(struct bContext *C,
+                             struct Depsgraph *depsgraph,
+                             struct ARegion *ar,
+                             struct BMEditMesh *em);
 
 /* editface.c */
 void paintface_flush_flags(struct bContext *C, struct Object *ob, short flag);
@@ -392,6 +395,9 @@ bool ED_mesh_color_remove_named(struct Mesh *me, const char *name);
 
 void ED_mesh_report_mirror(struct wmOperator *op, int totmirr, int totfail);
 void ED_mesh_report_mirror_ex(struct wmOperator *op, int totmirr, int totfail, char selectmode);
+
+/* Returns the pinned mesh, the mesh from the pinned object, or the mesh from the active object. */
+struct Mesh *ED_mesh_context(struct bContext *C);
 
 /* mesh backup */
 typedef struct BMBackup {

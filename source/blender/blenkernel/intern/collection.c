@@ -239,8 +239,9 @@ static Collection *collection_duplicate_recursive(Main *bmain,
 
   if (!do_hierarchy || collection_old->id.newid == NULL) {
     BKE_id_copy(bmain, &collection_old->id, (ID **)&collection_new);
-    id_us_min(
-        &collection_new->id); /* Copying add one user by default, need to get rid of that one. */
+
+    /* Copying add one user by default, need to get rid of that one. */
+    id_us_min(&collection_new->id);
 
     if (do_hierarchy) {
       ID_NEW_SET(collection_old, collection_new);
@@ -287,16 +288,6 @@ static Collection *collection_duplicate_recursive(Main *bmain,
 
       collection_object_add(bmain, collection_new, ob_new, 0, true);
       collection_object_remove(bmain, collection_new, ob_old, false);
-
-      if (ob_new->rigidbody_object != NULL) {
-        BLI_assert(ob_old->rigidbody_object != NULL);
-        for (Scene *scene = bmain->scenes.first; scene != NULL; scene = scene->id.next) {
-          if (scene->rigidbody_world != NULL &&
-              BKE_collection_has_object(scene->rigidbody_world->group, ob_old)) {
-            collection_object_add(bmain, scene->rigidbody_world->group, ob_new, 0, true);
-          }
-        }
-      }
     }
   }
 
@@ -443,15 +434,13 @@ static void collection_object_cache_fill(ListBase *lb, Collection *collection, i
       BLI_addtail(lb, base);
     }
 
-    int object_restrict = base->object->restrictflag;
-
-    if (((child_restrict & COLLECTION_RESTRICT_VIEWPORT) == 0) &&
-        ((object_restrict & OB_RESTRICT_VIEWPORT) == 0)) {
+    /* Only collection flags are checked here currently, object restrict flag is checked
+     * in FOREACH_COLLECTION_VISIBLE_OBJECT_RECURSIVE_BEGIN since it can be animated
+     * without updating the cache. */
+    if (((child_restrict & COLLECTION_RESTRICT_VIEWPORT) == 0)) {
       base->flag |= BASE_ENABLED_VIEWPORT;
     }
-
-    if (((child_restrict & COLLECTION_RESTRICT_RENDER) == 0) &&
-        ((object_restrict & OB_RESTRICT_RENDER) == 0)) {
+    if (((child_restrict & COLLECTION_RESTRICT_RENDER) == 0)) {
       base->flag |= BASE_ENABLED_RENDER;
     }
   }
@@ -574,7 +563,7 @@ bool BKE_collection_object_cyclic_check(Main *bmain, Object *object, Collection 
 
 /******************* Collection Object Membership *******************/
 
-bool BKE_collection_has_object(Collection *collection, Object *ob)
+bool BKE_collection_has_object(Collection *collection, const Object *ob)
 {
   if (ELEM(NULL, collection, ob)) {
     return false;
@@ -1112,7 +1101,7 @@ void BKE_collection_parent_relations_rebuild(Collection *collection)
 static void collection_parents_rebuild_recursive(Collection *collection)
 {
   BKE_collection_parent_relations_rebuild(collection);
-  collection->id.tag &= ~LIB_TAG_DOIT;
+  collection->tag &= ~COLLECTION_TAG_RELATION_REBUILD;
 
   for (CollectionChild *child = collection->children.first; child != NULL; child = child->next) {
     collection_parents_rebuild_recursive(child->collection);
@@ -1121,8 +1110,6 @@ static void collection_parents_rebuild_recursive(Collection *collection)
 
 /**
  * Rebuild parent relationships from child ones, for all collections in given \a bmain.
- *
- * \note Uses LIB_TAG_DOIT internally...
  */
 void BKE_main_collections_parent_relations_rebuild(Main *bmain)
 {
@@ -1131,7 +1118,7 @@ void BKE_main_collections_parent_relations_rebuild(Main *bmain)
        collection = collection->id.next) {
     BLI_freelistN(&collection->parents);
 
-    collection->id.tag |= LIB_TAG_DOIT;
+    collection->tag |= COLLECTION_TAG_RELATION_REBUILD;
   }
 
   /* Scene's master collections will be 'root' parent of most of our collections, so start with
@@ -1144,7 +1131,7 @@ void BKE_main_collections_parent_relations_rebuild(Main *bmain)
    * lib_link_collection_data() seems to assume that, so do the same here. */
   for (Collection *collection = bmain->collections.first; collection != NULL;
        collection = collection->id.next) {
-    if (collection->id.tag & LIB_TAG_DOIT) {
+    if (collection->tag & COLLECTION_TAG_RELATION_REBUILD) {
       /* Note: we do not have easy access to 'which collections is root' info in that case, which
        * means test for cycles in collection relationships may fail here. I don't think that is an
        * issue in practice here, but worth keeping in mind... */

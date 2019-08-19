@@ -232,6 +232,8 @@ static void distribute_grid(Mesh *mesh, ParticleSystem *psys)
 
           /* lets intersect the faces */
           for (i = 0; i < totface; i++, mface++) {
+            ParticleData *pa1 = NULL, *pa2 = NULL;
+
             copy_v3_v3(v1, mvert[mface->v1].co);
             copy_v3_v3(v2, mvert[mface->v2].co);
             copy_v3_v3(v3, mvert[mface->v3].co);
@@ -239,24 +241,32 @@ static void distribute_grid(Mesh *mesh, ParticleSystem *psys)
             bool intersects_tri = isect_ray_tri_watertight_v3(
                 co1, &isect_precalc, v1, v2, v3, &lambda, NULL);
             if (intersects_tri) {
-              if (from == PART_FROM_FACE) {
-                (pa + (int)(lambda * size[a]) * a0mul)->flag &= ~PARS_UNEXIST;
-              }
-              else { /* store number of intersections */
-                (pa + (int)(lambda * size[a]) * a0mul)->hair_index++;
-              }
+              pa1 = (pa + (int)(lambda * size[a]) * a0mul);
             }
 
             if (mface->v4 && (!intersects_tri || from == PART_FROM_VOLUME)) {
               copy_v3_v3(v4, mvert[mface->v4].co);
 
               if (isect_ray_tri_watertight_v3(co1, &isect_precalc, v1, v3, v4, &lambda, NULL)) {
-                if (from == PART_FROM_FACE) {
-                  (pa + (int)(lambda * size[a]) * a0mul)->flag &= ~PARS_UNEXIST;
-                }
-                else {
-                  (pa + (int)(lambda * size[a]) * a0mul)->hair_index++;
-                }
+                pa2 = (pa + (int)(lambda * size[a]) * a0mul);
+              }
+            }
+
+            if (pa1) {
+              if (from == PART_FROM_FACE) {
+                pa1->flag &= ~PARS_UNEXIST;
+              }
+              else { /* store number of intersections */
+                pa1->hair_index++;
+              }
+            }
+
+            if (pa2 && pa2 != pa1) {
+              if (from == PART_FROM_FACE) {
+                pa2->flag &= ~PARS_UNEXIST;
+              }
+              else { /* store number of intersections */
+                pa2->hair_index++;
               }
             }
           }
@@ -878,7 +888,7 @@ static int psys_thread_context_init_distribute(ParticleThreadContext *ctx,
                                                int from)
 {
   Scene *scene = sim->scene;
-  Mesh *final_mesh = BKE_particle_modifier_mesh_final_get(sim->psmd);
+  Mesh *final_mesh = sim->psmd->mesh_final;
   Object *ob = sim->ob;
   ParticleSystem *psys = sim->psys;
   ParticleData *pa = 0, *tpars = 0;
@@ -926,8 +936,8 @@ static int psys_thread_context_init_distribute(ParticleThreadContext *ctx,
   if (from == PART_FROM_CHILD) {
     /* Simple children */
     if (part->childtype != PART_CHILD_FACES) {
-      Mesh *mesh_original = BKE_particle_modifier_mesh_original_get(sim->psmd);
-      distribute_simple_children(scene, ob, final_mesh, mesh_original, psys, use_render_params);
+      distribute_simple_children(
+          scene, ob, final_mesh, sim->psmd->mesh_original, psys, use_render_params);
       return 0;
     }
   }
@@ -1318,7 +1328,7 @@ static void distribute_particles_on_dm(ParticleSimulationData *sim, int from)
   TaskPool *task_pool;
   ParticleThreadContext ctx;
   ParticleTask *tasks;
-  Mesh *final_mesh = BKE_particle_modifier_mesh_final_get(sim->psmd);
+  Mesh *final_mesh = sim->psmd->mesh_final;
   int i, totpart, numtasks;
 
   /* create a task pool for distribution tasks */
@@ -1346,8 +1356,7 @@ static void distribute_particles_on_dm(ParticleSimulationData *sim, int from)
 
   BLI_task_pool_free(task_pool);
 
-  Mesh *mesh_original = BKE_particle_modifier_mesh_original_get(sim->psmd);
-  psys_calc_dmcache(sim->ob, final_mesh, mesh_original, sim->psys);
+  psys_calc_dmcache(sim->ob, final_mesh, sim->psmd->mesh_original, sim->psys);
 
   if (ctx.mesh != final_mesh) {
     BKE_id_free(NULL, ctx.mesh);
@@ -1372,8 +1381,7 @@ void distribute_particles(ParticleSimulationData *sim, int from)
   int distr_error = 0;
 
   if (psmd) {
-    Mesh *mesh_final = BKE_particle_modifier_mesh_final_get(psmd);
-    if (mesh_final) {
+    if (psmd->mesh_final) {
       distribute_particles_on_dm(sim, from);
     }
     else {

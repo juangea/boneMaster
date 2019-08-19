@@ -160,19 +160,6 @@ Scene *DEG_get_evaluated_scene(const Depsgraph *graph)
   return scene_cow;
 }
 
-Scene *DEG_get_evaluated_scene_if_exists(const Depsgraph *graph)
-{
-  if (graph == NULL) {
-    return NULL;
-  }
-  const DEG::Depsgraph *deg_graph = reinterpret_cast<const DEG::Depsgraph *>(graph);
-  Scene *scene_cow = deg_graph->scene_cow;
-  if (scene_cow == NULL || !DEG::deg_copy_on_write_is_expanded(&scene_cow->id)) {
-    return NULL;
-  }
-  return scene_cow;
-}
-
 ViewLayer *DEG_get_evaluated_view_layer(const Depsgraph *graph)
 {
   const DEG::Depsgraph *deg_graph = reinterpret_cast<const DEG::Depsgraph *>(graph);
@@ -302,7 +289,7 @@ bool DEG_is_original_id(ID *id)
    * Localization is usually happening from evaluated data-block, or will have some special pointer
    * magic which will make them to act as evaluated.
    *
-   * NOTE: We conder ID evaluated if ANY of those flags is set. We do NOT require ALL of them. */
+   * NOTE: We consider ID evaluated if ANY of those flags is set. We do NOT require ALL of them. */
   if (id->tag &
       (LIB_TAG_COPIED_ON_WRITE | LIB_TAG_COPIED_ON_WRITE_EVAL_RESULT | LIB_TAG_LOCALIZED)) {
     return false;

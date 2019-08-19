@@ -32,34 +32,32 @@ OpenVDBLevelSet::~OpenVDBLevelSet()
 {
 }
 
-void OpenVDBLevelSet::OpenVDB_mesh_to_level_set(const float *vertices,
-                                                const unsigned int *faces,
-                                                const unsigned int totvertices,
-                                                const unsigned int totfaces,
-                                                openvdb::math::Transform::Ptr xform)
+void OpenVDBLevelSet::mesh_to_level_set(const float *vertices,
+                                        const unsigned int *faces,
+                                        const unsigned int totvertices,
+                                        const unsigned int totfaces,
+                                        const openvdb::math::Transform::Ptr &xform)
 {
-  std::vector<openvdb::Vec3s> points;
-  std::vector<openvdb::Vec3I> triangles;
+  std::vector<openvdb::Vec3s> points(totvertices);
+  std::vector<openvdb::Vec3I> triangles(totfaces);
   std::vector<openvdb::Vec4I> quads;
 
   for (unsigned int i = 0; i < totvertices; i++) {
-    openvdb::Vec3s v(vertices[i * 3], vertices[i * 3 + 1], vertices[i * 3 + 2]);
-    points.push_back(v);
+    points[i] = openvdb::Vec3s(vertices[i * 3], vertices[i * 3 + 1], vertices[i * 3 + 2]);
   }
 
   for (unsigned int i = 0; i < totfaces; i++) {
-    openvdb::Vec3I f(faces[i * 3], faces[i * 3 + 1], faces[i * 3 + 2]);
-    triangles.push_back(f);
+    triangles[i] = openvdb::Vec3I(faces[i * 3], faces[i * 3 + 1], faces[i * 3 + 2]);
   }
 
   this->grid = openvdb::tools::meshToLevelSet<openvdb::FloatGrid>(
       *xform, points, triangles, quads, 1);
 }
 
-void OpenVDBLevelSet::OpenVDB_volume_to_mesh(OpenVDBVolumeToMeshData *mesh,
-                                             const double isovalue,
-                                             const double adaptivity,
-                                             const bool relax_disoriented_triangles)
+void OpenVDBLevelSet::volume_to_mesh(OpenVDBVolumeToMeshData *mesh,
+                                     const double isovalue,
+                                     const double adaptivity,
+                                     const bool relax_disoriented_triangles)
 {
   std::vector<openvdb::Vec3s> out_points;
   std::vector<openvdb::Vec4I> out_quads;
@@ -85,37 +83,37 @@ void OpenVDBLevelSet::OpenVDB_volume_to_mesh(OpenVDBVolumeToMeshData *mesh,
   mesh->tottriangles = out_tris.size();
   mesh->totquads = out_quads.size();
 
-  for (unsigned int i = 0; i < out_points.size(); i++) {
+  for (size_t i = 0; i < out_points.size(); i++) {
     mesh->vertices[i * 3] = out_points[i].x();
     mesh->vertices[i * 3 + 1] = out_points[i].y();
     mesh->vertices[i * 3 + 2] = out_points[i].z();
   }
 
-  for (unsigned int i = 0; i < out_quads.size(); i++) {
+  for (size_t i = 0; i < out_quads.size(); i++) {
     mesh->quads[i * 4] = out_quads[i].x();
     mesh->quads[i * 4 + 1] = out_quads[i].y();
     mesh->quads[i * 4 + 2] = out_quads[i].z();
     mesh->quads[i * 4 + 3] = out_quads[i].w();
   }
 
-  for (unsigned int i = 0; i < out_tris.size(); i++) {
+  for (size_t i = 0; i < out_tris.size(); i++) {
     mesh->triangles[i * 3] = out_tris[i].x();
     mesh->triangles[i * 3 + 1] = out_tris[i].y();
     mesh->triangles[i * 3 + 2] = out_tris[i].z();
   }
 }
 
-void OpenVDBLevelSet::OpenVDB_level_set_filter(OpenVDBLevelSet_FilterType filter_type,
-                                               int width,
-                                               int iterations,
-                                               int filter_bias)
+void OpenVDBLevelSet::filter(OpenVDBLevelSet_FilterType filter_type,
+                             int width,
+                             float distance,
+                             OpenVDBLevelSet_FilterBias filter_bias)
 {
 
   if (!this->grid) {
     return;
   }
 
-  if (this->grid && this->grid->getGridClass() != openvdb::GRID_LEVEL_SET) {
+  if (this->grid->getGridClass() != openvdb::GRID_LEVEL_SET) {
     return;
   }
 
@@ -138,42 +136,41 @@ void OpenVDBLevelSet::OpenVDB_level_set_filter(OpenVDBLevelSet_FilterType filter
       filter.laplacian();
       break;
     case OPENVDB_LEVELSET_FILTER_DILATE:
-      filter.offset(-iterations / 100.0);
+      filter.offset(distance);
       break;
     case OPENVDB_LEVELSET_FILTER_ERODE:
-      filter.offset(iterations / 100.0);
+      filter.offset(distance);
+      break;
+    case OPENVDB_LEVELSET_FILTER_NONE:
       break;
   }
 }
-openvdb::FloatGrid::Ptr OpenVDBLevelSet::OpenVDB_CSG_operation(
-    openvdb::FloatGrid::Ptr gridA,
-    openvdb::FloatGrid::Ptr gridB,
+openvdb::FloatGrid::Ptr OpenVDBLevelSet::CSG_operation_apply(
+    const openvdb::FloatGrid::Ptr &gridA,
+    const openvdb::FloatGrid::Ptr &gridB,
     OpenVDBLevelSet_CSGOperation operation)
 {
-  openvdb::FloatGrid::Ptr gridA_copy = gridA;  //->deepCopy();
-  openvdb::FloatGrid::Ptr gridB_copy = gridB;  //->deepCopy();
-
   switch (operation) {
     case OPENVDB_LEVELSET_CSG_UNION:
-      openvdb::tools::csgUnion(*gridA_copy, *gridB_copy);
+      openvdb::tools::csgUnion(*gridA, *gridB);
       break;
     case OPENVDB_LEVELSET_CSG_DIFFERENCE:
-      openvdb::tools::csgDifference(*gridA_copy, *gridB_copy);
+      openvdb::tools::csgDifference(*gridA, *gridB);
       break;
     case OPENVDB_LEVELSET_CSG_INTERSECTION:
-      openvdb::tools::csgIntersection(*gridA_copy, *gridB_copy);
+      openvdb::tools::csgIntersection(*gridA, *gridB);
       break;
   }
 
-  return gridA_copy;
+  return gridA;
 }
 
-openvdb::FloatGrid::Ptr OpenVDBLevelSet::OpenVDB_level_set_get_grid()
+const openvdb::FloatGrid::Ptr &OpenVDBLevelSet::get_grid()
 {
   return this->grid;
 }
 
-void OpenVDBLevelSet::OpenVDB_level_set_set_grid(openvdb::FloatGrid::Ptr grid)
+void OpenVDBLevelSet::set_grid(const openvdb::FloatGrid::Ptr &grid)
 {
   this->grid = grid;
 }

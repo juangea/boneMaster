@@ -383,8 +383,16 @@ if(WITH_CYCLES_EMBREE)
 endif()
 
 if(WITH_OPENIMAGEDENOISE)
-  find_package(OpenImageDenoise REQUIRED)
-  find_package(TBB REQUIRED)
+  find_package(OpenImageDenoise)
+  find_package(TBB)
+
+  if(NOT OPENIMAGEDENOISE_FOUND)
+    set(WITH_OPENIMAGEDENOISE OFF)
+    message(STATUS "OpenImageDenoise not found")
+  elseif(NOT TBB_FOUND)
+    set(WITH_OPENIMAGEDENOISE OFF)
+    message(STATUS "TBB not found")
+  endif()
 endif()
 
 # CMake FindOpenMP doesn't know about AppleClang before 3.12, so provide custom flags.
@@ -398,16 +406,13 @@ if(WITH_OPENMP)
     set(OpenMP_CXX_FLAGS "-Xclang -fopenmp -I'${LIBDIR}/openmp/include'")
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -L'${LIBDIR}/openmp/lib' -lomp")
 
-    # Copy libomp.dylib to allow executables like datatoc to work.
-    if(CMAKE_MAKE_PROGRAM MATCHES "xcodebuild")
-      set(OPENMP_DYLIB_AUX_PATH "${CMAKE_BINARY_DIR}/bin")
-    else()
-      set(OPENMP_DYLIB_AUX_PATH "${CMAKE_BINARY_DIR}")
-    endif()
-
+    # Copy libomp.dylib to allow executables like datatoc and tests to work.
     execute_process(
-        COMMAND mkdir -p ${OPENMP_DYLIB_AUX_PATH}/Resources/lib
-        COMMAND cp -p ${LIBDIR}/openmp/lib/libomp.dylib ${OPENMP_DYLIB_AUX_PATH}/Resources/lib/libomp.dylib)
+        COMMAND mkdir -p ${CMAKE_BINARY_DIR}/Resources/lib
+        COMMAND cp -p ${LIBDIR}/openmp/lib/libomp.dylib ${CMAKE_BINARY_DIR}/Resources/lib/libomp.dylib)
+    execute_process(
+        COMMAND mkdir -p ${CMAKE_BINARY_DIR}/bin/Resources/lib
+        COMMAND cp -p ${LIBDIR}/openmp/lib/libomp.dylib ${CMAKE_BINARY_DIR}/bin/Resources/lib/libomp.dylib)
   endif()
 endif()
 

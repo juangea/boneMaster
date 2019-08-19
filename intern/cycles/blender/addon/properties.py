@@ -293,12 +293,29 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         description="Sample all lights (for indirect samples), rather than randomly picking one",
         default=True,
     )
+    
     light_sampling_threshold: FloatProperty(
         name="Light Sampling Threshold",
         description="Probabilistically terminate light samples when the light contribution is below this threshold (more noise but faster rendering). "
         "Zero disables the test and never ignores lights",
         min=0.0, max=1.0,
         default=0.01,
+    )
+
+    min_light_bounces: IntProperty(
+        name="Min Light Bounces",
+        description="Minimum number of light bounces. Setting this higher reduces noise in the first bounces, "
+                    "but can also be less efficient for more complex geometry like hair and volumes",
+        min=0, max=1024,
+        default=0,
+    )
+
+    min_transparent_bounces: IntProperty(
+        name="Min Transparent Bounces",
+        description="Minimum number of transparnet bounces. Setting this higher reduces noise in the first bounces, "
+                    "but can also be less efficient for more complex geometry like hair and volumes",
+        min=0, max=1024,
+        default=0,
     )
 
     adaptive_threshold: FloatProperty(

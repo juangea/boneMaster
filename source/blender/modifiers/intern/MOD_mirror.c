@@ -335,7 +335,7 @@ static Mesh *doMirrorOnAxis(MirrorModifierData *mmd,
   }
 
   /* handle custom split normals */
-  if ((((Mesh *)ob->data)->flag & ME_AUTOSMOOTH) &&
+  if (ob->type == OB_MESH && (((Mesh *)ob->data)->flag & ME_AUTOSMOOTH) &&
       CustomData_has_layer(&result->ldata, CD_CUSTOMLOOPNORMAL)) {
     const int totloop = result->totloop;
     const int totpoly = result->totpoly;
@@ -381,8 +381,9 @@ static Mesh *doMirrorOnAxis(MirrorModifierData *mmd,
 
       for (j = mp->loopstart; j < mp->loopstart + mp->totloop; j++) {
         int mirrorj = mpmirror->loopstart;
-        if (j > mp->loopstart)
+        if (j > mp->loopstart) {
           mirrorj += mpmirror->totloop - (j - mp->loopstart);
+        }
         copy_v3_v3(loop_normals[mirrorj], loop_normals[j]);
         loop_normals[mirrorj][axis] = -loop_normals[j][axis];
         BKE_lnor_space_custom_normal_to_data(

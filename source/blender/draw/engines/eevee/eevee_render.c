@@ -91,7 +91,7 @@ void EEVEE_render_init(EEVEE_Data *ved, RenderEngine *engine, struct Depsgraph *
     copy_v4_fl4(camtexcofac, 1.0f, 1.0f, 0.0f, 0.0f);
   }
 
-  /* XXX overiding viewport size. Simplify things but is not really 100% safe. */
+  /* XXX overriding viewport size. Simplify things but is not really 100% safe. */
   DRW_render_viewport_size_set((int[2]){size_orig[0] + g_data->overscan_pixels * 2.0f,
                                         size_orig[1] + g_data->overscan_pixels * 2.0f});
 
@@ -536,6 +536,11 @@ void EEVEE_render_draw(EEVEE_Data *vedata, RenderEngine *engine, RenderLayer *rl
     return;
   }
 
+  /* SSR needs one iteration to start properly. */
+  if (stl->effects->enabled_effects & EFFECT_SSR) {
+    tot_sample += 1;
+  }
+
   while (render_samples < tot_sample && !RE_engine_test_break(engine)) {
     float clear_col[4] = {0.0f, 0.0f, 0.0f, 0.0f};
     float clear_depth = 1.0f;
@@ -543,6 +548,25 @@ void EEVEE_render_draw(EEVEE_Data *vedata, RenderEngine *engine, RenderLayer *rl
     uint primes[3] = {2, 3, 7};
     double offset[3] = {0.0, 0.0, 0.0};
     double r[3];
+
+    if ((stl->effects->enabled_effects & EFFECT_SSR) && (render_samples == 1) &&
+        !stl->effects->ssr_was_valid_double_buffer) {
+      /* SSR needs one iteration to start properly.
+       * This iteration was done, reset to the original target sample count. */
+      render_samples--;
+      tot_sample--;
+      /* Reset sampling (and accumulation) after the first sample to avoid
+       * washed out first bounce for SSR. */
+      EEVEE_temporal_sampling_reset(vedata);
+      stl->effects->ssr_was_valid_double_buffer = stl->g_data->valid_double_buffer;
+    }
+    /* Don't print every samples as it can lead to bad performance. (see T59649) */
+    else if ((render_samples % 25) == 0 || (render_samples + 1) == tot_sample) {
+      char info[42];
+      BLI_snprintf(
+          info, sizeof(info), "Rendering %u / %u samples", render_samples + 1, tot_sample);
+      RE_engine_update_stats(engine, NULL, info);
+    }
 
     /* Copy previous persmat to UBO data */
     copy_m4_m4(sldata->common_data.prev_persmat, stl->effects->prev_persmat);
@@ -556,14 +580,6 @@ void EEVEE_render_draw(EEVEE_Data *vedata, RenderEngine *engine, RenderLayer *rl
     /* Refresh Probes */
     EEVEE_lightprobes_refresh(sldata, vedata);
     EEVEE_lightprobes_refresh_planar(sldata, vedata);
-
-    /* Don't print every samples as it can lead to bad performance. (see T59649) */
-    if ((render_samples % 25) == 0 || (render_samples + 1) == tot_sample) {
-      char info[42];
-      BLI_snprintf(
-          info, sizeof(info), "Rendering %u / %u samples", render_samples + 1, tot_sample);
-      RE_engine_update_stats(engine, NULL, info);
-    }
 
     /* Refresh Shadows */
     EEVEE_lights_update(sldata, vedata);
@@ -612,7 +628,11 @@ void EEVEE_render_draw(EEVEE_Data *vedata, RenderEngine *engine, RenderLayer *rl
     /* Mist output */
     EEVEE_mist_output_accumulate(sldata, vedata);
     /* Transparent */
+    GPU_framebuffer_texture_attach(fbl->main_color_fb, dtxl->depth, 0, 0);
+    GPU_framebuffer_bind(fbl->main_color_fb);
     DRW_draw_pass(psl->transparent_pass);
+    GPU_framebuffer_bind(fbl->main_fb);
+    GPU_framebuffer_texture_detach(fbl->main_color_fb, dtxl->depth);
     /* Result Z */
     eevee_render_result_z(rl, viewname, rect, vedata, sldata);
     /* Post Process */

@@ -131,7 +131,7 @@ static SpaceLink *image_new(const ScrArea *UNUSED(area), const Scene *UNUSED(sce
   BKE_imageuser_default(&simage->iuser);
   simage->iuser.flag = IMA_SHOW_STEREO | IMA_ANIM_ALWAYS;
 
-  scopes_new(&simage->scopes);
+  BKE_scopes_new(&simage->scopes);
   simage->sample_line_hist.height = 100;
 
   /* tool header */
@@ -179,7 +179,7 @@ static void image_free(SpaceLink *sl)
 {
   SpaceImage *simage = (SpaceImage *)sl;
 
-  scopes_free(&simage->scopes);
+  BKE_scopes_free(&simage->scopes);
 }
 
 /* spacetype; init callback, add handlers */
@@ -197,7 +197,7 @@ static SpaceLink *image_duplicate(SpaceLink *sl)
 
   /* clear or remove stuff from old */
 
-  scopes_new(&simagen->scopes);
+  BKE_scopes_new(&simagen->scopes);
 
   return (SpaceLink *)simagen;
 }
@@ -501,11 +501,10 @@ static void image_main_region_set_view2d(SpaceImage *sima, ARegion *ar)
   int winy = BLI_rcti_size_y(&ar->winrct) + 1;
 
   /* For region overlap, move center so image doesn't overlap header. */
-  rcti visible_rect;
-  ED_region_visible_rect(ar, &visible_rect);
-  const int visible_winy = BLI_rcti_size_y(&visible_rect) + 1;
+  const rcti *visible_rect = ED_region_visible_rect(ar);
+  const int visible_winy = BLI_rcti_size_y(visible_rect) + 1;
   int visible_centerx = 0;
-  int visible_centery = visible_rect.ymin + (visible_winy - winy) / 2;
+  int visible_centery = visible_rect->ymin + (visible_winy - winy) / 2;
 
   ar->v2d.tot.xmin = 0;
   ar->v2d.tot.ymin = 0;
@@ -576,7 +575,7 @@ static void image_main_region_draw(const bContext *C, ARegion *ar)
   SpaceImage *sima = CTX_wm_space_image(C);
   Object *obact = CTX_data_active_object(C);
   Object *obedit = CTX_data_edit_object(C);
-  Depsgraph *depsgraph = CTX_data_depsgraph(C);
+  Depsgraph *depsgraph = CTX_data_expect_evaluated_depsgraph(C);
   Mask *mask = NULL;
   bool show_uvedit = false;
   bool show_curve = false;
@@ -602,6 +601,7 @@ static void image_main_region_draw(const bContext *C, ARegion *ar)
   UI_GetThemeColor3fv(TH_BACK, col);
   GPU_clear_color(col[0], col[1], col[2], 0.0f);
   GPU_clear(GPU_COLOR_BIT);
+  GPU_depth_test(false);
 
   image_user_refresh_scene(C, sima);
 
@@ -842,6 +842,11 @@ static void image_buttons_region_listener(wmWindow *UNUSED(win),
         ED_region_tag_redraw(ar);
       }
       break;
+    case NC_BRUSH:
+      if (wmn->action == NA_EDITED) {
+        ED_region_tag_redraw(ar);
+      }
+      break;
   }
 }
 
@@ -943,6 +948,11 @@ static void image_header_region_listener(wmWindow *UNUSED(win),
         case ND_SELECT:
           ED_region_tag_redraw(ar);
           break;
+      }
+      break;
+    case NC_BRUSH:
+      if (wmn->action == NA_EDITED) {
+        ED_region_tag_redraw(ar);
       }
       break;
   }

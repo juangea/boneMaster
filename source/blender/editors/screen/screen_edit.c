@@ -681,6 +681,15 @@ void ED_screen_set_active_region(bContext *C, wmWindow *win, const int xy[2])
             area_iter->type->deactivate(area_iter);
           }
 
+          if (ar == old_ar && ar != scr->active_region) {
+            wmGizmoMap *gzmap = old_ar->gizmo_map;
+            if (gzmap) {
+              if (WM_gizmo_highlight_set(gzmap, NULL)) {
+                ED_region_tag_redraw_no_rebuild(old_ar);
+              }
+            }
+          }
+
           if (ar == old_ar || ar == scr->active_region) {
             do_draw = true;
           }
@@ -1107,7 +1116,7 @@ void ED_screen_full_prevspace(bContext *C, ScrArea *sa)
 
 void ED_screen_restore_temp_type(bContext *C, ScrArea *sa)
 {
-  /* incase nether functions below run */
+  /* In case nether functions below run. */
   ED_area_tag_redraw(sa);
 
   if (sa->flag & AREA_FLAG_TEMP_TYPE) {
@@ -1447,6 +1456,8 @@ void ED_screen_animation_timer_update(bScreen *screen, int redraws, int refresh)
 void ED_update_for_newframe(Main *bmain, Depsgraph *depsgraph)
 {
   Scene *scene = DEG_get_input_scene(depsgraph);
+
+  DEG_id_tag_update_ex(bmain, &scene->id, ID_RECALC_TIME);
 
 #ifdef DURIAN_CAMERA_SWITCH
   void *camera = BKE_scene_camera_switch_find(scene);

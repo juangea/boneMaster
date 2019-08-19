@@ -1022,8 +1022,9 @@ class WM_OT_doc_view(Operator):
     bl_label = "View Documentation"
 
     doc_id: doc_id
-    if bpy.app.version_cycle == "release":
-        _prefix = ("https://docs.blender.org/api/current")
+    if bpy.app.version_cycle in {"release", "rc"}:
+        _prefix = ("https://docs.blender.org/api/%d.%d%s" %
+                   (bpy.app.version[0], bpy.app.version[1], bpy.app.version_char))
     else:
         _prefix = ("https://docs.blender.org/api/master")
 
@@ -1084,6 +1085,14 @@ rna_is_overridable_library = BoolProperty(
     default=False,
 )
 
+# Most useful entries of rna_enum_property_subtype_items for number arrays:
+rna_vector_subtype_items = (
+    ('NONE', "Plain Data", "Data values without special behavior"),
+    ('COLOR', "Linear Color", "Color in the linear space"),
+    ('COLOR_GAMMA', "Gamma-Corrected Color", "Color in the gamma corrected space"),
+    ('EULER', "Euler Angles", "Euler rotation angles in radians"),
+    ('QUATERNION', "Quaternion Rotation", "Quaternion rotation (affects NLA blending)"),
+)
 
 class WM_OT_properties_edit(Operator):
     bl_idname = "wm.properties_edit"
@@ -1104,6 +1113,23 @@ class WM_OT_properties_edit(Operator):
     description: StringProperty(
         name="Tooltip",
     )
+    subtype: EnumProperty(
+        name="Subtype",
+        items=lambda self, _context: WM_OT_properties_edit.subtype_items,
+    )
+
+    subtype_items = rna_vector_subtype_items
+
+    def _init_subtype(self, prop_type, is_array, subtype):
+        subtype = subtype or 'NONE'
+        subtype_items = rna_vector_subtype_items
+
+        # Add a temporary enum entry to preserve unknown subtypes
+        if not any(subtype == item[0] for item in subtype_items):
+            subtype_items += ((subtype, subtype, ""),)
+
+        WM_OT_properties_edit.subtype_items = subtype_items
+        self.subtype = subtype
 
     def _cmp_props_get(self):
         # Changing these properties will refresh the UI
@@ -1138,6 +1164,8 @@ class WM_OT_properties_edit(Operator):
             rna_idprop_ui_prop_get,
             rna_idprop_ui_prop_clear,
             rna_idprop_ui_prop_update,
+            rna_idprop_ui_prop_default_set,
+            rna_idprop_value_item_type,
         )
 
         data_path = self.data_path
@@ -1173,15 +1201,15 @@ class WM_OT_properties_edit(Operator):
 
         self._last_prop[:] = [prop]
 
-        prop_type = type(item[prop])
+        prop_value = item[prop]
+        prop_type_new = type(prop_value)
+        prop_type, is_array = rna_idprop_value_item_type(prop_value)
 
         prop_ui = rna_idprop_ui_prop_get(item, prop)
 
         if prop_type in {float, int}:
             prop_ui["min"] = prop_type(self.min)
             prop_ui["max"] = prop_type(self.max)
-            if type(default_eval) in {float, int} and default_eval != 0:
-                prop_ui["default"] = prop_type(default_eval)
 
             if self.use_soft_limits:
                 prop_ui["soft_min"] = prop_type(self.soft_min)
@@ -1190,10 +1218,17 @@ class WM_OT_properties_edit(Operator):
                 prop_ui["soft_min"] = prop_type(self.min)
                 prop_ui["soft_max"] = prop_type(self.max)
 
+        if prop_type == float and is_array and self.subtype != 'NONE':
+            prop_ui["subtype"] = self.subtype
+        else:
+            prop_ui.pop("subtype", None)
+
         prop_ui["description"] = self.description
 
+        rna_idprop_ui_prop_default_set(item, prop, default_eval)
+
         # If we have changed the type of the property, update its potential anim curves!
-        if prop_type_old != prop_type:
+        if prop_type_old != prop_type_new:
             data_path = '["%s"]' % bpy.utils.escape_identifier(prop)
             done = set()
 
@@ -1230,7 +1265,11 @@ class WM_OT_properties_edit(Operator):
         return {'FINISHED'}
 
     def invoke(self, context, _event):
-        from rna_prop_ui import rna_idprop_ui_prop_get
+        from rna_prop_ui import (
+            rna_idprop_ui_prop_get,
+            rna_idprop_value_to_python,
+            rna_idprop_value_item_type
+        )
 
         data_path = self.data_path
 
@@ -1247,7 +1286,7 @@ class WM_OT_properties_edit(Operator):
         self.is_overridable_library = bool(eval(exec_str))
 
         # default default value
-        prop_type = type(self.get_value_eval())
+        prop_type, is_array = rna_idprop_value_item_type(self.get_value_eval())
         if prop_type in {int, float}:
             self.default = str(prop_type(0))
         else:
@@ -1262,7 +1301,7 @@ class WM_OT_properties_edit(Operator):
 
             defval = prop_ui.get("default", None)
             if defval is not None:
-                self.default = str(defval)
+                self.default = str(rna_idprop_value_to_python(defval))
 
             self.soft_min = prop_ui.get("soft_min", self.min)
             self.soft_max = prop_ui.get("soft_max", self.max)
@@ -1270,6 +1309,12 @@ class WM_OT_properties_edit(Operator):
                 self.min != self.soft_min or
                 self.max != self.soft_max
             )
+
+            subtype = prop_ui.get("subtype", None)
+        else:
+            subtype = None
+
+        self._init_subtype(prop_type, is_array, subtype)
 
         # store for comparison
         self._cmp_props = self._cmp_props_get()
@@ -1306,12 +1351,19 @@ class WM_OT_properties_edit(Operator):
         return changed
 
     def draw(self, _context):
+        from rna_prop_ui import (
+            rna_idprop_value_item_type,
+        )
+
         layout = self.layout
         layout.prop(self, "property")
         layout.prop(self, "value")
 
+        value = self.get_value_eval()
+        proptype, is_array = rna_idprop_value_item_type(value)
+
         row = layout.row()
-        row.enabled = type(self.get_value_eval()) in {int, float}
+        row.enabled = proptype in {int, float}
         row.prop(self, "default")
 
         row = layout.row(align=True)
@@ -1328,6 +1380,9 @@ class WM_OT_properties_edit(Operator):
         row.prop(self, "soft_min", text="Soft Min")
         row.prop(self, "soft_max", text="Soft Max")
         layout.prop(self, "description")
+
+        if is_array and proptype == float:
+            layout.prop(self, "subtype")
 
 
 class WM_OT_properties_add(Operator):
@@ -1542,6 +1597,56 @@ class WM_OT_tool_set_by_id(Operator):
             return {'CANCELLED'}
 
 
+class WM_OT_tool_set_by_index(Operator):
+    """Set the tool by index (for keymaps)"""
+    bl_idname = "wm.tool_set_by_index"
+    bl_label = "Set Tool By Index"
+    index: IntProperty(
+        name="Index in toolbar",
+        default=0,
+    )
+    cycle: BoolProperty(
+        name="Cycle",
+        description="Cycle through tools in this group",
+        default=False,
+        options={'SKIP_SAVE'},
+    )
+
+    expand: BoolProperty(
+        description="Include tool sub-groups",
+        default=True,
+    )
+
+    space_type: rna_space_type_prop
+
+    def execute(self, context):
+        from bl_ui.space_toolsystem_common import (
+            activate_by_id,
+            activate_by_id_or_cycle,
+            item_from_index,
+            item_from_flat_index,
+        )
+
+        if self.properties.is_property_set("space_type"):
+            space_type = self.space_type
+        else:
+            space_type = context.space_data.type
+
+        fn = item_from_flat_index if self.expand else item_from_index
+        item = fn(context, space_type, self.index)
+        if item is None:
+            # Don't report, since the number of tools may change.
+            return {'CANCELLED'}
+
+        # Same as: WM_OT_tool_set_by_id
+        fn = activate_by_id_or_cycle if self.cycle else activate_by_id
+        if fn(context, space_type, item.idname):
+            return {'FINISHED'}
+        else:
+            # Since we already have the tool, this can't happen.
+            raise Exception("Internal error setting tool")
+
+
 class WM_OT_toolbar(Operator):
     bl_idname = "wm.toolbar"
     bl_label = "Toolbar"
@@ -1703,12 +1808,17 @@ class WM_MT_splash(Menu):
         if found_recent:
             col2_title.label(text="Recent Files")
         else:
+            if bpy.app.version_cycle in {'rc', 'release'}:
+                manual_version = '%d.%d' % bpy.app.version[:2]
+            else:
+                manual_version = 'dev'
+
             # Links if no recent files
             col2_title.label(text="Getting Started")
 
             col2.operator(
                 "wm.url_open", text="Manual", icon='URL'
-            ).url = "https://docs.blender.org/manual/en/dev/"
+            ).url = "https://docs.blender.org/manual/en/" + manual_version + "/"
             col2.operator(
                 "wm.url_open", text="Release Notes", icon='URL',
             ).url = "https://www.blender.org/download/releases/%d-%d/" % bpy.app.version[:2]
@@ -1730,20 +1840,12 @@ class WM_MT_splash(Menu):
         col1.operator("wm.recover_last_session", icon='RECOVER_LAST')
 
         col2 = split.column()
-        if found_recent:
-            col2.operator(
-                "wm.url_open", text="Release Notes", icon='URL',
-            ).url = "https://www.blender.org/download/releases/%d-%d/" % bpy.app.version[:2]
-            col2.operator(
-                "wm.url_open", text="Development Fund", icon='URL'
-            ).url = "https://fund.blender.org"
-        else:
-            col2.operator(
-                "wm.url_open", text="Development Fund", icon='URL'
-            ).url = "https://fund.blender.org"
-            col2.operator(
-                "wm.url_open", text="Donate", icon='URL'
-            ).url = "https://www.blender.org/foundation/donation-payment/"
+        col2.operator(
+            "wm.url_open", text="Release Notes", icon='URL',
+        ).url = "https://www.blender.org/download/releases/%d-%d/" % bpy.app.version[:2]
+        col2.operator(
+            "wm.url_open", text="Development Fund", icon='FUND'
+        ).url = "https://fund.blender.org"
 
         layout.separator()
         layout.separator()
@@ -1810,6 +1912,7 @@ classes = (
     WM_OT_owner_enable,
     WM_OT_url_open,
     WM_OT_tool_set_by_id,
+    WM_OT_tool_set_by_index,
     WM_OT_toolbar,
     WM_MT_splash,
 )

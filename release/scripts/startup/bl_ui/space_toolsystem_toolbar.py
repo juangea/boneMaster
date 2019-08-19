@@ -295,7 +295,7 @@ class _defs_transform:
     @ToolDef.from_fn
     def transform():
         def draw_settings(context, layout, tool):
-            if not layout.use_property_split:
+            if layout.use_property_split:
                 layout.label(text="Gizmos:")
 
             props = tool.gizmo_group_properties("VIEW3D_GGT_xform_gizmo")
@@ -776,6 +776,7 @@ class _defs_edit_mesh:
         return dict(
             idname="builtin.knife",
             label="Knife",
+            cursor='KNIFE',
             icon="ops.mesh.knife_tool",
             widget=None,
             keymap=(),
@@ -1134,6 +1135,39 @@ class _defs_image_generic:
 class _defs_image_uv_transform:
 
     @ToolDef.from_fn
+    def translate():
+        return dict(
+            idname="builtin.move",
+            label="Move",
+            icon="ops.transform.translate",
+            # widget="VIEW3D_GGT_xform_gizmo",
+            operator="transform.translate",
+            keymap="Image Editor Tool: Uv, Move",
+        )
+
+    @ToolDef.from_fn
+    def rotate():
+        return dict(
+            idname="builtin.rotate",
+            label="Rotate",
+            icon="ops.transform.rotate",
+            # widget="VIEW3D_GGT_xform_gizmo",
+            operator="transform.rotate",
+            keymap="Image Editor Tool: Uv, Rotate",
+        )
+
+    @ToolDef.from_fn
+    def scale():
+        return dict(
+            idname="builtin.scale",
+            label="Scale",
+            icon="ops.transform.resize",
+            # widget="VIEW3D_GGT_xform_gizmo",
+            operator="transform.resize",
+            keymap="Image Editor Tool: Uv, Scale",
+        )
+
+    @ToolDef.from_fn
     def transform():
         return dict(
             idname="builtin.transform",
@@ -1469,6 +1503,15 @@ class _defs_gpencil_edit:
 class _defs_gpencil_sculpt:
 
     @staticmethod
+    def poll_select_mask(context):
+        if context is None:
+            return True
+        ob = context.active_object
+        ts = context.scene.tool_settings
+        return (ob and ob.type == 'GPENCIL' and
+                (ts.gpencil_sculpt.use_select_mask))
+
+    @staticmethod
     def generate_from_brushes(context):
         return generate_from_enum_ex(
             context,
@@ -1616,6 +1659,9 @@ class IMAGE_PT_tools_active(ToolSelectPanelHelper, Panel):
 
     # for reuse
     _tools_transform = (
+        _defs_image_uv_transform.translate,
+        _defs_image_uv_transform.rotate,
+        _defs_image_uv_transform.scale,
         _defs_image_uv_transform.transform,
     )
 
@@ -1989,9 +2035,13 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
 
         ],
         'SCULPT_GPENCIL': [
-            *_tools_gpencil_select,
-            None,
             _defs_gpencil_sculpt.generate_from_brushes,
+            None,
+            lambda context: (
+                VIEW3D_PT_tools_active._tools_gpencil_select
+                if _defs_gpencil_sculpt.poll_select_mask(context)
+                else ()
+            ),
         ],
         'WEIGHT_GPENCIL': [
             _defs_gpencil_weight.generate_from_brushes,

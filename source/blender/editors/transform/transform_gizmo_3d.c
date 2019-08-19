@@ -731,7 +731,9 @@ int ED_transform_calc_gizmo_stats(const bContext *C,
   ScrArea *sa = CTX_wm_area(C);
   ARegion *ar = CTX_wm_region(C);
   Scene *scene = CTX_data_scene(C);
-  Depsgraph *depsgraph = CTX_data_depsgraph(C);
+  /* TODO(sergey): This function is used from operator's modal() and from gizmo's refresh().
+   * Is it fine to possibly evaluate dependency graph here? */
+  Depsgraph *depsgraph = CTX_data_expect_evaluated_depsgraph(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   View3D *v3d = sa->spacedata.first;
   Object *obedit = CTX_data_edit_object(C);
@@ -1489,7 +1491,12 @@ static GizmoGroup *gizmogroup_init(wmGizmoGroup *gzgroup)
   ggd->gizmos[MAN_AXIS_ROT_T]->flag |= WM_GIZMO_SELECT_BACKGROUND;
 
   /* Prevent axis gizmos overlapping the center point, see: T63744. */
-  ggd->gizmos[MAN_AXIS_SCALE_C]->select_bias = ggd->gizmos[MAN_AXIS_TRANS_C]->select_bias = 2.0f;
+  ggd->gizmos[MAN_AXIS_TRANS_C]->select_bias = 2.0f;
+
+  ggd->gizmos[MAN_AXIS_SCALE_C]->select_bias = -2.0f;
+
+  /* Use 1/6 since this is '0.2' if the main scale is 1.2. */
+  RNA_float_set(ggd->gizmos[MAN_AXIS_SCALE_C]->ptr, "arc_inner_factor", 1.0 / 6.0);
 
   return ggd;
 }
@@ -1589,6 +1596,9 @@ static void gizmogroup_init_properties_from_twtype(wmGizmoGroup *gzgroup)
         }
         else if (axis_idx == MAN_AXIS_ROT_C) {
           WM_gizmo_set_flag(axis, WM_GIZMO_DRAW_VALUE, true);
+          WM_gizmo_set_scale(axis, 1.2f);
+        }
+        else if (axis_idx == MAN_AXIS_SCALE_C) {
           WM_gizmo_set_scale(axis, 1.2f);
         }
         else {
@@ -1868,7 +1878,7 @@ static void WIDGETGROUP_gizmo_invoke_prepare(const bContext *C,
 
   GizmoGroup *ggd = gzgroup->customdata;
 
-  /* Support gizmo spesific orientation. */
+  /* Support gizmo specific orientation. */
   if (gz != ggd->gizmos[MAN_AXIS_ROT_T]) {
     Scene *scene = CTX_data_scene(C);
     wmGizmoOpElem *gzop = WM_gizmo_operator_get(gz, 0);

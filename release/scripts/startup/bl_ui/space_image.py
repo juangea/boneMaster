@@ -176,6 +176,7 @@ class IMAGE_MT_select(Menu):
         layout.separator()
 
         layout.operator("uv.select_split")
+        layout.operator("uv.select_overlap")
 
 
 class IMAGE_MT_brush(Menu):
@@ -645,11 +646,18 @@ class IMAGE_HT_header(Header):
             tool_settings = context.tool_settings
 
             # Snap.
+            snap_uv_element = tool_settings.snap_uv_element
+            act_snap_uv_element = tool_settings.bl_rna.properties['snap_uv_element'].enum_items[snap_uv_element]
+
             row = layout.row(align=True)
             row.prop(tool_settings, "use_snap", text="")
-            row.prop(tool_settings, "snap_uv_element", icon_only=True)
-            if tool_settings.snap_uv_element != 'INCREMENT':
-                row.prop(tool_settings, "snap_target", text="")
+
+            sub = row.row(align=True)
+            sub.popover(
+                panel="IMAGE_PT_snapping",
+                icon=act_snap_uv_element.icon,
+                text="",
+            )
 
             # Proportional Editing
             row = layout.row(align=True)
@@ -717,6 +725,9 @@ class IMAGE_HT_header(Header):
             if ima.is_stereo_3d:
                 row = layout.row()
                 row.prop(sima, "show_stereo_3d", text="")
+            if show_maskedit:
+                row = layout.row()
+                row.popover(panel='CLIP_PT_mask_display')
 
             # layers.
             layout.template_image_layers(ima, iuser)
@@ -766,6 +777,51 @@ class MASK_MT_editor_menus(Menu):
             layout.menu("MASK_MT_mask")
 
 
+class IMAGE_MT_mask_context_menu(Menu):
+    bl_label = "Mask Context Menu"
+
+    @classmethod
+    def poll(cls, context):
+        sima = context.space_data
+        return (sima.show_maskedit)
+
+    def draw(self, context):
+        layout = self.layout
+        sima = context.space_data
+
+        if not sima.mask:
+            layout.operator("mask.new")
+            layout.separator()
+            layout.operator("mask.primitive_circle_add", icon='MESH_CIRCLE')
+            layout.operator("mask.primitive_square_add", icon='MESH_PLANE')
+        else:
+            layout.operator_menu_enum("mask.handle_type_set", "type")
+            layout.operator("mask.switch_direction")
+            layout.operator("mask.cyclic_toggle")
+
+            layout.separator()
+            layout.operator("mask.primitive_circle_add", icon='MESH_CIRCLE')
+            layout.operator("mask.primitive_square_add", icon='MESH_PLANE')
+
+            layout.separator()
+            layout.operator("mask.copy_splines", icon='COPYDOWN')
+            layout.operator("mask.paste_splines", icon='PASTEDOWN')
+
+            layout.separator()
+
+            layout.operator("mask.shape_key_rekey", text="Re-key Shape Points")
+            layout.operator("mask.feather_weight_clear")
+            layout.operator("mask.shape_key_feather_reset", text="Reset Feather Animation")
+
+            layout.separator()
+
+            layout.operator("mask.parent_set")
+            layout.operator("mask.parent_clear")
+
+            layout.separator()
+
+            layout.operator("mask.delete")
+
 # -----------------------------------------------------------------------------
 # Mask (similar code in space_clip.py, keep in sync)
 # note! - panel placement does _not_ fit well with image panels... need to fix.
@@ -782,34 +838,52 @@ from bl_ui.properties_mask_common import (
 class IMAGE_PT_mask(MASK_PT_mask, Panel):
     bl_space_type = 'IMAGE_EDITOR'
     bl_region_type = 'UI'
-    bl_category = "Image"
+    bl_category = "Mask"
 
 
 class IMAGE_PT_mask_layers(MASK_PT_layers, Panel):
     bl_space_type = 'IMAGE_EDITOR'
     bl_region_type = 'UI'
-    bl_category = "Image"
-
-
-class IMAGE_PT_mask_display(MASK_PT_display, Panel):
-    bl_space_type = 'IMAGE_EDITOR'
-    bl_region_type = 'UI'
-    bl_category = "Image"
+    bl_category = "Mask"
 
 
 class IMAGE_PT_active_mask_spline(MASK_PT_spline, Panel):
     bl_space_type = 'IMAGE_EDITOR'
     bl_region_type = 'UI'
-    bl_category = "Image"
+    bl_category = "Mask"
 
 
 class IMAGE_PT_active_mask_point(MASK_PT_point, Panel):
     bl_space_type = 'IMAGE_EDITOR'
     bl_region_type = 'UI'
-    bl_category = "Image"
+    bl_category = "Mask"
 
 
 # --- end mask ---
+
+class IMAGE_PT_snapping(Panel):
+    bl_space_type = 'IMAGE_EDITOR'
+    bl_region_type = 'HEADER'
+    bl_label = "Snapping"
+
+    def draw(self, context):
+        tool_settings = context.tool_settings
+
+        layout = self.layout
+        col = layout.column()
+        col.label(text="Snapping")
+        col.prop(tool_settings, "snap_uv_element", expand=True)
+
+        if tool_settings.snap_uv_element != 'INCREMENT':
+            col.label(text="Target")
+            row = col.row(align=True)
+            row.prop(tool_settings, "snap_target", expand=True)
+
+        col.label(text="Affect")
+        row = col.row(align=True)
+        row.prop(tool_settings, "use_snap_translate", text="Move", toggle=True)
+        row.prop(tool_settings, "use_snap_rotate", text="Rotate", toggle=True)
+        row.prop(tool_settings, "use_snap_scale", text="Scale", toggle=True)
 
 
 class IMAGE_PT_image_properties(Panel):
@@ -952,7 +1026,7 @@ class IMAGE_PT_render_slots(Panel):
         col = row.column()
         col.template_list(
             "IMAGE_UL_render_slots", "render_slots", ima,
-            "render_slots", ima.render_slots, "active_index", rows=3
+            "render_slots", ima.render_slots, "active_index", rows=3,
         )
 
         col = row.column(align=True)
@@ -1004,9 +1078,12 @@ class IMAGE_PT_paint_color(Panel, ImagePaintPanel):
         settings = context.tool_settings.image_paint
         brush = settings.brush
 
-        layout.active = not brush.use_gradient
+        layout.prop(brush, "color_type", expand=True)
 
-        brush_texpaint_common_color(self, context, layout, brush, settings, True)
+        if brush.color_type == 'COLOR':
+            brush_texpaint_common_color(self, context, layout, brush, settings, True)
+        elif brush.color_type == 'GRADIENT':
+            brush_texpaint_common_gradient(self, context, layout, brush, settings, True)
 
 
 class IMAGE_PT_paint_swatches(Panel, ImagePaintPanel):
@@ -1031,38 +1108,6 @@ class IMAGE_PT_paint_swatches(Panel, ImagePaintPanel):
         layout.template_ID(settings, "palette", new="palette.new")
         if settings.palette:
             layout.template_palette(settings, "palette", color=True)
-
-
-class IMAGE_PT_paint_gradient(Panel, ImagePaintPanel):
-    bl_category = "Tool"
-    bl_context = ".paint_common_2d"
-    bl_parent_id = "IMAGE_PT_paint"
-    bl_label = "Gradient"
-    bl_options = {'DEFAULT_CLOSED'}
-
-    @classmethod
-    def poll(cls, context):
-        settings = context.tool_settings.image_paint
-        brush = settings.brush
-        capabilities = brush.image_paint_capabilities
-
-        return capabilities.has_color
-
-    def draw_header(self, context):
-        settings = context.tool_settings.image_paint
-        brush = settings.brush
-        self.layout.prop(brush, "use_gradient", text="")
-
-    def draw(self, context):
-        layout = self.layout
-        layout.use_property_split = False
-        layout.use_property_decorate = False  # No animation.
-        settings = context.tool_settings.image_paint
-        brush = settings.brush
-
-        layout.active = brush.use_gradient
-
-        brush_texpaint_common_gradient(self, context, layout, brush, settings, True)
 
 
 class IMAGE_PT_paint_clone(Panel, ImagePaintPanel):
@@ -1365,16 +1410,21 @@ class IMAGE_PT_paint_curve(BrushButtonsPanel, Panel):
         tool_settings = context.tool_settings.image_paint
         brush = tool_settings.brush
 
-        layout.template_curve_mapping(brush, "curve")
-
         col = layout.column(align=True)
         row = col.row(align=True)
-        row.operator("brush.curve_preset", icon='SMOOTHCURVE', text="").shape = 'SMOOTH'
-        row.operator("brush.curve_preset", icon='SPHERECURVE', text="").shape = 'ROUND'
-        row.operator("brush.curve_preset", icon='ROOTCURVE', text="").shape = 'ROOT'
-        row.operator("brush.curve_preset", icon='SHARPCURVE', text="").shape = 'SHARP'
-        row.operator("brush.curve_preset", icon='LINCURVE', text="").shape = 'LINE'
-        row.operator("brush.curve_preset", icon='NOCURVE', text="").shape = 'MAX'
+        row.prop(brush, "curve_preset", text="")
+
+        if brush.curve_preset == 'CUSTOM':
+            layout.template_curve_mapping(brush, "curve")
+
+            col = layout.column(align=True)
+            row = col.row(align=True)
+            row.operator("brush.curve_preset", icon='SMOOTHCURVE', text="").shape = 'SMOOTH'
+            row.operator("brush.curve_preset", icon='SPHERECURVE', text="").shape = 'ROUND'
+            row.operator("brush.curve_preset", icon='ROOTCURVE', text="").shape = 'ROOT'
+            row.operator("brush.curve_preset", icon='SHARPCURVE', text="").shape = 'SHARP'
+            row.operator("brush.curve_preset", icon='LINCURVE', text="").shape = 'LINE'
+            row.operator("brush.curve_preset", icon='NOCURVE', text="").shape = 'MAX'
 
 
 class IMAGE_PT_tools_imagepaint_symmetry(BrushButtonsPanel, Panel):
@@ -1465,15 +1515,20 @@ class IMAGE_PT_uv_sculpt_curve(Panel):
         brush = uvsculpt.brush
 
         if brush is not None:
-            layout.template_curve_mapping(brush, "curve")
+            col = layout.column(align=True)
+            row = col.row(align=True)
+            row.prop(brush, "curve_preset", text="")
 
-            row = layout.row(align=True)
-            row.operator("brush.curve_preset", icon='SMOOTHCURVE', text="").shape = 'SMOOTH'
-            row.operator("brush.curve_preset", icon='SPHERECURVE', text="").shape = 'ROUND'
-            row.operator("brush.curve_preset", icon='ROOTCURVE', text="").shape = 'ROOT'
-            row.operator("brush.curve_preset", icon='SHARPCURVE', text="").shape = 'SHARP'
-            row.operator("brush.curve_preset", icon='LINCURVE', text="").shape = 'LINE'
-            row.operator("brush.curve_preset", icon='NOCURVE', text="").shape = 'MAX'
+            if brush.curve_preset == 'CUSTOM':
+                layout.template_curve_mapping(brush, "curve")
+
+                row = layout.row(align=True)
+                row.operator("brush.curve_preset", icon='SMOOTHCURVE', text="").shape = 'SMOOTH'
+                row.operator("brush.curve_preset", icon='SPHERECURVE', text="").shape = 'ROUND'
+                row.operator("brush.curve_preset", icon='ROOTCURVE', text="").shape = 'ROOT'
+                row.operator("brush.curve_preset", icon='SHARPCURVE', text="").shape = 'SHARP'
+                row.operator("brush.curve_preset", icon='LINCURVE', text="").shape = 'LINE'
+                row.operator("brush.curve_preset", icon='NOCURVE', text="").shape = 'MAX'
 
 
 class ImageScopesPanel:
@@ -1611,7 +1666,7 @@ class IMAGE_PT_uv_cursor(Panel):
 
 
 # Grease Pencil properties
-class IMAGE_PT_grease_pencil(AnnotationDataPanel, Panel):
+class IMAGE_PT_annotation(AnnotationDataPanel, Panel):
     bl_space_type = 'IMAGE_EDITOR'
     bl_region_type = 'UI'
     bl_category = "View"
@@ -1636,6 +1691,7 @@ classes = (
     IMAGE_MT_uvs_weldalign,
     IMAGE_MT_uvs_select_mode,
     IMAGE_MT_uvs_context_menu,
+    IMAGE_MT_mask_context_menu,
     IMAGE_MT_pivot_pie,
     IMAGE_MT_uvs_snap_pie,
     IMAGE_HT_tool_header,
@@ -1644,9 +1700,9 @@ classes = (
     IMAGE_PT_active_tool,
     IMAGE_PT_mask,
     IMAGE_PT_mask_layers,
-    IMAGE_PT_mask_display,
     IMAGE_PT_active_mask_spline,
     IMAGE_PT_active_mask_point,
+    IMAGE_PT_snapping,
     IMAGE_PT_image_properties,
     IMAGE_UL_render_slots,
     IMAGE_PT_render_slots,
@@ -1656,7 +1712,6 @@ classes = (
     IMAGE_PT_paint,
     IMAGE_PT_paint_color,
     IMAGE_PT_paint_swatches,
-    IMAGE_PT_paint_gradient,
     IMAGE_PT_paint_clone,
     IMAGE_PT_paint_options,
     IMAGE_PT_tools_brush_texture,
@@ -1676,7 +1731,7 @@ classes = (
     IMAGE_PT_sample_line,
     IMAGE_PT_scope_sample,
     IMAGE_PT_uv_cursor,
-    IMAGE_PT_grease_pencil,
+    IMAGE_PT_annotation,
 )
 
 

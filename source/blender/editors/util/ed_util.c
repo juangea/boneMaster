@@ -99,7 +99,7 @@ void ED_editors_init_for_undo(Main *bmain)
 
 void ED_editors_init(bContext *C)
 {
-  struct Depsgraph *depsgraph = CTX_data_depsgraph(C);
+  struct Depsgraph *depsgraph = CTX_data_expect_evaluated_depsgraph(C);
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   wmWindowManager *wm = CTX_wm_manager(C);
@@ -126,8 +126,12 @@ void ED_editors_init(bContext *C)
       continue;
     }
     else if (ob->type == OB_GPENCIL) {
-      /* For multi-edit mode we may already have mode data.
-       * (grease pencil does not need it) */
+      /* For multi-edit mode we may already have mode data (grease pencil does not need it).
+       * However we may have a non-active object stuck in a greasepencil edit mode. */
+      if (ob != obact) {
+        ob->mode = OB_MODE_OBJECT;
+        DEG_id_tag_update(&ob->id, ID_RECALC_COPY_ON_WRITE);
+      }
       continue;
     }
 
@@ -322,15 +326,15 @@ void unpack_menu(bContext *C,
     BLI_split_file_part(abs_name, fi, sizeof(fi));
     BLI_snprintf(local_name, sizeof(local_name), "//%s/%s", folder, fi);
     if (!STREQ(abs_name, local_name)) {
-      switch (checkPackedFile(BKE_main_blendfile_path(bmain), local_name, pf)) {
-        case PF_NOFILE:
+      switch (BKE_packedfile_compare_to_file(BKE_main_blendfile_path(bmain), local_name, pf)) {
+        case PF_CMP_NOFILE:
           BLI_snprintf(line, sizeof(line), TIP_("Create %s"), local_name);
           uiItemFullO_ptr(layout, ot, line, ICON_NONE, NULL, WM_OP_EXEC_DEFAULT, 0, &props_ptr);
           RNA_enum_set(&props_ptr, "method", PF_WRITE_LOCAL);
           RNA_string_set(&props_ptr, "id", id_name);
 
           break;
-        case PF_EQUAL:
+        case PF_CMP_EQUAL:
           BLI_snprintf(line, sizeof(line), TIP_("Use %s (identical)"), local_name);
           // uiItemEnumO_ptr(layout, ot, line, 0, "method", PF_USE_LOCAL);
           uiItemFullO_ptr(layout, ot, line, ICON_NONE, NULL, WM_OP_EXEC_DEFAULT, 0, &props_ptr);
@@ -338,7 +342,7 @@ void unpack_menu(bContext *C,
           RNA_string_set(&props_ptr, "id", id_name);
 
           break;
-        case PF_DIFFERS:
+        case PF_CMP_DIFFERS:
           BLI_snprintf(line, sizeof(line), TIP_("Use %s (differs)"), local_name);
           // uiItemEnumO_ptr(layout, ot, line, 0, "method", PF_USE_LOCAL);
           uiItemFullO_ptr(layout, ot, line, ICON_NONE, NULL, WM_OP_EXEC_DEFAULT, 0, &props_ptr);
@@ -355,22 +359,22 @@ void unpack_menu(bContext *C,
     }
   }
 
-  switch (checkPackedFile(BKE_main_blendfile_path(bmain), abs_name, pf)) {
-    case PF_NOFILE:
+  switch (BKE_packedfile_compare_to_file(BKE_main_blendfile_path(bmain), abs_name, pf)) {
+    case PF_CMP_NOFILE:
       BLI_snprintf(line, sizeof(line), TIP_("Create %s"), abs_name);
       // uiItemEnumO_ptr(layout, ot, line, 0, "method", PF_WRITE_ORIGINAL);
       uiItemFullO_ptr(layout, ot, line, ICON_NONE, NULL, WM_OP_EXEC_DEFAULT, 0, &props_ptr);
       RNA_enum_set(&props_ptr, "method", PF_WRITE_ORIGINAL);
       RNA_string_set(&props_ptr, "id", id_name);
       break;
-    case PF_EQUAL:
+    case PF_CMP_EQUAL:
       BLI_snprintf(line, sizeof(line), TIP_("Use %s (identical)"), abs_name);
       // uiItemEnumO_ptr(layout, ot, line, 0, "method", PF_USE_ORIGINAL);
       uiItemFullO_ptr(layout, ot, line, ICON_NONE, NULL, WM_OP_EXEC_DEFAULT, 0, &props_ptr);
       RNA_enum_set(&props_ptr, "method", PF_USE_ORIGINAL);
       RNA_string_set(&props_ptr, "id", id_name);
       break;
-    case PF_DIFFERS:
+    case PF_CMP_DIFFERS:
       BLI_snprintf(line, sizeof(line), TIP_("Use %s (differs)"), abs_name);
       // uiItemEnumO_ptr(layout, ot, line, 0, "method", PF_USE_ORIGINAL);
       uiItemFullO_ptr(layout, ot, line, ICON_NONE, NULL, WM_OP_EXEC_DEFAULT, 0, &props_ptr);

@@ -147,16 +147,8 @@ static void rna_Material_active_paint_texture_index_update(Main *bmain,
   Material *ma = ptr->id.data;
 
   if (ma->use_nodes && ma->nodetree) {
-    struct bNode *node;
-    int index = 0;
-    for (node = ma->nodetree->nodes.first; node; node = node->next) {
-      if (node->typeinfo->nclass == NODE_CLASS_TEXTURE &&
-          node->typeinfo->type == SH_NODE_TEX_IMAGE && node->id) {
-        if (index++ == ma->paint_active_slot) {
-          break;
-        }
-      }
-    }
+    struct bNode *node = BKE_texpaint_slot_material_find_node(ma, ma->paint_active_slot);
+
     if (node) {
       nodeSetActive(ma->nodetree, node);
     }
@@ -433,11 +425,11 @@ static void rna_def_material_greasepencil(BlenderRNA *brna)
   static EnumPropertyItem fill_style_items[] = {
       {GP_STYLE_FILL_STYLE_SOLID, "SOLID", 0, "Solid", "Fill area with solid color"},
       {GP_STYLE_FILL_STYLE_GRADIENT, "GRADIENT", 0, "Gradient", "Fill area with gradient color"},
-      {GP_STYLE_FILL_STYLE_CHESSBOARD,
-       "CHESSBOARD",
+      {GP_STYLE_FILL_STYLE_CHECKER,
+       "CHECKER",
        0,
        "Checker Board",
-       "Fill area with chessboard pattern"},
+       "Fill area with checkerboard pattern"},
       {GP_STYLE_FILL_STYLE_TEXTURE, "TEXTURE", 0, "Texture", "Fill area with image texture"},
       {0, NULL, 0, NULL, NULL},
   };
@@ -620,6 +612,12 @@ static void rna_def_material_greasepencil(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Pattern", "Use Fill Texture as a pattern to apply color");
   RNA_def_property_update(prop, NC_GPENCIL | ND_SHADING, "rna_MaterialGpencil_update");
 
+  prop = RNA_def_property(srna, "use_overlap_strokes", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", GP_STYLE_DISABLE_STENCIL);
+  RNA_def_property_ui_text(
+      prop, "Self Overlap", "Disable stencil and overlap self intersections with alpha materials");
+  RNA_def_property_update(prop, NC_GPENCIL | ND_SHADING, "rna_MaterialGpencil_update");
+
   prop = RNA_def_property(srna, "show_stroke", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "flag", GP_STYLE_STROKE_SHOW);
   RNA_def_property_ui_text(prop, "Show Stroke", "Show stroke lines of this material");
@@ -721,16 +719,6 @@ void RNA_def_material(BlenderRNA *brna)
 
   static EnumPropertyItem prop_eevee_blend_items[] = {
       {MA_BM_SOLID, "OPAQUE", 0, "Opaque", "Render surface without transparency"},
-      {MA_BM_ADD,
-       "ADD",
-       0,
-       "Additive",
-       "Render surface and blend the result with additive blending"},
-      {MA_BM_MULTIPLY,
-       "MULTIPLY",
-       0,
-       "Multiply",
-       "Render surface and blend the result with multiplicative blending"},
       {MA_BM_CLIP,
        "CLIP",
        0,

@@ -132,6 +132,9 @@ static Mesh *mesh_remove_doubles_on_axis(Mesh *result,
       tot_doubles += 1;
       copy_v3_v3(mvert_new[i].co, axis_co);
     }
+    else {
+      mvert_new[i].flag &= ~ME_VERT_TMP_TAG & 0xFF;
+    }
   }
 
   if (tot_doubles != 0) {
@@ -438,6 +441,10 @@ static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mes
     med_new->v2 = med_orig->v2;
     med_new->crease = med_orig->crease;
     med_new->flag = med_orig->flag & ~ME_LOOSEEDGE;
+    /* Tag mvert as not loose.
+     * NOTE: ME_VERT_TMP_TAG is given to be cleared by BKE_mesh_new_nomain_from_template. */
+    mvert_new[med_orig->v1].flag |= ME_VERT_TMP_TAG;
+    mvert_new[med_orig->v2].flag |= ME_VERT_TMP_TAG;
   }
 
   /* build polygon -> edge map */
@@ -484,7 +491,7 @@ static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mes
      * extra space by abusing the vert array before its filled with new verts.
      * The new array for vert_connect must be at least sizeof(ScrewVertConnect) * totvert
      * and the size of our resulting meshes array is sizeof(MVert) * totvert * 3
-     * so its safe to use the second 2 thrids of MVert the array for vert_connect,
+     * so its safe to use the second 2 thirds of MVert the array for vert_connect,
      * just make sure ScrewVertConnect struct is no more than twice as big as MVert,
      * at the moment there is no chance of that being a problem,
      * unless MVert becomes half its current size.
@@ -899,6 +906,9 @@ static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mes
       med_new->v1 = varray_stride + j;
       med_new->v2 = med_new->v1 - totvert;
       med_new->flag = ME_EDGEDRAW | ME_EDGERENDER;
+      if ((mv_new_base->flag & ME_VERT_TMP_TAG) == 0) {
+        med_new->flag |= ME_LOOSEEDGE;
+      }
       med_new++;
     }
   }
@@ -917,6 +927,9 @@ static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mes
       med_new->v1 = i;
       med_new->v2 = varray_stride + i;
       med_new->flag = ME_EDGEDRAW | ME_EDGERENDER;
+      if ((mvert_new[i].flag & ME_VERT_TMP_TAG) == 0) {
+        med_new->flag |= ME_LOOSEEDGE;
+      }
       med_new++;
     }
   }

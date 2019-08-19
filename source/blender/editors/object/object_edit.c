@@ -879,6 +879,8 @@ static int forcefield_toggle_exec(bContext *C, wmOperator *UNUSED(op))
   WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, ob);
   WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, ob);
 
+  DEG_id_tag_update(&ob->id, ID_RECALC_TRANSFORM);
+
   return OPERATOR_FINISHED;
 }
 
@@ -914,7 +916,9 @@ void ED_objects_recalculate_paths(bContext *C, Scene *scene, bool current_frame_
   }
 
   Main *bmain = CTX_data_main(C);
-  Depsgraph *depsgraph = CTX_data_depsgraph(C);
+  /* NOTE: Dependency graph will be evaluated at all the frames, but we first need to access some
+   * nested pointers, like animation data. */
+  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   ListBase targets = {NULL, NULL};
 
   /* loop over objects in scene */
@@ -1064,7 +1068,7 @@ void OBJECT_OT_paths_update(wmOperatorType *ot)
   ot->idname = "OBJECT_OT_paths_update";
   ot->description = "Recalculate paths for selected objects";
 
-  /* api callbakcs */
+  /* api callbacks */
   ot->exec = object_update_paths_exec;
   ot->poll = object_update_paths_poll;
 

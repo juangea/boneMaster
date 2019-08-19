@@ -56,6 +56,7 @@
 #include "BKE_paint.h"
 #include "BKE_report.h"
 #include "BKE_subsurf.h"
+#include "BKE_layer.h"
 
 #include "DEG_depsgraph.h"
 
@@ -78,6 +79,10 @@
 
 #include "sculpt_intern.h"
 #include "paint_intern.h" /* own include */
+
+/* -------------------------------------------------------------------- */
+/** \name Internal Utilities
+ * \{ */
 
 /* Use for 'blur' brush, align with PBVH nodes, created and freed on each update. */
 struct VPaintAverageAccum {
@@ -1100,6 +1105,8 @@ static void vertex_paint_init_session_data(const ToolSettings *ts, Object *ob)
   }
 }
 
+/** \} */
+
 /* -------------------------------------------------------------------- */
 /** \name Enter Vertex/Weight Paint Mode
  * \{ */
@@ -1164,10 +1171,9 @@ void ED_object_vpaintmode_enter_ex(
 {
   ed_vwpaintmode_enter_generic(bmain, depsgraph, wm, scene, ob, OB_MODE_VERTEX_PAINT);
 }
-void ED_object_vpaintmode_enter(struct bContext *C)
+void ED_object_vpaintmode_enter(struct bContext *C, Depsgraph *depsgraph)
 {
   Main *bmain = CTX_data_main(C);
-  Depsgraph *depsgraph = CTX_data_depsgraph(C);
   wmWindowManager *wm = CTX_wm_manager(C);
   Scene *scene = CTX_data_scene(C);
   Object *ob = CTX_data_active_object(C);
@@ -1179,10 +1185,9 @@ void ED_object_wpaintmode_enter_ex(
 {
   ed_vwpaintmode_enter_generic(bmain, depsgraph, wm, scene, ob, OB_MODE_WEIGHT_PAINT);
 }
-void ED_object_wpaintmode_enter(struct bContext *C)
+void ED_object_wpaintmode_enter(struct bContext *C, Depsgraph *depsgraph)
 {
   Main *bmain = CTX_data_main(C);
-  Depsgraph *depsgraph = CTX_data_depsgraph(C);
   wmWindowManager *wm = CTX_wm_manager(C);
   Scene *scene = CTX_data_scene(C);
   Object *ob = CTX_data_active_object(C);
@@ -1264,7 +1269,9 @@ void ED_object_wpaintmode_exit(struct bContext *C)
 
 /** \} */
 
-/* *************** set wpaint operator ****************** */
+/* -------------------------------------------------------------------- */
+/** \name Toggle Weight Paint Operator
+ * \{ */
 
 /**
  * \note Keep in sync with #vpaint_mode_toggle_exec
@@ -1292,23 +1299,55 @@ static int wpaint_mode_toggle_exec(bContext *C, wmOperator *op)
   }
   else {
     Depsgraph *depsgraph = CTX_data_depsgraph_on_load(C);
+    if (depsgraph) {
+      depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
+    }
     wmWindowManager *wm = CTX_wm_manager(C);
     ED_object_wpaintmode_enter_ex(bmain, depsgraph, wm, scene, ob);
     BKE_paint_toolslots_brush_validate(bmain, &ts->wpaint->paint);
   }
 
-  /* When locked, it's almost impossible to select the pose
-   * then the object to enter weight paint mode.
+  /* When locked, it's almost impossible to select the pose-object
+   * then the mesh-object to enter weight paint mode.
+   * Even when the object mode is not locked this is inconvenient - so allow in either case.
+   *
    * In this case move our pose object in/out of pose mode.
-   * This is in fits with the convention of selecting multiple objects and entering a mode. */
-  if (scene->toolsettings->object_flag & SCE_OBJECT_MODE_LOCK) {
-    Object *ob_arm = modifiers_isDeformedByArmature(ob);
-    if (ob_arm && (ob_arm->base_flag & BASE_SELECTED)) {
-      if (ob_arm->mode & OB_MODE_POSE) {
-        ED_object_posemode_exit_ex(bmain, ob_arm);
-      }
-      else {
-        ED_object_posemode_enter_ex(bmain, ob_arm);
+   * This is in fits with the convention of selecting multiple objects and entering a mode.
+   */
+  {
+    VirtualModifierData virtualModifierData;
+    ModifierData *md = modifiers_getVirtualModifierList(ob, &virtualModifierData);
+    if (md != NULL) {
+      /* Can be NULL. */
+      View3D *v3d = CTX_wm_view3d(C);
+      ViewLayer *view_layer = CTX_data_view_layer(C);
+      for (; md; md = md->next) {
+        if (md->type == eModifierType_Armature) {
+          ArmatureModifierData *amd = (ArmatureModifierData *)md;
+          Object *ob_arm = amd->object;
+          if (ob_arm != NULL) {
+            const Base *base_arm = BKE_view_layer_base_find(view_layer, ob_arm);
+            if (base_arm && BASE_VISIBLE(v3d, base_arm)) {
+              if (is_mode_set) {
+                if ((ob_arm->mode & OB_MODE_POSE) != 0) {
+                  ED_object_posemode_exit_ex(bmain, ob_arm);
+                }
+              }
+              else {
+                /* Only check selected status when entering weight-paint mode
+                 * because we may have multiple armature objects.
+                 * Selecting one will de-select the other, which would leave it in pose-mode
+                 * when exiting weight paint mode. While usable, this looks like inconsistent
+                 * behavior from a user perspective. */
+                if (base_arm->flag & BASE_SELECTED) {
+                  if ((ob_arm->mode & OB_MODE_POSE) == 0) {
+                    ED_object_posemode_enter_ex(bmain, ob_arm);
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
   }
@@ -1358,10 +1397,14 @@ void PAINT_OT_weight_paint_toggle(wmOperatorType *ot)
   ot->poll = paint_poll_test;
 
   /* flags */
-  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_USE_EVAL_DATA;
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
-/* ************ weight paint operator ********** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Weight Paint Operator
+ * \{ */
 
 struct WPaintData {
   ViewContext vc;
@@ -1514,7 +1557,7 @@ static bool wpaint_stroke_test_start(bContext *C, wmOperator *op, const float mo
   bool *defbase_sel;
   SculptSession *ss = ob->sculpt;
   VPaint *vp = CTX_data_tool_settings(C)->wpaint;
-  Depsgraph *depsgraph = CTX_data_depsgraph(C);
+  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
 
   if (ED_wpaint_ensure_data(C, op->reports, WPAINT_ENSURE_MIRROR, &vgroup_index) == false) {
     return false;
@@ -1671,7 +1714,7 @@ static float wpaint_get_active_weight(const MDeformVert *dv, const WeightPaintIn
 
 static void do_wpaint_precompute_weight_cb_ex(void *__restrict userdata,
                                               const int n,
-                                              const ParallelRangeTLS *__restrict UNUSED(tls))
+                                              const TaskParallelTLS *__restrict UNUSED(tls))
 {
   SculptThreadedTaskData *data = userdata;
   const MDeformVert *dv = &data->me->dvert[n];
@@ -1695,7 +1738,7 @@ static void precompute_weight_values(
       .me = me,
   };
 
-  ParallelRangeSettings settings;
+  TaskParallelSettings settings;
   BLI_parallel_range_settings_defaults(&settings);
   BLI_task_parallel_range(0, me->totvert, &data, do_wpaint_precompute_weight_cb_ex, &settings);
 
@@ -1704,7 +1747,7 @@ static void precompute_weight_values(
 
 static void do_wpaint_brush_blur_task_cb_ex(void *__restrict userdata,
                                             const int n,
-                                            const ParallelRangeTLS *__restrict UNUSED(tls))
+                                            const TaskParallelTLS *__restrict UNUSED(tls))
 {
   SculptThreadedTaskData *data = userdata;
   SculptSession *ss = data->ob->sculpt;
@@ -1796,7 +1839,7 @@ static void do_wpaint_brush_blur_task_cb_ex(void *__restrict userdata,
 
 static void do_wpaint_brush_smear_task_cb_ex(void *__restrict userdata,
                                              const int n,
-                                             const ParallelRangeTLS *__restrict UNUSED(tls))
+                                             const TaskParallelTLS *__restrict UNUSED(tls))
 {
   SculptThreadedTaskData *data = userdata;
   SculptSession *ss = data->ob->sculpt;
@@ -1907,7 +1950,7 @@ static void do_wpaint_brush_smear_task_cb_ex(void *__restrict userdata,
 
 static void do_wpaint_brush_draw_task_cb_ex(void *__restrict userdata,
                                             const int n,
-                                            const ParallelRangeTLS *__restrict UNUSED(tls))
+                                            const TaskParallelTLS *__restrict UNUSED(tls))
 {
   SculptThreadedTaskData *data = userdata;
   SculptSession *ss = data->ob->sculpt;
@@ -1980,7 +2023,7 @@ static void do_wpaint_brush_draw_task_cb_ex(void *__restrict userdata,
 }
 
 static void do_wpaint_brush_calc_average_weight_cb_ex(
-    void *__restrict userdata, const int n, const ParallelRangeTLS *__restrict UNUSED(tls))
+    void *__restrict userdata, const int n, const TaskParallelTLS *__restrict UNUSED(tls))
 {
   SculptThreadedTaskData *data = userdata;
   SculptSession *ss = data->ob->sculpt;
@@ -2036,7 +2079,7 @@ static void calculate_average_weight(SculptThreadedTaskData *data,
   struct WPaintAverageAccum *accum = MEM_mallocN(sizeof(*accum) * totnode, __func__);
   data->custom_data = accum;
 
-  ParallelRangeSettings settings;
+  TaskParallelSettings settings;
   BLI_parallel_range_settings_defaults(&settings);
   settings.use_threading = ((data->sd->flags & SCULPT_USE_OPENMP) &&
                             totnode > SCULPT_THREADED_LIMIT);
@@ -2085,7 +2128,7 @@ static void wpaint_paint_leaves(bContext *C,
   /* Use this so average can modify its weight without touching the brush. */
   data.strength = BKE_brush_weight_get(scene, brush);
 
-  ParallelRangeSettings settings;
+  TaskParallelSettings settings;
   BLI_parallel_range_settings_defaults(&settings);
   /* NOTE: current mirroring code cannot be run in parallel */
   settings.use_threading = !(me->editflag & ME_EDIT_MIRROR_X);
@@ -2259,7 +2302,6 @@ static void wpaint_stroke_update_step(bContext *C, struct PaintStroke *stroke, P
   vwpaint_update_cache_variants(C, wp, ob, itemptr);
 
   float mat[4][4];
-  float mval[2];
 
   const float brush_alpha_value = BKE_brush_alpha_get(scene, brush);
 
@@ -2309,7 +2351,7 @@ static void wpaint_stroke_update_step(bContext *C, struct PaintStroke *stroke, P
 
   /* calculate pivot for rotation around seletion if needed */
   /* also needed for "View Selected" on last stroke */
-  paint_last_stroke_update(scene, vc->ar, mval);
+  paint_last_stroke_update(scene, vc->ar, ss->cache->mouse);
 
   BKE_mesh_batch_cache_dirty_tag(ob->data, BKE_MESH_BATCH_DIRTY_ALL);
 
@@ -2464,7 +2506,11 @@ void PAINT_OT_weight_paint(wmOperatorType *ot)
   paint_stroke_operator_properties(ot);
 }
 
-/* ************ set / clear vertex paint mode ********** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Toggle Vertex Paint Operator
+ * \{ */
 
 /**
  * \note Keep in sync with #wpaint_mode_toggle_exec
@@ -2524,10 +2570,14 @@ void PAINT_OT_vertex_paint_toggle(wmOperatorType *ot)
   ot->poll = paint_poll_test;
 
   /* flags */
-  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_USE_EVAL_DATA;
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
-/* ********************** vertex paint operator ******************* */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Vertex Paint Operator
+ * \{ */
 
 /* Implementation notes:
  *
@@ -2589,7 +2639,7 @@ static bool vpaint_stroke_test_start(bContext *C, struct wmOperator *op, const f
   Object *ob = CTX_data_active_object(C);
   Mesh *me;
   SculptSession *ss = ob->sculpt;
-  Depsgraph *depsgraph = CTX_data_depsgraph(C);
+  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
 
   /* context checks could be a poll() */
   me = BKE_mesh_from_object(ob);
@@ -2656,8 +2706,9 @@ static bool vpaint_stroke_test_start(bContext *C, struct wmOperator *op, const f
   return 1;
 }
 
-static void do_vpaint_brush_calc_average_color_cb_ex(
-    void *__restrict userdata, const int n, const ParallelRangeTLS *__restrict UNUSED(tls))
+static void do_vpaint_brush_calc_average_color_cb_ex(void *__restrict userdata,
+                                                     const int n,
+                                                     const TaskParallelTLS *__restrict UNUSED(tls))
 {
   SculptThreadedTaskData *data = userdata;
   SculptSession *ss = data->ob->sculpt;
@@ -2723,7 +2774,7 @@ static float tex_color_alpha_ubyte(SculptThreadedTaskData *data,
 
 static void do_vpaint_brush_draw_task_cb_ex(void *__restrict userdata,
                                             const int n,
-                                            const ParallelRangeTLS *__restrict UNUSED(tls))
+                                            const TaskParallelTLS *__restrict UNUSED(tls))
 {
   SculptThreadedTaskData *data = userdata;
   SculptSession *ss = data->ob->sculpt;
@@ -2822,7 +2873,7 @@ static void do_vpaint_brush_draw_task_cb_ex(void *__restrict userdata,
 
 static void do_vpaint_brush_blur_task_cb_ex(void *__restrict userdata,
                                             const int n,
-                                            const ParallelRangeTLS *__restrict UNUSED(tls))
+                                            const TaskParallelTLS *__restrict UNUSED(tls))
 {
   SculptThreadedTaskData *data = userdata;
   SculptSession *ss = data->ob->sculpt;
@@ -2940,7 +2991,7 @@ static void do_vpaint_brush_blur_task_cb_ex(void *__restrict userdata,
 
 static void do_vpaint_brush_smear_task_cb_ex(void *__restrict userdata,
                                              const int n,
-                                             const ParallelRangeTLS *__restrict UNUSED(tls))
+                                             const TaskParallelTLS *__restrict UNUSED(tls))
 {
   SculptThreadedTaskData *data = userdata;
   SculptSession *ss = data->ob->sculpt;
@@ -3090,7 +3141,7 @@ static void calculate_average_color(SculptThreadedTaskData *data,
   struct VPaintAverageAccum *accum = MEM_mallocN(sizeof(*accum) * totnode, __func__);
   data->custom_data = accum;
 
-  ParallelRangeSettings settings;
+  TaskParallelSettings settings;
   BLI_parallel_range_settings_defaults(&settings);
   BLI_task_parallel_range(0, totnode, data, do_vpaint_brush_calc_average_color_cb_ex, &settings);
 
@@ -3136,7 +3187,7 @@ static void vpaint_paint_leaves(bContext *C,
       .lcol = (uint *)me->mloopcol,
       .me = me,
   };
-  ParallelRangeSettings settings;
+  TaskParallelSettings settings;
   BLI_parallel_range_settings_defaults(&settings);
   switch ((eBrushVertexPaintTool)brush->vertexpaint_tool) {
     case VPAINT_TOOL_AVERAGE:
@@ -3253,12 +3304,12 @@ static void vpaint_stroke_update_step(bContext *C, struct PaintStroke *stroke, P
   VPaint *vp = ts->vpaint;
   ViewContext *vc = &vpd->vc;
   Object *ob = vc->obact;
+  SculptSession *ss = ob->sculpt;
   Sculpt *sd = CTX_data_tool_settings(C)->sculpt;
 
   vwpaint_update_cache_variants(C, vp, ob, itemptr);
 
   float mat[4][4];
-  float mval[2];
 
   ED_view3d_init_mats_rv3d(ob, vc->rv3d);
 
@@ -3280,7 +3331,7 @@ static void vpaint_stroke_update_step(bContext *C, struct PaintStroke *stroke, P
 
   /* calculate pivot for rotation around seletion if needed */
   /* also needed for "View Selected" on last stroke */
-  paint_last_stroke_update(scene, vc->ar, mval);
+  paint_last_stroke_update(scene, vc->ar, ss->cache->mouse);
 
   ED_region_tag_redraw(vc->ar);
 
@@ -3397,3 +3448,5 @@ void PAINT_OT_vertex_paint(wmOperatorType *ot)
 
   paint_stroke_operator_properties(ot);
 }
+
+/** \} */

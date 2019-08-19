@@ -42,6 +42,7 @@ extern "C" {
 struct ARegion;
 struct GHashIterator;
 struct GPUViewport;
+struct ID;
 struct IDProperty;
 struct ImBuf;
 struct ImageFormatData;
@@ -92,7 +93,7 @@ void WM_init_native_pixels(bool do_it);
 void WM_init_tablet_api(void);
 
 void WM_init(struct bContext *C, int argc, const char **argv);
-void WM_exit_ext(struct bContext *C, const bool do_python);
+void WM_exit_ex(struct bContext *C, const bool do_python);
 
 void WM_exit(struct bContext *C) ATTR_NORETURN;
 
@@ -104,6 +105,8 @@ void WM_init_opengl(struct Main *bmain);
 
 void WM_check(struct bContext *C);
 void WM_reinit_gizmomap_all(struct Main *bmain);
+
+uint *WM_window_pixels_read(struct wmWindowManager *wm, struct wmWindow *win, int r_size[2]);
 
 int WM_window_pixels_x(const struct wmWindow *win);
 int WM_window_pixels_y(const struct wmWindow *win);
@@ -159,6 +162,7 @@ enum {
   WM_WINDOW_RENDER = 1,
   WM_WINDOW_USERPREFS,
   WM_WINDOW_DRIVERS,
+  WM_WINDOW_INFO,
   // WM_WINDOW_FILESEL // UNUSED
 };
 
@@ -176,6 +180,10 @@ void WM_autosave_init(struct wmWindowManager *wm);
 void WM_recover_last_session(struct bContext *C, struct ReportList *reports);
 void WM_file_tag_modified(void);
 
+struct ID *WM_file_append_datablock(struct bContext *C,
+                                    const char *filepath,
+                                    const short id_code,
+                                    const char *id_name);
 void WM_lib_reload(struct Library *lib, struct bContext *C, struct ReportList *reports);
 
 /* mouse cursors */
@@ -391,7 +399,7 @@ int WM_operator_call_ex(struct bContext *C, struct wmOperator *op, const bool st
 int WM_operator_call(struct bContext *C, struct wmOperator *op);
 int WM_operator_call_notest(struct bContext *C, struct wmOperator *op);
 int WM_operator_repeat(struct bContext *C, struct wmOperator *op);
-int WM_operator_repeat_interactive(struct bContext *C, struct wmOperator *op);
+int WM_operator_repeat_last(struct bContext *C, struct wmOperator *op);
 bool WM_operator_repeat_check(const struct bContext *C, struct wmOperator *op);
 bool WM_operator_is_repeat(const struct bContext *C, const struct wmOperator *op);
 int WM_operator_name_call_ptr(struct bContext *C,
@@ -413,11 +421,14 @@ int WM_operator_call_py(struct bContext *C,
                         struct ReportList *reports,
                         const bool is_undo);
 
+/* Used for keymap and macro items. */
 void WM_operator_properties_alloc(struct PointerRNA **ptr,
                                   struct IDProperty **properties,
-                                  const char *opstring); /* used for keymap and macro items */
-void WM_operator_properties_sanitize(
-    struct PointerRNA *ptr, const bool no_context); /* make props context sensitive or not */
+                                  const char *opstring);
+
+/* Make props context sensitive or not. */
+void WM_operator_properties_sanitize(struct PointerRNA *ptr, const bool no_context);
+
 bool WM_operator_properties_default(struct PointerRNA *ptr, const bool do_update);
 void WM_operator_properties_reset(struct wmOperator *op);
 void WM_operator_properties_create(struct PointerRNA *ptr, const char *opstring);
@@ -558,8 +569,8 @@ bool WM_menutype_poll(struct bContext *C, struct MenuType *mt);
 void WM_paneltype_init(void);
 void WM_paneltype_clear(void);
 struct PanelType *WM_paneltype_find(const char *idname, bool quiet);
-bool WM_paneltype_add(struct PanelType *mt);
-void WM_paneltype_remove(struct PanelType *mt);
+bool WM_paneltype_add(struct PanelType *pt);
+void WM_paneltype_remove(struct PanelType *pt);
 
 /* wm_gesture_ops.c */
 int WM_gesture_box_invoke(struct bContext *C, struct wmOperator *op, const struct wmEvent *event);
@@ -647,7 +658,6 @@ enum {
   WM_JOB_PRIORITY = (1 << 0),
   WM_JOB_EXCL_RENDER = (1 << 1),
   WM_JOB_PROGRESS = (1 << 2),
-  WM_JOB_SUSPEND = (1 << 3),
 };
 
 /** Identifying jobs by owner alone is unreliable, this isnt saved,
@@ -698,6 +708,7 @@ bool WM_jobs_is_stopped(wmWindowManager *wm, void *owner);
 void *WM_jobs_customdata_get(struct wmJob *);
 void WM_jobs_customdata_set(struct wmJob *, void *customdata, void (*free)(void *));
 void WM_jobs_timer(struct wmJob *, double timestep, unsigned int note, unsigned int endnote);
+void WM_jobs_delay_start(struct wmJob *, double delay_time);
 void WM_jobs_callbacks(struct wmJob *,
                        void (*startjob)(void *, short *, short *, float *),
                        void (*initjob)(void *),
@@ -733,6 +744,10 @@ void *WM_draw_cb_activate(struct wmWindow *win,
                           void *customdata);
 void WM_draw_cb_exit(struct wmWindow *win, void *handle);
 void WM_redraw_windows(struct bContext *C);
+
+void WM_draw_region_viewport_ensure(struct ARegion *ar, short space_type);
+void WM_draw_region_viewport_bind(struct ARegion *ar);
+void WM_draw_region_viewport_unbind(struct ARegion *ar);
 
 /* Region drawing */
 void WM_draw_region_free(struct ARegion *ar);

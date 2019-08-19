@@ -241,7 +241,7 @@ PyDoc_STRVAR(StrokeAttribute_has_attribute_real_doc,
              "\n"
              "   :arg name: The name of the attribute.\n"
              "   :type name: str\n"
-             "   :return: True if the attribute is availbale.\n"
+             "   :return: True if the attribute is available.\n"
              "   :rtype: bool\n");
 
 static PyObject *StrokeAttribute_has_attribute_real(BPy_StrokeAttribute *self,
@@ -265,7 +265,7 @@ PyDoc_STRVAR(StrokeAttribute_has_attribute_vec2_doc,
              "\n"
              "   :arg name: The name of the attribute.\n"
              "   :type name: str\n"
-             "   :return: True if the attribute is availbale.\n"
+             "   :return: True if the attribute is available.\n"
              "   :rtype: bool\n");
 
 static PyObject *StrokeAttribute_has_attribute_vec2(BPy_StrokeAttribute *self,
@@ -289,7 +289,7 @@ PyDoc_STRVAR(StrokeAttribute_has_attribute_vec3_doc,
              "\n"
              "   :arg name: The name of the attribute.\n"
              "   :type name: str\n"
-             "   :return: True if the attribute is availbale.\n"
+             "   :return: True if the attribute is available.\n"
              "   :rtype: bool\n");
 
 static PyObject *StrokeAttribute_has_attribute_vec3(BPy_StrokeAttribute *self,
@@ -577,8 +577,8 @@ static int StrokeAttribute_alpha_set(BPy_StrokeAttribute *self,
                                      void *UNUSED(closure))
 {
   float scalar;
-  if ((scalar = PyFloat_AsDouble(value)) == -1.0f &&
-      PyErr_Occurred()) { /* parsed item not a number */
+  if ((scalar = PyFloat_AsDouble(value)) == -1.0f && PyErr_Occurred()) {
+    /* parsed item not a number */
     PyErr_SetString(PyExc_TypeError, "value must be a number");
     return -1;
   }

@@ -95,7 +95,6 @@ const EnumPropertyItem rna_enum_object_modifier_type_items[] = {
     {eModifierType_Mask, "MASK", ICON_MOD_MASK, "Mask", ""},
     {eModifierType_Mirror, "MIRROR", ICON_MOD_MIRROR, "Mirror", ""},
     {eModifierType_Multires, "MULTIRES", ICON_MOD_MULTIRES, "Multiresolution", ""},
-    {eModifierType_ParticleMesher, "PARTICLE_MESHER", ICON_MOD_PARTICLES, "Particle Mesher", ""},
     {eModifierType_Remesh, "REMESH", ICON_MOD_REMESH, "Remesh", ""},
     {eModifierType_Screw, "SCREW", ICON_MOD_SCREW, "Screw", ""},
     {eModifierType_Skin, "SKIN", ICON_MOD_SKIN, "Skin", ""},
@@ -219,16 +218,6 @@ const EnumPropertyItem rna_enum_modifier_shrinkwrap_mode_items[] = {
      "The point is constrained to the surface of the target object, "
      "with distance offset applied exactly along the target normal"},
     {0, NULL, 0, NULL, NULL},
-};
-
-const EnumPropertyItem part_mesher_filter_items[] = {
-    {LEVEL_FILTER_MEDIAN, "MEDIAN", 0, "Median", ""},
-    {LEVEL_FILTER_MEAN, "MEAN", 0, "Mean", ""},
-    {LEVEL_FILTER_GAUSSIAN, "GAUSSIAN", 0, "Gaussian", ""},
-    {LEVEL_FILTER_MEAN_CURV, "MEAN_CURV", 0, "Mean Curvature", ""},
-    {LEVEL_FILTER_LAPLACIAN, "LAPLACIAN", 0, "Laplacian", ""},
-    {LEVEL_FILTER_OFFSET, "OFFSET", 0, "Offset", ""},
-    {0, NULL, 0, NULL, NULL}
 };
 
 #ifndef RNA_RUNTIME
@@ -594,8 +583,6 @@ static StructRNA *rna_Modifier_refine(struct PointerRNA *ptr)
       return &RNA_SurfaceDeformModifier;
     case eModifierType_WeightedNormal:
       return &RNA_WeightedNormalModifier;
-    case eModifierType_ParticleMesher:
-      return &RNA_ParticleMesherModifier;
     /* Default */
     case eModifierType_None:
     case eModifierType_ShapeKey:
@@ -1191,8 +1178,6 @@ static const EnumPropertyItem *rna_DataTransferModifier_layers_select_src_itemf(
     return rna_enum_dt_layers_select_src_items;
   }
 
-  Depsgraph *depsgraph = CTX_data_depsgraph(C);
-
   /* No active here! */
   RNA_enum_items_add_value(
       &item, &totitem, rna_enum_dt_layers_select_src_items, DT_LAYERS_ALL_SRC);
@@ -1232,6 +1217,7 @@ static const EnumPropertyItem *rna_DataTransferModifier_layers_select_src_itemf(
       Mesh *me_eval;
       int num_data, i;
 
+      Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
       Scene *scene_eval = DEG_get_evaluated_scene(depsgraph);
       Object *ob_src_eval = DEG_get_evaluated_object(depsgraph, ob_src);
 
@@ -1257,6 +1243,7 @@ static const EnumPropertyItem *rna_DataTransferModifier_layers_select_src_itemf(
       Mesh *me_eval;
       int num_data, i;
 
+      Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
       Scene *scene_eval = DEG_get_evaluated_scene(depsgraph);
       Object *ob_src_eval = DEG_get_evaluated_object(depsgraph, ob_src);
 
@@ -1496,68 +1483,6 @@ static void rna_ParticleInstanceModifier_particle_system_set(PointerRNA *ptr,
   CLAMP_MIN(psmd->psys, 1);
 }
 
-static PointerRNA rna_ParticleMesherModifier_active_levelset_filter_get(PointerRNA *ptr)
-{
-    ParticleMesherModifierData *pmmd = (ParticleMesherModifierData *)ptr->data;
-    LevelSetFilter *filter = (LevelSetFilter *)pmmd->filters.first;
-
-    for (; filter; filter = filter->next) {
-        if (filter->flag & LVLSETFILTER_CURRENT)
-            return rna_pointer_inherit_refine(ptr, &RNA_LevelSetFilter, filter);
-    }
-    return rna_pointer_inherit_refine(ptr, &RNA_LevelSetFilter, NULL);
-}
-
-static void rna_ParticleMesherModifier_active_levelset_filter_index_range(PointerRNA *ptr, int *min, int *max,
-                                                                        int *UNUSED(softmin), int *UNUSED(softmax))
-{
-    ParticleMesherModifierData *pmmd = (ParticleMesherModifierData *)ptr->data;
-    *min = 0;
-    *max = max_ii(0, BLI_listbase_count(&pmmd->filters) - 1);
-}
-
-static int rna_ParticleMesherModifier_active_levelset_filter_index_get(PointerRNA *ptr)
-{
-    ParticleMesherModifierData *pmmd = (ParticleMesherModifierData *)ptr->data;
-    LevelSetFilter *filter = (LevelSetFilter *)pmmd->filters.first;
-    int i = 0;
-
-    for (; filter; filter = filter->next, i++) {
-        if (filter->flag & LVLSETFILTER_CURRENT)
-            return i;
-    }
-    return 0;
-}
-
-static void rna_ParticleMesherModifier_active_levelset_filter_index_set(struct PointerRNA *ptr, int value)
-{
-    ParticleMesherModifierData *pmmd = (ParticleMesherModifierData *)ptr->data;
-    LevelSetFilter *filter = (LevelSetFilter *)pmmd->filters.first;
-    int i = 0;
-
-    for (; filter; filter = filter->next, i++) {
-        if (i == value)
-            filter->flag |= LVLSETFILTER_CURRENT;
-        else
-            filter->flag &= ~LVLSETFILTER_CURRENT;
-    }
-}
-
-static void rna_LevelSetFilter_name_get(PointerRNA *ptr, char *str)
-{
-	LevelSetFilter *filter = (LevelSetFilter *)ptr->data;
-
-	strcpy(str, part_mesher_filter_items[filter->type - 1].name);
-}
-
-static int rna_LevelSetFilter_name_length(PointerRNA *ptr)
-{
-	char tstr[MAX_ID_NAME + MAX_ID_NAME + 64];
-
-	rna_LevelSetFilter_name_get(ptr, tstr);
-
-	return strlen(tstr);
-}
 #else
 
 /* NOTE: *MUST* return subdivision_type property. */
@@ -6110,7 +6035,8 @@ static void rna_def_modifier_datatransfer(BlenderRNA *brna)
       0.0f,
       1.0f,
       "Mix Factor",
-      "Factor to use when applying data to destination (exact behavior depends on mix mode)",
+      "Factor to use when applying data to destination (exact behavior depends on mix mode, "
+      "multiplied with weights from vertex group when defined)",
       0.0f,
       1.0f);
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
@@ -6357,213 +6283,6 @@ static void rna_def_modifier_weightednormal(BlenderRNA *brna)
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 }
 
-static void rna_def_level_set_filter(BlenderRNA *brna)
-{
-    StructRNA *srna;
-    PropertyRNA *prop;
-    static EnumPropertyItem part_mesher_filter_accur_items[] = {
-        {LEVEL_FILTER_ACC_FISRT, "FIRST_BIAS", 0, "First-order accuracy", ""},
-        {LEVEL_FILTER_ACC_SECOND, "SECOND_BIAS", 0, "Second-order accuracy", ""},
-        {LEVEL_FILTER_ACC_THIRD, "THIRD_BIAS", 0, "Third-order accuracy", ""},
-        {LEVEL_FILTER_ACC_WENO5, "WENO_BIAS", 0, "Fifth-order Weno", ""},
-        {LEVEL_FILTER_ACC_HJWENO5, "HJ_WENO_BIAS", 0, "Fifth-order HJ Weno", ""},
-        {0, NULL, 0, NULL, NULL}
-    };
-
-    srna = RNA_def_struct(brna, "LevelSetFilter", NULL);
-    RNA_def_struct_ui_text(srna, "Level set filters", "Level set filters");
-    //RNA_def_struct_sdna(srna, "LevelSetFilter");
-
-    prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
-    //RNA_def_property_string_funcs(prop, "rna_LevelSetFilter_name_get", "rna_LevelSetFilter_name_length", NULL);
-    RNA_def_property_ui_text(prop, "Name", "Level Set filter name");
-    RNA_def_struct_name_property(srna, prop);
-
-    prop = RNA_def_property(srna, "type", PROP_ENUM, PROP_NONE);
-    RNA_def_property_enum_sdna(prop, NULL, "type");
-    RNA_def_property_enum_items(prop, part_mesher_filter_items);
-    RNA_def_property_ui_text(prop, "Filters", "");
-    RNA_def_property_update(prop, 0, "rna_Modifier_update");
-
-    prop = RNA_def_property(srna, "accuracy", PROP_ENUM, PROP_NONE);
-    RNA_def_property_enum_sdna(prop, NULL, "accuracy");
-    RNA_def_property_enum_items(prop, part_mesher_filter_accur_items);
-    RNA_def_property_ui_text(prop, "Filter Accuracy", "");
-    RNA_def_property_update(prop, 0, "rna_Modifier_update");
-
-    prop = RNA_def_property(srna, "iterations", PROP_INT, PROP_NONE);
-    RNA_def_property_int_sdna(prop, NULL, "iterations");
-    RNA_def_property_range(prop, 0, 10);
-    RNA_def_property_ui_text(prop, "Iterations", "Number of times to execute the levelset filtering");
-    RNA_def_property_update(prop, 0, "rna_Modifier_update");
-
-    prop = RNA_def_property(srna, "width", PROP_INT, PROP_NONE);
-    RNA_def_property_int_sdna(prop, NULL, "width");
-    RNA_def_property_range(prop, 0, 5);
-    RNA_def_property_ui_text(prop, "Radius", "Filter radius in voxel units");
-    RNA_def_property_update(prop, 0, "rna_Modifier_update");
-
-    prop = RNA_def_property(srna, "offset", PROP_FLOAT, PROP_NONE);
-    RNA_def_property_float_sdna(prop, NULL, "offset");
-    RNA_def_property_range(prop, -10.0f, 10.0f);
-    RNA_def_property_ui_range(prop, -10.0f, 10.0f, 0.1, 2);
-    RNA_def_property_ui_text(prop, "Voxel Offset", "");
-    RNA_def_property_update(prop, 0, "rna_Modifier_update");
-
-    prop = RNA_def_property(srna, "mute", PROP_BOOLEAN, PROP_NONE);
-    RNA_def_property_boolean_sdna(prop, NULL, "flag", LVLSETFILTER_MUTE);
-    RNA_def_property_ui_text(prop, "Mute", "Mute this filter");
-    RNA_def_property_ui_icon(prop, ICON_RESTRICT_VIEW_OFF, 1);
-    RNA_def_property_update(prop, 0, "rna_Modifier_update");
-}
-
-static void rna_def_modifier_particlemesher(BlenderRNA *brna)
-{
-    StructRNA *srna;
-    PropertyRNA *prop;
-
-    srna = RNA_def_struct(brna, "ParticleMesherModifier", "Modifier");
-    RNA_def_struct_ui_text(srna, "Particle Mesher Modifier", "Particle mesher modifier");
-    RNA_def_struct_sdna(srna, "ParticleMesherModifierData");
-    RNA_def_struct_ui_icon(srna, ICON_MOD_PARTICLES);
-
-    prop = RNA_def_property(srna, "particle_system", PROP_POINTER, PROP_NONE);
-    RNA_def_property_pointer_sdna(prop, NULL, "psys");
-    RNA_def_property_struct_type(prop, "ParticleSystem");
-    RNA_def_property_flag(prop, PROP_EDITABLE);
-    RNA_def_property_ui_text(prop, "Particle Systems", "Particle system to mesh");
-    RNA_def_property_update(prop, NC_OBJECT | ND_MODIFIER, "rna_Modifier_dependency_update");
-
-    prop = RNA_def_property(srna, "object", PROP_POINTER, PROP_NONE);
-    RNA_def_property_pointer_sdna(prop, NULL, "mesher_mask_ob");
-    RNA_def_property_struct_type(prop, "Object");
-    RNA_def_property_flag(prop, PROP_EDITABLE);
-    RNA_def_property_ui_text(prop, "Mask Object", "Object used to define which areas to mesh");
-    RNA_def_property_update(prop, NC_OBJECT | ND_MODIFIER, "rna_Modifier_dependency_update");
-
-    prop = RNA_def_property(srna, "filter", PROP_COLLECTION, PROP_NONE);
-    RNA_def_property_collection_sdna(prop, NULL, "filters", NULL);
-    RNA_def_property_struct_type(prop, "LevelSetFilter");
-    //RNA_def_property_ui_text(prop, "Filters", "");
-
-    prop = RNA_def_property(srna, "voxel_size", PROP_FLOAT, PROP_NONE);
-    RNA_def_property_float_sdna(prop, NULL, "voxel_size");
-    RNA_def_property_range(prop, 0.0f, 10.0f);
-    RNA_def_property_ui_range(prop, 0.005f, 10.0f, 0.1, 2);
-    RNA_def_property_ui_text(prop, "Voxel Size", "");
-    RNA_def_property_update(prop, 0, "rna_Modifier_update");
-
-    prop = RNA_def_property(srna, "half_width", PROP_FLOAT, PROP_NONE);
-    RNA_def_property_float_sdna(prop, NULL, "half_width");
-    RNA_def_property_range(prop, 0.0f, 10.0f);
-    RNA_def_property_ui_range(prop, 0.0f, 10.0f, 0.1, 2);
-    RNA_def_property_ui_text(prop, "Half Width", "Half the size of the narrow band");
-    RNA_def_property_update(prop, 0, "rna_Modifier_update");
-
-    prop = RNA_def_property(srna, "min_part_radius", PROP_FLOAT, PROP_NONE);
-    RNA_def_property_float_sdna(prop, NULL, "min_part_radius");
-    RNA_def_property_range(prop, 0.001f, 100000.0f);
-    RNA_def_property_ui_range(prop, 0.01, 100, 1, 3);
-    RNA_def_property_ui_text(prop, "Min Radius",
-                             "Smallest size a particle should have to be considered for meshing");
-    RNA_def_property_update(prop, 0, "rna_Modifier_update");
-
-    prop = RNA_def_property(srna, "part_scale_factor", PROP_FLOAT, PROP_NONE);
-    RNA_def_property_float_sdna(prop, NULL, "part_scale_factor");
-    RNA_def_property_range(prop, 0.0f, 10.0f);
-    RNA_def_property_ui_range(prop, 0.0f, 10.0f, 0.1, 2);
-    RNA_def_property_ui_text(prop, "Radius Scale",
-                             "Value to multiply the particles size by");
-
-    RNA_def_property_update(prop, 0, "rna_Modifier_update");
-
-    prop = RNA_def_property(srna, "part_vel_factor", PROP_FLOAT, PROP_NONE);
-    RNA_def_property_float_sdna(prop, NULL, "part_vel_factor");
-    RNA_def_property_range(prop, 0.0f, 10.0f);
-    RNA_def_property_ui_range(prop, 0.0f, 10.0f, 0.1, 2);
-    RNA_def_property_ui_text(prop, "Velocity Scale",
-                             "Value to multiply the particles velocity by, used for generating the trails");
-    RNA_def_property_update(prop, 0, "rna_Modifier_update");
-
-    prop = RNA_def_property(srna, "trail_size", PROP_FLOAT, PROP_NONE);
-    RNA_def_property_float_sdna(prop, NULL, "trail_size");
-    RNA_def_property_range(prop, 0.0f, 10.0f);
-    RNA_def_property_ui_range(prop, 0.0f, 10.0f, 0.1, 2);
-    RNA_def_property_ui_text(prop, "Trail Size", "Distance between trailing spheres");
-    RNA_def_property_update(prop, 0, "rna_Modifier_update");
-
-    prop = RNA_def_property(srna, "adaptivity", PROP_FLOAT, PROP_NONE);
-    RNA_def_property_float_sdna(prop, NULL, "adaptivity");
-    RNA_def_property_range(prop, 0.0f, 1.0f);
-    RNA_def_property_ui_range(prop, 0.0f, 1.0f, 0.1, 2);
-    RNA_def_property_ui_text(prop, "Adaptivity",
-                             "Set the level of variation in the resulting mesh");
-    RNA_def_property_update(prop, 0, "rna_Modifier_update");
-
-    prop = RNA_def_property(srna, "isovalue", PROP_FLOAT, PROP_NONE);
-    RNA_def_property_float_sdna(prop, NULL, "isovalue");
-    RNA_def_property_range(prop, -1.0f, 1.0f);
-    RNA_def_property_ui_range(prop, -1.0f, 1.0f, 0.1, 2);
-    RNA_def_property_ui_text(prop, "Isovalue", "Determine what values are considered for meshing");
-    RNA_def_property_update(prop, 0, "rna_Modifier_update");
-
-    prop = RNA_def_property(srna, "mask_width", PROP_FLOAT, PROP_NONE);
-    RNA_def_property_float_sdna(prop, NULL, "mask_width");
-    RNA_def_property_range(prop, 0.0f, 1.0f);
-    RNA_def_property_ui_range(prop, 0.0f, 1.0f, 0.1, 2);
-    RNA_def_property_ui_text(prop, "Mask Width", "Width of the mask");
-    RNA_def_property_update(prop, 0, "rna_Modifier_update");
-
-    prop = RNA_def_property(srna, "mask_offset", PROP_FLOAT, PROP_NONE);
-    RNA_def_property_float_sdna(prop, NULL, "mask_offset");
-    RNA_def_property_range(prop, -10.0f, 10.0f);
-    RNA_def_property_ui_range(prop, -10.0f, 10.0f, 0.1, 2);
-    RNA_def_property_ui_text(prop, "Mask Offset", "Offset the mask");
-    RNA_def_property_update(prop, 0, "rna_Modifier_update");
-
-    prop = RNA_def_property(srna, "ext_band", PROP_FLOAT, PROP_NONE);
-    RNA_def_property_float_sdna(prop, NULL, "ext_band");
-    RNA_def_property_range(prop, 0.0f, 10.0f);
-    RNA_def_property_ui_range(prop, 0.0f, 10.0f, 0.1, 2);
-    RNA_def_property_ui_text(prop, "Exterior Band", "");
-    RNA_def_property_update(prop, 0, "rna_Modifier_update");
-
-    prop = RNA_def_property(srna, "int_band", PROP_FLOAT, PROP_NONE);
-    RNA_def_property_float_sdna(prop, NULL, "int_band");
-    RNA_def_property_range(prop, 0.0f, 10.0f);
-    RNA_def_property_ui_range(prop, 0.0f, 10.0f, 0.1, 2);
-    RNA_def_property_ui_text(prop, "Interior Band", "");
-    RNA_def_property_update(prop, 0, "rna_Modifier_update");
-
-    prop = RNA_def_property(srna, "invert_mask", PROP_BOOLEAN, PROP_NONE);
-    RNA_def_property_boolean_sdna(prop, NULL, "invert_mask", 1);
-    RNA_def_property_ui_text(prop, "Invert Mask", "Generate sphere instances to have a Motion Blur type of effect");
-    RNA_def_property_update(prop, 0, "rna_Modifier_update");
-
-    prop = RNA_def_property(srna, "generate_trails", PROP_BOOLEAN, PROP_NONE);
-    RNA_def_property_boolean_sdna(prop, NULL, "generate_trails", 1);
-    RNA_def_property_ui_text(prop, "Generate Trails", "Generate sphere instances to have a Motion Blur type of effect");
-    RNA_def_property_update(prop, 0, "rna_Modifier_update");
-
-    prop = RNA_def_property(srna, "generate_mask", PROP_BOOLEAN, PROP_NONE);
-    RNA_def_property_boolean_sdna(prop, NULL, "generate_mask", 1);
-    RNA_def_property_ui_text(prop, "Generate Mask", "Preserve details by generating an alpha mask around the particles");
-    RNA_def_property_update(prop, 0, "rna_Modifier_update");
-
-    prop = RNA_def_property(srna, "active_levelset_filter", PROP_POINTER, PROP_NONE);
-    RNA_def_property_struct_type(prop, "LevelSetFilter");
-    RNA_def_property_pointer_funcs(prop, "rna_ParticleMesherModifier_active_levelset_filter_get", NULL, NULL, NULL);
-    RNA_def_property_ui_text(prop, "Active Level Set Filter", "");
-
-    prop = RNA_def_property(srna, "active_levelset_filter_index", PROP_INT, PROP_UNSIGNED);
-    RNA_def_property_int_funcs(prop, "rna_ParticleMesherModifier_active_levelset_filter_index_get",
-                               "rna_ParticleMesherModifier_active_levelset_filter_index_set",
-                               "rna_ParticleMesherModifier_active_levelset_filter_index_range");
-    RNA_def_property_ui_text(prop, "Active Level Set Filter Index", "");
-
-    rna_def_level_set_filter(brna);
-}
-
 void RNA_def_modifier(BlenderRNA *brna)
 {
   StructRNA *srna;
@@ -6689,7 +6408,6 @@ void RNA_def_modifier(BlenderRNA *brna)
   rna_def_modifier_meshseqcache(brna);
   rna_def_modifier_surfacedeform(brna);
   rna_def_modifier_weightednormal(brna);
-  rna_def_modifier_particlemesher(brna);
 }
 
 #endif

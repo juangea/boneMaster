@@ -65,6 +65,9 @@
 #include "ED_object.h"
 #include "ED_paint.h"
 
+/* for Copy As Driver */
+#include "ED_keyframing.h"
+
 /* only for UI_OT_editsource */
 #include "ED_screen.h"
 #include "BKE_main.h"
@@ -153,6 +156,82 @@ static void UI_OT_copy_data_path_button(wmOperatorType *ot)
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Copy As Driver Operator
+ * \{ */
+
+static bool copy_as_driver_button_poll(bContext *C)
+{
+  PointerRNA ptr;
+  PropertyRNA *prop;
+  char *path;
+  int index;
+
+  UI_context_active_but_prop_get(C, &ptr, &prop, &index);
+
+  if (ptr.id.data && ptr.data && prop &&
+      ELEM(RNA_property_type(prop), PROP_BOOLEAN, PROP_INT, PROP_FLOAT, PROP_ENUM) &&
+      (index >= 0 || !RNA_property_array_check(prop))) {
+    path = RNA_path_from_ID_to_property(&ptr, prop);
+
+    if (path) {
+      MEM_freeN(path);
+      return 1;
+    }
+  }
+
+  return 0;
+}
+
+static int copy_as_driver_button_exec(bContext *C, wmOperator *UNUSED(op))
+{
+  PointerRNA ptr;
+  PropertyRNA *prop;
+  int index;
+
+  /* try to create driver using property retrieved from UI */
+  UI_context_active_but_prop_get(C, &ptr, &prop, &index);
+
+  if (ptr.id.data && ptr.data && prop) {
+    int dim = RNA_property_array_dimension(&ptr, prop, NULL);
+    char *path = RNA_path_from_ID_to_property_index(&ptr, prop, dim, index);
+
+    if (path) {
+      ANIM_copy_as_driver(ptr.id.data, path, RNA_property_identifier(prop));
+      MEM_freeN(path);
+      return OPERATOR_FINISHED;
+    }
+  }
+
+  return OPERATOR_CANCELLED;
+}
+
+static void UI_OT_copy_as_driver_button(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Copy As New Driver";
+  ot->idname = "UI_OT_copy_as_driver_button";
+  ot->description =
+      "Create a new driver with this property as input, and copy it to the "
+      "clipboard. Use Paste Driver to add it to the target property, or Paste "
+      "Driver Variables to extend an existing driver";
+
+  /* callbacks */
+  ot->exec = copy_as_driver_button_exec;
+  ot->poll = copy_as_driver_button_poll;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Copy Python Command Operator
+ * \{ */
+
 static bool copy_python_command_button_poll(bContext *C)
 {
   uiBut *but = UI_context_active_but_get(C);
@@ -163,12 +242,6 @@ static bool copy_python_command_button_poll(bContext *C)
 
   return 0;
 }
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name Copy Python Command Operator
- * \{ */
 
 static int copy_python_command_button_exec(bContext *C, wmOperator *UNUSED(op))
 {
@@ -1052,8 +1125,7 @@ static int reports_to_text_exec(bContext *C, wmOperator *UNUSED(op))
   str = BKE_reports_string(reports, (G.debug & G_DEBUG) ? RPT_DEBUG : RPT_INFO);
 
   if (str) {
-    TextUndoBuf *utxt = NULL;  // FIXME
-    BKE_text_write(txt, utxt, str);
+    BKE_text_write(txt, str);
     MEM_freeN(str);
 
     return OPERATOR_FINISHED;
@@ -1507,27 +1579,19 @@ static void UI_OT_reloadtranslation(wmOperatorType *ot)
 /** \name Press Button Operator
  * \{ */
 
-static ARegion *region_event_inside_for_screen(bContext *C, const int xy[2])
-{
-  bScreen *sc = CTX_wm_screen(C);
-  if (sc) {
-    for (ARegion *ar = sc->regionbase.first; ar; ar = ar->next) {
-      if (BLI_rcti_isect_pt_v(&ar->winrct, xy)) {
-        return ar;
-      }
-    }
-  }
-  return NULL;
-}
-
 static int ui_button_press_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
+  bScreen *sc = CTX_wm_screen(C);
   const bool skip_depressed = RNA_boolean_get(op->ptr, "skip_depressed");
   ARegion *ar_prev = CTX_wm_region(C);
-  ARegion *ar = region_event_inside_for_screen(C, &event->x);
+  ARegion *ar = sc ? BKE_screen_find_region_xy(sc, RGN_TYPE_ANY, event->x, event->y) : NULL;
 
   if (ar == NULL) {
     ar = ar_prev;
+  }
+
+  if (ar == NULL) {
+    return OPERATOR_PASS_THROUGH;
   }
 
   CTX_wm_region_set(C, ar);
@@ -1545,7 +1609,7 @@ static int ui_button_press_invoke(bContext *C, wmOperator *op, const wmEvent *ev
    * having this avoids a minor drawing glitch. */
   void *but_optype = but->optype;
 
-  UI_but_execute(C, but);
+  UI_but_execute(C, ar, but);
 
   but->optype = but_optype;
 
@@ -1677,6 +1741,7 @@ static void UI_OT_drop_color(wmOperatorType *ot)
 void ED_operatortypes_ui(void)
 {
   WM_operatortype_append(UI_OT_copy_data_path_button);
+  WM_operatortype_append(UI_OT_copy_as_driver_button);
   WM_operatortype_append(UI_OT_copy_python_command_button);
   WM_operatortype_append(UI_OT_reset_default_button);
   WM_operatortype_append(UI_OT_assign_default_button);

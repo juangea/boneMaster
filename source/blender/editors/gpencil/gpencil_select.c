@@ -71,6 +71,13 @@ static bool gpencil_select_poll(bContext *C)
 {
   bGPdata *gpd = ED_gpencil_data_get_active(C);
 
+  if (GPENCIL_SCULPT_MODE(gpd)) {
+    ToolSettings *ts = CTX_data_tool_settings(C);
+    if ((ts->gp_sculpt.flag & GP_SCULPT_SETT_FLAG_SELECT_MASK) == 0) {
+      return false;
+    }
+  }
+
   /* we just need some visible strokes, and to be in editmode or other modes only to catch event */
   if (GPENCIL_ANY_MODE(gpd)) {
     /* TODO: include a check for visible strokes? */
@@ -302,11 +309,10 @@ typedef enum eGP_SelectGrouped {
 /* On each visible layer, check for selected strokes - if found, select all others */
 static void gp_select_same_layer(bContext *C)
 {
-  Depsgraph *depsgraph = CTX_data_depsgraph(C);
-  int cfra_eval = (int)DEG_get_ctime(depsgraph);
+  Scene *scene = CTX_data_scene(C);
 
   CTX_DATA_BEGIN (C, bGPDlayer *, gpl, editable_gpencil_layers) {
-    bGPDframe *gpf = BKE_gpencil_layer_getframe(gpl, cfra_eval, GP_GETFRAME_USE_PREV);
+    bGPDframe *gpf = BKE_gpencil_layer_getframe(gpl, CFRA, GP_GETFRAME_USE_PREV);
     bGPDstroke *gps;
     bool found = false;
 
@@ -990,7 +996,7 @@ void GPENCIL_OT_select_circle(wmOperatorType *ot)
   ot->cancel = WM_gesture_circle_cancel;
 
   /* flags */
-  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_USE_EVAL_DATA;
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   /* properties */
   WM_operator_properties_gesture_circle(ot);
@@ -1181,7 +1187,7 @@ void GPENCIL_OT_select_box(wmOperatorType *ot)
   ot->poll = gpencil_select_poll;
 
   /* flags */
-  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_USE_EVAL_DATA;
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   /* properties */
   WM_operator_properties_gesture_box(ot);
@@ -1249,7 +1255,7 @@ void GPENCIL_OT_select_lasso(wmOperatorType *ot)
   ot->cancel = WM_gesture_lasso_cancel;
 
   /* flags */
-  ot->flag = OPTYPE_UNDO | OPTYPE_USE_EVAL_DATA;
+  ot->flag = OPTYPE_UNDO;
 
   /* properties */
   WM_operator_properties_select_operation(ot);
@@ -1469,7 +1475,7 @@ void GPENCIL_OT_select(wmOperatorType *ot)
   ot->poll = gpencil_select_poll;
 
   /* flag */
-  ot->flag = OPTYPE_UNDO | OPTYPE_USE_EVAL_DATA;
+  ot->flag = OPTYPE_UNDO;
 
   /* properties */
   WM_operator_properties_mouse_select(ot);

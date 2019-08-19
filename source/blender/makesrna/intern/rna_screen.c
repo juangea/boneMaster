@@ -225,12 +225,15 @@ static const EnumPropertyItem *rna_Area_ui_type_itemf(bContext *C,
 
 static int rna_Area_ui_type_get(PointerRNA *ptr)
 {
-  int value = rna_Area_type_get(ptr) << 16;
   ScrArea *sa = ptr->data;
+  const int area_type = rna_Area_type_get(ptr);
+  const bool area_changing = sa->butspacetype != SPACE_EMPTY;
+  int value = area_type << 16;
+
   /* sa->type can be NULL (when not yet initialized), try to do it now. */
   /* Copied from `ED_area_initialize()`.*/
-  if (sa->type == NULL) {
-    sa->type = BKE_spacetype_from_id(sa->spacetype);
+  if (sa->type == NULL || area_changing) {
+    sa->type = BKE_spacetype_from_id(area_type);
     if (sa->type == NULL) {
       sa->spacetype = SPACE_VIEW3D;
       sa->type = BKE_spacetype_from_id(sa->spacetype);
@@ -238,7 +241,7 @@ static int rna_Area_ui_type_get(PointerRNA *ptr)
     BLI_assert(sa->type != NULL);
   }
   if (sa->type->space_subtype_item_extend != NULL) {
-    value |= sa->type->space_subtype_get(sa);
+    value |= area_changing ? sa->butspacetype_subtype : sa->type->space_subtype_get(sa);
   }
   return value;
 }
@@ -553,6 +556,11 @@ static void rna_def_screen(BlenderRNA *brna)
   RNA_def_property_boolean_funcs(prop, "rna_Screen_is_animation_playing_get", NULL);
   RNA_def_property_ui_text(prop, "Animation Playing", "Animation playback is active");
 
+  prop = RNA_def_property(srna, "is_temporary", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_boolean_sdna(prop, NULL, "temp", 1);
+  RNA_def_property_ui_text(prop, "Temporary", "");
+
   prop = RNA_def_property(srna, "show_fullscreen", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
   RNA_def_property_boolean_funcs(prop, "rna_Screen_fullscreen_get", NULL);
@@ -571,7 +579,7 @@ static void rna_def_screen(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "use_play_3d_editors", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "redraws_flag", TIME_ALL_3D_WIN);
-  RNA_def_property_ui_text(prop, "All 3D View Editors", "");
+  RNA_def_property_ui_text(prop, "All 3D Viewports", "");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_TIME, "rna_Screen_redraw_update");
 
   prop = RNA_def_property(srna, "use_follow", PROP_BOOLEAN, PROP_NONE);

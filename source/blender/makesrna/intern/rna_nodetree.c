@@ -89,12 +89,12 @@ static const EnumPropertyItem node_quality_items[] = {
 };
 
 static const EnumPropertyItem node_chunksize_items[] = {
-    {NTREE_CHUNCKSIZE_32, "32", 0, "32x32", "Chunksize of 32x32"},
-    {NTREE_CHUNCKSIZE_64, "64", 0, "64x64", "Chunksize of 64x64"},
-    {NTREE_CHUNCKSIZE_128, "128", 0, "128x128", "Chunksize of 128x128"},
-    {NTREE_CHUNCKSIZE_256, "256", 0, "256x256", "Chunksize of 256x256"},
-    {NTREE_CHUNCKSIZE_512, "512", 0, "512x512", "Chunksize of 512x512"},
-    {NTREE_CHUNCKSIZE_1024, "1024", 0, "1024x1024", "Chunksize of 1024x1024"},
+    {NTREE_CHUNKSIZE_32, "32", 0, "32x32", "Chunksize of 32x32"},
+    {NTREE_CHUNKSIZE_64, "64", 0, "64x64", "Chunksize of 64x64"},
+    {NTREE_CHUNKSIZE_128, "128", 0, "128x128", "Chunksize of 128x128"},
+    {NTREE_CHUNKSIZE_256, "256", 0, "256x256", "Chunksize of 256x256"},
+    {NTREE_CHUNKSIZE_512, "512", 0, "512x512", "Chunksize of 512x512"},
+    {NTREE_CHUNKSIZE_1024, "1024", 0, "1024x1024", "Chunksize of 1024x1024"},
     {0, NULL, 0, NULL, NULL},
 };
 #endif
@@ -1709,6 +1709,12 @@ static void rna_Node_update(Main *bmain, Scene *UNUSED(scene), PointerRNA *ptr)
   bNodeTree *ntree = (bNodeTree *)ptr->id.data;
   bNode *node = (bNode *)ptr->data;
   ED_node_tag_update_nodetree(bmain, ntree, node);
+}
+
+static void rna_Node_update_relations(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
+  rna_Node_update(bmain, scene, ptr);
+  DEG_relations_tag_update(bmain);
 }
 
 static void rna_Node_socket_value_update(ID *id, bNode *node, bContext *C)
@@ -3828,6 +3834,16 @@ static void def_frame(StructRNA *srna)
   RNA_def_property_update(prop, NC_NODE | ND_DISPLAY, NULL);
 }
 
+static void def_map_range(StructRNA *srna)
+{
+  PropertyRNA *prop;
+
+  prop = RNA_def_property(srna, "clamp", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "custom1", 1);
+  RNA_def_property_ui_text(prop, "Clamp", "Clamp the result to the target range [To Min, To Max]");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+}
+
 static void def_math(StructRNA *srna)
 {
   PropertyRNA *prop;
@@ -4458,7 +4474,7 @@ static void def_sh_tex_coord(StructRNA *srna)
   RNA_def_property_flag(prop, PROP_EDITABLE | PROP_ID_REFCOUNT);
   RNA_def_property_ui_text(
       prop, "Object", "Use coordinates from this object (for object texture coordinates output)");
-  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update_relations");
 
   prop = RNA_def_property(srna, "from_instancer", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "custom1", 1);
@@ -7593,11 +7609,6 @@ static void def_cmp_denoise(StructRNA *srna)
   prop = RNA_def_property(srna, "use_hdr", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "hdr", 0);
   RNA_def_property_ui_text(prop, "HDR", "Process HDR images");
-  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
-
-  prop = RNA_def_property(srna, "use_srgb", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, NULL, "srgb", 0);
-  RNA_def_property_ui_text(prop, "sRGB", "Work in sRGB space (only valid for non-HDR images");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 }
 

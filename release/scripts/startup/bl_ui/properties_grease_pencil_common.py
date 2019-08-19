@@ -116,7 +116,7 @@ class AnnotationDrawingToolsPanel:
         col.separator()
         col.separator()
 
-        if context.space_data.type in {'CLIP_EDITOR'}:
+        if context.space_data.type == 'CLIP_EDITOR':
             col.separator()
             col.label(text="Data Source:")
             row = col.row(align=True)
@@ -590,16 +590,6 @@ class GPENCIL_MT_snap(Menu):
         layout.operator("view3d.snap_cursor_to_grid", text="Cursor to Grid")
 
 
-class GPENCIL_MT_separate(Menu):
-    bl_label = "Separate"
-
-    def draw(self, _context):
-        layout = self.layout
-        layout.operator("gpencil.stroke_separate", text="Selected Points").mode = 'POINT'
-        layout.operator("gpencil.stroke_separate", text="Selected Strokes").mode = 'STROKE'
-        layout.operator("gpencil.stroke_separate", text="Active Layer").mode = 'LAYER'
-
-
 class GPENCIL_MT_gpencil_draw_delete(Menu):
     bl_label = "GPencil Draw Delete"
 
@@ -616,7 +606,8 @@ class GPENCIL_MT_cleanup(Menu):
 
     def draw(self, _context):
         layout = self.layout
-        layout.operator("gpencil.frame_clean_loose", text="Loose Points")
+        layout.operator("gpencil.frame_clean_loose", text="Delete Loose Points")
+        layout.operator("gpencil.stroke_merge_by_distance", text="Merge by Distance")
         layout.separator()
 
         layout.operator("gpencil.frame_clean_fill", text="Boundary Strokes").mode = 'ACTIVE'
@@ -902,8 +893,8 @@ class GPENCIL_UL_layer(UIList):
             row.prop(gpl, "info", text="", emboss=False)
 
             row = layout.row(align=True)
-            row.prop(gpl, "clamp_layer", text="",
-                     icon='MOD_MASK' if gpl.clamp_layer else 'LAYER_ACTIVE',
+            row.prop(gpl, "mask_layer", text="",
+                     icon='MOD_MASK' if gpl.mask_layer else 'LAYER_ACTIVE',
                      emboss=False)
 
             row.prop(gpl, "lock", text="", emboss=False)
@@ -931,7 +922,6 @@ classes = (
     GPENCIL_MT_pie_sculpt,
 
     GPENCIL_MT_snap,
-    GPENCIL_MT_separate,
     GPENCIL_MT_cleanup,
 
     GPENCIL_MT_gpencil_draw_delete,

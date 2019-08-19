@@ -3016,7 +3016,7 @@ GPUBatch *DRW_cache_bone_dof_sphere_get(void)
         pz = z;
       }
     }
-    /* TODO alloc right count from the begining. */
+    /* TODO allocate right count from the beginning. */
     GPU_vertbuf_data_resize(vbo, v);
 
     SHC.drw_bone_dof_sphere = GPU_batch_create_ex(GPU_PRIM_TRIS, vbo, NULL, GPU_BATCH_OWNS_VBO);
@@ -4001,7 +4001,7 @@ GPUBatch *DRW_cache_cursor_get(bool crosshair_lines)
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Batch Cache Impl. common
+/** \name Batch Cache Implementation (common)
  * \{ */
 
 void drw_batch_cache_validate(Object *ob)
@@ -4033,11 +4033,11 @@ void drw_batch_cache_validate(Object *ob)
 void drw_batch_cache_generate_requested(Object *ob)
 {
   const DRWContextState *draw_ctx = DRW_context_state_get();
-  const ToolSettings *ts = draw_ctx->scene->toolsettings;
+  const Scene *scene = draw_ctx->scene;
   const enum eContextObjectMode mode = CTX_data_mode_enum_ex(
       draw_ctx->object_edit, draw_ctx->obact, draw_ctx->object_mode);
   const bool is_paint_mode = ELEM(
-      mode, CTX_MODE_PAINT_TEXTURE, CTX_MODE_PAINT_VERTEX, CTX_MODE_PAINT_WEIGHT);
+      mode, CTX_MODE_SCULPT, CTX_MODE_PAINT_TEXTURE, CTX_MODE_PAINT_VERTEX, CTX_MODE_PAINT_WEIGHT);
 
   const bool use_hide = ((ob->type == OB_MESH) &&
                          ((is_paint_mode && (ob == draw_ctx->obact) &&
@@ -4047,13 +4047,13 @@ void drw_batch_cache_generate_requested(Object *ob)
   struct Mesh *mesh_eval = ob->runtime.mesh_eval;
   switch (ob->type) {
     case OB_MESH:
-      DRW_mesh_batch_cache_create_requested(ob, (Mesh *)ob->data, ts, is_paint_mode, use_hide);
+      DRW_mesh_batch_cache_create_requested(ob, (Mesh *)ob->data, scene, is_paint_mode, use_hide);
       break;
     case OB_CURVE:
     case OB_FONT:
     case OB_SURF:
       if (mesh_eval) {
-        DRW_mesh_batch_cache_create_requested(ob, mesh_eval, ts, is_paint_mode, use_hide);
+        DRW_mesh_batch_cache_create_requested(ob, mesh_eval, scene, is_paint_mode, use_hide);
       }
       DRW_curve_batch_cache_create_requested(ob);
       break;

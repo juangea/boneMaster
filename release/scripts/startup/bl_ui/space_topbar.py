@@ -120,8 +120,8 @@ class TOPBAR_PT_gpencil_layers(Panel):
 
             srow = col.row(align=True)
             srow.prop(gpl, "opacity", text="Opacity", slider=True)
-            srow.prop(gpl, "clamp_layer", text="",
-                      icon='MOD_MASK' if gpl.clamp_layer else 'LAYER_ACTIVE')
+            srow.prop(gpl, "mask_layer", text="",
+                      icon='MOD_MASK' if gpl.mask_layer else 'LAYER_ACTIVE')
 
             srow = col.row(align=True)
             srow.prop(gpl, "use_solo_mode", text="Show Only On Keyframed")
@@ -154,10 +154,13 @@ class TOPBAR_MT_editor_menus(Menu):
     bl_idname = "TOPBAR_MT_editor_menus"
     bl_label = ""
 
-    def draw(self, _context):
+    def draw(self, context):
         layout = self.layout
 
-        layout.menu("TOPBAR_MT_app", text="", icon='BLENDER')
+        if context.area.show_menus:
+            layout.menu("TOPBAR_MT_app", text="", icon='BLENDER')
+        else:
+            layout.menu("TOPBAR_MT_app", text="Blender")
 
         layout.menu("TOPBAR_MT_file")
         layout.menu("TOPBAR_MT_edit")
@@ -368,7 +371,7 @@ class TOPBAR_MT_app_support(Menu):
         layout = self.layout
 
         layout.operator(
-            "wm.url_open", text="Development Fund", icon='URL',
+            "wm.url_open", text="Development Fund", icon='FUND',
         ).url = "https://fund.blender.org"
 
         layout.separator()
@@ -570,9 +573,14 @@ class TOPBAR_MT_help(Menu):
 
         show_developer = context.preferences.view.show_developer_ui
 
+        if bpy.app.version_cycle in {'rc', 'release'}:
+            manual_version = '%d.%d' % bpy.app.version[:2]
+        else:
+            manual_version = 'dev'
+
         layout.operator(
             "wm.url_open", text="Manual", icon='HELP',
-        ).url = "https://docs.blender.org/manual/en/dev/"
+        ).url = "https://docs.blender.org/manual/en/" + manual_version + "/"
         layout.operator(
             "wm.url_open", text="Tutorials", icon='URL',
         ).url = "https://www.blender.org/tutorials"

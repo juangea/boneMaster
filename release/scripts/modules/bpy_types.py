@@ -151,10 +151,12 @@ class WindowManager(bpy_types.ID):
             self, draw_func, *,
             ui_units_x=0,
             keymap=None,
+            from_active_button=False,
     ):
         import bpy
         popup = self.popover_begin__internal(
             ui_units_x=ui_units_x,
+            from_active_button=from_active_button,
         )
 
         try:
@@ -653,6 +655,12 @@ class Gizmo(StructRNA):
         shader = gpu.shader.from_builtin('3D_UNIFORM_COLOR' if dims == 3 else '2D_UNIFORM_COLOR')
         batch.program_set(shader)
         return (batch, shader)
+
+
+# Dummy class to keep the reference in `bpy_types_dict` and avoid
+# erros like: "TypeError: expected GizmoGroup subclass of class ..."
+class GizmoGroup(StructRNA):
+    __slots__ = ()
 
 
 # Only defined so operators members can be used by accessing self.order

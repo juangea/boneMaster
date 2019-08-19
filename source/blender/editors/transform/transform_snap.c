@@ -566,13 +566,8 @@ static void initSnappingMode(TransInfo *t)
     /* Edit mode */
     if (t->tsnap.applySnap != NULL &&  // A snapping function actually exist
         ((obedit_type != -1) &&
-         ELEM(obedit_type,
-              OB_MESH,
-              OB_ARMATURE,
-              OB_CURVE,
-              OB_LATTICE,
-              OB_MBALL)))  // Temporary limited to edit mode meshes, armature, curves, metaballs
-    {
+         /* Temporary limited to edit mode meshes, armature, curves, metaballs. */
+         ELEM(obedit_type, OB_MESH, OB_ARMATURE, OB_CURVE, OB_LATTICE, OB_MBALL))) {
       /* Exclude editmesh if using proportional edit */
       if ((obedit_type == OB_MESH) && (t->flag & T_PROP_EDIT)) {
         t->tsnap.modeSelect = SNAP_NOT_ACTIVE;
@@ -1155,12 +1150,19 @@ static void TargetSnapMedian(TransInfo *t)
         add_v3_v3(v, td->center);
       }
 
+      if (i == 0) {
+        /* Is this possible? */
+        continue;
+      }
+
+      mul_v3_fl(v, 1.0 / i);
+
       if (tc->use_local_mat) {
         mul_m4_v3(tc->mat, v);
       }
 
       add_v3_v3(t->tsnap.snapTarget, v);
-      i_accum += i;
+      i_accum++;
     }
 
     mul_v3_fl(t->tsnap.snapTarget, 1.0 / i_accum);

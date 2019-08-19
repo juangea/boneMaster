@@ -74,6 +74,7 @@
 #include "ED_clip.h"
 #include "ED_image.h"
 #include "ED_keyframes_draw.h"
+#include "ED_mesh.h"
 #include "ED_object.h"
 #include "ED_screen.h"
 #include "ED_screen_types.h"
@@ -185,9 +186,9 @@ bool ED_operator_scene_editable(bContext *C)
 {
   Scene *scene = CTX_data_scene(C);
   if (scene && !ID_IS_LINKED(scene)) {
-    return 1;
+    return true;
   }
-  return 0;
+  return false;
 }
 
 bool ED_operator_objectmode(bContext *C)
@@ -369,6 +370,12 @@ bool ED_operator_object_active_editable_font(bContext *C)
 {
   Object *ob = ED_object_active_context(C);
   return ((ob != NULL) && !ID_IS_LINKED(ob) && !ed_object_hidden(ob) && (ob->type == OB_FONT));
+}
+
+bool ED_operator_editable_mesh(bContext *C)
+{
+  Mesh *mesh = ED_mesh_context(C);
+  return (mesh != NULL) && !ID_IS_LINKED(mesh);
 }
 
 bool ED_operator_editmesh(bContext *C)
@@ -689,21 +696,9 @@ static bool actionzone_area_poll(bContext *C)
 
 /* the debug drawing of the click_rect is in area_draw_azone_fullscreen, keep both in sync */
 static void fullscreen_click_rcti_init(
-    rcti *rect, const short x1, const short y1, const short x2, const short y2)
+    rcti *rect, const short UNUSED(x1), const short UNUSED(y1), const short x2, const short y2)
 {
-  int x = x2 - ((float)x2 - x1) * 0.5f / UI_DPI_FAC;
-  int y = y2 - ((float)y2 - y1) * 0.5f / UI_DPI_FAC;
-  float icon_size = UI_DPI_ICON_SIZE + 7 * UI_DPI_FAC;
-
-  /* adjust the icon distance from the corner */
-  x += 36.0f / UI_DPI_FAC;
-  y += 36.0f / UI_DPI_FAC;
-
-  /* draws from the left bottom corner of the icon */
-  x -= UI_DPI_ICON_SIZE;
-  y -= UI_DPI_ICON_SIZE;
-
-  BLI_rcti_init(rect, x, x + icon_size, y, y + icon_size);
+  BLI_rcti_init(rect, x2 - U.widget_unit, x2, y2 - U.widget_unit, y2);
 }
 
 static bool azone_clipped_rect_calc(const AZone *az, rcti *r_rect_clip)
@@ -1052,7 +1047,7 @@ static int actionzone_modal(bContext *C, wmOperator *op, const wmEvent *event)
             is_gesture = (delta_max > split_threshold);
           }
           else {
-            /* Different area, so posible join. */
+            /* Different area, so possible join. */
             if (sad->gesture_dir == 'n') {
               WM_cursor_set(win, BC_N_ARROWCURSOR);
             }
@@ -3555,7 +3550,7 @@ static int repeat_last_exec(bContext *C, wmOperator *UNUSED(op))
 
   if (lastop) {
     WM_operator_free_all_after(wm, lastop);
-    WM_operator_repeat_interactive(C, lastop);
+    WM_operator_repeat_last(C, lastop);
   }
 
   return OPERATOR_CANCELLED;
@@ -3747,7 +3742,7 @@ static int region_quadview_exec(bContext *C, wmOperator *op)
       rv3d->viewlock = 0;
       rv3d->rflag &= ~RV3D_CLIPPING;
 
-      /* accumulate locks, incase they're mixed */
+      /* Accumulate locks, in case they're mixed. */
       for (ar_iter = sa->regionbase.first; ar_iter; ar_iter = ar_iter->next) {
         if (ar_iter->regiontype == RGN_TYPE_WINDOW) {
           RegionView3D *rv3d_iter = ar_iter->regiondata;
@@ -4200,6 +4195,7 @@ static int match_region_with_redraws(int spacetype,
 static int screen_animation_step(bContext *C, wmOperator *UNUSED(op), const wmEvent *event)
 {
   bScreen *screen = CTX_wm_screen(C);
+  wmWindow *win = CTX_wm_window(C);
 
 #ifdef PROFILE_AUDIO_SYNCH
   static int old_frame = 0;
@@ -4209,8 +4205,9 @@ static int screen_animation_step(bContext *C, wmOperator *UNUSED(op), const wmEv
   if (screen->animtimer && screen->animtimer == event->customdata) {
     Main *bmain = CTX_data_main(C);
     Scene *scene = CTX_data_scene(C);
-    Depsgraph *depsgraph = CTX_data_depsgraph(C);
-    Scene *scene_eval = DEG_get_evaluated_scene(depsgraph);
+    ViewLayer *view_layer = WM_window_get_active_view_layer(win);
+    Depsgraph *depsgraph = BKE_scene_get_depsgraph(scene, view_layer, false);
+    Scene *scene_eval = (depsgraph != NULL) ? DEG_get_evaluated_scene(depsgraph) : NULL;
     wmTimer *wt = screen->animtimer;
     ScreenAnimData *sad = wt->customdata;
     wmWindowManager *wm = CTX_wm_manager(C);
@@ -4230,7 +4227,11 @@ static int screen_animation_step(bContext *C, wmOperator *UNUSED(op), const wmEv
       sync = (scene->flag & SCE_FRAME_DROP);
     }
 
-    if (scene_eval->id.recalc & ID_RECALC_AUDIO_SEEK) {
+    if (scene_eval == NULL) {
+      /* Happens when undo/redo system is used during playback, nothing meaningful we can do here.
+       */
+    }
+    else if (scene_eval->id.recalc & ID_RECALC_AUDIO_SEEK) {
       /* Ignore seek here, the audio will be updated to the scene frame after jump during next
        * dependency graph update. */
     }
@@ -4335,7 +4336,9 @@ static int screen_animation_step(bContext *C, wmOperator *UNUSED(op), const wmEv
     }
 
     /* since we follow drawflags, we can't send notifier but tag regions ourselves */
-    ED_update_for_newframe(bmain, depsgraph);
+    if (depsgraph != NULL) {
+      ED_update_for_newframe(bmain, depsgraph);
+    }
 
     for (window = wm->windows.first; window; window = window->next) {
       const bScreen *win_screen = WM_window_get_active_screen(window);
@@ -4450,7 +4453,7 @@ int ED_screen_animation_play(bContext *C, int sync, int mode)
 {
   bScreen *screen = CTX_wm_screen(C);
   Scene *scene = CTX_data_scene(C);
-  Scene *scene_eval = DEG_get_evaluated_scene(CTX_data_depsgraph(C));
+  Scene *scene_eval = DEG_get_evaluated_scene(CTX_data_ensure_evaluated_depsgraph(C));
 
   if (ED_screen_animation_playing(CTX_wm_manager(C))) {
     /* stop playback now */
@@ -4766,6 +4769,40 @@ static void SCREEN_OT_drivers_editor_show(struct wmOperatorType *ot)
 
   /* api callbacks */
   ot->invoke = drivers_editor_show_invoke;
+  ot->poll = ED_operator_screenactive;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Show Info Log Operator
+ * \{ */
+
+static int info_log_show_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+{
+  int sizex = 900 * UI_DPI_FAC;
+  int sizey = 580 * UI_DPI_FAC;
+  int shift_y = 480;
+
+  /* changes context! */
+  if (WM_window_open_temp(C, event->x, event->y + shift_y, sizex, sizey, WM_WINDOW_INFO) != NULL) {
+    return OPERATOR_FINISHED;
+  }
+  else {
+    BKE_report(op->reports, RPT_ERROR, "Failed to open window!");
+    return OPERATOR_CANCELLED;
+  }
+}
+
+static void SCREEN_OT_info_log_show(struct wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Show Info Log";
+  ot->description = "Show info log in a separate window";
+  ot->idname = "SCREEN_OT_info_log_show";
+
+  /* api callbacks */
+  ot->invoke = info_log_show_invoke;
   ot->poll = ED_operator_screenactive;
 }
 
@@ -5238,6 +5275,7 @@ void ED_operatortypes_screen(void)
   WM_operatortype_append(SCREEN_OT_screenshot);
   WM_operatortype_append(SCREEN_OT_userpref_show);
   WM_operatortype_append(SCREEN_OT_drivers_editor_show);
+  WM_operatortype_append(SCREEN_OT_info_log_show);
   WM_operatortype_append(SCREEN_OT_region_blend);
   WM_operatortype_append(SCREEN_OT_space_type_set_or_cycle);
   WM_operatortype_append(SCREEN_OT_space_context_cycle);

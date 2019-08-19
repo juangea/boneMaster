@@ -73,8 +73,8 @@ static void brush_defaults(Brush *brush)
   brush->topology_rake_factor = 0.0f;
   brush->crease_pinch_factor = 0.5f;
   brush->sculpt_plane = SCULPT_DISP_DIR_AREA;
-  brush->plane_offset =
-      0.0f; /* how far above or below the plane that is found by averaging the faces */
+  /* How far above or below the plane that is found by averaging the faces. */
+  brush->plane_offset = 0.0f;
   brush->plane_trim = 0.5f;
   brush->clone.alpha = 0.5f;
   brush->normal_weight = 0.0f;
@@ -82,7 +82,8 @@ static void brush_defaults(Brush *brush)
   brush->flag |= BRUSH_ALPHA_PRESSURE;
 
   /* BRUSH PAINT TOOL SETTINGS */
-  brush->rgb[0] = 1.0f; /* default rgb color of the brush when painting - white */
+  /* Default rgb color of the brush when painting - white. */
+  brush->rgb[0] = 1.0f;
   brush->rgb[1] = 1.0f;
   brush->rgb[2] = 1.0f;
 
@@ -90,13 +91,14 @@ static void brush_defaults(Brush *brush)
 
   /* BRUSH STROKE SETTINGS */
   brush->flag |= (BRUSH_SPACE | BRUSH_SPACE_ATTEN);
-  brush->spacing =
-      10; /* how far each brush dot should be spaced as a percentage of brush diameter */
+  /* How far each brush dot should be spaced as a percentage of brush diameter. */
+  brush->spacing = 10;
 
   brush->smooth_stroke_radius = 75;
   brush->smooth_stroke_factor = 0.9f;
 
-  brush->rate = 0.1f; /* time delay between dots of paint or sculpting when doing airbrush mode */
+  /* Time delay between dots of paint or sculpting when doing airbrush mode. */
+  brush->rate = 0.1f;
 
   brush->jitter = 0.0f;
 
@@ -182,9 +184,9 @@ void BKE_brush_init_gpencil_settings(Brush *brush)
   brush->gpencil_settings->flag |= GP_BRUSH_ENABLE_CURSOR;
 
   /* curves */
-  brush->gpencil_settings->curve_sensitivity = curvemapping_add(1, 0.0f, 0.0f, 1.0f, 1.0f);
-  brush->gpencil_settings->curve_strength = curvemapping_add(1, 0.0f, 0.0f, 1.0f, 1.0f);
-  brush->gpencil_settings->curve_jitter = curvemapping_add(1, 0.0f, 0.0f, 1.0f, 1.0f);
+  brush->gpencil_settings->curve_sensitivity = BKE_curvemapping_add(1, 0.0f, 0.0f, 1.0f, 1.0f);
+  brush->gpencil_settings->curve_strength = BKE_curvemapping_add(1, 0.0f, 0.0f, 1.0f, 1.0f);
+  brush->gpencil_settings->curve_jitter = BKE_curvemapping_add(1, 0.0f, 0.0f, 1.0f, 1.0f);
 }
 
 /* add a new gp-brush */
@@ -384,8 +386,8 @@ void BKE_brush_gpencil_presets(bContext *C)
 
   /* Curve */
   custom_curve = brush->gpencil_settings->curve_sensitivity;
-  curvemapping_set_defaults(custom_curve, 0, 0.0f, 0.0f, 1.0f, 1.0f);
-  curvemapping_initialize(custom_curve);
+  BKE_curvemapping_set_defaults(custom_curve, 0, 0.0f, 0.0f, 1.0f, 1.0f);
+  BKE_curvemapping_initialize(custom_curve);
   brush_gpencil_curvemap_reset(custom_curve->cm, 3, GPCURVE_PRESET_INK);
 
   /* Ink Noise brush */
@@ -421,8 +423,8 @@ void BKE_brush_gpencil_presets(bContext *C)
 
   /* Curve */
   custom_curve = brush->gpencil_settings->curve_sensitivity;
-  curvemapping_set_defaults(custom_curve, 0, 0.0f, 0.0f, 1.0f, 1.0f);
-  curvemapping_initialize(custom_curve);
+  BKE_curvemapping_set_defaults(custom_curve, 0, 0.0f, 0.0f, 1.0f, 1.0f);
+  BKE_curvemapping_initialize(custom_curve);
   brush_gpencil_curvemap_reset(custom_curve->cm, 3, GPCURVE_PRESET_INKNOISE);
 
   brush->gpencil_settings->gradient_f = 1.0f;
@@ -493,8 +495,8 @@ void BKE_brush_gpencil_presets(bContext *C)
   brush->smooth_stroke_factor = SMOOTH_STROKE_FACTOR;
   /* Curve */
   custom_curve = brush->gpencil_settings->curve_sensitivity;
-  curvemapping_set_defaults(custom_curve, 0, 0.0f, 0.0f, 1.0f, 1.0f);
-  curvemapping_initialize(custom_curve);
+  BKE_curvemapping_set_defaults(custom_curve, 0, 0.0f, 0.0f, 1.0f, 1.0f);
+  BKE_curvemapping_initialize(custom_curve);
   brush_gpencil_curvemap_reset(custom_curve->cm, 4, GPCURVE_PRESET_MARKER);
 
   brush->gpencil_settings->gradient_f = 1.0f;
@@ -647,14 +649,14 @@ void BKE_brush_copy_data(Main *UNUSED(bmain),
     brush_dst->preview = NULL;
   }
 
-  brush_dst->curve = curvemapping_copy(brush_src->curve);
+  brush_dst->curve = BKE_curvemapping_copy(brush_src->curve);
   if (brush_src->gpencil_settings != NULL) {
     brush_dst->gpencil_settings = MEM_dupallocN(brush_src->gpencil_settings);
-    brush_dst->gpencil_settings->curve_sensitivity = curvemapping_copy(
+    brush_dst->gpencil_settings->curve_sensitivity = BKE_curvemapping_copy(
         brush_src->gpencil_settings->curve_sensitivity);
-    brush_dst->gpencil_settings->curve_strength = curvemapping_copy(
+    brush_dst->gpencil_settings->curve_strength = BKE_curvemapping_copy(
         brush_src->gpencil_settings->curve_strength);
-    brush_dst->gpencil_settings->curve_jitter = curvemapping_copy(
+    brush_dst->gpencil_settings->curve_jitter = BKE_curvemapping_copy(
         brush_src->gpencil_settings->curve_jitter);
   }
 
@@ -675,12 +677,12 @@ void BKE_brush_free(Brush *brush)
   if (brush->icon_imbuf) {
     IMB_freeImBuf(brush->icon_imbuf);
   }
-  curvemapping_free(brush->curve);
+  BKE_curvemapping_free(brush->curve);
 
   if (brush->gpencil_settings != NULL) {
-    curvemapping_free(brush->gpencil_settings->curve_sensitivity);
-    curvemapping_free(brush->gpencil_settings->curve_strength);
-    curvemapping_free(brush->gpencil_settings->curve_jitter);
+    BKE_curvemapping_free(brush->gpencil_settings->curve_sensitivity);
+    BKE_curvemapping_free(brush->gpencil_settings->curve_strength);
+    BKE_curvemapping_free(brush->gpencil_settings->curve_jitter);
     MEM_SAFE_FREE(brush->gpencil_settings);
   }
 
@@ -915,15 +917,15 @@ void BKE_brush_curve_preset(Brush *b, eCurveMappingPreset preset)
   CurveMap *cm = NULL;
 
   if (!b->curve) {
-    b->curve = curvemapping_add(1, 0, 0, 1, 1);
+    b->curve = BKE_curvemapping_add(1, 0, 0, 1, 1);
   }
 
   cm = b->curve->cm;
   cm->flag &= ~CUMA_EXTEND_EXTRAPOLATE;
 
   b->curve->preset = preset;
-  curvemap_reset(cm, &b->curve->clipr, b->curve->preset, CURVEMAP_SLOPE_NEGATIVE);
-  curvemapping_changed(b->curve, false);
+  BKE_curvemap_reset(cm, &b->curve->clipr, b->curve->preset, CURVEMAP_SLOPE_NEGATIVE);
+  BKE_curvemapping_changed(b->curve, false);
 }
 
 /* Generic texture sampler for 3D painting systems. point has to be either in
@@ -1398,16 +1400,45 @@ void BKE_brush_randomize_texture_coords(UnifiedPaintSettings *ups, bool mask)
 /* Uses the brush curve control to find a strength value */
 float BKE_brush_curve_strength(const Brush *br, float p, const float len)
 {
-  float strength;
+  float strength = 1.0f;
 
   if (p >= len) {
     return 0;
   }
   else {
     p = p / len;
+    p = 1.0f - p;
   }
 
-  strength = curvemapping_evaluateF(br->curve, 0, p);
+  switch (br->curve_preset) {
+    case BRUSH_CURVE_CUSTOM:
+      strength = BKE_curvemapping_evaluateF(br->curve, 0, 1.0f - p);
+      break;
+    case BRUSH_CURVE_SHARP:
+      strength = p * p;
+      break;
+    case BRUSH_CURVE_SMOOTH:
+      strength = 3.0f * p * p - 2.0f * p * p * p;
+      break;
+    case BRUSH_CURVE_ROOT:
+      strength = sqrtf(p);
+      break;
+    case BRUSH_CURVE_LIN:
+      strength = p;
+      break;
+    case BRUSH_CURVE_CONSTANT:
+      strength = 1.0f;
+      break;
+    case BRUSH_CURVE_SPHERE:
+      strength = sqrtf(2 * p - p * p);
+      break;
+    case BRUSH_CURVE_POW4:
+      strength = p * p * p * p;
+      break;
+    case BRUSH_CURVE_INVSQUARE:
+      strength = p * (2.0f - p);
+      break;
+  }
 
   return strength;
 }
@@ -1467,7 +1498,7 @@ struct ImBuf *BKE_brush_gen_radial_control_imbuf(Brush *br, bool secondary)
   int half = side / 2;
   int i, j;
 
-  curvemapping_initialize(br->curve);
+  BKE_curvemapping_initialize(br->curve);
   texcache = BKE_brush_gen_texture_cache(br, half, secondary);
   im->rect_float = MEM_callocN(sizeof(float) * side * side, "radial control rect");
   im->x = im->y = side;

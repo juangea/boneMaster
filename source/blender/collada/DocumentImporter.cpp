@@ -804,7 +804,10 @@ void DocumentImporter::write_profile_COMMON(COLLADAFW::EffectCommon *ef, Materia
   matNode.set_alpha(ef->getOpaqueMode(), ef->getTransparent(), ef->getTransparency());
 
   /* following mapping still needs to be verified */
+#if 0
+  // needs rework to be done for 2.81
   matNode.set_shininess(ef->getShininess());
+#endif
   matNode.set_reflectivity(ef->getReflectivity());
 
   /* not supported by principled BSDF */
@@ -914,7 +917,7 @@ bool DocumentImporter::writeCamera(const COLLADAFW::Camera *camera)
           double yfov = camera->getYFov().getValue();
           double aspect = camera->getAspectRatio().getValue();
 
-          /* NOTE: Needs more testing (As we curretnly have no official test data for this) */
+          /* NOTE: Needs more testing (As we currently have no official test data for this) */
 
           double xfov = 2.0f * atanf(aspect * tanf(DEG2RADF(yfov) * 0.5f));
           cam->lens = fov_to_focallength(xfov, cam->sensor_x);

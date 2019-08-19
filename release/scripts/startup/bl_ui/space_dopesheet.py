@@ -136,6 +136,8 @@ class DopesheetFilterPopoverBase:
             flow.prop(dopesheet, "show_shapekeys", text="Shape Keys")
         if bpy.data.cache_files:
             flow.prop(dopesheet, "show_cache_files", text="Cache Files")
+        if bpy.data.movieclips:
+            flow.prop(dopesheet, "show_movieclips", text="Movie Clips")
 
         layout.separator()
 
@@ -359,7 +361,7 @@ class DOPESHEET_MT_select(Menu):
 
         layout.separator()
         layout.operator("action.select_box").axis_range = False
-        layout.operator("action.select_box", text="Border Axis Range").axis_range = True
+        layout.operator("action.select_box", text="Box Select (Axis Range)").axis_range = True
 
         layout.operator("action.select_circle")
 

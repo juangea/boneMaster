@@ -51,7 +51,7 @@ A quick list of helpful things to know before starting:
   | ``scripts/startup/bl_operators`` for operators.
 
   Exact location depends on platform, see:
-  :ref:`Configuration and Data Paths <blender_manual:getting-started_installing-config-directories>`.
+  :ref:`directory layout docs <blender_manual:blender-directory-layout>`.
 
 
 Running Scripts
@@ -317,7 +317,9 @@ To run the script:
 #. Click the button labeled ``New`` and the confirmation pop up in order to create a new text block.
 #. Press :kbd:`Ctrl-V` to paste the code into the text panel (the upper left frame).
 #. Click on the button **Run Script**.
-#. Move your cursor into the 3D view, press spacebar for the operator search menu, and type "Simple".
+#. Move your cursor into the 3D Viewport,
+   open the :ref:`operator search menu <blender_manual:bpy.ops.wm.search_menu>`,
+   and type "Simple".
 #. Click on the "Simple Operator" item found in search.
 
 

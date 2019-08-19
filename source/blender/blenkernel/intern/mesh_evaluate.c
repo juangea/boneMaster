@@ -220,7 +220,7 @@ typedef struct MeshCalcNormalsData {
 
 static void mesh_calc_normals_poly_cb(void *__restrict userdata,
                                       const int pidx,
-                                      const ParallelRangeTLS *__restrict UNUSED(tls))
+                                      const TaskParallelTLS *__restrict UNUSED(tls))
 {
   MeshCalcNormalsData *data = userdata;
   const MPoly *mp = &data->mpolys[pidx];
@@ -230,7 +230,7 @@ static void mesh_calc_normals_poly_cb(void *__restrict userdata,
 
 static void mesh_calc_normals_poly_prepare_cb(void *__restrict userdata,
                                               const int pidx,
-                                              const ParallelRangeTLS *__restrict UNUSED(tls))
+                                              const TaskParallelTLS *__restrict UNUSED(tls))
 {
   MeshCalcNormalsData *data = userdata;
   const MPoly *mp = &data->mpolys[pidx];
@@ -294,7 +294,7 @@ static void mesh_calc_normals_poly_prepare_cb(void *__restrict userdata,
 
 static void mesh_calc_normals_poly_finalize_cb(void *__restrict userdata,
                                                const int vidx,
-                                               const ParallelRangeTLS *__restrict UNUSED(tls))
+                                               const TaskParallelTLS *__restrict UNUSED(tls))
 {
   MeshCalcNormalsData *data = userdata;
 
@@ -321,7 +321,7 @@ void BKE_mesh_calc_normals_poly(MVert *mverts,
 {
   float(*pnors)[3] = r_polynors;
 
-  ParallelRangeSettings settings;
+  TaskParallelSettings settings;
   BLI_parallel_range_settings_defaults(&settings);
   settings.min_iter_per_thread = 1024;
 
@@ -1164,8 +1164,10 @@ static void split_loop_nor_fan_do(LoopSplitTaskDataCommon *common_data, LoopSpli
    */
   const unsigned int mv_pivot_index = ml_curr->v; /* The vertex we are "fanning" around! */
   const MVert *mv_pivot = &mverts[mv_pivot_index];
-  const MEdge *me_org =
-      &medges[ml_curr->e]; /* ml_curr would be mlfan_prev if we needed that one */
+
+  /* ml_curr would be mlfan_prev if we needed that one. */
+  const MEdge *me_org = &medges[ml_curr->e];
+
   const int *e2lfan_curr;
   float vec_curr[3], vec_prev[3], vec_org[3];
   const MLoop *mlfan_curr;
@@ -1318,7 +1320,7 @@ static void split_loop_nor_fan_do(LoopSplitTaskDataCommon *common_data, LoopSpli
           }
           // print_v2("new clnors", clnors_avg);
         }
-        /* Extra bonus: since smallstack is local to this func,
+        /* Extra bonus: since small-stack is local to this function,
          * no more need to empty it at all cost! */
 
         BKE_lnor_space_custom_data_to_normal(lnor_space, *clnor_ref, lnor);
@@ -1334,7 +1336,7 @@ static void split_loop_nor_fan_do(LoopSplitTaskDataCommon *common_data, LoopSpli
         copy_v3_v3(nor, lnor);
       }
     }
-    /* Extra bonus: since smallstack is local to this func,
+    /* Extra bonus: since small-stack is local to this funcion,
      * no more need to empty it at all cost! */
   }
 }
@@ -2374,6 +2376,24 @@ float BKE_mesh_calc_poly_area(const MPoly *mpoly, const MLoop *loopstart, const 
 
     return area;
   }
+}
+
+float BKE_mesh_calc_poly_uv_area(const MPoly *mpoly, const MLoopUV *uv_array)
+{
+
+  int i, l_iter = mpoly->loopstart;
+  float area;
+  float(*vertexcos)[2] = BLI_array_alloca(vertexcos, (size_t)mpoly->totloop);
+
+  /* pack vertex cos into an array for area_poly_v2 */
+  for (i = 0; i < mpoly->totloop; i++, l_iter++) {
+    copy_v2_v2(vertexcos[i], uv_array[l_iter].uv);
+  }
+
+  /* finally calculate the area */
+  area = area_poly_v2((const float(*)[2])vertexcos, (unsigned int)mpoly->totloop);
+
+  return area;
 }
 
 /**

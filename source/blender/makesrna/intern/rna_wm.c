@@ -1449,12 +1449,12 @@ static StructRNA *rna_Operator_register(Main *bmain,
 
   /* setup dummy operator & operator type to store static properties in */
   dummyop.type = &dummyot;
-  dummyot.idname = temp_buffers.idname;           /* only assigne the pointer, string is NULL'd */
-  dummyot.name = temp_buffers.name;               /* only assigne the pointer, string is NULL'd */
-  dummyot.description = temp_buffers.description; /* only assigne the pointer, string is NULL'd */
+  dummyot.idname = temp_buffers.idname;           /* only assign the pointer, string is NULL'd */
+  dummyot.name = temp_buffers.name;               /* only assign the pointer, string is NULL'd */
+  dummyot.description = temp_buffers.description; /* only assign the pointer, string is NULL'd */
   dummyot.translation_context =
-      temp_buffers.translation_context;         /* only assigne the pointer, string is NULL'd */
-  dummyot.undo_group = temp_buffers.undo_group; /* only assigne the pointer, string is NULL'd */
+      temp_buffers.translation_context;         /* only assign the pointer, string is NULL'd */
+  dummyot.undo_group = temp_buffers.undo_group; /* only assign the pointer, string is NULL'd */
   RNA_pointer_create(NULL, &RNA_Operator, &dummyop, &dummyotr);
 
   /* clear in case they are left unset */
@@ -1514,8 +1514,10 @@ static StructRNA *rna_Operator_register(Main *bmain,
 
   /* create a new operator type */
   dummyot.ext.srna = RNA_def_struct_ptr(&BLENDER_RNA, dummyot.idname, &RNA_Operator);
-  RNA_def_struct_flag(dummyot.ext.srna,
-                      STRUCT_NO_IDPROPERTIES); /* operator properties are registered separately */
+
+  /* Operator properties are registered separately. */
+  RNA_def_struct_flag(dummyot.ext.srna, STRUCT_NO_IDPROPERTIES);
+
   RNA_def_struct_property_tags(dummyot.ext.srna, rna_enum_operator_property_tags);
   RNA_def_struct_translation_context(dummyot.ext.srna, dummyot.translation_context);
   dummyot.ext.data = data;
@@ -1597,12 +1599,12 @@ static StructRNA *rna_MacroOperator_register(Main *bmain,
 
   /* setup dummy operator & operator type to store static properties in */
   dummyop.type = &dummyot;
-  dummyot.idname = temp_buffers.idname;           /* only assigne the pointer, string is NULL'd */
-  dummyot.name = temp_buffers.name;               /* only assigne the pointer, string is NULL'd */
-  dummyot.description = temp_buffers.description; /* only assigne the pointer, string is NULL'd */
+  dummyot.idname = temp_buffers.idname;           /* only assign the pointer, string is NULL'd */
+  dummyot.name = temp_buffers.name;               /* only assign the pointer, string is NULL'd */
+  dummyot.description = temp_buffers.description; /* only assign the pointer, string is NULL'd */
   dummyot.translation_context =
-      temp_buffers.translation_context;         /* only assigne the pointer, string is NULL'd */
-  dummyot.undo_group = temp_buffers.undo_group; /* only assigne the pointer, string is NULL'd */
+      temp_buffers.translation_context;         /* only assign the pointer, string is NULL'd */
+  dummyot.undo_group = temp_buffers.undo_group; /* only assign the pointer, string is NULL'd */
   RNA_pointer_create(NULL, &RNA_Macro, &dummyop, &dummyotr);
 
   /* clear in case they are left unset */
@@ -1795,7 +1797,12 @@ static void rna_def_operator_options_runtime(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "is_repeat", PROP_BOOLEAN, PROP_BOOLEAN);
   RNA_def_property_boolean_sdna(prop, NULL, "flag", OP_IS_REPEAT);
-  RNA_def_property_ui_text(prop, "Repeat", "True when run from the redo panel");
+  RNA_def_property_ui_text(prop, "Repeat", "True when run from the 'Adjust Last Operation' panel");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
+  prop = RNA_def_property(srna, "is_repeat_last", PROP_BOOLEAN, PROP_BOOLEAN);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", OP_IS_REPEAT_LAST);
+  RNA_def_property_ui_text(prop, "Repeat Call", "True when run from the operator 'Repeat Last'");
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 
   prop = RNA_def_property(srna, "use_cursor_region", PROP_BOOLEAN, PROP_BOOLEAN);

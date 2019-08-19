@@ -148,7 +148,7 @@ typedef struct LoadTexData {
 
 static void load_tex_task_cb_ex(void *__restrict userdata,
                                 const int j,
-                                const ParallelRangeTLS *__restrict tls)
+                                const TaskParallelTLS *__restrict tls)
 {
   LoadTexData *data = userdata;
   Brush *br = data->br;
@@ -328,7 +328,7 @@ static int load_tex(Brush *br, ViewContext *vc, float zoom, bool col, bool prima
         .radius = radius,
     };
 
-    ParallelRangeSettings settings;
+    TaskParallelSettings settings;
     BLI_parallel_range_settings_defaults(&settings);
     BLI_task_parallel_range(0, size, &data, load_tex_task_cb_ex, &settings);
 
@@ -385,7 +385,7 @@ static int load_tex(Brush *br, ViewContext *vc, float zoom, bool col, bool prima
 
 static void load_tex_cursor_task_cb(void *__restrict userdata,
                                     const int j,
-                                    const ParallelRangeTLS *__restrict UNUSED(tls))
+                                    const TaskParallelTLS *__restrict UNUSED(tls))
 {
   LoadTexData *data = userdata;
   Brush *br = data->br;
@@ -460,7 +460,7 @@ static int load_tex_cursor(Brush *br, ViewContext *vc, float zoom)
     }
     buffer = MEM_mallocN(sizeof(GLubyte) * size * size, "load_tex");
 
-    curvemapping_initialize(br->curve);
+    BKE_curvemapping_initialize(br->curve);
 
     LoadTexData data = {
         .br = br,
@@ -468,7 +468,7 @@ static int load_tex_cursor(Brush *br, ViewContext *vc, float zoom)
         .size = size,
     };
 
-    ParallelRangeSettings settings;
+    TaskParallelSettings settings;
     BLI_parallel_range_settings_defaults(&settings);
     BLI_task_parallel_range(0, size, &data, load_tex_cursor_task_cb, &settings);
 
@@ -964,9 +964,9 @@ static void paint_draw_curve_cursor(Brush *brush, ViewContext *vc)
     immBindBuiltinProgram(GPU_SHADER_2D_UNIFORM_COLOR);
 
     float selec_col[4], handle_col[4], pivot_col[4];
-    UI_GetThemeColor4fv(TH_VERTEX_SELECT, selec_col);
-    UI_GetThemeColor4fv(TH_PAINT_CURVE_HANDLE, handle_col);
-    UI_GetThemeColor4fv(TH_PAINT_CURVE_PIVOT, pivot_col);
+    UI_GetThemeColorType4fv(TH_VERTEX_SELECT, SPACE_VIEW3D, selec_col);
+    UI_GetThemeColorType4fv(TH_PAINT_CURVE_HANDLE, SPACE_VIEW3D, handle_col);
+    UI_GetThemeColorType4fv(TH_PAINT_CURVE_PIVOT, SPACE_VIEW3D, pivot_col);
 
     for (i = 0; i < pc->tot_points - 1; i++, cp++) {
       int j;

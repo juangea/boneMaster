@@ -195,7 +195,9 @@ void ED_pose_recalculate_paths(bContext *C, Scene *scene, Object *ob, bool curre
   }
 
   Main *bmain = CTX_data_main(C);
-  Depsgraph *depsgraph = CTX_data_depsgraph(C);
+  /* NOTE: Dependency graph will be evaluated at all the frames, but we first need to access some
+   * nested pointers, like animation data. */
+  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   ListBase targets = {NULL, NULL};
   bool free_depsgraph = false;
 
@@ -384,7 +386,7 @@ void POSE_OT_paths_update(wmOperatorType *ot)
   ot->idname = "POSE_OT_paths_update";
   ot->description = "Recalculate paths for bones that already have them";
 
-  /* api callbakcs */
+  /* api callbacks */
   ot->exec = pose_update_paths_exec;
   ot->poll = pose_update_paths_poll;
 
@@ -872,6 +874,8 @@ static int pose_bone_layers_exec(bContext *C, wmOperator *op)
     RNA_boolean_set_array(&ptr, "layers", layers);
 
     if (prev_ob != ob) {
+      BKE_armature_refresh_layer_used(ob->data);
+
       /* Note, notifier might evolve. */
       WM_event_add_notifier(C, NC_OBJECT | ND_POSE, ob);
       DEG_id_tag_update((ID *)ob->data, ID_RECALC_COPY_ON_WRITE);
@@ -948,6 +952,8 @@ static int armature_bone_layers_exec(bContext *C, wmOperator *op)
     RNA_boolean_set_array(&ptr, "layers", layers);
   }
   CTX_DATA_END;
+
+  ED_armature_edit_refresh_layer_used(ob->data);
 
   /* note, notifier might evolve */
   WM_event_add_notifier(C, NC_OBJECT | ND_POSE, ob);

@@ -32,6 +32,8 @@
 #include "BKE_studiolight.h"
 #include "BKE_sequencer.h"
 
+#include "ED_text.h"
+
 #include "BLI_math.h"
 
 #include "DNA_action_types.h"
@@ -985,7 +987,7 @@ static int rna_3DViewShading_type_get(PointerRNA *ptr)
     return shading->type;
   }
   else if (BKE_scene_uses_blender_workbench(scene)) {
-    return (shading->type == OB_MATERIAL) ? OB_RENDER : shading->type;
+    return (shading->type == OB_MATERIAL) ? OB_SOLID : shading->type;
   }
   else {
     if (shading->type == OB_RENDER && !(type && type->view_draw)) {
@@ -1058,21 +1060,6 @@ static PointerRNA rna_View3DShading_selected_studio_light_get(PointerRNA *ptr)
 }
 
 /* shading.light */
-static int rna_View3DShading_light_get(PointerRNA *ptr)
-{
-  View3DShading *shading = (View3DShading *)ptr->data;
-  return shading->light;
-}
-
-static void rna_View3DShading_light_set(PointerRNA *ptr, int value)
-{
-  View3DShading *shading = (View3DShading *)ptr->data;
-  if (value == V3D_LIGHTING_MATCAP && shading->color_type == V3D_SHADING_TEXTURE_COLOR) {
-    shading->color_type = V3D_SHADING_MATERIAL_COLOR;
-  }
-  shading->light = value;
-}
-
 static const EnumPropertyItem *rna_View3DShading_color_type_itemf(bContext *UNUSED(C),
                                                                   PointerRNA *ptr,
                                                                   PropertyRNA *UNUSED(prop),
@@ -1081,36 +1068,24 @@ static const EnumPropertyItem *rna_View3DShading_color_type_itemf(bContext *UNUS
   View3DShading *shading = (View3DShading *)ptr->data;
 
   int totitem = 0;
-  EnumPropertyItem *item = NULL;
 
-  if (shading->type == OB_SOLID) {
-    RNA_enum_items_add_value(
-        &item, &totitem, rna_enum_shading_color_type_items, V3D_SHADING_MATERIAL_COLOR);
+  if (shading->type == OB_WIRE) {
+    EnumPropertyItem *item = NULL;
     RNA_enum_items_add_value(
         &item, &totitem, rna_enum_shading_color_type_items, V3D_SHADING_SINGLE_COLOR);
     RNA_enum_items_add_value(
         &item, &totitem, rna_enum_shading_color_type_items, V3D_SHADING_OBJECT_COLOR);
     RNA_enum_items_add_value(
         &item, &totitem, rna_enum_shading_color_type_items, V3D_SHADING_RANDOM_COLOR);
-    RNA_enum_items_add_value(
-        &item, &totitem, rna_enum_shading_color_type_items, V3D_SHADING_VERTEX_COLOR);
-    if (shading->light != V3D_LIGHTING_MATCAP) {
-      RNA_enum_items_add_value(
-          &item, &totitem, rna_enum_shading_color_type_items, V3D_SHADING_TEXTURE_COLOR);
-    }
+    RNA_enum_item_end(&item, &totitem);
+    *r_free = true;
+    return item;
   }
-  else if (shading->type == OB_WIRE) {
-    RNA_enum_items_add_value(
-        &item, &totitem, rna_enum_shading_color_type_items, V3D_SHADING_SINGLE_COLOR);
-    RNA_enum_items_add_value(
-        &item, &totitem, rna_enum_shading_color_type_items, V3D_SHADING_OBJECT_COLOR);
-    RNA_enum_items_add_value(
-        &item, &totitem, rna_enum_shading_color_type_items, V3D_SHADING_RANDOM_COLOR);
+  else {
+    /* Solid mode, or lookdev mode for workbench engine. */
+    r_free = false;
+    return rna_enum_shading_color_type_items;
   }
-
-  RNA_enum_item_end(&item, &totitem);
-  *r_free = true;
-  return item;
 }
 
 /* Studio light */
@@ -1529,6 +1504,11 @@ static void rna_SpaceTextEditor_text_set(PointerRNA *ptr,
   st->text = value.data;
 
   WM_main_add_notifier(NC_TEXT | NA_SELECTED, st->text);
+}
+
+static bool rna_SpaceTextEditor_text_is_syntax_highlight_supported(struct SpaceText *space)
+{
+  return ED_text_is_syntax_highlight_supported(space->text);
 }
 
 static void rna_SpaceTextEditor_updateEdited(Main *UNUSED(bmain),
@@ -2131,6 +2111,13 @@ static void rna_SpaceClipEditor_clip_mode_update(Main *UNUSED(bmain),
                                                  PointerRNA *ptr)
 {
   SpaceClip *sc = (SpaceClip *)(ptr->data);
+
+  if (sc->mode == SC_MODE_MASKEDIT && sc->view != SC_VIEW_CLIP) {
+    /* Make sure we are in the right view for mask editing */
+    sc->view = SC_VIEW_CLIP;
+    ScrArea *sa = rna_area_from_space(ptr);
+    ED_area_tag_refresh(sa);
+  }
 
   sc->scopes.ok = 0;
 }
@@ -2790,6 +2777,7 @@ static void rna_def_space_outliner(BlenderRNA *brna)
   static const EnumPropertyItem filter_state_items[] = {
       {SO_FILTER_OB_ALL, "ALL", 0, "All", "Show all objects in the view layer"},
       {SO_FILTER_OB_VISIBLE, "VISIBLE", 0, "Visible", "Show visible objects"},
+      {SO_FILTER_OB_INVISIBLE, "INVISIBLE", 0, "Invisible", "Show invisible objects"},
       {SO_FILTER_OB_SELECTED, "SELECTED", 0, "Selected", "Show selected objects"},
       {SO_FILTER_OB_ACTIVE, "ACTIVE", 0, "Active", "Show only the active object"},
       {0, NULL, 0, NULL, NULL},
@@ -2826,6 +2814,12 @@ static void rna_def_space_outliner(BlenderRNA *brna)
   prop = RNA_def_property(srna, "use_sort_alpha", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", SO_SKIP_SORT_ALPHA);
   RNA_def_property_ui_text(prop, "Sort Alphabetically", "");
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_OUTLINER, NULL);
+
+  prop = RNA_def_property(srna, "use_sync_select", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", SO_SYNC_SELECT);
+  RNA_def_property_ui_text(
+      prop, "Sync Outliner Selection", "Sync outliner selection with other editors");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_OUTLINER, NULL);
 
   /* Granular restriction column option. */
@@ -2997,8 +2991,6 @@ static void rna_def_space_view3d_shading(BlenderRNA *brna)
   prop = RNA_def_property(srna, "light", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, NULL, "light");
   RNA_def_property_enum_items(prop, rna_enum_viewport_lighting_items);
-  RNA_def_property_enum_funcs(
-      prop, "rna_View3DShading_light_get", "rna_View3DShading_light_set", NULL);
   RNA_def_property_ui_text(prop, "Lighting", "Lighting Method for Solid/Texture Viewport Shading");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 
@@ -3551,7 +3543,8 @@ static void rna_def_space_view3d_overlay(BlenderRNA *brna)
   prop = RNA_def_property(srna, "texture_paint_mode_opacity", PROP_FLOAT, PROP_FACTOR);
   RNA_def_property_float_sdna(prop, NULL, "overlay.texture_paint_mode_opacity");
   RNA_def_property_float_default(prop, 1.0f);
-  RNA_def_property_ui_text(prop, "Texture Opacity", "Opacity of the texture paint mode overlay");
+  RNA_def_property_ui_text(
+      prop, "Stencil Opacity", "Opacity of the texture paint mode stencil mask overlay");
   RNA_def_property_range(prop, 0.0f, 1.0f);
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 
@@ -4560,6 +4553,7 @@ static void rna_def_space_text(BlenderRNA *brna)
 {
   StructRNA *srna;
   PropertyRNA *prop;
+  FunctionRNA *func;
 
   srna = RNA_def_struct(brna, "SpaceTextEditor", "Space");
   RNA_def_struct_sdna(srna, "SpaceText");
@@ -4588,6 +4582,15 @@ static void rna_def_space_text(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Line Numbers", "Show line numbers next to the text");
   RNA_def_property_ui_icon(prop, ICON_LINENUMBERS_ON, 0);
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_TEXT, NULL);
+
+  func = RNA_def_function(srna,
+                          "is_syntax_highlight_supported",
+                          "rna_SpaceTextEditor_text_is_syntax_highlight_supported");
+  RNA_def_function_return(func,
+                          RNA_def_boolean(func, "is_syntax_highlight_supported", false, "", ""));
+  RNA_def_function_ui_description(func,
+                                  "Returns True if the editor supports syntax highlighting "
+                                  "for the current text datablock");
 
   prop = RNA_def_property(srna, "show_syntax_highlight", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "showsyntax", 0);

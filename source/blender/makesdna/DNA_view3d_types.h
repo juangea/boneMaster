@@ -144,7 +144,7 @@ typedef struct View3DCursor {
 
 /** 3D Viewport Shading settings. */
 typedef struct View3DShading {
-  /** Shading type (VIEW3D_SHADE_SOLID, ..). */
+  /** Shading type (OB_SOLID, ..). */
   char type;
   /** Runtime, for toggle between rendered viewport. */
   char prev_type;
@@ -433,6 +433,10 @@ enum {
   V3D_SHADING_TEXTURE_COLOR = 3,
   V3D_SHADING_OBJECT_COLOR = 4,
   V3D_SHADING_VERTEX_COLOR = 5,
+
+  /* Is used to display the object using the error color. For example when in
+   * solid texture paint mode without any textures configured */
+  V3D_SHADING_ERROR_COLOR = 999,
 };
 
 /** #View3DShading.background_type */

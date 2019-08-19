@@ -802,33 +802,48 @@ void FILE_OT_select_walk(wmOperatorType *ot)
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 
-static int file_select_all_exec(bContext *C, wmOperator *UNUSED(op))
+static int file_select_all_exec(bContext *C, wmOperator *op)
 {
   ScrArea *sa = CTX_wm_area(C);
   SpaceFile *sfile = CTX_wm_space_file(C);
   FileSelection sel;
   const int numfiles = filelist_files_ensure(sfile->files);
-  const bool has_selection = file_is_any_selected(sfile->files);
+  int action = RNA_enum_get(op->ptr, "action");
+
+  if (action == SEL_TOGGLE) {
+    action = file_is_any_selected(sfile->files) ? SEL_DESELECT : SEL_SELECT;
+  }
 
   sel.first = 0;
   sel.last = numfiles - 1;
 
-  /* select all only if previously no file was selected */
-  if (has_selection) {
-    filelist_entries_select_index_range_set(
-        sfile->files, &sel, FILE_SEL_REMOVE, FILE_SEL_SELECTED, CHECK_ALL);
-    sfile->params->active_file = -1;
+  FileCheckType check_type;
+  FileSelType filesel_type;
+
+  switch (action) {
+    case SEL_SELECT:
+    case SEL_INVERT: {
+      check_type = (sfile->params->flag & FILE_DIRSEL_ONLY) ? CHECK_DIRS : CHECK_FILES;
+      filesel_type = (action == SEL_INVERT) ? FILE_SEL_TOGGLE : FILE_SEL_ADD;
+      break;
+    }
+    case SEL_DESELECT: {
+      check_type = CHECK_ALL;
+      filesel_type = FILE_SEL_REMOVE;
+      break;
+    }
+    default: {
+      BLI_assert(0);
+      return OPERATOR_CANCELLED;
+    }
   }
-  else {
-    const FileCheckType check_type = (sfile->params->flag & FILE_DIRSEL_ONLY) ? CHECK_DIRS :
-                                                                                CHECK_FILES;
-    int i;
 
-    filelist_entries_select_index_range_set(
-        sfile->files, &sel, FILE_SEL_ADD, FILE_SEL_SELECTED, check_type);
+  filelist_entries_select_index_range_set(
+      sfile->files, &sel, filesel_type, FILE_SEL_SELECTED, check_type);
 
-    /* set active_file to first selected */
-    for (i = 0; i < numfiles; i++) {
+  sfile->params->active_file = -1;
+  if (action != SEL_DESELECT) {
+    for (int i = 0; i < numfiles; i++) {
       if (filelist_entry_select_index_get(sfile->files, i, check_type)) {
         sfile->params->active_file = i;
         break;
@@ -855,6 +870,7 @@ void FILE_OT_select_all(wmOperatorType *ot)
   ot->poll = ED_operator_file_active;
 
   /* properties */
+  WM_operator_properties_select_all(ot);
 }
 
 /* ---------- BOOKMARKS ----------- */
@@ -1720,7 +1736,7 @@ static int file_smoothscroll_invoke(bContext *C, wmOperator *UNUSED(op), const w
                                  ((numfiles % items_block_size) != 0 ? items_block_size : 0)) -
                                 (numfiles_layout / 2);
   /* Actual (physical) scrolling info, in pixels, used to detect whether we are fully at the
-   * begining/end of the view. */
+   * beginning/end of the view. */
   /* Note that there is a weird glitch, that sometimes tot rctf is smaller than cur rctf...
    * that is why we still need to keep the min/max_middle_offset checks too. :( */
   const float min_tot_scroll = is_horizontal ? ar->v2d.tot.xmin : -ar->v2d.tot.ymax;
@@ -1731,17 +1747,17 @@ static int file_smoothscroll_invoke(bContext *C, wmOperator *UNUSED(op), const w
   /* Check if we have reached our final scroll position. */
   /* Filelist has to be ready, otherwise it makes no sense to stop scrolling yet. */
   const bool is_ready = filelist_is_ready(sfile->files);
-  /* Edited item must be in the 'middle' of shown area (kind of approximative).
+  /* Edited item must be in the 'middle' of shown area (kind of approximated).
    * Note that we have to do the check in 'block space', not in 'item space' here. */
   const bool is_centered = (abs(middle_offset / items_block_size -
                                 sfile->scroll_offset / items_block_size) == 0);
-  /* OR edited item must be towards the begining, and we are scrolled fully to the start. */
+  /* OR edited item must be towards the beginning, and we are scrolled fully to the start. */
   const bool is_full_start = ((sfile->scroll_offset < min_middle_offset) &&
                               (min_curr_scroll - min_tot_scroll < 1.0f) &&
                               (middle_offset - min_middle_offset < items_block_size));
   /* OR edited item must be towards the end, and we are scrolled fully to the end.
-   * This one is crucial (unlike the one for the begining), because without it we won't scroll
-   * fully to the end, and last column or row wil end up only partially drawn. */
+   * This one is crucial (unlike the one for the beginning), because without it we won't scroll
+   * fully to the end, and last column or row will end up only partially drawn. */
   const bool is_full_end = ((sfile->scroll_offset > max_middle_offset) &&
                             (max_tot_scroll - max_curr_scroll < 1.0f) &&
                             (max_middle_offset - middle_offset < items_block_size));

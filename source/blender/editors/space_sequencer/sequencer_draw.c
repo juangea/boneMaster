@@ -1546,7 +1546,7 @@ void sequencer_draw_preview(const bContext *C,
                             bool draw_backdrop)
 {
   struct Main *bmain = CTX_data_main(C);
-  struct Depsgraph *depsgraph = CTX_data_depsgraph(C);
+  struct Depsgraph *depsgraph = CTX_data_expect_evaluated_depsgraph(C);
   struct View2D *v2d = &ar->v2d;
   struct ImBuf *ibuf = NULL;
   struct ImBuf *scope = NULL;
@@ -2042,8 +2042,6 @@ void draw_timeline_seq(const bContext *C, ARegion *ar)
   if (ed) {
     /* draw the data */
     draw_seq_strips(C, ed, ar);
-    draw_cache_view(C);
-
     /* text draw cached (for sequence names), in pixelspace now */
     UI_view2d_text_cache_draw(ar);
   }
@@ -2063,8 +2061,12 @@ void draw_timeline_seq(const bContext *C, ARegion *ar)
   }
   ED_markers_draw(C, marker_draw_flag);
 
-  /* preview range */
   UI_view2d_view_ortho(v2d);
+  /* draw cache on top of markers area */
+  if (ed) {
+    draw_cache_view(C);
+  }
+  /* preview range */
   ANIM_draw_previewrange(C, v2d, 1);
 
   /* overlap playhead */
@@ -2074,9 +2076,11 @@ void draw_timeline_seq(const bContext *C, ARegion *ar)
                         scene->r.cfra + scene->ed->over_ofs;
 
     uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
-    immBindBuiltinProgram(GPU_SHADER_2D_UNIFORM_COLOR);
+    immBindBuiltinProgram(GPU_SHADER_3D_LINE_DASHED_UNIFORM_COLOR);
 
-    immUniformColor3f(0.2f, 0.2f, 0.2f);
+    immUniform1f("dash_width", 20.0f * U.pixelsize);
+    immUniform1f("dash_factor", 0.5f);
+    immUniformThemeColor(TH_CFRAME);
 
     immBegin(GPU_PRIM_LINES, 2);
     immVertex2f(pos, cfra_over, v2d->cur.ymin);

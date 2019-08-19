@@ -33,6 +33,7 @@
 #include "BKE_global.h"
 #include "BKE_report.h"
 #include "BKE_editmesh.h"
+#include "BKE_layer.h"
 #include "BKE_scene.h"
 
 #include "RNA_access.h"
@@ -754,16 +755,6 @@ static void TRANSFORM_OT_resize(struct wmOperatorType *ot)
                            P_OPTIONS | P_GPENCIL_EDIT | P_CENTER);
 }
 
-static bool skin_resize_poll(bContext *C)
-{
-  struct Object *obedit = CTX_data_edit_object(C);
-  if (obedit && obedit->type == OB_MESH) {
-    BMEditMesh *em = BKE_editmesh_from_object(obedit);
-    return (em && CustomData_has_layer(&em->bm->vdata, CD_MVERT_SKIN));
-  }
-  return 0;
-}
-
 static void TRANSFORM_OT_skin_resize(struct wmOperatorType *ot)
 {
   /* identifiers */
@@ -777,7 +768,7 @@ static void TRANSFORM_OT_skin_resize(struct wmOperatorType *ot)
   ot->exec = transform_exec;
   ot->modal = transform_modal;
   ot->cancel = transform_cancel;
-  ot->poll = skin_resize_poll;
+  ot->poll = ED_operator_editmesh;
   ot->poll_property = transform_poll_property;
 
   RNA_def_float_vector(
@@ -892,6 +883,16 @@ static void TRANSFORM_OT_bend(struct wmOperatorType *ot)
   Transform_Properties(ot, P_PROPORTIONAL | P_MIRROR | P_SNAP | P_GPENCIL_EDIT | P_CENTER);
 }
 
+static bool transform_shear_poll(bContext *C)
+{
+  if (!ED_operator_screenactive(C)) {
+    return false;
+  }
+
+  ScrArea *sa = CTX_wm_area(C);
+  return sa && !ELEM(sa->spacetype, SPACE_ACTION);
+}
+
 static void TRANSFORM_OT_shear(struct wmOperatorType *ot)
 {
   /* identifiers */
@@ -905,7 +906,7 @@ static void TRANSFORM_OT_shear(struct wmOperatorType *ot)
   ot->exec = transform_exec;
   ot->modal = transform_modal;
   ot->cancel = transform_cancel;
-  ot->poll = ED_operator_screenactive;
+  ot->poll = transform_shear_poll;
   ot->poll_property = transform_poll_property;
 
   RNA_def_float(ot->srna, "value", 0, -FLT_MAX, FLT_MAX, "Offset", "", -FLT_MAX, FLT_MAX);
@@ -1149,8 +1150,12 @@ static void TRANSFORM_OT_seq_slide(struct wmOperatorType *ot)
   ot->cancel = transform_cancel;
   ot->poll = ED_operator_sequencer_active;
 
-  RNA_def_float_vector_xyz(
+  /* properties */
+  PropertyRNA *prop;
+
+  prop = RNA_def_float_vector(
       ot->srna, "value", 2, NULL, -FLT_MAX, FLT_MAX, "Offset", "", -FLT_MAX, FLT_MAX);
+  RNA_def_property_ui_range(prop, -FLT_MAX, FLT_MAX, 1, 0);
 
   WM_operatortype_props_advanced_begin(ot);
 

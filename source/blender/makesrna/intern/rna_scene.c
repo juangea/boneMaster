@@ -735,7 +735,7 @@ static void rna_GPencilInterpolateSettings_type_set(PointerRNA *ptr, int value)
 
   /* init custom interpolation curve here now the first time it's used */
   if ((settings->type == GP_IPO_CURVEMAP) && (settings->custom_ipo == NULL)) {
-    settings->custom_ipo = curvemapping_add(1, 0.0f, 0.0f, 1.0f, 1.0f);
+    settings->custom_ipo = BKE_curvemapping_add(1, 0.0f, 0.0f, 1.0f, 1.0f);
   }
 }
 
@@ -821,8 +821,8 @@ static void rna_Scene_fps_update(Main *bmain, Scene *scene, PointerRNA *UNUSED(p
 {
   DEG_id_tag_update(&scene->id, ID_RECALC_AUDIO_FPS | ID_RECALC_SEQUENCER_STRIPS);
   /* NOTE: Tag via dependency graph will take care of all the updates ion the evaluated domain,
-   * however, changes in FPS actually modifies an original stip length, so this we take care about
-   * here. */
+   * however, changes in FPS actually modifies an original skip length,
+   * so this we take care about here. */
   BKE_sequencer_refresh_sound_length(bmain, scene);
 }
 
@@ -831,9 +831,10 @@ static void rna_Scene_listener_update(Main *UNUSED(bmain), Scene *scene, Pointer
   DEG_id_tag_update(&scene->id, ID_RECALC_AUDIO_LISTENER);
 }
 
-static void rna_Scene_volume_update(Main *UNUSED(bmain), Scene *scene, PointerRNA *UNUSED(ptr))
+static void rna_Scene_volume_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
 {
-  DEG_id_tag_update(&scene->id, ID_RECALC_AUDIO_VOLUME);
+  Scene *scene = (Scene *)ptr->id.data;
+  DEG_id_tag_update(&scene->id, ID_RECALC_AUDIO_VOLUME | ID_RECALC_SEQUENCER_STRIPS);
 }
 
 static const char *rna_Scene_statistics_string_get(Scene *scene,
@@ -876,7 +877,7 @@ static float rna_Scene_frame_current_final_get(PointerRNA *ptr)
 {
   Scene *scene = (Scene *)ptr->data;
 
-  return BKE_scene_frame_get_from_ctime(scene, (float)scene->r.cfra);
+  return BKE_scene_frame_to_ctime(scene, (float)scene->r.cfra);
 }
 
 static void rna_Scene_start_frame_set(PointerRNA *ptr, int value)
@@ -1663,6 +1664,13 @@ static void rna_Scene_use_nodes_update(bContext *C, PointerRNA *ptr)
     ED_node_composit_default(C, scene);
   }
   DEG_relations_tag_update(CTX_data_main(C));
+}
+
+static void rna_Physics_relations_update(Main *bmain,
+                                         Scene *UNUSED(scene),
+                                         PointerRNA *UNUSED(ptr))
+{
+  DEG_relations_tag_update(bmain);
 }
 
 static void rna_Physics_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
@@ -2887,7 +2895,7 @@ static void rna_def_tool_settings(BlenderRNA *brna)
   prop = RNA_def_property(srna, "use_transform_pivot_point_align", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "transform_flag", SCE_XFORM_AXIS_ALIGN);
   RNA_def_property_ui_text(
-      prop, "Only Origins", "Manipulate center points (object, pose and weight paint mode only)");
+      prop, "Only Origins", "Manipulate origins (object, pose and weight paint mode only)");
   RNA_def_property_ui_icon(prop, ICON_CENTER_ONLY, 0);
   RNA_def_property_update(prop, NC_SCENE, NULL);
 
@@ -3459,7 +3467,7 @@ static void rna_def_statvis(BlenderRNA *brna)
   RNA_def_property_float_sdna(prop, NULL, "overhang_min");
   RNA_def_property_float_default(prop, 0.5f);
   RNA_def_property_range(prop, 0.0f, DEG2RADF(180.0f));
-  RNA_def_property_ui_range(prop, 0.0f, DEG2RADF(180.0f), 0.001, 3);
+  RNA_def_property_ui_range(prop, 0.0f, DEG2RADF(180.0f), 10, 3);
   RNA_def_property_ui_text(prop, "Overhang Min", "Minimum angle to display");
   RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
   RNA_def_property_update(prop, 0, "rna_EditMesh_update");
@@ -5163,6 +5171,7 @@ static void rna_def_scene_ffmpeg_settings(BlenderRNA *brna)
       {FFMPEG_OGG, "OGG", 0, "Ogg", ""},
       {FFMPEG_MKV, "MKV", 0, "Matroska", ""},
       {FFMPEG_FLV, "FLASH", 0, "Flash", ""},
+      {FFMPEG_WEBM, "WEBM", 0, "WebM", ""},
       {0, NULL, 0, NULL, NULL},
   };
 
@@ -5221,6 +5230,7 @@ static void rna_def_scene_ffmpeg_settings(BlenderRNA *brna)
       {AV_CODEC_ID_FLAC, "FLAC", 0, "FLAC", ""},
       {AV_CODEC_ID_MP2, "MP2", 0, "MP2", ""},
       {AV_CODEC_ID_MP3, "MP3", 0, "MP3", ""},
+      {AV_CODEC_ID_OPUS, "OPUS", 0, "Opus", ""},
       {AV_CODEC_ID_PCM_S16LE, "PCM", 0, "PCM", ""},
       {AV_CODEC_ID_VORBIS, "VORBIS", 0, "Vorbis", ""},
       {0, NULL, 0, NULL, NULL},
@@ -6266,7 +6276,7 @@ static void rna_def_scene_objects(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_property_srna(cprop, "SceneObjects");
   srna = RNA_def_struct(brna, "SceneObjects", NULL);
   RNA_def_struct_sdna(srna, "Scene");
-  RNA_def_struct_ui_text(srna, "Scene Objects", "All the of scene objects");
+  RNA_def_struct_ui_text(srna, "Scene Objects", "All of the scene objects");
 }
 
 /* scene.timeline_markers */
@@ -7345,7 +7355,7 @@ void RNA_def_scene(BlenderRNA *brna)
   RNA_def_property_pointer_sdna(prop, NULL, "rigidbody_world");
   RNA_def_property_struct_type(prop, "RigidBodyWorld");
   RNA_def_property_ui_text(prop, "Rigid Body World", "");
-  RNA_def_property_update(prop, NC_SCENE, NULL);
+  RNA_def_property_update(prop, NC_SCENE, "rna_Physics_relations_update");
 
   /* Tool Settings */
   prop = RNA_def_property(srna, "tool_settings", PROP_POINTER, PROP_NONE);

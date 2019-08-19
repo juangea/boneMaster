@@ -124,7 +124,8 @@ void ED_region_image_metadata_draw(
 void ED_region_image_metadata_panel_draw(struct ImBuf *ibuf, struct uiLayout *layout);
 void ED_region_grid_draw(struct ARegion *ar, float zoomx, float zoomy);
 float ED_region_blend_alpha(struct ARegion *ar);
-void ED_region_visible_rect(struct ARegion *ar, struct rcti *rect);
+void ED_region_visible_rect_calc(struct ARegion *ar, struct rcti *rect);
+const rcti *ED_region_visible_rect(ARegion *ar);
 bool ED_region_is_overlap(int spacetype, int regiontype);
 
 int ED_region_snap_size_test(const struct ARegion *ar);
@@ -337,6 +338,7 @@ bool ED_operator_object_active(struct bContext *C);
 bool ED_operator_object_active_editable(struct bContext *C);
 bool ED_operator_object_active_editable_mesh(struct bContext *C);
 bool ED_operator_object_active_editable_font(struct bContext *C);
+bool ED_operator_editable_mesh(struct bContext *C);
 bool ED_operator_editmesh(struct bContext *C);
 bool ED_operator_editmesh_view3d(struct bContext *C);
 bool ED_operator_editmesh_region_view3d(struct bContext *C);

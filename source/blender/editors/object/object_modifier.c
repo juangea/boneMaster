@@ -100,7 +100,7 @@ static void object_force_modifier_update_for_bind(Depsgraph *depsgraph, Object *
   BKE_object_eval_reset(ob_eval);
   if (ob->type == OB_MESH) {
     Mesh *me_eval = mesh_create_eval_final_view(depsgraph, scene_eval, ob_eval, &CD_MASK_BAREMESH);
-    BKE_id_free(NULL, me_eval);
+    BKE_mesh_eval_delete(me_eval);
   }
   else if (ob->type == OB_LATTICE) {
     BKE_lattice_modifiers_calc(depsgraph, scene_eval, ob_eval);
@@ -913,7 +913,10 @@ void OBJECT_OT_modifier_add(wmOperatorType *ot)
 
 /********** generic functions for operators using mod names and data context *********************/
 
-bool edit_modifier_poll_generic(bContext *C, StructRNA *rna_type, int obtype_flag)
+bool edit_modifier_poll_generic(bContext *C,
+                                StructRNA *rna_type,
+                                int obtype_flag,
+                                const bool is_editmode_allowed)
 {
   PointerRNA ptr = CTX_data_pointer_get_type(C, "modifier", rna_type);
   Object *ob = (ptr.id.data) ? ptr.id.data : ED_object_active_context(C);
@@ -933,12 +936,17 @@ bool edit_modifier_poll_generic(bContext *C, StructRNA *rna_type, int obtype_fla
     return (((ModifierData *)ptr.data)->flag & eModifierFlag_OverrideLibrary_Local) != 0;
   }
 
+  if (!is_editmode_allowed && CTX_data_edit_object(C) != NULL) {
+    CTX_wm_operator_poll_msg_set(C, "This modifier operation is not allowed from Edit mode");
+    return 0;
+  }
+
   return 1;
 }
 
 bool edit_modifier_poll(bContext *C)
 {
-  return edit_modifier_poll_generic(C, &RNA_Modifier, 0);
+  return edit_modifier_poll_generic(C, &RNA_Modifier, 0, true);
 }
 
 void edit_modifier_properties(wmOperatorType *ot)
@@ -1123,7 +1131,7 @@ void OBJECT_OT_modifier_move_down(wmOperatorType *ot)
 static int modifier_apply_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
-  Depsgraph *depsgraph = CTX_data_depsgraph(C);
+  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   Scene *scene = CTX_data_scene(C);
   Object *ob = ED_object_active_context(C);
   ModifierData *md = edit_modifier_property_get(op, ob, 0);
@@ -1187,7 +1195,7 @@ void OBJECT_OT_modifier_apply(wmOperatorType *ot)
 static int modifier_convert_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
-  Depsgraph *depsgraph = CTX_data_depsgraph(C);
+  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   Object *ob = ED_object_active_context(C);
@@ -1275,7 +1283,7 @@ void OBJECT_OT_modifier_copy(wmOperatorType *ot)
 
 static bool multires_poll(bContext *C)
 {
-  return edit_modifier_poll_generic(C, &RNA_MultiresModifier, (1 << OB_MESH));
+  return edit_modifier_poll_generic(C, &RNA_MultiresModifier, (1 << OB_MESH), true);
 }
 
 static int multires_higher_levels_delete_exec(bContext *C, wmOperator *op)
@@ -1384,7 +1392,7 @@ void OBJECT_OT_multires_subdivide(wmOperatorType *ot)
 
 static int multires_reshape_exec(bContext *C, wmOperator *op)
 {
-  Depsgraph *depsgraph = CTX_data_depsgraph(C);
+  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   Object *ob = ED_object_active_context(C), *secondob = NULL;
   MultiresModifierData *mmd = (MultiresModifierData *)edit_modifier_property_get(
       op, ob, eModifierType_Multires);
@@ -1628,14 +1636,13 @@ static void modifier_skin_customdata_delete(Object *ob)
 
 static bool skin_poll(bContext *C)
 {
-  return (!CTX_data_edit_object(C) &&
-          edit_modifier_poll_generic(C, &RNA_SkinModifier, (1 << OB_MESH)));
+  return (edit_modifier_poll_generic(C, &RNA_SkinModifier, (1 << OB_MESH), false));
 }
 
 static bool skin_edit_poll(bContext *C)
 {
   return (CTX_data_edit_object(C) &&
-          edit_modifier_poll_generic(C, &RNA_SkinModifier, (1 << OB_MESH)));
+          edit_modifier_poll_generic(C, &RNA_SkinModifier, (1 << OB_MESH), true));
 }
 
 static void skin_root_clear(BMVert *bm_vert, GSet *visited, const int cd_vert_skin_offset)
@@ -1928,7 +1935,7 @@ static Object *modifier_skin_armature_create(Depsgraph *depsgraph,
 static int skin_armature_create_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
-  Depsgraph *depsgraph = CTX_data_depsgraph(C);
+  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   Scene *scene = CTX_data_scene(C);
   Object *ob = CTX_data_active_object(C), *arm_ob;
   Mesh *me = ob->data;
@@ -1988,12 +1995,12 @@ void OBJECT_OT_skin_armature_create(wmOperatorType *ot)
 
 static bool correctivesmooth_poll(bContext *C)
 {
-  return edit_modifier_poll_generic(C, &RNA_CorrectiveSmoothModifier, 0);
+  return edit_modifier_poll_generic(C, &RNA_CorrectiveSmoothModifier, 0, true);
 }
 
 static int correctivesmooth_bind_exec(bContext *C, wmOperator *op)
 {
-  Depsgraph *depsgraph = CTX_data_depsgraph(C);
+  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   Scene *scene = CTX_data_scene(C);
   Object *ob = ED_object_active_context(C);
   CorrectiveSmoothModifierData *csmd = (CorrectiveSmoothModifierData *)edit_modifier_property_get(
@@ -2066,12 +2073,12 @@ void OBJECT_OT_correctivesmooth_bind(wmOperatorType *ot)
 
 static bool meshdeform_poll(bContext *C)
 {
-  return edit_modifier_poll_generic(C, &RNA_MeshDeformModifier, 0);
+  return edit_modifier_poll_generic(C, &RNA_MeshDeformModifier, 0, true);
 }
 
 static int meshdeform_bind_exec(bContext *C, wmOperator *op)
 {
-  Depsgraph *depsgraph = CTX_data_depsgraph(C);
+  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   Object *ob = ED_object_active_context(C);
   MeshDeformModifierData *mmd = (MeshDeformModifierData *)edit_modifier_property_get(
       op, ob, eModifierType_MeshDeform);
@@ -2139,7 +2146,7 @@ void OBJECT_OT_meshdeform_bind(wmOperatorType *ot)
 
 static bool explode_poll(bContext *C)
 {
-  return edit_modifier_poll_generic(C, &RNA_ExplodeModifier, 0);
+  return edit_modifier_poll_generic(C, &RNA_ExplodeModifier, 0, true);
 }
 
 static int explode_refresh_exec(bContext *C, wmOperator *op)
@@ -2189,7 +2196,7 @@ void OBJECT_OT_explode_refresh(wmOperatorType *ot)
 
 static bool ocean_bake_poll(bContext *C)
 {
-  return edit_modifier_poll_generic(C, &RNA_OceanModifier, 0);
+  return edit_modifier_poll_generic(C, &RNA_OceanModifier, 0, true);
 }
 
 typedef struct OceanBakeJob {
@@ -2310,8 +2317,9 @@ static int ocean_bake_exec(bContext *C, wmOperator *op)
   for (f = omd->bakestart; f <= omd->bakeend; f++) {
     /* For now only simple animation of time value is supported, nothing else.
      * No drivers or other modifier parameters. */
-    BKE_animsys_evaluate_animdata(
-        CTX_data_depsgraph(C), scene, (ID *)ob, ob->adt, f, ADT_RECALC_ANIM);
+    /* TODO(sergey): This operates on an original data, so no flush is needed. However, baking
+     * usually should happen on an evaluated objects, so this seems to be deeper issue here. */
+    BKE_animsys_evaluate_animdata(scene, (ID *)ob, ob->adt, f, ADT_RECALC_ANIM, false);
 
     och->time[i] = omd->time;
     i++;
@@ -2390,13 +2398,13 @@ void OBJECT_OT_ocean_bake(wmOperatorType *ot)
 
 static bool laplaciandeform_poll(bContext *C)
 {
-  return edit_modifier_poll_generic(C, &RNA_LaplacianDeformModifier, 0);
+  return edit_modifier_poll_generic(C, &RNA_LaplacianDeformModifier, 0, false);
 }
 
 static int laplaciandeform_bind_exec(bContext *C, wmOperator *op)
 {
   Object *ob = ED_object_active_context(C);
-  Depsgraph *depsgraph = CTX_data_depsgraph(C);
+  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   LaplacianDeformModifierData *lmd = (LaplacianDeformModifierData *)edit_modifier_property_get(
       op, ob, eModifierType_LaplacianDeform);
 
@@ -2465,13 +2473,13 @@ void OBJECT_OT_laplaciandeform_bind(wmOperatorType *ot)
 
 static bool surfacedeform_bind_poll(bContext *C)
 {
-  return edit_modifier_poll_generic(C, &RNA_SurfaceDeformModifier, 0);
+  return edit_modifier_poll_generic(C, &RNA_SurfaceDeformModifier, 0, true);
 }
 
 static int surfacedeform_bind_exec(bContext *C, wmOperator *op)
 {
   Object *ob = ED_object_active_context(C);
-  Depsgraph *depsgraph = CTX_data_depsgraph(C);
+  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   SurfaceDeformModifierData *smd = (SurfaceDeformModifierData *)edit_modifier_property_get(
       op, ob, eModifierType_SurfaceDeform);
 
@@ -2526,213 +2534,6 @@ void OBJECT_OT_surfacedeform_bind(wmOperatorType *ot)
   edit_modifier_properties(ot);
 }
 
-/***************** ParticleMesher level set filter operator *****************/
-
-static bool particlemesher_poll(bContext *C)
-{
-	return edit_modifier_poll_generic(C, &RNA_ParticleMesherModifier, 0);
-}
-
-static LevelSetFilter *levelset_get_current_filter(ParticleMesherModifierData *mesher)
-{
-	LevelSetFilter *filter = mesher->filters.first;
-
-	for (; filter; filter = filter->next) {
-		if (filter->flag & LVLSETFILTER_CURRENT) {
-			break;
-		}
-	}
-
-	return filter;
-}
-
-static LevelSetFilter *levelset_filter_new(void)
-{
-	LevelSetFilter *filter = NULL;
-
-	filter = MEM_callocN(sizeof(LevelSetFilter), "LevelSetFilter");
-	filter->iterations = 3;
-	filter->accuracy = LEVEL_FILTER_ACC_FISRT;
-	filter->type = LEVEL_FILTER_MEDIAN;
-	filter->width = 1;
-	filter->offset = 1.0f;
-
-	BLI_strncpy(filter->name,
-	            part_mesher_filter_items[filter->type].name,
-				sizeof(filter->name));
-
-	return filter;
-}
-
-static int levelset_filter_add_exec(bContext *C, wmOperator *op)
-{
-	Object *ob = ED_object_active_context(C);
-	ParticleMesherModifierData *pmmd = (ParticleMesherModifierData *)edit_modifier_property_get(op, ob, eModifierType_ParticleMesher);
-	LevelSetFilter *filter, *filter_new;
-
-	if (!pmmd) {
-		return OPERATOR_CANCELLED;
-	}
-
-	filter = levelset_get_current_filter(pmmd);
-
-	if (filter) {
-		filter->flag &= ~LVLSETFILTER_CURRENT;
-	}
-
-	filter_new = levelset_filter_new();
-	filter_new->flag |= LVLSETFILTER_CURRENT;
-
-	BLI_addtail(&pmmd->filters, filter_new);
-
-	DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
-	WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, ob);
-
-	return OPERATOR_FINISHED;
-}
-
-static int particlemesher_filter_add_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
-{
-	if (edit_modifier_invoke_properties(C, op))
-		return levelset_filter_add_exec(C, op);
-	else
-		return OPERATOR_CANCELLED;
-}
-
-void OBJECT_OT_levelset_filter_add(wmOperatorType *ot)
-{
-	/* identifiers */
-	ot->name = "Add Level Set Filter";
-	ot->description = "Add a level set filter to the generated mesh";
-	ot->idname = "OBJECT_OT_levelset_filter_add";
-
-	/* api callbacks */
-	ot->poll = particlemesher_poll;
-	ot->invoke = particlemesher_filter_add_invoke;
-	ot->exec = levelset_filter_add_exec;
-
-	/* flags */
-	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
-
-	edit_modifier_properties(ot);
-}
-
-static int levelset_filter_remove_exec(bContext *C, wmOperator *op)
-{
-	Object *ob = ED_object_active_context(C);
-	ParticleMesherModifierData *pmmd = (ParticleMesherModifierData *)edit_modifier_property_get(op, ob, eModifierType_ParticleMesher);
-	LevelSetFilter *filter, *filter_prev = NULL;
-
-	if (!pmmd) {
-		return OPERATOR_CANCELLED;
-	}
-
-	filter = levelset_get_current_filter(pmmd);
-
-	if (filter) {
-		filter_prev = filter->prev;
-		BLI_remlink(&pmmd->filters, filter);
-		MEM_freeN(filter);
-	}
-
-	if (filter_prev) {
-		filter_prev->flag |= LVLSETFILTER_CURRENT;
-	}
-
-	DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
-
-	return OPERATOR_FINISHED;
-}
-
-static int particlemesher_filter_remove_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
-{
-	if (edit_modifier_invoke_properties(C, op))
-		return levelset_filter_remove_exec(C, op);
-	else
-		return OPERATOR_CANCELLED;
-}
-
-void OBJECT_OT_levelset_filter_remove(wmOperatorType *ot)
-{
-	/* identifiers */
-	ot->name = "Remove Level Set Filter";
-	ot->description = "Remove the currently selected level set filter";
-	ot->idname = "OBJECT_OT_levelset_filter_remove";
-
-	/* api callbacks */
-	ot->invoke = particlemesher_filter_remove_invoke;
-	ot->exec = levelset_filter_remove_exec;
-
-	/* flags */
-	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
-	edit_modifier_properties(ot);
-}
-
-enum {
-	LVLSET_FILTER_MOVE_UP = 0,
-	LVLSET_FILTER_MOVE_DOWN,
-};
-
-static int levelset_filter_move_exec(bContext *C, wmOperator *op)
-{
-	Object *ob = ED_object_active_context(C);
-	ParticleMesherModifierData *pmmd = (ParticleMesherModifierData *)edit_modifier_property_get(op, ob, eModifierType_ParticleMesher);
-	LevelSetFilter *filter;
-	int direction = RNA_enum_get(op->ptr, "direction");
-
-	if (!pmmd) {
-		return OPERATOR_CANCELLED;
-	}
-
-	filter = levelset_get_current_filter(pmmd);
-
-	if (direction == LVLSET_FILTER_MOVE_UP) {
-		if (filter->prev) {
-			BLI_remlink(&pmmd->filters, filter);
-			BLI_insertlinkbefore(&pmmd->filters, filter->prev, filter);
-		}
-	}
-	else if (direction == LVLSET_FILTER_MOVE_DOWN) {
-		if (filter->next) {
-			BLI_remlink(&pmmd->filters, filter);
-			BLI_insertlinkafter(&pmmd->filters, filter->next, filter);
-		}
-	}
-
-	DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
-
-	return OPERATOR_FINISHED;
-}
-
-static int particlemesher_filter_move_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
-{
-	if (edit_modifier_invoke_properties(C, op))
-		return levelset_filter_move_exec(C, op);
-	else
-		return OPERATOR_CANCELLED;
-}
-
-void OBJECT_OT_levelset_filter_move(wmOperatorType *ot)
-{
-	static EnumPropertyItem filter_move[] = {
-		{LVLSET_FILTER_MOVE_UP, "UP", 0, "Up", ""},
-		{LVLSET_FILTER_MOVE_DOWN, "DOWN", 0, "Down", ""},
-		{ 0, NULL, 0, NULL, NULL }
-	};
-
-	ot->name = "Move Levelset Filter";
-	ot->description = "Move levelset filter up or down the list";
-	ot->idname = "OBJECT_OT_levelset_filter_move";
-
-	ot->invoke = particlemesher_filter_move_invoke;
-	ot->exec = levelset_filter_move_exec;
-
-	/* flags */
-	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
-	ot->prop = RNA_def_enum(ot->srna, "direction", filter_move, LVLSET_FILTER_MOVE_UP, "Direction", "");
-	edit_modifier_properties(ot);
-}
-
 static bool remesh_update_check(bContext *C, wmOperator *op)
 {
   Object *ob = ED_object_active_context(C);
@@ -2751,7 +2552,7 @@ static bool remesh_update_check(bContext *C, wmOperator *op)
 
 static bool remesh_csg_poll(bContext *C)
 {
-  return edit_modifier_poll_generic(C, &RNA_RemeshModifier, 0);
+  return edit_modifier_poll_generic(C, &RNA_RemeshModifier, 0, true);
 }
 
 static int remesh_csg_add_exec(bContext *C, wmOperator *op)

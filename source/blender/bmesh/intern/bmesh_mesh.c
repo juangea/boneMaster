@@ -1345,7 +1345,7 @@ void BM_normals_loops_edges_tag(BMesh *bm, const bool do_edges)
 }
 
 /**
- * Auxillary function only used by rebuild to detect if any spaces were not marked as invalid.
+ * Auxiliary function only used by rebuild to detect if any spaces were not marked as invalid.
  * Reports error if any of the lnor spaces change after rebuilding, meaning that all the possible
  * lnor spaces to be rebuilt were not correctly marked.
  */
@@ -1582,7 +1582,7 @@ BMLoopNorEditDataArray *BM_loop_normal_editdata_array_init(BMesh *bm,
 
   BLI_assert(bm->spacearr_dirty == 0);
 
-  BMLoopNorEditDataArray *lnors_ed_arr = MEM_mallocN(sizeof(*lnors_ed_arr), __func__);
+  BMLoopNorEditDataArray *lnors_ed_arr = MEM_callocN(sizeof(*lnors_ed_arr), __func__);
   lnors_ed_arr->lidx_to_lnor_editdata = MEM_callocN(
       sizeof(*lnors_ed_arr->lidx_to_lnor_editdata) * bm->totloop, __func__);
 

@@ -35,40 +35,26 @@ struct OpenVDBLevelSet {
  public:
   OpenVDBLevelSet();
   ~OpenVDBLevelSet();
-  openvdb::FloatGrid::Ptr OpenVDB_level_set_get_grid();
-  void OpenVDB_level_set_set_grid(openvdb::FloatGrid::Ptr);
-  void OpenVDB_mesh_to_level_set(const float *vertices,
-                                 const unsigned int *faces,
-                                 const unsigned int totvertices,
-                                 const unsigned int totfaces,
-                                 const double voxel_size);
+  const openvdb::FloatGrid::Ptr &get_grid();
+  void set_grid(const openvdb::FloatGrid::Ptr &grid);
 
-  void OpenVDB_mesh_to_level_set(const float *vertices,
-                                 const unsigned int *faces,
-                                 const unsigned int totvertices,
-                                 const unsigned int totfaces,
-                                 openvdb::math::Transform::Ptr transform);
+  void mesh_to_level_set(const float *vertices,
+                         const unsigned int *faces,
+                         const unsigned int totvertices,
+                         const unsigned int totfaces,
+                         const openvdb::math::Transform::Ptr &transform);
 
-  void OpenVDB_volume_to_mesh(float *vertices,
-                              unsigned int *quads,
-                              unsigned int *triangles,
-                              unsigned int *totvertices,
-                              unsigned int *totfaces,
-                              unsigned int *tottriangles,
-                              const double isovalue,
-                              const double adaptivity,
-                              const bool relax_disoriented_triangles);
-  void OpenVDB_volume_to_mesh(struct OpenVDBVolumeToMeshData *mesh,
-                              const double isovalue,
-                              const double adaptivity,
-                              const bool relax_disoriented_triangles);
-  void OpenVDB_level_set_filter(OpenVDBLevelSet_FilterType filter_type,
-                                int width,
-                                int iterations,
-                                int filter_bias);
-  openvdb::FloatGrid::Ptr OpenVDB_CSG_operation(openvdb::FloatGrid::Ptr gridA,
-                                                openvdb::FloatGrid::Ptr gridB,
-                                                OpenVDBLevelSet_CSGOperation operation);
+  void volume_to_mesh(struct OpenVDBVolumeToMeshData *mesh,
+                      const double isovalue,
+                      const double adaptivity,
+                      const bool relax_disoriented_triangles);
+  void filter(OpenVDBLevelSet_FilterType filter_type,
+              int width,
+              float distance,
+              OpenVDBLevelSet_FilterBias filter_bias);
+  openvdb::FloatGrid::Ptr CSG_operation_apply(const openvdb::FloatGrid::Ptr &gridA,
+                                              const openvdb::FloatGrid::Ptr &gridB,
+                                              OpenVDBLevelSet_CSGOperation operation);
 };
 
 #endif /* __OPENVDB_LEVEL_SET_H__ */

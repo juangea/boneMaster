@@ -272,7 +272,9 @@ class PARTICLE_PT_emission(ParticleButtonsPanel, Panel):
         col = layout.column()
         col.active = part.emit_from == 'VERT' or part.distribution != 'GRID'
         col.prop(part, "count")
-        col.prop(psys, "seed")
+
+        if psys is not None:
+            col.prop(psys, "seed")
 
         if part.type == 'HAIR':
             col.prop(part, "hair_length")
@@ -315,7 +317,7 @@ class PARTICLE_PT_emission_source(ParticleButtonsPanel, Panel):
             col.prop(part, "invert_grid")
             col.prop(part, "hexagonal_grid")
         else:
-            col.prop(part, "use_emit_random")
+            col.prop(part, "use_emit_random", text="Random Order")
             col.prop(part, "use_even_distribution")
 
         if part.emit_from == 'FACE' or part.emit_from == 'VOLUME':
@@ -820,7 +822,7 @@ class PARTICLE_PT_physics_boids_movement(ParticleButtonsPanel, Panel):
     @classmethod
     def poll(cls, context):
         part = particle_get_settings(context)
-        return part.physics_type in {'BOIDS'}
+        return part.physics_type == 'BOIDS'
 
     def draw(self, context):
         layout = self.layout
@@ -873,7 +875,7 @@ class PARTICLE_PT_physics_boids_battle(ParticleButtonsPanel, Panel):
     @classmethod
     def poll(cls, context):
         part = particle_get_settings(context)
-        return part.physics_type in {'BOIDS'}
+        return part.physics_type == 'BOIDS'
 
     def draw(self, context):
         layout = self.layout
@@ -900,7 +902,7 @@ class PARTICLE_PT_physics_boids_misc(ParticleButtonsPanel, Panel):
     @classmethod
     def poll(cls, context):
         part = particle_get_settings(context)
-        return part.physics_type in {'BOIDS'}
+        return part.physics_type == 'BOIDS'
 
     def draw(self, context):
         layout = self.layout
@@ -1232,8 +1234,7 @@ class PARTICLE_PT_render(ParticleButtonsPanel, Panel):
                 part.type == 'EMITTER' or
                 (part.render_type in {'OBJECT', 'COLLECTION'} and part.type == 'HAIR')
         ):
-            if part.render_type not in {'NONE'}:
-
+            if part.render_type != 'NONE':
                 col = layout.column(align=True)
                 col.prop(part, "particle_size", text="Scale")
                 col.prop(part, "size_random", slider=True, text="Scale Randomness")
@@ -1948,9 +1949,10 @@ class PARTICLE_PT_hair_shape(ParticleButtonsPanel, Panel):
 
     @classmethod
     def poll(cls, context):
-        if context.particle_system is None:
+        psys = context.particle_system
+        if psys is None:
             return False
-        return particle_panel_poll(cls, context)
+        return particle_panel_poll(cls, context) and psys.settings.type == 'HAIR'
 
     def draw(self, context):
         layout = self.layout

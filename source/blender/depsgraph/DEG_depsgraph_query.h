@@ -85,16 +85,6 @@ void DEG_get_customdata_mask_for_object(const struct Depsgraph *graph,
  * one. Assert will happen if it's not. */
 struct Scene *DEG_get_evaluated_scene(const struct Depsgraph *graph);
 
-/* Similar to DEG_get_evaluated_scene(), but allows to access non-fully evaluated pointer without
- * causing asserts or crashes. Works the following way:
- *  - If the scene was never evaluated NULL returned.
- *  - Otherwise the last known state of the scene is returned.
- *
- * Use in exceptional case if it's absolutely must to.
- *
- * Allows to pass depsgraph == NULL, will return NULL in that case. */
-struct Scene *DEG_get_evaluated_scene_if_exists(const struct Depsgraph *graph);
-
 /* Get view layer at its evaluated state.
  * This is a shortcut for accessing active view layer from evaluated scene. */
 struct ViewLayer *DEG_get_evaluated_view_layer(const struct Depsgraph *graph);
@@ -229,6 +219,9 @@ void DEG_iterator_ids_end(struct BLI_Iterator *iter);
 /* ************************ DEG traversal ********************* */
 
 typedef void (*DEGForeachIDCallback)(ID *id, void *user_data);
+typedef void (*DEGForeachIDComponentCallback)(ID *id,
+                                              eDepsObjectComponentType component,
+                                              void *user_data);
 
 /* NOTE: Modifies runtime flags in depsgraph nodes, so can not be used in
  * parallel. Keep an eye on that!
@@ -241,6 +234,14 @@ void DEG_foreach_dependent_ID(const Depsgraph *depsgraph,
                               const ID *id,
                               DEGForeachIDCallback callback,
                               void *user_data);
+
+/* Starts traversal from given component of the given ID, invokes callback for every other
+ * component  which is directly on indirectly dependent on the source one. */
+void DEG_foreach_dependent_ID_component(const Depsgraph *depsgraph,
+                                        const ID *id,
+                                        eDepsObjectComponentType source_component_type,
+                                        DEGForeachIDComponentCallback callback,
+                                        void *user_data);
 
 void DEG_foreach_ID(const Depsgraph *depsgraph, DEGForeachIDCallback callback, void *user_data);
 

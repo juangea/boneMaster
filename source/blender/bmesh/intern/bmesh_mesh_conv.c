@@ -422,7 +422,7 @@ void BM_mesh_bm_from_me(BMesh *bm, const Mesh *me, const struct BMeshFromMeshPar
       /* don't use 'j' since we may have skipped some faces, hence some loops. */
       BM_elem_index_set(l_iter, totloops++); /* set_ok */
 
-      /* Save index of correspsonding MLoop */
+      /* Save index of corresponding #MLoop. */
       CustomData_to_bmesh_block(&me->ldata, &bm->ldata, j++, &l_iter->head.data, true);
     } while ((l_iter = l_iter->next) != l_first);
 
@@ -984,7 +984,7 @@ void BM_mesh_bm_to_me(Main *bmain, BMesh *bm, Mesh *me, const struct BMeshToMesh
 /**
  * A version of #BM_mesh_bm_to_me intended for getting the mesh
  * to pass to the modifier stack for evaluation,
- * instad of mode switching (where we make sure all data is kept
+ * instead of mode switching (where we make sure all data is kept
  * and do expensive lookups to maintain shape keys).
  *
  * Key differences:

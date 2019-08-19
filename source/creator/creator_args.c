@@ -383,11 +383,11 @@ fail:
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Utilities Python Context Macro (#BPY_CTX_SETUP)
+ * \{ */
 
 #  ifdef WITH_PYTHON
 
-/** \name Utilities Python Context Macro (#BPY_CTX_SETUP)
- * \{ */
 struct BlendePyContextStore {
   wmWindowManager *wm;
   Scene *scene;
@@ -926,7 +926,7 @@ static const char arg_handle_debug_mode_generic_set_doc_ffmpeg[] =
 #  ifdef WITH_FREESTYLE
 static const char arg_handle_debug_mode_generic_set_doc_freestyle[] =
     "\n\t"
-    "Enable debug messages for FreeStyle.";
+    "Enable debug messages for Freestyle.";
 #  endif
 static const char arg_handle_debug_mode_generic_set_doc_python[] =
     "\n\t"
@@ -1481,7 +1481,7 @@ static int arg_handle_threads_set(int argc, const char **argv, void *UNUSED(data
 
 static const char arg_handle_verbosity_set_doc[] =
     "<verbose>\n"
-    "\tSet logging verbosity level.";
+    "\tSet logging verbosity level for debug messages which supports it.";
 static int arg_handle_verbosity_set(int argc, const char **argv, void *UNUSED(data))
 {
   const char *arg_id = "--verbose";

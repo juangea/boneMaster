@@ -108,7 +108,7 @@ class WXEdge : public WEdge {
  private:
   // flag to indicate whether the edge is a silhouette edge or not
   WXNature _nature;
-  // 0: the order doesn't matter. 1: the order is the orginal one. -1: the order is not good
+  // 0: the order doesn't matter. 1: the order is the original one. -1: the order is not good
   short _order;
   // A front facing edge is an edge for which the bording face which is the nearest from the
   // viewpoint is front. A back facing edge is the opposite.
@@ -449,7 +449,7 @@ class WXFaceLayer {
   unsigned int GetSmoothEdgeIndex() const;
 
   /*! retrieves the edges of the triangle for which the signs are different (a null value is not
-   * considered) for the dotp values at each edge extrimity
+   * considered) for the dotp values at each edge extremity
    */
   void RetrieveCuspEdgesIndices(vector<int> &oCuspEdges);
 

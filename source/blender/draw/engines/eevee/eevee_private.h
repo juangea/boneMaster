@@ -562,6 +562,7 @@ typedef struct EEVEE_EffectsInfo {
   /* SSR */
   bool reflection_trace_full;
   bool ssr_was_persp;
+  bool ssr_was_valid_double_buffer;
   int ssr_neighbor_ofs;
   int ssr_halfres_ofs[2];
   struct GPUTexture *ssr_normal_input; /* Textures from pool */
@@ -632,7 +633,7 @@ typedef struct EEVEE_EffectsInfo {
   struct GPUTexture *source_buffer;     /* latest updated texture */
   struct GPUFrameBuffer *target_buffer; /* next target to render to */
   struct GPUTexture *final_tx;          /* Final color to transform to display color space. */
-  struct GPUFrameBuffer *final_fb;      /* Framebuffer with final_tx as attachement. */
+  struct GPUFrameBuffer *final_fb;      /* Framebuffer with final_tx as attachment. */
 } EEVEE_EffectsInfo;
 
 /* ***************** COMMON DATA **************** */
@@ -653,11 +654,11 @@ typedef struct EEVEE_CommonUniformBuffer {
   float ao_offset, ao_bounce_fac, ao_quality, ao_settings; /* vec4 */
   /* Volumetric */
   /* -- 16 byte aligned -- */
-  int vol_tex_size[3], pad3;         /* ivec3 */
-  float vol_depth_param[3], pad4;    /* vec3 */
-  float vol_inv_tex_size[3], pad5;   /* vec3 */
-  float vol_jitter[3], pad6;         /* vec3 */
-  float vol_coord_scale[2], pad7[2]; /* vec2 */
+  int vol_tex_size[3], pad3;       /* ivec3 */
+  float vol_depth_param[3], pad4;  /* vec3 */
+  float vol_inv_tex_size[3], pad5; /* vec3 */
+  float vol_jitter[3], pad6;       /* vec3 */
+  float vol_coord_scale[4];        /* vec4 */
   /* -- 16 byte aligned -- */
   float vol_history_alpha; /* float */
   float vol_light_clamp;   /* float */
@@ -671,6 +672,7 @@ typedef struct EEVEE_CommonUniformBuffer {
   float ssr_firefly_fac;                              /* float */
   float ssr_brdf_bias;                                /* float */
   int ssr_toggle;                                     /* bool */
+  int ssrefract_toggle;                               /* bool */
   /* SubSurface Scattering */
   float sss_jitter_threshold; /* float */
   int sss_toggle;             /* bool */
@@ -690,8 +692,6 @@ typedef struct EEVEE_CommonUniformBuffer {
   int hiz_mip_offset; /* int */
   int ray_type;       /* int */
   float ray_depth;    /* float */
-
-  float pad_common_ubo;
 } EEVEE_CommonUniformBuffer;
 
 BLI_STATIC_ASSERT_ALIGN(EEVEE_CommonUniformBuffer, 16)
@@ -761,8 +761,8 @@ typedef struct EEVEE_ShadowCascadeData {
   float radius[MAX_CASCADE_NUM];
 } EEVEE_ShadowCascadeData;
 
-/* Theses are the structs stored inside Objects.
- * It works with even if the object is in multiple layers
+/* These are the structs stored inside Objects.
+ * It works even if the object is in multiple layers
  * because we don't get the same "Object *" for each layer. */
 typedef struct EEVEE_LightEngineData {
   DrawData dd;
@@ -897,7 +897,6 @@ struct GPUMaterial *EEVEE_material_mesh_get(struct Scene *scene,
                                             Material *ma,
                                             EEVEE_Data *vedata,
                                             bool use_blend,
-                                            bool use_multiply,
                                             bool use_refract,
                                             bool use_translucency,
                                             int shadow_method);

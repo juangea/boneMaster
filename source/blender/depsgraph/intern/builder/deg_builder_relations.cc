@@ -200,6 +200,11 @@ static OperationCode bone_target_opcode(ID *target,
   return OperationCode::BONE_DONE;
 }
 
+static bool object_have_geometry_component(const Object *object)
+{
+  return ELEM(object->type, OB_MESH, OB_CURVE, OB_FONT, OB_SURF, OB_MBALL, OB_LATTICE, OB_GPENCIL);
+}
+
 /* **** General purpose functions ****  */
 
 DepsgraphRelationBuilder::DepsgraphRelationBuilder(Main *bmain,
@@ -374,6 +379,14 @@ void DepsgraphRelationBuilder::add_particle_forcefield_relations(const Operation
 {
   ListBase *relations = build_effector_relations(graph_, eff->group);
 
+  /* Make sure physics effects like wind are properly re-evaluating the modifier stack. */
+  if (!BLI_listbase_is_empty(relations)) {
+    TimeSourceKey time_src_key;
+    ComponentKey geometry_key(&object->id, NodeType::GEOMETRY);
+    add_relation(
+        time_src_key, geometry_key, "Effector Time -> Particle", RELATION_CHECK_BEFORE_ADD);
+  }
+
   LISTBASE_FOREACH (EffectorRelation *, relation, relations) {
     if (relation->ob != object) {
       /* Relation to forcefield object, optionally including geometry. */
@@ -518,7 +531,7 @@ void DepsgraphRelationBuilder::build_collection(LayerCollection *from_layer_coll
     /* If we came from layer collection we don't go deeper, view layer
      * builder takes care of going deeper.
      *
-     * NOTE: Do early output before tagging build as done, so possbile
+     * NOTE: Do early output before tagging build as done, so possible
      * subsequent builds from outside of the layer collection properly
      * recurses into all the nested objects and collections. */
     return;
@@ -664,7 +677,7 @@ void DepsgraphRelationBuilder::build_object(Base *base, Object *object)
   }
   /* Point caches. */
   build_object_pointcache(object);
-  /* Syncronization back to original object. */
+  /* Synchronization back to original object. */
   OperationKey synchronize_key(
       &object->id, NodeType::SYNCHRONIZATION, OperationCode::SYNCHRONIZE_TO_ORIGINAL);
   add_relation(final_transform_key, synchronize_key, "Synchronize to Original");
@@ -682,7 +695,7 @@ void DepsgraphRelationBuilder::build_object_flags(Base *base, Object *object)
   OperationKey object_flags_key(
       &object->id, NodeType::OBJECT_FROM_LAYER, OperationCode::OBJECT_BASE_FLAGS);
   add_relation(view_layer_done_key, object_flags_key, "Base flags flush");
-  /* Syncronization back to original object. */
+  /* Synchronization back to original object. */
   OperationKey synchronize_key(
       &object->id, NodeType::SYNCHRONIZATION, OperationCode::SYNCHRONIZE_TO_ORIGINAL);
   add_relation(object_flags_key, synchronize_key, "Synchronize to Original");
@@ -745,6 +758,12 @@ void DepsgraphRelationBuilder::build_object_data(Object *object)
     ComponentKey key_key(&key->id, NodeType::GEOMETRY);
     add_relation(key_key, geometry_key, "Shapekeys");
     build_nested_shapekey(&object->id, key);
+  }
+  /* Materials. */
+  Material ***materials_ptr = give_matarar(object);
+  if (materials_ptr != NULL) {
+    short *num_materials_ptr = give_totcolp(object);
+    build_materials(*materials_ptr, *num_materials_ptr);
   }
 }
 
@@ -898,6 +917,13 @@ void DepsgraphRelationBuilder::build_object_pointcache(Object *object)
       OperationKey transform_key(
           &object->id, NodeType::TRANSFORM, OperationCode::TRANSFORM_SIMULATION_INIT);
       add_relation(point_cache_key, transform_key, "Point Cache -> Rigid Body");
+      /* Manual changes to effectors need to invalidate simulation. */
+      OperationKey rigidbody_rebuild_key(
+          &scene_->id, NodeType::TRANSFORM, OperationCode::RIGIDBODY_REBUILD);
+      add_relation(rigidbody_rebuild_key,
+                   point_cache_key,
+                   "Rigid Body Rebuild -> Point Cache Reset",
+                   RELATION_FLAG_FLUSH_USER_EDIT_ONLY);
     }
     else {
       flag = FLAG_GEOMETRY;
@@ -1199,7 +1225,10 @@ void DepsgraphRelationBuilder::build_animdata_curves_targets(ID *id,
     const IDNode *id_node_to = operation_to->owner->owner;
     if (id_node_from != id_node_to) {
       ComponentKey cow_key(id_node_to->id_orig, NodeType::COPY_ON_WRITE);
-      add_relation(cow_key, adt_key, "Animated CoW -> Animation", RELATION_CHECK_BEFORE_ADD);
+      add_relation(cow_key,
+                   adt_key,
+                   "Animated CoW -> Animation",
+                   RELATION_CHECK_BEFORE_ADD | RELATION_FLAG_NO_FLUSH);
     }
   }
 }
@@ -1292,7 +1321,7 @@ void DepsgraphRelationBuilder::build_animdata_drivers(ID *id)
 
 void DepsgraphRelationBuilder::build_animation_images(ID *id)
 {
-  /* TODO: can we check for existance of node for performance? */
+  /* TODO: can we check for existence of node for performance? */
   if (BKE_image_user_id_has_animation(id)) {
     OperationKey image_animation_key(id, NodeType::ANIMATION, OperationCode::IMAGE_ANIMATION);
     TimeSourceKey time_src_key;
@@ -1502,8 +1531,9 @@ void DepsgraphRelationBuilder::build_driver_id_property(ID *id, const char *rna_
   }
   PointerRNA id_ptr, ptr;
   PropertyRNA *prop;
+  int index;
   RNA_id_pointer_create(id, &id_ptr);
-  if (!RNA_path_resolve_full(&id_ptr, rna_path, &ptr, &prop, NULL)) {
+  if (!RNA_path_resolve_full(&id_ptr, rna_path, &ptr, &prop, &index)) {
     return;
   }
   if (prop == NULL) {
@@ -1919,14 +1949,7 @@ void DepsgraphRelationBuilder::build_object_data_geometry(Object *object)
     }
   }
   /* Materials. */
-  if (object->totcol) {
-    for (int a = 1; a <= object->totcol; a++) {
-      Material *ma = give_current_material(object, a);
-      if (ma != NULL) {
-        build_material(ma);
-      }
-    }
-  }
+  build_materials(object->mat, object->totcol);
   /* Geometry collision. */
   if (ELEM(object->type, OB_MESH, OB_CURVE, OB_LATTICE)) {
     // add geometry collider relations
@@ -1977,11 +2000,19 @@ void DepsgraphRelationBuilder::build_object_data_geometry(Object *object)
       }
     }
   }
-  /* Syncronization back to original object. */
-  ComponentKey final_geometry_jey(&object->id, NodeType::GEOMETRY);
+  /* Synchronization back to original object. */
+  ComponentKey final_geometry_key(&object->id, NodeType::GEOMETRY);
   OperationKey synchronize_key(
       &object->id, NodeType::SYNCHRONIZATION, OperationCode::SYNCHRONIZE_TO_ORIGINAL);
-  add_relation(final_geometry_jey, synchronize_key, "Synchronize to Original");
+  add_relation(final_geometry_key, synchronize_key, "Synchronize to Original");
+  /* Batch cache. */
+  OperationKey object_data_select_key(
+      obdata, NodeType::BATCH_CACHE, OperationCode::GEOMETRY_SELECT_UPDATE);
+  OperationKey object_select_key(
+      &object->id, NodeType::BATCH_CACHE, OperationCode::GEOMETRY_SELECT_UPDATE);
+  add_relation(object_data_select_key, object_select_key, "Data Selection -> Object Selection");
+  add_relation(
+      geom_key, object_select_key, "Object Geometry -> Select Update", RELATION_FLAG_NO_FLUSH);
 }
 
 void DepsgraphRelationBuilder::build_object_data_geometry_datablock(ID *obdata)
@@ -2139,9 +2170,11 @@ void DepsgraphRelationBuilder::build_nodetree(bNodeTree *ntree)
     else if (id_type == ID_OB) {
       build_object(NULL, (Object *)id);
       ComponentKey object_transform_key(id, NodeType::TRANSFORM);
-      ComponentKey object_geometry_key(id, NodeType::GEOMETRY);
       add_relation(object_transform_key, shading_key, "Object Transform -> Node");
-      add_relation(object_geometry_key, shading_key, "Object Geometry -> Node");
+      if (object_have_geometry_component(reinterpret_cast<Object *>(id))) {
+        ComponentKey object_geometry_key(id, NodeType::GEOMETRY);
+        add_relation(object_geometry_key, shading_key, "Object Geometry -> Node");
+      }
     }
     else if (id_type == ID_SCE) {
       Scene *node_scene = (Scene *)id;
@@ -2208,6 +2241,16 @@ void DepsgraphRelationBuilder::build_material(Material *material)
     OperationKey material_key(&material->id, NodeType::SHADING, OperationCode::MATERIAL_UPDATE);
     add_relation(ntree_key, material_key, "Material's NTree");
     build_nested_nodetree(&material->id, material->nodetree);
+  }
+}
+
+void DepsgraphRelationBuilder::build_materials(Material **materials, int num_materials)
+{
+  for (int i = 0; i < num_materials; ++i) {
+    if (materials[i] == NULL) {
+      continue;
+    }
+    build_material(materials[i]);
   }
 }
 
@@ -2295,6 +2338,24 @@ void DepsgraphRelationBuilder::build_mask(Mask *mask)
   /* Final mask evaluation. */
   OperationKey mask_eval_key(mask_id, NodeType::PARAMETERS, OperationCode::MASK_EVAL);
   add_relation(mask_animation_key, mask_eval_key, "Mask Animation -> Mask Eval");
+  /* Build parents. */
+  LISTBASE_FOREACH (MaskLayer *, mask_layer, &mask->masklayers) {
+    LISTBASE_FOREACH (MaskSpline *, spline, &mask_layer->splines) {
+      for (int i = 0; i < spline->tot_point; i++) {
+        MaskSplinePoint *point = &spline->points[i];
+        MaskParent *parent = &point->parent;
+        if (parent == NULL || parent->id == NULL) {
+          continue;
+        }
+        build_id(parent->id);
+        if (parent->id_type == ID_MC) {
+          OperationKey movieclip_eval_key(
+              parent->id, NodeType::PARAMETERS, OperationCode::MOVIECLIP_EVAL);
+          add_relation(movieclip_eval_key, mask_eval_key, "Movie Clip -> Mask Eval");
+        }
+      }
+    }
+  }
 }
 
 void DepsgraphRelationBuilder::build_movieclip(MovieClip *clip)
@@ -2367,7 +2428,9 @@ void DepsgraphRelationBuilder::build_scene_sequencer(Scene *scene)
       if (seq->flag & SEQ_SCENE_STRIPS) {
         build_scene_sequencer(seq->scene);
         ComponentKey sequence_scene_audio_key(&seq->scene->id, NodeType::AUDIO);
-        add_relation(sequence_scene_audio_key, scene_audio_key, "Sequence Audio -> Scene Audio");
+        add_relation(sequence_scene_audio_key, sequencer_key, "Sequence Scene Audio -> Sequencer");
+        ComponentKey sequence_scene_key(&seq->scene->id, NodeType::SEQUENCER);
+        add_relation(sequence_scene_key, sequencer_key, "Sequence Scene -> Sequencer");
       }
       ViewLayer *sequence_view_layer = BKE_view_layer_default_render(seq->scene);
       build_scene_speakers(seq->scene, sequence_view_layer);
@@ -2474,7 +2537,7 @@ void DepsgraphRelationBuilder::build_copy_on_write_relations(IDNode *id_node)
      *   copied by copy-on-write, and not preserved. PROBABLY it is better
      *   to preserve that cache in copy-on-write, but for the time being
      *   we allow flush to layer collections component which will ensure
-     *   that cached array fo bases exists and is up-to-date. */
+     *   that cached array of bases exists and is up-to-date. */
     if (comp_node->type == NodeType::PARAMETERS ||
         comp_node->type == NodeType::LAYER_COLLECTIONS) {
       rel_flag &= ~RELATION_FLAG_NO_FLUSH;

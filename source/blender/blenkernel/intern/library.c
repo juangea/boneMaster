@@ -57,6 +57,7 @@
 #include "DNA_node_types.h"
 #include "DNA_object_types.h"
 #include "DNA_lightprobe_types.h"
+#include "DNA_rigidbody_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_speaker_types.h"
@@ -1129,7 +1130,7 @@ void BKE_main_lib_objects_recalc_all(Main *bmain)
  * **************************** */
 
 /**
- * Get allocation size fo a given data-block type and optionally allocation name.
+ * Get allocation size of a given data-block type and optionally allocation name.
  */
 size_t BKE_libblock_get_alloc_info(short type, const char **name)
 {
@@ -1501,7 +1502,7 @@ void *BKE_libblock_copy_for_localize(const ID *id)
 void BKE_library_free(Library *lib)
 {
   if (lib->packedfile) {
-    freePackedFile(lib->packedfile);
+    BKE_packedfile_free(lib->packedfile);
   }
 }
 
@@ -1726,8 +1727,8 @@ bool BKE_id_new_name_validate(ListBase *lb, ID *id, const char *tname)
 
   /* This was in 2.43 and previous releases
    * however all data in blender should be sorted, not just duplicate names
-   * sorting should not hurt, but noting just incase it alters the way other
-   * functions work, so sort every time */
+   * sorting should not hurt, but noting just in case it alters the way other
+   * functions work, so sort every time. */
 #if 0
   if (result) {
     id_sort_by_name(lb, id);
@@ -1814,7 +1815,7 @@ static int id_refcount_recompute_callback(void *user_data,
   return IDWALK_RET_NOP;
 }
 
-void BLE_main_id_refcount_recompute(struct Main *bmain, const bool do_linked_only)
+void BKE_main_id_refcount_recompute(struct Main *bmain, const bool do_linked_only)
 {
   ID *id;
 
@@ -1854,8 +1855,9 @@ static void library_make_local_copying_check(ID *id,
   MainIDRelationsEntry *entry = BLI_ghash_lookup(id_relations->id_used_to_user, id);
   BLI_gset_insert(loop_tags, id);
   for (; entry != NULL; entry = entry->next) {
-    ID *par_id =
-        (ID *)entry->id_pointer; /* used_to_user stores ID pointer, not pointer to ID pointer... */
+
+    /* Used_to_user stores ID pointer, not pointer to ID pointer. */
+    ID *par_id = (ID *)entry->id_pointer;
 
     /* Our oh-so-beloved 'from' pointers... */
     if (entry->usage_flag & IDWALK_CB_LOOPBACK) {
@@ -1911,7 +1913,8 @@ static void library_make_local_copying_check(ID *id,
  * \param bmain: Almost certainly global main.
  * \param lib: If not NULL, only make local data-blocks from this library.
  * \param untagged_only: If true, only make local data-blocks not tagged with
- * LIB_TAG_PRE_EXISTING. \param set_fake: If true, set fake user on all localized data-blocks
+ * LIB_TAG_PRE_EXISTING.
+ * \param set_fake: If true, set fake user on all localized data-blocks
  * (except group and objects ones).
  */
 /* Note: Old (2.77) version was simply making (tagging) data-blocks as local,
@@ -2038,6 +2041,10 @@ void BKE_library_make_local(Main *bmain,
       id_clear_lib_data_ex(bmain, id, true);
       BKE_id_expand_local(bmain, id);
       id->tag &= ~LIB_TAG_DOIT;
+
+      if (GS(id->name) == ID_OB) {
+        BKE_rigidbody_ensure_local_object(bmain, (Object *)id);
+      }
     }
     else {
       /* In this specific case, we do want to make ID local even if it has no local usage yet...
@@ -2053,6 +2060,10 @@ void BKE_library_make_local(Main *bmain,
       }
 
       if (id->newid) {
+        if (GS(id->newid->name) == ID_OB) {
+          BKE_rigidbody_ensure_local_object(bmain, (Object *)id->newid);
+        }
+
         /* Reuse already allocated LinkNode (transferring it from todo_ids to copied_ids). */
         BLI_linklist_prepend_nlink(&copied_ids, id, it);
       }
@@ -2175,25 +2186,6 @@ void BKE_library_make_local(Main *bmain,
     if (ob->data != NULL && ob->type == OB_ARMATURE && ob->pose != NULL &&
         ob->pose->flag & POSE_RECALC) {
       BKE_pose_rebuild(bmain, ob, ob->data, true);
-    }
-  }
-
-  /* Reset rigid body objects. */
-  for (LinkNode *it = copied_ids; it; it = it->next) {
-    ID *id = it->link;
-    if (GS(id->name) == ID_OB) {
-      Object *ob = (Object *)id;
-
-      /* If there was ever any rigidbody settings in the object, we reset it. */
-      if (ob->rigidbody_object) {
-        for (Scene *scene_iter = bmain->scenes.first; scene_iter;
-             scene_iter = scene_iter->id.next) {
-          if (scene_iter->rigidbody_world) {
-            BKE_rigidbody_remove_object(bmain, scene_iter, ob);
-          }
-        }
-        BKE_rigidbody_free_object(ob, NULL);
-      }
     }
   }
 

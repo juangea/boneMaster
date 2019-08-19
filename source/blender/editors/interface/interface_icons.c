@@ -169,6 +169,7 @@ static const IconType icontypes[] = {
 #  define DEF_ICON_OBJECT_DATA(name) {ICON_TYPE_MONO_TEXTURE, TH_ICON_OBJECT_DATA},
 #  define DEF_ICON_MODIFIER(name) {ICON_TYPE_MONO_TEXTURE, TH_ICON_MODIFIER},
 #  define DEF_ICON_SHADING(name) {ICON_TYPE_MONO_TEXTURE, TH_ICON_SHADING},
+#  define DEF_ICON_FUND(name) {ICON_TYPE_MONO_TEXTURE, TH_ICON_FUND},
 #  define DEF_ICON_VECTOR(name) {ICON_TYPE_VECTOR, 0},
 #  define DEF_ICON_COLOR(name) {ICON_TYPE_COLOR_TEXTURE, 0},
 #  define DEF_ICON_BLANK(name) {ICON_TYPE_BLANK, 0},
@@ -402,7 +403,7 @@ static void vicon_handletype_auto_clamp_draw(int x, int y, int w, int h, float a
 static void vicon_colorset_draw(int index, int x, int y, int w, int h, float UNUSED(alpha))
 {
   bTheme *btheme = UI_GetTheme();
-  ThemeWireColor *cs = &btheme->tarm[index];
+  const ThemeWireColor *cs = &btheme->tarm[index];
 
   /* Draw three bands of color: One per color
    *    x-----a-----b-----c
@@ -419,15 +420,15 @@ static void vicon_colorset_draw(int index, int x, int y, int w, int h, float UNU
 
   /* XXX: Include alpha into this... */
   /* normal */
-  immUniformColor3ubv((uchar *)cs->solid);
+  immUniformColor3ubv(cs->solid);
   immRecti(pos, x, y, a, y + h);
 
   /* selected */
-  immUniformColor3ubv((uchar *)cs->select);
+  immUniformColor3ubv(cs->select);
   immRecti(pos, a, y, b, y + h);
 
   /* active */
-  immUniformColor3ubv((uchar *)cs->active);
+  immUniformColor3ubv(cs->active);
   immRecti(pos, b, y, c, y + h);
 
   immUnbindProgram();
@@ -463,7 +464,7 @@ DEF_ICON_VECTOR_COLORSET_DRAW_NTH(20, 19)
 #  undef DEF_ICON_VECTOR_COLORSET_DRAW_NTH
 
 /* Dynamically render icon instead of rendering a plain color to a texture/buffer
- * This is mot strictly a "vicon", as it needs access to icon->obj to get the color info,
+ * This is not strictly a "vicon", as it needs access to icon->obj to get the color info,
  * but it works in a very similar way.
  */
 static void vicon_gplayer_color_draw(Icon *icon, int x, int y, int w, int h)
@@ -1417,11 +1418,13 @@ static void icon_set_image(const bContext *C,
     return;
   }
 
+  const bool delay = prv_img->rect[size] != NULL;
   icon_create_rect(prv_img, size);
 
   if (use_job) {
     /* Job (background) version */
-    ED_preview_icon_job(C, prv_img, id, prv_img->rect[size], prv_img->w[size], prv_img->h[size]);
+    ED_preview_icon_job(
+        C, prv_img, id, prv_img->rect[size], prv_img->w[size], prv_img->h[size], delay);
   }
   else {
     if (!scene) {
@@ -1779,7 +1782,7 @@ static void icon_draw_size(float x,
                            enum eIconSizes size,
                            int draw_size,
                            const float desaturate,
-                           const char mono_rgba[4],
+                           const uchar mono_rgba[4],
                            const bool mono_border)
 {
   bTheme *btheme = UI_GetTheme();
@@ -2267,7 +2270,7 @@ void UI_icon_draw_ex(float x,
                      float aspect,
                      float alpha,
                      float desaturate,
-                     const char mono_color[4],
+                     const uchar mono_color[4],
                      const bool mono_border)
 {
   int draw_size = get_draw_size(ICON_SIZE_ICON);

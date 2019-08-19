@@ -20,8 +20,6 @@
 #ifndef __OPENVDB_CAPI_H__
 #define __OPENVDB_CAPI_H__
 
-#include <stddef.h>
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -67,6 +65,7 @@ struct OpenVDBLevelSet;
 struct OpenVDBFloatGrid;
 struct OpenVDBIntGrid;
 struct OpenVDBVectorGrid;
+
 struct OpenVDBVolumeToMeshData {
   int tottriangles;
   int totquads;
@@ -90,8 +89,8 @@ struct OpenVDBRemeshData {
   int out_totfaces;
   int out_tottris;
   int filter_type;
-  int filter_bias;
-  int filter_width; /*parameter for gaussian, median, mean*/
+  enum OpenVDBLevelSet_FilterType filter_bias;
+  enum OpenVDBLevelSet_FilterBias filter_width; /* Parameter for gaussian, median, mean*/
 
   float voxel_size;
   float isovalue;
@@ -181,88 +180,6 @@ void OpenVDBReader_get_meta_mat4(struct OpenVDBReader *reader,
                                  const char *name,
                                  float value[4][4]);
 
-/*for OpenVDB particle mesher modifier */
-struct OpenVDBGeom;
-struct OpenVDBPrimitive;
-struct ParticleList;
-
-enum {
-    LEVEL_FILTER_MEDIAN    = 0,
-    LEVEL_FILTER_MEAN      = 1,
-    LEVEL_FILTER_GAUSSIAN  = 2,
-    LEVEL_FILTER_MEAN_CURV = 3,
-    LEVEL_FILTER_LAPLACIAN = 4,
-    LEVEL_FILTER_OFFSET    = 5,
-};
-
-enum {
-    LEVEL_FILTER_ACC_FISRT   = 0,
-    LEVEL_FILTER_ACC_SECOND  = 1,
-    LEVEL_FILTER_ACC_THIRD   = 2,
-    LEVEL_FILTER_ACC_WENO5   = 3,
-    LEVEL_FILTER_ACC_HJWENO5 = 4,
-};
-
-void OpenVDB_filter_level_set(struct OpenVDBPrimitive *level_set,
-                              struct OpenVDBPrimitive *filter_mask,
-                              int accuracy, int type, int iterations,
-                              int width, float offset);
-
-
-void OpenVDB_from_particles(struct OpenVDBPrimitive *level_set,
-                            struct OpenVDBPrimitive *mask_grid,
-                            struct ParticleList *Pa, bool mask, float mask_width, float min_radius, bool trail, float trail_size);
-
-
-
-struct OpenVDBPrimitive *OpenVDB_from_polygons(struct OpenVDBGeom *geom,
-                                               struct OpenVDBPrimitive *level_set,
-                                               float voxel_size, float int_band, float ext_band);
-
-struct OpenVDBGeom *OpenVDB_to_polygons(struct OpenVDBPrimitive *level_set,
-                                        struct OpenVDBPrimitive *mask_grid,
-                                        float isovalue, float adaptivity,
-                                        float mask_offset, bool invert_mask);
-
-struct ParticleList *OpenVDB_create_part_list(size_t totpart, float rad_scale, float vel_scale);
-void OpenVDB_part_list_free(struct ParticleList *part_list);
-void OpenVDB_add_particle(struct ParticleList *part_list, float pos[3], float rad, float vel[3]);
-void OpenVDB_set_part_list_flags(struct ParticleList *part_list, const bool has_radius, const bool has_velocity);
-
-enum {
-    VDB_GRID_INVALID = 0,
-    VDB_GRID_FLOAT   = 1,
-    VDB_GRID_DOUBLE  = 2,
-    VDB_GRID_INT32   = 3,
-    VDB_GRID_INT64   = 4,
-    VDB_GRID_BOOL    = 5,
-    VDB_GRID_VEC3F   = 6,
-    VDB_GRID_VEC3D   = 7,
-    VDB_GRID_VEC3I   = 8,
-};
-
-struct OpenVDBPrimitive *OpenVDBPrimitive_create(int grid_type);
-struct OpenVDBPrimitive *OpenVDBPrimitive_create_level_set(float voxel_size, float half_width);
-void OpenVDBPrimitive_free(struct OpenVDBPrimitive *vdb_prim);
-void OpenVDBPrimitive_set_transform(struct OpenVDBPrimitive *vdb_prim, float mat[4][4]);
-
-struct OpenVDBGeom *OpenVDBGeom_create(size_t num_points, size_t num_polys);
-void OpenVDBGeom_free(struct OpenVDBGeom *geom);
-void OpenVDBGeom_add_point(struct OpenVDBGeom *geom, const float point[3]);
-void OpenVDBGeom_add_quad(struct OpenVDBGeom *geom, const int quad[4]);
-void OpenVDBGeom_addTriangle(struct OpenVDBGeom *geom, const int tri[3]);
-void OpenVDBGeom_get_point(struct OpenVDBGeom *geom, const size_t idx, float r_point[3]);
-void OpenVDBGeom_get_quad(struct OpenVDBGeom *geom, const size_t idx, int r_quad[4]);
-void OpenVDBGeom_get_triangle(struct OpenVDBGeom *geom, const size_t idx, int r_triangle[3]);
-size_t OpenVDBGeom_get_num_points(struct OpenVDBGeom *geom);
-size_t OpenVDBGeom_get_num_quads(struct OpenVDBGeom *geom);
-size_t OpenVDBGeom_get_num_tris(struct OpenVDBGeom *geom);
-
-void OpenVDB_draw_primitive(struct OpenVDBPrimitive *vdb_prim,
-                            const bool draw_root,
-                            const bool draw_level_1,
-                            const bool draw_level_2,
-                            const bool draw_leaves);
 struct OpenVDBTransform *OpenVDBTransform_create(void);
 void OpenVDBTransform_free(struct OpenVDBTransform *transform);
 void OpenVDBTransform_create_linear_transform(struct OpenVDBTransform *transform,
@@ -290,7 +207,7 @@ void OpenVDBLevelSet_volume_to_mesh(struct OpenVDBLevelSet *level_set,
 void OpenVDBLevelSet_filter(struct OpenVDBLevelSet *level_set,
                             OpenVDBLevelSet_FilterType filter_type,
                             int width,
-                            int iterations,
+                            float distance,
                             OpenVDBLevelSet_FilterBias bias);
 void OpenVDBLevelSet_CSG_operation(struct OpenVDBLevelSet *out,
                                    struct OpenVDBLevelSet *gridA,

@@ -87,6 +87,7 @@ extern "C" {
 #include "BKE_library_query.h"
 #include "BKE_modifier.h"
 #include "BKE_object.h"
+#include "BKE_pointcache.h"
 #include "BKE_sequencer.h"
 #include "BKE_sound.h"
 }
@@ -577,6 +578,7 @@ void update_armature_edit_mode_pointers(const Depsgraph * /*depsgraph*/,
   const bArmature *armature_orig = (const bArmature *)id_orig;
   bArmature *armature_cow = (bArmature *)id_cow;
   armature_cow->edbo = armature_orig->edbo;
+  armature_cow->act_edbone = armature_orig->act_edbone;
 }
 
 void update_curve_edit_mode_pointers(const Depsgraph * /*depsgraph*/,
@@ -683,10 +685,29 @@ void set_particle_system_modifiers_loaded(Object *object_cow)
   }
 }
 
-void update_particles_after_copy(const Object *object_orig, Object *object_cow)
+void reset_particle_system_edit_eval(const Depsgraph *depsgraph, Object *object_cow)
+{
+  /* Inactive (and render) dependency graphs are living in own little bubble, should not care about
+   * edit mode at all. */
+  if (!DEG_is_active(reinterpret_cast<const ::Depsgraph *>(depsgraph))) {
+    return;
+  }
+  LISTBASE_FOREACH (ParticleSystem *, psys, &object_cow->particlesystem) {
+    ParticleSystem *orig_psys = psys->orig_psys;
+    if (orig_psys->edit != NULL) {
+      orig_psys->edit->psys_eval = NULL;
+      orig_psys->edit->psmd_eval = NULL;
+    }
+  }
+}
+
+void update_particles_after_copy(const Depsgraph *depsgraph,
+                                 const Object *object_orig,
+                                 Object *object_cow)
 {
   update_particle_system_orig_pointers(object_orig, object_cow);
   set_particle_system_modifiers_loaded(object_cow);
+  reset_particle_system_edit_eval(depsgraph, object_cow);
 }
 
 void update_pose_orig_pointers(const bPose *pose_orig, bPose *pose_cow)
@@ -765,7 +786,7 @@ void update_id_after_copy(const Depsgraph *depsgraph,
         }
         BKE_pose_pchan_index_rebuild(object_cow->pose);
       }
-      update_particles_after_copy(object_orig, object_cow);
+      update_particles_after_copy(depsgraph, object_orig, object_cow);
       update_modifiers_orig_pointers(object_orig, object_cow);
       break;
     }
@@ -1006,7 +1027,7 @@ class SceneBackup {
    *
    * NOTE: Scene can not disappear after relations update, because otherwise the entire dependency
    * graph will be gone. This means we don't need to compare original scene pointer, or worry about
-   * freeing those if they cant' be restorted: we just copy them over to a new scene. */
+   * freeing those if they cant' be restored: we just copy them over to a new scene. */
   void *sound_scene;
   void *playback_handle;
   void *sound_scrub_handle;
@@ -1321,6 +1342,50 @@ void ObjectRuntimeBackup::restore_pose_channel_runtime_data(Object *object)
   }
 }
 
+/* Backup of movie clip runtime data. */
+
+class MovieClipBackup {
+ public:
+  MovieClipBackup();
+
+  void reset();
+
+  void init_from_movieclip(MovieClip *movieclip);
+  void restore_to_movieclip(MovieClip *movieclip);
+
+  struct anim *anim;
+  struct MovieClipCache *cache;
+};
+
+MovieClipBackup::MovieClipBackup()
+{
+  reset();
+}
+
+void MovieClipBackup::reset()
+{
+  anim = NULL;
+  cache = NULL;
+}
+
+void MovieClipBackup::init_from_movieclip(MovieClip *movieclip)
+{
+  anim = movieclip->anim;
+  cache = movieclip->cache;
+  /* Clear pointers stored in the movie clip, so they are not freed when copied-on-written
+   * datablock is freed for re-allocation. */
+  movieclip->anim = NULL;
+  movieclip->cache = NULL;
+}
+
+void MovieClipBackup::restore_to_movieclip(MovieClip *movieclip)
+{
+  movieclip->anim = anim;
+  movieclip->cache = cache;
+
+  reset();
+}
+
 class RuntimeBackup {
  public:
   RuntimeBackup() : drawdata_ptr(NULL)
@@ -1339,6 +1404,7 @@ class RuntimeBackup {
   ObjectRuntimeBackup object_backup;
   DrawDataList drawdata_backup;
   DrawDataList *drawdata_ptr;
+  MovieClipBackup movieclip_backup;
 };
 
 void RuntimeBackup::init_from_id(ID *id)
@@ -1356,6 +1422,9 @@ void RuntimeBackup::init_from_id(ID *id)
       break;
     case ID_SO:
       sound_backup.init_from_sound(reinterpret_cast<bSound *>(id));
+      break;
+    case ID_MC:
+      movieclip_backup.init_from_movieclip(reinterpret_cast<MovieClip *>(id));
       break;
     default:
       break;
@@ -1381,6 +1450,9 @@ void RuntimeBackup::restore_to_id(ID *id)
       break;
     case ID_SO:
       sound_backup.restore_to_sound(reinterpret_cast<bSound *>(id));
+      break;
+    case ID_MC:
+      movieclip_backup.restore_to_movieclip(reinterpret_cast<MovieClip *>(id));
       break;
     default:
       break;

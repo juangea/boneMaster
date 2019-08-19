@@ -60,9 +60,8 @@ typedef struct MPathTarget {
   Object *ob;          /* source object */
   bPoseChannel *pchan; /* source posechannel (if applicable) */
 
-  /* "Evaluated" Copies (these come from the background COW copie
-   * that provide all the coordinates we want to save off)
-   */
+  /* "Evaluated" Copies (these come from the background COW copy
+   * that provide all the coordinates we want to save off). */
   Object *ob_eval; /* evaluated object */
 } MPathTarget;
 
@@ -322,8 +321,8 @@ void animviz_calc_motionpaths(Depsgraph *depsgraph,
 
   /* reset original environment */
   /* NOTE: We don't always need to reevaluate the main scene, as the depsgraph
-   * may be a temporary one that works on a subset of the data. We always have
-   * to resoture the current frame though. */
+   * may be a temporary one that works on a subset of the data.
+   * We always have to restore the current frame though. */
   CFRA = cfra;
   if (!current_frame_only && restore) {
     motionpaths_calc_update_scene(bmain, depsgraph);

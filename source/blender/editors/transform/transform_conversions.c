@@ -52,6 +52,7 @@
 #include "BLI_string.h"
 #include "BLI_bitmap.h"
 #include "BLI_rect.h"
+#include "BLI_kdtree.h"
 
 #include "BKE_action.h"
 #include "BKE_animsys.h"
@@ -235,8 +236,9 @@ static void sort_trans_data_selected_first(TransInfo *t)
   }
 }
 
-/* distance calculated from not-selected vertex to nearest selected vertex
- * warning; this is loops inside loop, has minor N^2 issues, but by sorting list it is OK */
+/**
+ * Distance calculated from not-selected vertex to nearest selected vertex.
+ */
 static void set_prop_dist(TransInfo *t, const bool with_dist)
 {
   int a;
@@ -255,54 +257,124 @@ static void set_prop_dist(TransInfo *t, const bool with_dist)
     }
   }
 
+  /* Count number of selected. */
+  int td_table_len = 0;
   FOREACH_TRANS_DATA_CONTAINER (t, tc) {
-    TransData *tob = tc->data;
-    for (a = 0; a < tc->data_len; a++, tob++) {
+    TransData *td = tc->data;
+    for (a = 0; a < tc->data_len; a++, td++) {
+      if (td->flag & TD_SELECTED) {
+        td_table_len++;
+      }
+      else {
+        /* By definition transform-data has selected items in beginning. */
+        break;
+      }
+    }
+  }
 
-      tob->rdist = 0.0f;  // init, it was mallocced
+  /* Pointers to selected's #TransData.
+   * Used to find #TransData from the index returned by #BLI_kdtree_find_nearest. */
+  TransData **td_table = MEM_mallocN(sizeof(*td_table) * td_table_len, __func__);
 
-      if ((tob->flag & TD_SELECTED) == 0) {
-        TransData *td;
-        int i;
-        float dist_sq, vec[3];
+  /* Create and fill kd-tree of selected's positions - in global or proj_vec space. */
+  KDTree_3d *td_tree = BLI_kdtree_3d_new(td_table_len);
 
-        tob->rdist = -1.0f;  // signal for next loop
+  int td_table_index = 0;
+  FOREACH_TRANS_DATA_CONTAINER (t, tc) {
+    TransData *td = tc->data;
+    for (a = 0; a < tc->data_len; a++, td++) {
+      if (td->flag & TD_SELECTED) {
+        /* Initialize, it was mallocced. */
+        float vec[3];
+        td->rdist = 0.0f;
 
-        for (i = 0, td = tc->data; i < tc->data_len; i++, td++) {
-          if (td->flag & TD_SELECTED) {
-            if (use_island) {
-              sub_v3_v3v3(vec, tob->iloc, td->iloc);
-            }
-            else {
-              sub_v3_v3v3(vec, tob->center, td->center);
-            }
-            mul_m3_v3(tob->mtx, vec);
-
-            if (proj_vec) {
-              float vec_p[3];
-              project_v3_v3v3(vec_p, vec, proj_vec);
-              sub_v3_v3(vec, vec_p);
-            }
-
-            dist_sq = len_squared_v3(vec);
-            if ((tob->rdist == -1.0f) || (dist_sq < SQUARE(tob->rdist))) {
-              tob->rdist = sqrtf(dist_sq);
-              if (use_island) {
-                copy_v3_v3(tob->center, td->center);
-                copy_m3_m3(tob->axismtx, td->axismtx);
-              }
-            }
+        if (use_island) {
+          if (tc->use_local_mat) {
+            mul_v3_m4v3(vec, tc->mat, td->iloc);
           }
           else {
-            break; /* by definition transdata has selected items in beginning */
+            mul_v3_m3v3(vec, td->mtx, td->iloc);
           }
         }
+        else {
+          if (tc->use_local_mat) {
+            mul_v3_m4v3(vec, tc->mat, td->center);
+          }
+          else {
+            mul_v3_m3v3(vec, td->mtx, td->center);
+          }
+        }
+
+        if (proj_vec) {
+          float vec_p[3];
+          project_v3_v3v3(vec_p, vec, proj_vec);
+          sub_v3_v3(vec, vec_p);
+        }
+
+        BLI_kdtree_3d_insert(td_tree, td_table_index, vec);
+        td_table[td_table_index++] = td;
+      }
+      else {
+        /* By definition transform-data has selected items in beginning. */
+        break;
+      }
+    }
+  }
+  BLI_assert(td_table_index == td_table_len);
+
+  BLI_kdtree_3d_balance(td_tree);
+
+  /* For each non-selected vertex, find distance to the nearest selected vertex. */
+  FOREACH_TRANS_DATA_CONTAINER (t, tc) {
+    TransData *td = tc->data;
+    for (a = 0; a < tc->data_len; a++, td++) {
+      if ((td->flag & TD_SELECTED) == 0) {
+        float vec[3];
+
+        if (use_island) {
+          if (tc->use_local_mat) {
+            mul_v3_m4v3(vec, tc->mat, td->iloc);
+          }
+          else {
+            mul_v3_m3v3(vec, td->mtx, td->iloc);
+          }
+        }
+        else {
+          if (tc->use_local_mat) {
+            mul_v3_m4v3(vec, tc->mat, td->center);
+          }
+          else {
+            mul_v3_m3v3(vec, td->mtx, td->center);
+          }
+        }
+
+        if (proj_vec) {
+          float vec_p[3];
+          project_v3_v3v3(vec_p, vec, proj_vec);
+          sub_v3_v3(vec, vec_p);
+        }
+
+        KDTreeNearest_3d nearest;
+        const int td_index = BLI_kdtree_3d_find_nearest(td_tree, vec, &nearest);
+
+        td->rdist = -1.0f;
+        if (td_index != -1) {
+          td->rdist = nearest.dist;
+          if (use_island) {
+            copy_v3_v3(td->center, td_table[td_index]->center);
+            copy_m3_m3(td->axismtx, td_table[td_index]->axismtx);
+          }
+        }
+
         if (with_dist) {
-          tob->dist = tob->rdist;
+          td->dist = td->rdist;
         }
       }
     }
   }
+
+  BLI_kdtree_3d_free(td_tree);
+  MEM_freeN(td_table);
 }
 
 /* ************************** CONVERSIONS ************************* */
@@ -1289,7 +1361,6 @@ static void createTransPose(TransInfo *t)
     bPose *pose = ob->pose;
 
     bArmature *arm;
-    short ik_on = 0;
 
     /* check validity of state */
     arm = BKE_armature_from_object(tc->poseobj);
@@ -1315,8 +1386,7 @@ static void createTransPose(TransInfo *t)
 
     /* do we need to add temporal IK chains? */
     if ((pose->flag & POSE_AUTO_IK) && t->mode == TFM_TRANSLATION) {
-      ik_on = pose_grab_with_ik(bmain, ob);
-      if (ik_on) {
+      if (pose_grab_with_ik(bmain, ob)) {
         t->flag |= T_AUTOIK;
         has_translate_rotate[0] = true;
       }
@@ -1359,7 +1429,6 @@ static void createTransPose(TransInfo *t)
     Object *ob = tc->poseobj;
     TransData *td;
     TransDataExtension *tdx;
-    short ik_on = 0;
     int i;
 
     PoseInitData_Mirror *pid = tc->custom.type.data;
@@ -1407,7 +1476,7 @@ static void createTransPose(TransInfo *t)
     }
 
     /* initialize initial auto=ik chainlen's? */
-    if (ik_on) {
+    if (t->flag & T_AUTOIK) {
       transform_autoik_update(t, 0);
     }
   }
@@ -2424,8 +2493,8 @@ static void createTransParticleVerts(bContext *C, TransInfo *t)
 
       if (psys && !(psys->flag & PSYS_GLOBAL_HAIR)) {
         ParticleSystemModifierData *psmd_eval = edit->psmd_eval;
-        Mesh *mesh_final = BKE_particle_modifier_mesh_final_get(psmd_eval);
-        psys_mat_hair_to_global(ob, mesh_final, psys->part->from, psys->particles + i, mat);
+        psys_mat_hair_to_global(
+            ob, psmd_eval->mesh_final, psys->part->from, psys->particles + i, mat);
       }
 
       for (k = 0, key = point->keys; k < point->totkey; k++, key++) {
@@ -2516,8 +2585,8 @@ void flushTransParticles(TransInfo *t)
 
       if (psys && !(psys->flag & PSYS_GLOBAL_HAIR)) {
         ParticleSystemModifierData *psmd_eval = edit->psmd_eval;
-        Mesh *mesh_final = BKE_particle_modifier_mesh_final_get(psmd_eval);
-        psys_mat_hair_to_global(ob, mesh_final, psys->part->from, psys->particles + i, mat);
+        psys_mat_hair_to_global(
+            ob, psmd_eval->mesh_final, psys->part->from, psys->particles + i, mat);
         invert_m4_m4(imat, mat);
 
         for (k = 0, key = point->keys; k < point->totkey; k++, key++) {
@@ -2537,6 +2606,7 @@ void flushTransParticles(TransInfo *t)
     }
 
     PE_update_object(t->depsgraph, scene, OBACT(view_layer), 1);
+    BKE_particle_batch_cache_dirty_tag(psys, BKE_PARTICLE_BATCH_DIRTY_ALL);
     DEG_id_tag_update(&ob->id, ID_RECALC_PSYS_REDO);
   }
 }
@@ -2935,11 +3005,16 @@ static void VertsToTransData(TransInfo *t,
   }
   else if (t->mode == TFM_SKIN_RESIZE) {
     MVertSkin *vs = CustomData_bmesh_get(&em->bm->vdata, eve->head.data, CD_MVERT_SKIN);
-    /* skin node size */
-    td->ext = tx;
-    copy_v3_v3(tx->isize, vs->radius);
-    tx->size = vs->radius;
-    td->val = vs->radius;
+    if (vs) {
+      /* skin node size */
+      td->ext = tx;
+      copy_v3_v3(tx->isize, vs->radius);
+      tx->size = vs->radius;
+      td->val = vs->radius;
+    }
+    else {
+      td->flag |= TD_SKIP;
+    }
   }
   else if (t->mode == TFM_SHRINKFATTEN) {
     td->ext = tx;
@@ -3705,50 +3780,48 @@ bool clipUVTransform(TransInfo *t, float vec[2], const bool resize)
     for (a = 0, td = tc->data; a < tc->data_len; a++, td++) {
       minmax_v2v2_v2(min, max, td->loc);
     }
+  }
 
-    if (resize) {
-      if (min[0] < 0.0f && t->center_global[0] > 0.0f &&
-          t->center_global[0] < t->aspect[0] * 0.5f) {
-        vec[0] *= t->center_global[0] / (t->center_global[0] - min[0]);
-      }
-      else if (max[0] > t->aspect[0] && t->center_global[0] < t->aspect[0]) {
-        vec[0] *= (t->center_global[0] - t->aspect[0]) / (t->center_global[0] - max[0]);
-      }
-      else {
-        clipx = 0;
-      }
-
-      if (min[1] < 0.0f && t->center_global[1] > 0.0f &&
-          t->center_global[1] < t->aspect[1] * 0.5f) {
-        vec[1] *= t->center_global[1] / (t->center_global[1] - min[1]);
-      }
-      else if (max[1] > t->aspect[1] && t->center_global[1] < t->aspect[1]) {
-        vec[1] *= (t->center_global[1] - t->aspect[1]) / (t->center_global[1] - max[1]);
-      }
-      else {
-        clipy = 0;
-      }
+  if (resize) {
+    if (min[0] < 0.0f && t->center_global[0] > 0.0f && t->center_global[0] < t->aspect[0] * 0.5f) {
+      vec[0] *= t->center_global[0] / (t->center_global[0] - min[0]);
+    }
+    else if (max[0] > t->aspect[0] && t->center_global[0] < t->aspect[0]) {
+      vec[0] *= (t->center_global[0] - t->aspect[0]) / (t->center_global[0] - max[0]);
     }
     else {
-      if (min[0] < 0.0f) {
-        vec[0] -= min[0];
-      }
-      else if (max[0] > t->aspect[0]) {
-        vec[0] -= max[0] - t->aspect[0];
-      }
-      else {
-        clipx = 0;
-      }
+      clipx = 0;
+    }
 
-      if (min[1] < 0.0f) {
-        vec[1] -= min[1];
-      }
-      else if (max[1] > t->aspect[1]) {
-        vec[1] -= max[1] - t->aspect[1];
-      }
-      else {
-        clipy = 0;
-      }
+    if (min[1] < 0.0f && t->center_global[1] > 0.0f && t->center_global[1] < t->aspect[1] * 0.5f) {
+      vec[1] *= t->center_global[1] / (t->center_global[1] - min[1]);
+    }
+    else if (max[1] > t->aspect[1] && t->center_global[1] < t->aspect[1]) {
+      vec[1] *= (t->center_global[1] - t->aspect[1]) / (t->center_global[1] - max[1]);
+    }
+    else {
+      clipy = 0;
+    }
+  }
+  else {
+    if (min[0] < 0.0f) {
+      vec[0] -= min[0];
+    }
+    else if (max[0] > t->aspect[0]) {
+      vec[0] -= max[0] - t->aspect[0];
+    }
+    else {
+      clipx = 0;
+    }
+
+    if (min[1] < 0.0f) {
+      vec[1] -= min[1];
+    }
+    else if (max[1] > t->aspect[1]) {
+      vec[1] -= max[1] - t->aspect[1];
+    }
+    else {
+      clipy = 0;
     }
   }
 
@@ -6132,6 +6205,8 @@ static void freeSeqData(TransInfo *t, TransDataContainer *tc, TransCustomData *c
     MEM_freeN(custom_data->data);
     custom_data->data = NULL;
   }
+
+  DEG_id_tag_update(&t->scene->id, ID_RECALC_SEQUENCER_STRIPS);
 }
 
 static void createTransSeqData(bContext *C, TransInfo *t)
@@ -6438,10 +6513,15 @@ static void trans_object_base_deps_flag_prepare(ViewLayer *view_layer)
   }
 }
 
-static void set_trans_object_base_deps_flag_cb(ID *id, void *UNUSED(user_data))
+static void set_trans_object_base_deps_flag_cb(ID *id,
+                                               eDepsObjectComponentType component,
+                                               void *UNUSED(user_data))
 {
   /* Here we only handle object IDs. */
   if (GS(id->name) != ID_OB) {
+    return;
+  }
+  if (!ELEM(component, DEG_OB_COMP_TRANSFORM, DEG_OB_COMP_GEOMETRY)) {
     return;
   }
   id->tag |= LIB_TAG_DOIT;
@@ -6450,7 +6530,8 @@ static void set_trans_object_base_deps_flag_cb(ID *id, void *UNUSED(user_data))
 static void flush_trans_object_base_deps_flag(Depsgraph *depsgraph, Object *object)
 {
   object->id.tag |= LIB_TAG_DOIT;
-  DEG_foreach_dependent_ID(depsgraph, &object->id, set_trans_object_base_deps_flag_cb, NULL);
+  DEG_foreach_dependent_ID_component(
+      depsgraph, &object->id, DEG_OB_COMP_TRANSFORM, set_trans_object_base_deps_flag_cb, NULL);
 }
 
 static void trans_object_base_deps_flag_finish(ViewLayer *view_layer)
@@ -6622,7 +6703,6 @@ void autokeyframe_object(bContext *C, Scene *scene, ViewLayer *view_layer, Objec
 
   // TODO: this should probably be done per channel instead...
   if (autokeyframe_cfra_can_key(scene, id)) {
-    Depsgraph *depsgraph = CTX_data_depsgraph(C);
     ReportList *reports = CTX_wm_reports(C);
     ToolSettings *ts = scene->toolsettings;
     KeyingSet *active_ks = ANIM_scene_get_active_keyingset(scene);
@@ -6649,11 +6729,9 @@ void autokeyframe_object(bContext *C, Scene *scene, ViewLayer *view_layer, Objec
       /* only key on available channels */
       if (adt && adt->action) {
         ListBase nla_cache = {NULL, NULL};
-
         for (fcu = adt->action->curves.first; fcu; fcu = fcu->next) {
           fcu->flag &= ~FCURVE_SELECTED;
           insert_keyframe(bmain,
-                          depsgraph,
                           reports,
                           id,
                           adt->action,
@@ -6768,7 +6846,6 @@ void autokeyframe_pose(bContext *C, Scene *scene, Object *ob, int tmode, short t
 
   // TODO: this should probably be done per channel instead...
   if (autokeyframe_cfra_can_key(scene, id)) {
-    Depsgraph *depsgraph = CTX_data_depsgraph(C);
     ReportList *reports = CTX_wm_reports(C);
     ToolSettings *ts = scene->toolsettings;
     KeyingSet *active_ks = ANIM_scene_get_active_keyingset(scene);
@@ -6816,7 +6893,6 @@ void autokeyframe_pose(bContext *C, Scene *scene, Object *ob, int tmode, short t
                  */
                 if (pchanName && STREQ(pchanName, pchan->name)) {
                   insert_keyframe(bmain,
-                                  depsgraph,
                                   reports,
                                   id,
                                   act,
@@ -7092,6 +7168,10 @@ void special_aftertrans_update(bContext *C, TransInfo *t)
 
           FOREACH_TRANS_DATA_CONTAINER (t, tc) {
             EdgeSlideData *sld = tc->custom.mode.data;
+
+            if (sld == NULL) {
+              continue;
+            }
 
             /* Free temporary faces to avoid auto-merging and deleting
              * during cleanup - psy-fi. */
@@ -9007,7 +9087,7 @@ static void createTransGPencil_center_get(bGPDstroke *gps, float r_center[3])
 
 static void createTransGPencil(bContext *C, TransInfo *t)
 {
-  Depsgraph *depsgraph = CTX_data_depsgraph(C);
+  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   bGPdata *gpd = ED_gpencil_data_get_active(C);
   ToolSettings *ts = CTX_data_tool_settings(C);
 
@@ -9041,7 +9121,7 @@ static void createTransGPencil(bContext *C, TransInfo *t)
 
   /* initialize falloff curve */
   if (is_multiedit) {
-    curvemapping_initialize(ts->gp_sculpt.cur_falloff);
+    BKE_curvemapping_initialize(ts->gp_sculpt.cur_falloff);
   }
 
   /* First Pass: Count the number of data-points required for the strokes,

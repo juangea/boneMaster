@@ -553,10 +553,8 @@ static void writestruct_id(
   writestruct_at_address_id(wd, filecode, structname, nr, adr, adr);
 }
 
-static void writedata(WriteData *wd,
-                      int filecode,
-                      int len,
-                      const void *adr) /* do not use for structs */
+/* do not use for structs */
+static void writedata(WriteData *wd, int filecode, int len, const void *adr)
 {
   BHead bh;
 
@@ -1144,9 +1142,12 @@ typedef struct RenderInfo {
   char scene_name[MAX_ID_NAME - 2];
 } RenderInfo;
 
-/* was for historic render-deamon feature,
- * now write because it can be easily extracted without
- * reading the whole blend file */
+/**
+ * This was originally added for the historic render-daemon feature,
+ * now write because it can be easily extracted without reading the whole blend file.
+ *
+ * See: `release/scripts/modules/blend_render_info.py`
+ */
 static void write_renderinfo(WriteData *wd, Main *mainvar)
 {
   bScreen *curscreen;
@@ -1756,13 +1757,6 @@ static void write_modifiers(WriteData *wd, ListBase *modbase)
             }
           }
         }
-      }
-    }
-    else if (md->type == eModifierType_ParticleMesher) {
-      ParticleMesherModifierData *pmmd = (ParticleMesherModifierData *)md;
-      LevelSetFilter *filter;
-      for (filter = pmmd->filters.first; filter; filter = filter->next) {
-        writestruct(wd, DATA, LevelSetFilter, 1, filter);
       }
     }
     else if (md->type == eModifierType_Remesh) {

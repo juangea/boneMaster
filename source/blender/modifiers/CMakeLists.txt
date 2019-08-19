@@ -74,7 +74,6 @@ set(SRC
   intern/MOD_normal_edit.c
   intern/MOD_ocean.c
   intern/MOD_particleinstance.c
-  intern/MOD_particlemesher.c
   intern/MOD_particlesystem.c
   intern/MOD_remesh.c
   intern/MOD_screw.c
@@ -167,14 +166,6 @@ if(WITH_OPENVDB)
       -DWITH_OPENVDB_BLOSC
     )
   endif()
-endif()
-
-if(WITH_MOD_PARTMESHER)
-    add_definitions(-DWITH_MOD_PARTMESHER)
-    list(APPEND SRC
-        intern/MOD_openvdb_util.c
-        intern/MOD_openvdb_util.h
-    )
 endif()
 
 # So we can have special tricks in modifier system.

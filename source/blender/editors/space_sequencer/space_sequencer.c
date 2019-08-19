@@ -675,10 +675,9 @@ static void sequencer_preview_region_draw(const bContext *C, ARegion *ar)
   WM_gizmomap_draw(ar->gizmo_map, C, WM_GIZMOMAP_DRAWSTEP_2D);
 
   if ((U.uiflag & USER_SHOW_FPS) && ED_screen_animation_no_scrub(wm)) {
-    rcti rect;
-    ED_region_visible_rect(ar, &rect);
-    int xoffset = rect.xmin + U.widget_unit;
-    int yoffset = rect.ymax;
+    const rcti *rect = ED_region_visible_rect(ar);
+    int xoffset = rect->xmin + U.widget_unit;
+    int yoffset = rect->ymax;
     ED_scene_draw_fps(scene, xoffset, &yoffset);
   }
 }
@@ -849,7 +848,7 @@ void ED_spacetype_sequencer(void)
   /* regions: listview/buttons */
   art = MEM_callocN(sizeof(ARegionType), "spacetype sequencer region");
   art->regionid = RGN_TYPE_UI;
-  art->prefsizex = UI_SIDEBAR_PANEL_WIDTH;
+  art->prefsizex = UI_SIDEBAR_PANEL_WIDTH * 1.3f;
   art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_FRAMES;
   art->listener = sequencer_buttons_region_listener;
   art->init = sequencer_buttons_region_init;

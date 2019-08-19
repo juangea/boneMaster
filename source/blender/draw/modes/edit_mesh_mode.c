@@ -128,8 +128,7 @@ typedef struct EDIT_MESH_Shaders {
   GPUShader *depth;
 
   /* Mesh analysis shader */
-  GPUShader *mesh_analysis_face;
-  GPUShader *mesh_analysis_vertex;
+  GPUShader *mesh_analysis;
 } EDIT_MESH_Shaders;
 
 /* *********** STATIC *********** */
@@ -307,15 +306,9 @@ static void EDIT_MESH_engine_init(void *vedata)
     });
 
     /* Mesh Analysis */
-    sh_data->mesh_analysis_face = GPU_shader_create_from_arrays({
+    sh_data->mesh_analysis = GPU_shader_create_from_arrays({
         .vert = (const char *[]){lib, datatoc_edit_mesh_overlay_mesh_analysis_vert_glsl, NULL},
         .frag = (const char *[]){datatoc_edit_mesh_overlay_mesh_analysis_frag_glsl, NULL},
-        .defs = (const char *[]){sh_cfg_data->def, "#define FACE_COLOR\n", NULL},
-    });
-    sh_data->mesh_analysis_vertex = GPU_shader_create_from_arrays({
-        .vert = (const char *[]){lib, datatoc_edit_mesh_overlay_mesh_analysis_vert_glsl, NULL},
-        .frag = (const char *[]){datatoc_edit_mesh_overlay_mesh_analysis_frag_glsl, NULL},
-        .defs = (const char *[]){sh_cfg_data->def, "#define VERTEX_COLOR\n", NULL},
     });
 
     MEM_freeN(lib);
@@ -371,7 +364,7 @@ static void edit_mesh_create_overlay_passes(float face_alpha,
     DRW_shgroup_state_enable(grp, DRW_STATE_CLIP_PLANES);
   }
 
-  /* Cage geom needs to be offseted to avoid Z-fighting. */
+  /* Cage geom needs to be offsetted to avoid Z-fighting. */
   passes->faces_cage = DRW_pass_create("Edit Mesh Faces Cage", DRW_STATE_WRITE_COLOR | statemod);
   grp = shgrps->faces_cage = DRW_shgroup_create(face_sh, passes->faces_cage);
   DRW_shgroup_uniform_block(grp, "globalsBlock", G_draw.block_ubo);
@@ -548,10 +541,9 @@ static void EDIT_MESH_cache_init(void *vedata)
     /* Mesh Analysis Pass */
     DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_BLEND_ALPHA;
     psl->mesh_analysis_pass = DRW_pass_create("Mesh Analysis", state);
-    const bool is_vertex_color = scene->toolsettings->statvis.type == SCE_STATVIS_SHARP;
-    g_data->mesh_analysis_shgrp = DRW_shgroup_create(
-        is_vertex_color ? sh_data->mesh_analysis_vertex : sh_data->mesh_analysis_face,
-        psl->mesh_analysis_pass);
+    g_data->mesh_analysis_shgrp = DRW_shgroup_create(sh_data->mesh_analysis,
+                                                     psl->mesh_analysis_pass);
+    DRW_shgroup_uniform_texture(g_data->mesh_analysis_shgrp, "weightTex", G_draw.weight_ramp);
     if (rv3d->rflag & RV3D_CLIPPING) {
       DRW_shgroup_state_enable(g_data->mesh_analysis_shgrp, DRW_STATE_CLIP_PLANES);
     }
@@ -667,17 +659,17 @@ static void edit_mesh_add_ob_to_pass(Scene *scene,
 
   geom_tris = DRW_mesh_batch_cache_get_edit_triangles(ob->data);
   geom_edges = DRW_mesh_batch_cache_get_edit_edges(ob->data);
-  DRW_shgroup_call(edge_shgrp, geom_edges, ob);
-  DRW_shgroup_call(face_shgrp, geom_tris, ob);
+  DRW_shgroup_call_no_cull(edge_shgrp, geom_edges, ob);
+  DRW_shgroup_call_no_cull(face_shgrp, geom_tris, ob);
 
   if ((tsettings->selectmode & SCE_SELECT_VERTEX) != 0) {
     geom_verts = DRW_mesh_batch_cache_get_edit_vertices(ob->data);
-    DRW_shgroup_call(vert_shgrp, geom_verts, ob);
+    DRW_shgroup_call_no_cull(vert_shgrp, geom_verts, ob);
   }
 
   if (facedot_shgrp && (tsettings->selectmode & SCE_SELECT_FACE) != 0) {
     geom_fcenter = DRW_mesh_batch_cache_get_edit_facedots(ob->data);
-    DRW_shgroup_call(facedot_shgrp, geom_fcenter, ob);
+    DRW_shgroup_call_no_cull(facedot_shgrp, geom_fcenter, ob);
   }
 }
 
@@ -702,41 +694,34 @@ static void EDIT_MESH_cache_populate(void *vedata, Object *ob)
 
       if (do_show_weight) {
         geom = DRW_cache_mesh_surface_weights_get(ob);
-        DRW_shgroup_call(g_data->fweights_shgrp, geom, ob);
+        DRW_shgroup_call_no_cull(g_data->fweights_shgrp, geom, ob);
       }
-
-      if (do_show_mesh_analysis && !XRAY_ACTIVE(v3d)) {
-        Mesh *me = (Mesh *)ob->data;
-        BMEditMesh *embm = me->edit_mesh;
-        const bool is_original = embm->mesh_eval_final &&
-                                 (embm->mesh_eval_final->runtime.is_original == true);
-        if (is_original) {
-          geom = DRW_cache_mesh_surface_mesh_analysis_get(ob);
-          if (geom) {
-            DRW_shgroup_call(g_data->mesh_analysis_shgrp, geom, ob);
-          }
+      else if (do_show_mesh_analysis && !XRAY_ACTIVE(v3d)) {
+        geom = DRW_cache_mesh_surface_mesh_analysis_get(ob);
+        if (geom) {
+          DRW_shgroup_call_no_cull(g_data->mesh_analysis_shgrp, geom, ob);
         }
       }
 
       if (do_occlude_wire || do_in_front) {
         geom = DRW_cache_mesh_surface_get(ob);
-        DRW_shgroup_call(do_in_front ? g_data->depth_shgrp_hidden_wire_in_front :
-                                       g_data->depth_shgrp_hidden_wire,
-                         geom,
-                         ob);
+        DRW_shgroup_call_no_cull(do_in_front ? g_data->depth_shgrp_hidden_wire_in_front :
+                                               g_data->depth_shgrp_hidden_wire,
+                                 geom,
+                                 ob);
       }
 
       if (vnormals_do) {
-        geom = DRW_mesh_batch_cache_get_edit_vertices(ob->data);
-        DRW_shgroup_call(g_data->vnormals_shgrp, geom, ob);
+        geom = DRW_mesh_batch_cache_get_edit_vnors(ob->data);
+        DRW_shgroup_call_no_cull(g_data->vnormals_shgrp, geom, ob);
       }
       if (lnormals_do) {
         geom = DRW_mesh_batch_cache_get_edit_lnors(ob->data);
-        DRW_shgroup_call(g_data->lnormals_shgrp, geom, ob);
+        DRW_shgroup_call_no_cull(g_data->lnormals_shgrp, geom, ob);
       }
       if (fnormals_do) {
         geom = DRW_mesh_batch_cache_get_edit_facedots(ob->data);
-        DRW_shgroup_call(g_data->fnormals_shgrp, geom, ob);
+        DRW_shgroup_call_no_cull(g_data->fnormals_shgrp, geom, ob);
       }
 
       if (g_data->do_zbufclip) {

@@ -969,8 +969,8 @@ int IMB_exr_begin_read(void *handle, const char *filename, int *width, int *heig
   ExrHandle *data = (ExrHandle *)handle;
   ExrChannel *echan;
 
-  if (BLI_exists(filename) &&
-      BLI_file_size(filename) > 32) { /* 32 is arbitrary, but zero length files crashes exr */
+  /* 32 is arbitrary, but zero length files crashes exr. */
+  if (BLI_exists(filename) && BLI_file_size(filename) > 32) {
     /* avoid crash/abort when we don't have permission to write here */
     try {
       data->ifile_stream = new IFileStream(filename);
@@ -1215,9 +1215,9 @@ void IMB_exr_read_channels(void *handle)
   /* check if exr was saved with previous versions of blender which flipped images */
   const StringAttribute *ta = data->ifile->header(0).findTypedAttribute<StringAttribute>(
       "BlenderMultiChannel");
-  short flip = (ta && STREQLEN(ta->value().c_str(),
-                               "Blender V2.43",
-                               13)); /* 'previous multilayer attribute, flipped */
+
+  /* 'previous multilayer attribute, flipped. */
+  short flip = (ta && STREQLEN(ta->value().c_str(), "Blender V2.43", 13));
 
   exr_printf(
       "\nIMB_exr_read_channels\n%s %-6s %-22s "
@@ -1762,32 +1762,11 @@ static bool imb_exr_is_multilayer_file(MultiPartInputFile &file)
   const ChannelList &channels = file.header(0).channels();
   std::set<std::string> layerNames;
 
-  /* will not include empty layer names */
+  /* This will not include empty layer names, so files with just R/G/B/A
+   * channels without a layer name will be single layer. */
   channels.layers(layerNames);
 
-  if (layerNames.size() > 1) {
-    return true;
-  }
-
-  if (layerNames.size()) {
-    /* if layerNames is not empty, it means at least one layer is non-empty,
-     * but it also could be layers without names in the file and such case
-     * shall be considered a multilayer exr
-     *
-     * that's what we do here: test whether they're empty layer names together
-     * with non-empty ones in the file
-     */
-    for (ChannelList::ConstIterator i = channels.begin(); i != channels.end(); i++) {
-      std::string layerName = i.name();
-      size_t pos = layerName.rfind('.');
-
-      if (pos == std::string::npos) {
-        return true;
-      }
-    }
-  }
-
-  return false;
+  return (layerNames.size() > 0);
 }
 
 static void imb_exr_type_by_channels(ChannelList &channels,
@@ -1957,8 +1936,8 @@ struct ImBuf *imb_load_openexr(const unsigned char *mem,
           }
         }
 
-        if (is_multi &&
-            ((flags & IB_thumbnail) == 0)) { /* only enters with IB_multilayer flag set */
+        /* Only enters with IB_multilayer flag set. */
+        if (is_multi && ((flags & IB_thumbnail) == 0)) {
           /* constructs channels for reading, allocates memory in channels */
           ExrHandle *handle = imb_exr_begin_read_mem(*membuf, *file, width, height);
           if (handle) {

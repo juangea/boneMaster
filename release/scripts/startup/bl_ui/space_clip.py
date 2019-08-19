@@ -82,7 +82,7 @@ class CLIP_PT_marker_display(Panel):
 
         if view.mode != 'MASK':
             col.prop(view, "show_bundles", text="3D Markers")
-        col.prop(view, "show_tiny_markers", text="Draw Thin")
+        col.prop(view, "show_tiny_markers", text="Display Thin")
 
 
 class CLIP_PT_clip_display(Panel):
@@ -106,7 +106,7 @@ class CLIP_PT_clip_display(Panel):
         row.separator()
         row.prop(sc, "use_grayscale_preview", text="B/W", toggle=True)
         row.separator()
-        row.prop(sc, "use_mute_footage", text="", icon='VISIBLE_IPO_ON', toggle=True)
+        row.prop(sc, "use_mute_footage", text="", icon='HIDE_OFF', toggle=True)
 
         layout.separator()
 
@@ -180,8 +180,6 @@ class CLIP_HT_header(Header):
             active_object = tracking.objects.active
 
             if sc.view == 'CLIP':
-                layout.template_running_jobs()
-
                 r = active_object.reconstruction
 
                 if r.is_valid and sc.view == 'CLIP':
@@ -1001,7 +999,7 @@ class CLIP_PT_stabilization(CLIP_PT_reconstruction_panel, Panel):
             sub.menu('CLIP_MT_stabilize_2d_context_menu', text="",
                      icon='DOWNARROW_HLT')
 
-            # Usually we don't hide things from iterface, but here every pixel of
+            # Usually we don't hide things from interface, but here every pixel of
             # vertical space is precious.
             if stab.use_stabilize_rotation:
                 box.label(text="Tracks For Rotation / Scale")
@@ -1152,6 +1150,7 @@ class CLIP_PT_tools_mask_transforms(MASK_PT_transforms, Panel):
     bl_region_type = 'TOOLS'
     bl_category = "Mask"
 
+
 class CLIP_PT_tools_mask_tools(MASK_PT_tools, Panel):
     bl_space_type = 'CLIP_EDITOR'
     bl_region_type = 'TOOLS'
@@ -1203,7 +1202,7 @@ class CLIP_PT_tools_scenesetup(Panel):
 
 
 # Grease Pencil properties
-class CLIP_PT_grease_pencil(AnnotationDataPanel, CLIP_PT_clip_view_panel, Panel):
+class CLIP_PT_annotation(AnnotationDataPanel, CLIP_PT_clip_view_panel, Panel):
     bl_space_type = 'CLIP_EDITOR'
     bl_region_type = 'UI'
     bl_category = "Annotation"
@@ -1231,7 +1230,6 @@ class CLIP_MT_view(Menu):
             layout.prop(sc, "show_region_ui")
             layout.prop(sc, "show_region_toolbar")
             layout.prop(sc, "show_region_hud")
-            layout.prop(sc, "show_region_tool_header")
 
             layout.separator()
 
@@ -1427,6 +1425,7 @@ class CLIP_MT_select_grouped(Menu):
 
         layout.operator_enum("clip.select_grouped", "group")
 
+
 class CLIP_MT_mask_handle_type_menu(Menu):
     bl_label = "Set Handle Type"
 
@@ -1435,6 +1434,7 @@ class CLIP_MT_mask_handle_type_menu(Menu):
 
         layout.operator_enum("mask.handle_type_set", "type")
 
+
 class CLIP_MT_tracking_context_menu(Menu):
     bl_label = "Context Menu"
 
@@ -1442,10 +1442,10 @@ class CLIP_MT_tracking_context_menu(Menu):
     def poll(cls, context):
         return context.space_data.clip
 
-    def draw(self, _context):
+    def draw(self, context):
         layout = self.layout
 
-        mode = _context.space_data.mode
+        mode = context.space_data.mode
 
         if mode == 'TRACKING':
 
@@ -1512,6 +1512,7 @@ class CLIP_MT_tracking_context_menu(Menu):
             layout.separator()
 
             layout.operator("mask.delete")
+
 
 class CLIP_PT_camera_presets(PresetPanel, Panel):
     """Predefined tracking camera intrinsics"""
@@ -1633,7 +1634,7 @@ class CLIP_MT_tracking_pie(Menu):
         prop.backwards = False
         prop.sequence = True
         # Disable Marker
-        pie.operator("clip.disable_markers", icon='VISIBLE_IPO_ON').action = 'TOGGLE'
+        pie.operator("clip.disable_markers", icon='HIDE_OFF').action = 'TOGGLE'
         # Detect Features
         pie.operator("clip.detect_features", icon='ZOOM_SELECTED')
         # Clear Path Backwards
@@ -1759,7 +1760,7 @@ classes = (
     CLIP_PT_tools_mask_transforms,
     CLIP_PT_tools_mask_tools,
     CLIP_PT_tools_scenesetup,
-    CLIP_PT_grease_pencil,
+    CLIP_PT_annotation,
     CLIP_PT_tools_grease_pencil_draw,
     CLIP_MT_view,
     CLIP_MT_clip,

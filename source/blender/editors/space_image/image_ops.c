@@ -556,39 +556,38 @@ static void image_zoom_apply(ViewZoomData *vpd,
                              const bool zoom_to_pos)
 {
   float factor;
+  float delta;
+
+  if (viewzoom != USER_ZOOM_SCALE) {
+    if (U.uiflag & USER_ZOOM_HORIZ) {
+      delta = (float)(x - vpd->origx);
+    }
+    else {
+      delta = (float)(y - vpd->origy);
+    }
+  }
+  else {
+    delta = x - vpd->origx + y - vpd->origy;
+  }
+
+  delta /= U.pixelsize;
+
+  if (zoom_invert) {
+    delta = -delta;
+  }
 
   if (viewzoom == USER_ZOOM_CONT) {
     double time = PIL_check_seconds_timer();
     float time_step = (float)(time - vpd->timer_lastdraw);
-    float fac;
     float zfac;
 
-    if (U.uiflag & USER_ZOOM_HORIZ) {
-      fac = (float)(x - vpd->origx);
-    }
-    else {
-      fac = (float)(y - vpd->origy);
-    }
-
-    if (zoom_invert) {
-      fac = -fac;
-    }
-
     /* oldstyle zoom */
-    zfac = 1.0f + ((fac / 20.0f) * time_step);
+    zfac = 1.0f + ((delta / 20.0f) * time_step);
     vpd->timer_lastdraw = time;
     /* this is the final zoom, but instead make it into a factor */
-    // zoom = vpd->sima->zoom * zfac;
     factor = (vpd->sima->zoom * zfac) / vpd->zoom;
   }
   else {
-    /* for now do the same things for scale and dolly */
-    float delta = x - vpd->origx + y - vpd->origy;
-
-    if (zoom_invert) {
-      delta *= -1.0f;
-    }
-
     factor = 1.0f + delta / 300.0f;
   }
 
@@ -1391,7 +1390,7 @@ static int image_open_exec(bContext *C, wmOperator *op)
     BKE_image_init_imageuser(ima, iuser);
   }
 
-  /* XXX unpackImage frees image buffers */
+  /* XXX BKE_packedfile_unpack_image frees image buffers */
   ED_preview_kill_jobs(CTX_wm_manager(C), bmain);
 
   BKE_image_signal(bmain, ima, iuser, IMA_SIGNAL_RELOAD);
@@ -1601,7 +1600,7 @@ static int image_replace_exec(bContext *C, wmOperator *op)
     sima->image->source = IMA_SRC_FILE;
   }
 
-  /* XXX unpackImage frees image buffers */
+  /* XXX BKE_packedfile_unpack_image frees image buffers */
   ED_preview_kill_jobs(CTX_wm_manager(C), CTX_data_main(C));
 
   BKE_icon_changed(BKE_icon_id_ensure(&sima->image->id));
@@ -2401,7 +2400,7 @@ static int image_reload_exec(bContext *C, wmOperator *UNUSED(op))
     return OPERATOR_CANCELLED;
   }
 
-  /* XXX unpackImage frees image buffers */
+  /* XXX BKE_packedfile_unpack_image frees image buffers */
   ED_preview_kill_jobs(CTX_wm_manager(C), CTX_data_main(C));
 
   BKE_image_signal(bmain, ima, iuser, IMA_SIGNAL_RELOAD);
@@ -2499,7 +2498,7 @@ static int image_new_exec(bContext *C, wmOperator *op)
   }
 
   ima = BKE_image_add_generated(
-      bmain, width, height, name, alpha ? 32 : 24, floatbuf, gen_type, color, stereo3d);
+      bmain, width, height, name, alpha ? 32 : 24, floatbuf, gen_type, color, stereo3d, false);
 
   if (!ima) {
     image_new_free(op);
@@ -2859,10 +2858,10 @@ static int image_unpack_exec(bContext *C, wmOperator *op)
                "AutoPack is enabled, so image will be packed again on file save");
   }
 
-  /* XXX unpackImage frees image buffers */
+  /* XXX BKE_packedfile_unpack_image frees image buffers */
   ED_preview_kill_jobs(CTX_wm_manager(C), CTX_data_main(C));
 
-  unpackImage(CTX_data_main(C), op->reports, ima, method);
+  BKE_packedfile_unpack_image(CTX_data_main(C), op->reports, ima, method);
 
   WM_event_add_notifier(C, NC_IMAGE | NA_EDITED, ima);
 
@@ -3220,10 +3219,10 @@ static void image_sample_apply(bContext *C, wmOperator *op, const wmEvent *event
         int point = RNA_enum_get(op->ptr, "point");
 
         if (point == 1) {
-          curvemapping_set_black_white(curve_mapping, NULL, info->linearcol);
+          BKE_curvemapping_set_black_white(curve_mapping, NULL, info->linearcol);
         }
         else if (point == 0) {
-          curvemapping_set_black_white(curve_mapping, info->linearcol, NULL);
+          BKE_curvemapping_set_black_white(curve_mapping, info->linearcol, NULL);
         }
         WM_event_add_notifier(C, NC_WINDOW, NULL);
       }

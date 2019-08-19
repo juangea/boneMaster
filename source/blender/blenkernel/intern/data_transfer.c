@@ -1,3 +1,4 @@
+
 /*
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -85,6 +86,7 @@ void BKE_object_data_transfer_dttypes_to_cdmask(const int dtdata_types,
     }
     else if (cddata_type == CD_FAKE_LNOR) {
       r_data_masks->vmask |= CD_MASK_NORMAL;
+      r_data_masks->pmask |= CD_MASK_NORMAL;
       r_data_masks->lmask |= CD_MASK_NORMAL | CD_MASK_CUSTOMLOOPNORMAL;
     }
   }
@@ -1408,8 +1410,8 @@ bool BKE_object_data_transfer_ex(struct Depsgraph *depsgraph,
   SpaceTransform auto_space_transform;
 
   Mesh *me_src;
-  bool dirty_nors_dst =
-      true; /* Assumed always true if not using an evaluated mesh as destination. */
+  /* Assumed always true if not using an evaluated mesh as destination. */
+  bool dirty_nors_dst = true;
   int i;
 
   MDeformVert *mdef = NULL;

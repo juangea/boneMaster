@@ -268,18 +268,6 @@ static IDProperty *rna_EditBone_idprops(PointerRNA *ptr, bool create)
   return ebone->prop;
 }
 
-/* Update the layers_used variable after bones are moved between layer
- * NOTE: Used to be done in drawing code in 2.7, but that won't work with
- *       Copy-on-Write, as drawing uses evaluated copies.
- */
-static void rna_Armature_layer_used_refresh(bArmature *arm, ListBase *bones)
-{
-  for (Bone *bone = bones->first; bone; bone = bone->next) {
-    arm->layer_used |= bone->layer;
-    rna_Armature_layer_used_refresh(arm, &bone->childbase);
-  }
-}
-
 static void rna_bone_layer_set(int *layer, const bool *values)
 {
   int i, tot = 0;
@@ -312,8 +300,7 @@ static void rna_Bone_layer_set(PointerRNA *ptr, const bool *values)
 
   rna_bone_layer_set(&bone->layer, values);
 
-  arm->layer_used = 0;
-  rna_Armature_layer_used_refresh(arm, &arm->bonebase);
+  BKE_armature_refresh_layer_used(arm);
 }
 
 static void rna_Armature_layer_set(PointerRNA *ptr, const bool *values)
@@ -935,13 +922,13 @@ static void rna_def_bone_common(StructRNA *srna, int editbone)
 
   prop = RNA_def_property(srna, "bbone_x", PROP_FLOAT, PROP_NONE);
   RNA_def_property_float_sdna(prop, NULL, "xwidth");
-  RNA_def_property_range(prop, 0.0f, 1000.0f);
+  RNA_def_property_ui_range(prop, 0.0f, 1000.0f, 1, RNA_TRANSLATION_PREC_DEFAULT);
   RNA_def_property_ui_text(prop, "B-Bone Display X Width", "B-Bone X size");
   RNA_def_property_update(prop, 0, "rna_Armature_update_data");
 
   prop = RNA_def_property(srna, "bbone_z", PROP_FLOAT, PROP_NONE);
   RNA_def_property_float_sdna(prop, NULL, "zwidth");
-  RNA_def_property_range(prop, 0.0f, 1000.0f);
+  RNA_def_property_ui_range(prop, 0.0f, 1000.0f, 1, RNA_TRANSLATION_PREC_DEFAULT);
   RNA_def_property_ui_text(prop, "B-Bone Display Z Width", "B-Bone Z size");
   RNA_def_property_update(prop, 0, "rna_Armature_update_data");
 
@@ -1355,7 +1342,7 @@ static void rna_def_armature(BlenderRNA *brna)
   prop = RNA_def_property(srna, "display_type", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, NULL, "drawtype");
   RNA_def_property_enum_items(prop, prop_drawtype_items);
-  RNA_def_property_ui_text(prop, "Display Type Type", "");
+  RNA_def_property_ui_text(prop, "Display Type", "");
   RNA_def_property_update(prop, 0, "rna_Armature_redraw_data");
   RNA_def_property_flag(prop, PROP_LIB_EXCEPTION);
 

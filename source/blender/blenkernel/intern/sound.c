@@ -170,7 +170,7 @@ void BKE_sound_free(bSound *sound)
   /* No animdata here. */
 
   if (sound->packedfile) {
-    freePackedFile(sound->packedfile);
+    BKE_packedfile_free(sound->packedfile);
     sound->packedfile = NULL;
   }
 
@@ -211,7 +211,7 @@ void BKE_sound_copy_data(Main *UNUSED(bmain),
   sound_dst->newpackedfile = NULL;
 
   if (sound_dst->packedfile) {
-    sound_dst->packedfile = dupPackedFile(sound_dst->packedfile);
+    sound_dst->packedfile = BKE_packedfile_duplicate(sound_dst->packedfile);
   }
 
   BKE_sound_reset_runtime(sound_dst);
@@ -389,7 +389,6 @@ void BKE_sound_cache(bSound *sound)
 {
   sound_verify_evaluated_id(&sound->id);
 
-  sound->flags |= SOUND_FLAGS_CACHING;
   if (sound->cache) {
     AUD_Sound_free(sound->cache);
   }
@@ -405,7 +404,6 @@ void BKE_sound_cache(bSound *sound)
 
 void BKE_sound_delete_cache(bSound *sound)
 {
-  sound->flags &= ~SOUND_FLAGS_CACHING;
   if (sound->cache) {
     AUD_Sound_free(sound->cache);
     sound->cache = NULL;
@@ -900,7 +898,7 @@ void BKE_sound_read_waveform(Main *bmain, bSound *sound, short *stop)
 {
   bool need_close_audio_handles = false;
   if (sound->playback_handle == NULL) {
-    /* TOOD(sergey): Make it fully independent audio handle. */
+    /* TODO(sergey): Make it fully independent audio handle. */
     sound_load_audio(bmain, sound);
     need_close_audio_handles = true;
   }
@@ -1094,7 +1092,7 @@ bool BKE_sound_info_get(struct Main *main, struct bSound *sound, SoundInfo *soun
   if (sound->playback_handle != NULL) {
     return sound_info_from_playback_handle(sound->playback_handle, sound_info);
   }
-  /* TOOD(sergey): Make it fully independent audio handle. */
+  /* TODO(sergey): Make it fully independent audio handle. */
   sound_load_audio(main, sound);
   const bool result = sound_info_from_playback_handle(sound->playback_handle, sound_info);
   sound_free_audio(sound);

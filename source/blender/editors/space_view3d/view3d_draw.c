@@ -169,7 +169,13 @@ void ED_view3d_update_viewmat(Depsgraph *depsgraph,
     v2[2] = rv3d->persmat[2][1];
 
     len_px = 2.0f / sqrtf(min_ff(len_squared_v3(v1), len_squared_v3(v2)));
-    len_sc = (float)MAX2(ar->winx, ar->winy);
+
+    if (rect) {
+      len_sc = (float)max_ii(BLI_rcti_size_x(rect), BLI_rcti_size_y(rect));
+    }
+    else {
+      len_sc = (float)MAX2(ar->winx, ar->winy);
+    }
 
     rv3d->pixsize = len_px / len_sc;
   }
@@ -797,8 +803,18 @@ void ED_view3d_draw_depth(Depsgraph *depsgraph, ARegion *ar, View3D *v3d, bool a
 
   GPU_depth_test(true);
 
+  /* Needed in cases the view-port isn't already setup. */
+  WM_draw_region_viewport_ensure(ar, SPACE_VIEW3D);
+  WM_draw_region_viewport_bind(ar);
+
   GPUViewport *viewport = WM_draw_region_get_viewport(ar, 0);
-  DRW_draw_depth_loop(depsgraph, ar, v3d, viewport);
+  /* When Blender is starting, a click event can trigger a depth test while the viewport is not
+   * yet available. */
+  if (viewport != NULL) {
+    DRW_draw_depth_loop(depsgraph, ar, v3d, viewport, false);
+  }
+
+  WM_draw_region_viewport_unbind(ar);
 
   if (rv3d->rflag & RV3D_CLIPPING) {
     ED_view3d_clipping_disable();
@@ -1066,7 +1082,7 @@ static void draw_rotation_guide(const RegionView3D *rv3d)
 static void view3d_draw_border(const bContext *C, ARegion *ar)
 {
   Scene *scene = CTX_data_scene(C);
-  Depsgraph *depsgraph = CTX_data_depsgraph(C);
+  Depsgraph *depsgraph = CTX_data_expect_evaluated_depsgraph(C);
   RegionView3D *rv3d = ar->regiondata;
   View3D *v3d = CTX_wm_view3d(C);
 
@@ -1366,25 +1382,30 @@ void view3d_draw_region_info(const bContext *C, ARegion *ar)
   ED_region_pixelspace(ar);
 
   /* local coordinate visible rect inside region, to accommodate overlapping ui */
-  rcti rect;
-  ED_region_visible_rect(ar, &rect);
+  const rcti *rect = ED_region_visible_rect(ar);
 
   view3d_draw_border(C, ar);
   view3d_draw_grease_pencil(C);
 
   BLF_batch_draw_begin();
 
-  if ((U.uiflag & USER_SHOW_GIZMO_AXIS) ||
-      /* No need to display gizmo and this info. */
-      (v3d->gizmo_flag & (V3D_GIZMO_HIDE | V3D_GIZMO_HIDE_NAVIGATE))) {
+  if (v3d->gizmo_flag & (V3D_GIZMO_HIDE | V3D_GIZMO_HIDE_NAVIGATE)) {
     /* pass */
   }
   else {
-    draw_view_axis(rv3d, &rect);
+    switch ((eUserpref_MiniAxisType)U.mini_axis_type) {
+      case USER_MINI_AXIS_TYPE_GIZMO:
+        /* The gizmo handles it's own drawing. */
+        break;
+      case USER_MINI_AXIS_TYPE_MINIMAL:
+        draw_view_axis(rv3d, rect);
+      case USER_MINI_AXIS_TYPE_NONE:
+        break;
+    }
   }
 
-  int xoffset = rect.xmin + U.widget_unit;
-  int yoffset = rect.ymax;
+  int xoffset = rect->xmin + U.widget_unit;
+  int yoffset = rect->ymax;
 
   if ((v3d->flag2 & V3D_HIDE_OVERLAYS) == 0 && (v3d->overlay.flag & V3D_OVERLAY_HIDE_TEXT) == 0) {
     if ((U.uiflag & USER_SHOW_FPS) && ED_screen_animation_no_scrub(wm)) {
@@ -1431,7 +1452,7 @@ void view3d_draw_region_info(const bContext *C, ARegion *ar)
 static void view3d_draw_view(const bContext *C, ARegion *ar)
 {
   ED_view3d_draw_setup_view(CTX_wm_window(C),
-                            CTX_data_depsgraph(C),
+                            CTX_data_expect_evaluated_depsgraph(C),
                             CTX_data_scene(C),
                             ar,
                             CTX_wm_view3d(C),

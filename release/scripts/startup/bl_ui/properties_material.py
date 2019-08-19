@@ -32,6 +32,7 @@ class MATERIAL_MT_context_menu(Menu):
         layout.operator("material.copy", icon='COPYDOWN')
         layout.operator("object.material_slot_copy")
         layout.operator("material.paste", icon='PASTEDOWN')
+        layout.operator("object.material_slot_remove_unused")
 
 
 class MATERIAL_UL_matslots(UIList):
@@ -105,7 +106,7 @@ class EEVEE_MATERIAL_PT_context_material(MaterialButtonsPanel, Panel):
         if ob:
             is_sortable = len(ob.material_slots) > 1
             rows = 3
-            if (is_sortable):
+            if is_sortable:
                 rows = 5
 
             row = layout.row()

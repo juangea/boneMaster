@@ -184,6 +184,8 @@ typedef enum eNodeSocketFlag {
   /** socket hidden automatically, to distinguish from manually hidden */
   SOCK_AUTO_HIDDEN__DEPRECATED = (1 << 8),
   SOCK_NO_INTERNAL_LINK = (1 << 9),
+  /** Draw socket in a more compact form. */
+  SOCK_COMPACT = (1 << 10),
 } eNodeSocketFlag;
 
 /* limit data in bNode to what we want to see saved? */
@@ -387,12 +389,12 @@ typedef struct bNodeLink {
 #define NTREE_QUALITY_LOW 2
 
 /* tree->chunksize */
-#define NTREE_CHUNCKSIZE_32 32
-#define NTREE_CHUNCKSIZE_64 64
-#define NTREE_CHUNCKSIZE_128 128
-#define NTREE_CHUNCKSIZE_256 256
-#define NTREE_CHUNCKSIZE_512 512
-#define NTREE_CHUNCKSIZE_1024 1024
+#define NTREE_CHUNKSIZE_32 32
+#define NTREE_CHUNKSIZE_64 64
+#define NTREE_CHUNKSIZE_128 128
+#define NTREE_CHUNKSIZE_256 256
+#define NTREE_CHUNKSIZE_512 512
+#define NTREE_CHUNKSIZE_1024 1024
 
 /* the basis for a Node tree, all links and nodes reside internal here */
 /* only re-usable node trees are in the library though,
@@ -1012,8 +1014,7 @@ typedef struct NodeCryptomatte {
 
 typedef struct NodeDenoise {
   char hdr;
-  char srgb;
-  char _pad[6];
+  char _pad[7];
 } NodeDenoise;
 
 /* script node mode */

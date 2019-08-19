@@ -412,7 +412,6 @@ bool ANIM_animdata_get_context(const bContext *C, bAnimContext *ac)
   if (scene) {
     ac->markers = ED_context_get_markers(C);
   }
-  ac->depsgraph = CTX_data_depsgraph(C);
   ac->view_layer = CTX_data_view_layer(C);
   ac->obact = (ac->view_layer->basact) ? ac->view_layer->basact->object : NULL;
   ac->sa = sa;
@@ -1830,13 +1829,13 @@ static size_t animdata_filter_gpencil(bAnimContext *ac,
           }
         }
 
-        /* check selection and object type filters */
-        if ((ads->filterflag & ADS_FILTER_ONLYSEL) &&
-            !((base->flag & BASE_SELECTED) /*|| (base == scene->basact)*/)) {
-          /* only selected should be shown */
-          continue;
+        /* check selection and object type filters only for Object mode */
+        if (ob->mode == OB_MODE_OBJECT) {
+          if ((ads->filterflag & ADS_FILTER_ONLYSEL) && !((base->flag & BASE_SELECTED))) {
+            /* only selected should be shown */
+            continue;
+          }
         }
-
         /* check if object belongs to the filtering group if option to filter
          * objects by the grouped status is on
          * - used to ease the process of doing multiple-character choreographies
@@ -2231,7 +2230,7 @@ static size_t animdata_filter_ds_textures(
     }
   }
 
-  /* Firstly check that we actuallly have some textures,
+  /* Firstly check that we actually have some textures,
    * by gathering all textures in a temp list. */
   for (a = 0; a < MAX_MTEX; a++) {
     Tex *tex = (mtex[a]) ? mtex[a]->tex : NULL;
@@ -3151,7 +3150,9 @@ static size_t animdata_filter_dopesheet(bAnimContext *ac,
   }
 
   /* movie clip's animation */
-  items += animdata_filter_dopesheet_movieclips(ac, anim_data, ads, filter_mode);
+  if (!(ads->filterflag2 & ADS_FILTER_NOMOVIECLIPS) && !(ads->filterflag & ADS_FILTER_ONLYSEL)) {
+    items += animdata_filter_dopesheet_movieclips(ac, anim_data, ads, filter_mode);
+  }
 
   /* Scene-linked animation - e.g. world, compositing nodes, scene anim
    * (including sequencer currently). */

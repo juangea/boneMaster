@@ -30,6 +30,7 @@
 
 #include "BLI_utildefines.h"
 #include "BLI_math_base.h"
+#include "BLI_math_rotation.h"
 
 #include "BLT_translation.h"
 
@@ -225,6 +226,13 @@ static void rna_userdef_update(Main *UNUSED(bmain), Scene *UNUSED(scene), Pointe
 static void rna_userdef_theme_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
   /* Recreate gizmos when changing themes. */
+  WM_reinit_gizmomap_all(bmain);
+
+  rna_userdef_update(bmain, scene, ptr);
+}
+
+static void rna_userdef_gizmo_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
   WM_reinit_gizmomap_all(bmain);
 
   rna_userdef_update(bmain, scene, ptr);
@@ -2289,6 +2297,11 @@ static void rna_def_userdef_theme_space_outliner(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Selected Highlight", "");
   RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
 
+  prop = RNA_def_property(srna, "active", PROP_FLOAT, PROP_COLOR_GAMMA);
+  RNA_def_property_array(prop, 3);
+  RNA_def_property_ui_text(prop, "Active Highlight", "");
+  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
+
   prop = RNA_def_property(srna, "selected_object", PROP_FLOAT, PROP_COLOR_GAMMA);
   RNA_def_property_array(prop, 3);
   RNA_def_property_ui_text(prop, "Selected Objects", "");
@@ -4082,6 +4095,12 @@ static void rna_def_userdef_view(BlenderRNA *brna)
       "Show the frames per second screen refresh rate, while animation is played back");
   RNA_def_property_update(prop, 0, "rna_userdef_update");
 
+  prop = RNA_def_property(srna, "show_addons_enabled_only", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", USER_ADDONS_ENABLED_ONLY);
+  RNA_def_property_ui_text(prop,
+                           "Enabled Add-ons Only",
+                           "Only show enabled add-ons. Un-check to see all installed add-ons");
+
   static const EnumPropertyItem factor_display_items[] = {
       {USER_FACTOR_AS_FACTOR, "FACTOR", 0, "Factor", "Display factors as values between 0 and 1"},
       {USER_FACTOR_AS_PERCENTAGE, "PERCENTAGE", 0, "Percentage", "Display factors as percentages"},
@@ -4117,6 +4136,14 @@ static void rna_def_userdef_view(BlenderRNA *brna)
   RNA_def_property_ui_text(
       prop, "Editor Corner Splitting", "Split and join editors by dragging from corners");
   RNA_def_property_update(prop, 0, "rna_userdef_screen_update");
+
+  prop = RNA_def_property(srna, "show_navigate_ui", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "uiflag", USER_SHOW_GIZMO_NAVIGATE);
+  RNA_def_property_ui_text(
+      prop,
+      "Navigation Controls",
+      "Show navigation controls in 2D & 3D views which do not have scroll bars");
+  RNA_def_property_update(prop, 0, "rna_userdef_gizmo_update");
 
   /* menus */
   prop = RNA_def_property(srna, "use_mouse_over_open", PROP_BOOLEAN, PROP_NONE);
@@ -4229,24 +4256,24 @@ static void rna_def_userdef_view(BlenderRNA *brna)
 
   /* mini axis */
   static const EnumPropertyItem mini_axis_type_items[] = {
-      {0, "MINIMAL", 0, "Simple Axis", ""},
-      {USER_SHOW_GIZMO_AXIS, "GIZMO", 0, "Interactive Navigation", ""},
+      {USER_MINI_AXIS_TYPE_NONE, "NONE", 0, "Off", ""},
+      {USER_MINI_AXIS_TYPE_MINIMAL, "MINIMAL", 0, "Simple Axis", ""},
+      {USER_MINI_AXIS_TYPE_GIZMO, "GIZMO", 0, "Interactive Navigation", ""},
       {0, NULL, 0, NULL, NULL},
   };
 
   prop = RNA_def_property(srna, "mini_axis_type", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_items(prop, mini_axis_type_items);
-  RNA_def_property_enum_bitflag_sdna(prop, NULL, "uiflag");
   RNA_def_property_ui_text(prop,
                            "Mini Axes Type",
                            "Show a small rotating 3D axes in the top right corner of the 3D View");
-  RNA_def_property_update(prop, 0, "rna_userdef_update");
+  RNA_def_property_update(prop, 0, "rna_userdef_gizmo_update");
 
   prop = RNA_def_property(srna, "mini_axis_size", PROP_INT, PROP_PIXEL);
   RNA_def_property_int_sdna(prop, NULL, "rvisize");
   RNA_def_property_range(prop, 10, 64);
   RNA_def_property_ui_text(prop, "Mini Axes Size", "The axes icon's size");
-  RNA_def_property_update(prop, 0, "rna_userdef_update");
+  RNA_def_property_update(prop, 0, "rna_userdef_gizmo_update");
 
   prop = RNA_def_property(srna, "mini_axis_brightness", PROP_INT, PROP_NONE);
   RNA_def_property_int_sdna(prop, NULL, "rvibright");
@@ -4573,10 +4600,6 @@ static void rna_def_userdef_edit(BlenderRNA *brna)
   RNA_def_property_ui_text(prop,
                            "Grease Pencil Euclidean Distance",
                            "Distance moved by mouse when drawing stroke to include");
-
-  prop = RNA_def_property(srna, "use_grease_pencil_simplify_stroke", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, NULL, "gp_settings", GP_PAINT_DOSIMPLIFY);
-  RNA_def_property_ui_text(prop, "Grease Pencil Simplify Stroke", "Simplify the final stroke");
 
   prop = RNA_def_property(srna, "grease_pencil_eraser_radius", PROP_INT, PROP_PIXEL);
   RNA_def_property_int_sdna(prop, NULL, "gp_eraser");
@@ -5097,13 +5120,18 @@ static void rna_def_userdef_input(BlenderRNA *brna)
        "CONTINUE",
        0,
        "Continue",
-       "Old style zoom, continues while moving mouse up or down"},
-      {USER_ZOOM_DOLLY, "DOLLY", 0, "Dolly", "Zoom in and out based on vertical mouse movement"},
+       "Continuous zooming. The zoom direction and speed depends on how far along the set Zoom "
+       "Axis the mouse has moved"},
+      {USER_ZOOM_DOLLY,
+       "DOLLY",
+       0,
+       "Dolly",
+       "Zoom in and out based on mouse movement along the set Zoom Axis"},
       {USER_ZOOM_SCALE,
        "SCALE",
        0,
        "Scale",
-       "Zoom in and out like scaling the view, mouse movements relative to center"},
+       "Zoom in and out as if you are scaling the view, mouse movements relative to center"},
       {0, NULL, 0, NULL, NULL},
   };
 
@@ -5209,6 +5237,20 @@ static void rna_def_userdef_input(BlenderRNA *brna)
   RNA_def_property_flag(prop, PROP_NEVER_NULL);
   RNA_def_property_struct_type(prop, "WalkNavigation");
   RNA_def_property_ui_text(prop, "Walk Navigation", "Settings for walk navigation mode");
+
+  prop = RNA_def_property(srna, "view_rotate_sensitivity_turntable", PROP_FLOAT, PROP_ANGLE);
+  RNA_def_property_range(prop, DEG2RADF(0.001f), DEG2RADF(15.0f));
+  RNA_def_property_float_default(prop, DEG2RADF(0.4f));
+  RNA_def_property_ui_range(prop, DEG2RADF(0.001f), DEG2RADF(15.0f), 1.0f, 2);
+  RNA_def_property_ui_text(prop,
+                           "Orbit Sensitivity",
+                           "Rotation amount per-pixel to control how fast the viewport orbits");
+
+  prop = RNA_def_property(srna, "view_rotate_sensitivity_trackball", PROP_FLOAT, PROP_FACTOR);
+  RNA_def_property_range(prop, 0.1f, 10.0f);
+  RNA_def_property_float_default(prop, 1.0f);
+  RNA_def_property_ui_range(prop, 0.1f, 2.0f, 0.01f, 2);
+  RNA_def_property_ui_text(prop, "Orbit Sensitivity", "Scale trackball orbit sensitivity");
 
   /* tweak tablet & mouse preset */
   prop = RNA_def_property(srna, "drag_threshold_mouse", PROP_INT, PROP_PIXEL);
@@ -5789,12 +5831,15 @@ void RNA_def_userdef(BlenderRNA *brna)
   /* Preferences Flags */
   prop = RNA_def_property(srna, "use_preferences_save", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "pref_flag", USER_PREF_FLAG_SAVE);
-  RNA_def_property_ui_text(prop, "Save on Exit", "Save modified preferences on exit");
+  RNA_def_property_ui_text(prop,
+                           "Save on Exit",
+                           "Save preferences on exit when modified "
+                           "(unless factory settings have been loaded)");
 
   prop = RNA_def_property(srna, "is_dirty", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "runtime.is_dirty", 0);
-  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
   RNA_def_property_ui_text(prop, "Dirty", "Preferences have changed");
+  RNA_def_property_update(prop, 0, "rna_userdef_ui_update");
 
   rna_def_userdef_view(brna);
   rna_def_userdef_edit(brna);

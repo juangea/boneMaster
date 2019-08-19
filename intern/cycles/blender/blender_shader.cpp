@@ -315,6 +315,15 @@ static ShaderNode *add_node(Scene *scene,
   else if (b_node.is_a(&RNA_ShaderNodeRGBToBW)) {
     node = new RGBToBWNode();
   }
+  else if (b_node.is_a(&RNA_ShaderNodeMapRange)) {
+    BL::ShaderNodeMapRange b_map_range_node(b_node);
+    MapRangeNode *map_range_node = new MapRangeNode();
+    map_range_node->clamp = b_map_range_node.clamp();
+    node = map_range_node;
+  }
+  else if (b_node.is_a(&RNA_ShaderNodeClamp)) {
+    node = new ClampNode();
+  }
   else if (b_node.is_a(&RNA_ShaderNodeMath)) {
     BL::ShaderNodeMath b_math_node(b_node);
     MathNode *math = new MathNode();
@@ -1437,9 +1446,6 @@ void BlenderSync::sync_shaders(BL::Depsgraph &b_depsgraph)
   sync_world(b_depsgraph, auto_refresh_update);
   sync_lights(b_depsgraph, auto_refresh_update);
   sync_materials(b_depsgraph, auto_refresh_update);
-
-  /* false = don't delete unused shaders, not supported */
-  shader_map.post_sync(false);
 }
 
 CCL_NAMESPACE_END

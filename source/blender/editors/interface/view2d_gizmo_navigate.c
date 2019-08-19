@@ -126,6 +126,14 @@ struct NavigateWidgetGroup {
   int region_size[2];
 };
 
+static bool WIDGETGROUP_navigate_poll(const bContext *UNUSED(C), wmGizmoGroupType *UNUSED(gzgt))
+{
+  if ((U.uiflag & USER_SHOW_GIZMO_NAVIGATE) == 0) {
+    return false;
+  }
+  return true;
+}
+
 static void WIDGETGROUP_navigate_setup(const bContext *UNUSED(C), wmGizmoGroup *gzgroup)
 {
   struct NavigateWidgetGroup *navgroup = MEM_callocN(sizeof(struct NavigateWidgetGroup), __func__);
@@ -171,9 +179,6 @@ static void WIDGETGROUP_navigate_setup(const bContext *UNUSED(C), wmGizmoGroup *
           gz->ptr, "draw_options", ED_GIZMO_BUTTON_SHOW_OUTLINE | ED_GIZMO_BUTTON_SHOW_BACKDROP);
     }
 
-    /* Not needed, just match 3D view where it is needed. */
-    WM_gizmo_set_flag(gz, WM_GIZMO_EVENT_HANDLE_ALL, true);
-
     wmOperatorType *ot = WM_operatortype_find(info->opname, true);
     WM_gizmo_operator_set(gz, 0, ot, NULL);
   }
@@ -196,21 +201,20 @@ static void WIDGETGROUP_navigate_draw_prepare(const bContext *C, wmGizmoGroup *g
   struct NavigateWidgetGroup *navgroup = gzgroup->customdata;
   ARegion *ar = CTX_wm_region(C);
 
-  rcti rect_visible;
-  ED_region_visible_rect(ar, &rect_visible);
+  const rcti *rect_visible = ED_region_visible_rect(ar);
 
-  if ((navgroup->state.rect_visible.xmax == rect_visible.xmax) &&
-      (navgroup->state.rect_visible.ymax == rect_visible.ymax)) {
+  if ((navgroup->state.rect_visible.xmax == rect_visible->xmax) &&
+      (navgroup->state.rect_visible.ymax == rect_visible->ymax)) {
     return;
   }
 
-  navgroup->state.rect_visible = rect_visible;
+  navgroup->state.rect_visible = *rect_visible;
 
   const float icon_size = GIZMO_SIZE;
   const float icon_offset_mini = icon_size * GIZMO_MINI_OFFSET_FAC * UI_DPI_FAC;
   const float co[2] = {
-      rect_visible.xmax - (icon_offset_mini * 0.75f),
-      rect_visible.ymax - (icon_offset_mini * 0.75f),
+      rect_visible->xmax - (icon_offset_mini * 0.75f),
+      rect_visible->ymax - (icon_offset_mini * 0.75f),
   };
 
   wmGizmo *gz;
@@ -242,6 +246,7 @@ void VIEW2D_GGT_navigate_impl(wmGizmoGroupType *gzgt, const char *idname)
   gzgt->flag |= (WM_GIZMOGROUPTYPE_PERSISTENT | WM_GIZMOGROUPTYPE_SCALE |
                  WM_GIZMOGROUPTYPE_DRAW_MODAL_ALL);
 
+  gzgt->poll = WIDGETGROUP_navigate_poll;
   gzgt->setup = WIDGETGROUP_navigate_setup;
   gzgt->draw_prepare = WIDGETGROUP_navigate_draw_prepare;
 }

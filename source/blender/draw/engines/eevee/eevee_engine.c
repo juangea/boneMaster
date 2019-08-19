@@ -295,7 +295,13 @@ static void eevee_draw_background(void *vedata)
     EEVEE_volumes_resolve(sldata, vedata);
 
     /* Transparent */
+    /* TODO(fclem): should be its own Framebuffer.
+     * This is needed because dualsource blending only works with 1 color buffer. */
+    GPU_framebuffer_texture_attach(fbl->main_color_fb, dtxl->depth, 0, 0);
+    GPU_framebuffer_bind(fbl->main_color_fb);
     DRW_draw_pass(psl->transparent_pass);
+    GPU_framebuffer_bind(fbl->main_fb);
+    GPU_framebuffer_texture_detach(fbl->main_color_fb, dtxl->depth);
 
     /* Post Process */
     DRW_stats_group_start("Post FX");
@@ -303,6 +309,16 @@ static void eevee_draw_background(void *vedata)
     DRW_stats_group_end();
 
     DRW_view_set_active(NULL);
+
+    if (DRW_state_is_image_render() && (stl->effects->enabled_effects & EFFECT_SSR) &&
+        !stl->effects->ssr_was_valid_double_buffer) {
+      /* SSR needs one iteration to start properly. */
+      loop_len++;
+      /* Reset sampling (and accumulation) after the first sample to avoid
+       * washed out first bounce for SSR. */
+      EEVEE_temporal_sampling_reset(vedata);
+      stl->effects->ssr_was_valid_double_buffer = stl->g_data->valid_double_buffer;
+    }
   }
 
   /* Tonemapping and transfer result to default framebuffer. */

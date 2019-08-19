@@ -2455,7 +2455,7 @@ static void ntree_interface_identifier(bNodeTree *ntree,
                                        char *description)
 {
   /* There is a possibility that different node tree names get mapped to the same identifier
-   * after sanitization (e.g. "SomeGroup_A", "SomeGroup.A" both get sanitized to "SomeGroup_A").
+   * after sanitation (e.g. "SomeGroup_A", "SomeGroup.A" both get sanitized to "SomeGroup_A").
    * On top of the sanitized id string add a number suffix if necessary to avoid duplicates.
    */
   identifier[0] = '\0';
@@ -3857,6 +3857,8 @@ static void registerShaderNodes(void)
   register_node_type_sh_mapping();
   register_node_type_sh_curve_vec();
   register_node_type_sh_curve_rgb();
+  register_node_type_sh_map_range();
+  register_node_type_sh_clamp();
   register_node_type_sh_math();
   register_node_type_sh_vect_math();
   register_node_type_sh_vect_transform();

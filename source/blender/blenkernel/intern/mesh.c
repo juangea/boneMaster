@@ -40,6 +40,7 @@
 #include "BKE_idcode.h"
 #include "BKE_main.h"
 #include "BKE_global.h"
+#include "BKE_key.h"
 #include "BKE_mesh.h"
 #include "BKE_mesh_runtime.h"
 #include "BKE_library.h"
@@ -50,6 +51,7 @@
 #include "BKE_editmesh.h"
 
 #include "DEG_depsgraph.h"
+#include "DEG_depsgraph_query.h"
 
 enum {
   MESHCMP_DVERT_WEIGHTMISMATCH = 1,
@@ -478,20 +480,38 @@ bool BKE_mesh_has_custom_loop_normals(Mesh *me)
 /** Free (or release) any data used by this mesh (does not free the mesh itself). */
 void BKE_mesh_free(Mesh *me)
 {
-  BKE_animdata_free(&me->id, false);
-
-  BKE_mesh_runtime_clear_cache(me);
-
-  CustomData_free(&me->vdata, me->totvert);
-  CustomData_free(&me->edata, me->totedge);
-  CustomData_free(&me->fdata, me->totface);
-  CustomData_free(&me->ldata, me->totloop);
-  CustomData_free(&me->pdata, me->totpoly);
-
+  BKE_mesh_clear_geometry(me);
   MEM_SAFE_FREE(me->mat);
-  MEM_SAFE_FREE(me->bb);
-  MEM_SAFE_FREE(me->mselect);
-  MEM_SAFE_FREE(me->edit_mesh);
+}
+
+void BKE_mesh_clear_geometry(Mesh *mesh)
+{
+  BKE_animdata_free(&mesh->id, false);
+  BKE_mesh_runtime_clear_cache(mesh);
+
+  CustomData_free(&mesh->vdata, mesh->totvert);
+  CustomData_free(&mesh->edata, mesh->totedge);
+  CustomData_free(&mesh->fdata, mesh->totface);
+  CustomData_free(&mesh->ldata, mesh->totloop);
+  CustomData_free(&mesh->pdata, mesh->totpoly);
+
+  MEM_SAFE_FREE(mesh->bb);
+  MEM_SAFE_FREE(mesh->mselect);
+  MEM_SAFE_FREE(mesh->edit_mesh);
+
+  /* Note that materials and shape keys are not freed here. This is intentional, as freeing
+   * shape keys requires tagging the depsgraph for updated relations, which is expensive.
+   * Material slots should be kept in sync with the object.*/
+
+  mesh->totvert = 0;
+  mesh->totedge = 0;
+  mesh->totface = 0;
+  mesh->totloop = 0;
+  mesh->totpoly = 0;
+  mesh->act_face = -1;
+  mesh->totselect = 0;
+
+  BKE_mesh_update_customdata_pointers(mesh, false);
 }
 
 static void mesh_tessface_clear_intern(Mesh *mesh, int free_customdata)
@@ -516,6 +536,7 @@ void BKE_mesh_init(Mesh *me)
   me->size[0] = me->size[1] = me->size[2] = 1.0;
   me->smoothresh = DEG2RADF(30);
   me->texflag = ME_AUTOSPACE;
+  me->remesh_voxel_size = 0.1f;
 
   CustomData_reset(&me->vdata);
   CustomData_reset(&me->edata);
@@ -557,8 +578,9 @@ void BKE_mesh_copy_data(Main *bmain, Mesh *me_dst, const Mesh *me_src, const int
   /* XXX WHAT? Why? Comment, please! And pretty sure this is not valid for regular Mesh copying? */
   me_dst->runtime.is_original = false;
 
-  const bool do_tessface = ((me_src->totface != 0) &&
-                            (me_src->totpoly == 0)); /* only do tessface if we have no polys */
+  /* Only do tessface if we have no polys. */
+  const bool do_tessface = ((me_src->totface != 0) && (me_src->totpoly == 0));
+
   CustomData_MeshMasks mask = CD_MASK_MESH;
 
   if (me_src->id.tag & LIB_TAG_NO_MAIN) {
@@ -663,6 +685,7 @@ static Mesh *mesh_new_nomain_from_template_ex(const Mesh *me_src,
 
   me_dst->cd_flag = me_src->cd_flag;
   me_dst->editflag = me_src->editflag;
+  me_dst->texflag = me_src->texflag;
 
   CustomData_copy(&me_src->vdata, &me_dst->vdata, mask.vmask, CD_CALLOC, verts_len);
   CustomData_copy(&me_src->edata, &me_dst->edata, mask.emask, CD_CALLOC, edges_len);
@@ -692,6 +715,15 @@ Mesh *BKE_mesh_new_nomain_from_template(const Mesh *me_src,
 {
   return mesh_new_nomain_from_template_ex(
       me_src, verts_len, edges_len, tessface_len, loops_len, polys_len, CD_MASK_EVERYTHING);
+}
+
+void BKE_mesh_eval_delete(struct Mesh *mesh_eval)
+{
+  /* Evaluated mesh may point to edit mesh, but never owns it. */
+  mesh_eval->edit_mesh = NULL;
+  BKE_mesh_free(mesh_eval);
+  BKE_libblock_free_data(&mesh_eval->id, false);
+  MEM_freeN(mesh_eval);
 }
 
 Mesh *BKE_mesh_copy_for_eval(struct Mesh *source, bool reference)
@@ -1173,6 +1205,27 @@ void BKE_mesh_material_index_remove(Mesh *me, short index)
       mf->mat_nr--;
     }
   }
+}
+
+bool BKE_mesh_material_index_used(Mesh *me, short index)
+{
+  MPoly *mp;
+  MFace *mf;
+  int i;
+
+  for (mp = me->mpoly, i = 0; i < me->totpoly; i++, mp++) {
+    if (mp->mat_nr == index) {
+      return true;
+    }
+  }
+
+  for (mf = me->mface, i = 0; i < me->totface; i++, mf++) {
+    if (mf->mat_nr == index) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 void BKE_mesh_material_index_clear(Mesh *me)
@@ -1995,9 +2048,7 @@ void BKE_mesh_split_faces(Mesh *mesh, bool free_loop_normals)
 void BKE_mesh_eval_geometry(Depsgraph *depsgraph, Mesh *mesh)
 {
   DEG_debug_print_eval(depsgraph, __func__, mesh->id.name, mesh);
-  if (mesh->bb == NULL || (mesh->bb->flag & BOUNDBOX_DIRTY)) {
-    BKE_mesh_texspace_calc(mesh);
-  }
+  BKE_mesh_texspace_calc(mesh);
   /* Clear autospace flag in evaluated mesh, so that texspace does not get recomputed when bbox is
    * (e.g. after modifiers, etc.) */
   mesh->texflag &= ~ME_AUTOSPACE;
@@ -2008,5 +2059,18 @@ void BKE_mesh_eval_geometry(Depsgraph *depsgraph, Mesh *mesh)
     mesh->runtime.mesh_eval->edit_mesh = NULL;
     BKE_id_free(NULL, mesh->runtime.mesh_eval);
     mesh->runtime.mesh_eval = NULL;
+  }
+  if (DEG_is_active(depsgraph)) {
+    Mesh *mesh_orig = (Mesh *)DEG_get_original_id(&mesh->id);
+    BoundBox *bb = mesh->bb;
+    if (bb != NULL) {
+      if (mesh_orig->bb == NULL) {
+        mesh_orig->bb = MEM_mallocN(sizeof(*mesh_orig->bb), __func__);
+      }
+      *mesh_orig->bb = *bb;
+      copy_v3_v3(mesh_orig->loc, mesh->loc);
+      copy_v3_v3(mesh_orig->size, mesh->size);
+      copy_v3_v3(mesh_orig->rot, mesh->rot);
+    }
   }
 }

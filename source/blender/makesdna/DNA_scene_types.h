@@ -1116,7 +1116,7 @@ typedef struct GP_Sculpt_Settings {
   char _pad[4];
   /** Multiframe edit falloff effect by frame. */
   struct CurveMapping *cur_falloff;
-  /** Curve used for primitve tools. */
+  /** Curve used for primitive tools. */
   struct CurveMapping *cur_primitive;
   /** Guides used for paint tools */
   struct GP_Sculpt_Guide guide;
@@ -1138,7 +1138,7 @@ typedef enum eGP_Sculpt_SettingsFlag {
   GP_SCULPT_SETT_FLAG_FRAME_FALLOFF = (1 << 5),
   /* apply brush to uv data */
   GP_SCULPT_SETT_FLAG_APPLY_UV = (1 << 6),
-  /* apply primitve curve */
+  /* apply primitive curve */
   GP_SCULPT_SETT_FLAG_PRIMITIVE_CURVE = (1 << 7),
 } eGP_Sculpt_SettingsFlag;
 
@@ -2170,7 +2170,7 @@ typedef enum eSculptFlags {
 
   SCULPT_USE_OPENMP = (1 << 7),
   SCULPT_ONLY_DEFORM = (1 << 8),
-  SCULPT_SHOW_DIFFUSE = (1 << 9),
+  // SCULPT_SHOW_DIFFUSE = (1 << 9), // deprecated
 
   /* If set, the mesh will be drawn with smooth-shading in
    * dynamic-topology mode */

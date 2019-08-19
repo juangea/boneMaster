@@ -3336,8 +3336,7 @@ static ImBuf *seq_render_mask(const SeqRenderData *context, Mask *mask, float nr
 
     /* anim-data */
     adt = BKE_animdata_from_id(&mask->id);
-    BKE_animsys_evaluate_animdata(
-        context->depsgraph, context->scene, &mask_temp->id, adt, nr, ADT_RECALC_ANIM);
+    BKE_animsys_evaluate_animdata(context->scene, &mask_temp->id, adt, nr, ADT_RECALC_ANIM, false);
 
     maskbuf = MEM_mallocN(sizeof(float) * context->rectx * context->recty, __func__);
 
@@ -3711,7 +3710,7 @@ static ImBuf *do_render_strip_uncached(const SeqRenderData *context,
     case SEQ_TYPE_SCENE: {
       if (seq->flag & SEQ_SCENE_STRIPS) {
         if (seq->scene && (context->scene != seq->scene)) {
-          /* recusrive check */
+          /* recursive check */
           if (BLI_linklist_index(state->scene_parents, seq->scene) != -1) {
             break;
           }
@@ -3739,9 +3738,6 @@ static ImBuf *do_render_strip_uncached(const SeqRenderData *context,
         /* scene can be NULL after deletions */
         ibuf = seq_render_scene_strip(context, seq, nr, cfra);
       }
-
-      /* Scene strips update all animation, so we need to restore original state.*/
-      BKE_animsys_evaluate_all_animation(context->bmain, context->depsgraph, context->scene, cfra);
 
       break;
     }
@@ -4648,7 +4644,7 @@ void BKE_sequence_tx_handle_xlimits(Sequence *seq, int leftflag, int rightflag)
         BKE_sequence_tx_set_final_left(seq, seq_tx_get_end(seq) - 1);
       }
 
-      /* dosnt work now - TODO */
+      /* doesn't work now - TODO */
 #if 0
       if (seq_tx_get_start(seq) >= seq_tx_get_final_right(seq, 0)) {
         int ofs;
@@ -5203,6 +5199,8 @@ void BKE_sequencer_offset_animdata(Scene *scene, Sequence *seq, int ofs)
       }
     }
   }
+
+  DEG_id_tag_update(&scene->adt->action->id, ID_RECALC_ANIMATION);
 }
 
 void BKE_sequencer_dupe_animdata(Scene *scene, const char *name_src, const char *name_dst)
@@ -5398,7 +5396,7 @@ static void seq_load_apply(Main *bmain, Scene *scene, Sequence *seq, SeqLoadInfo
 
     if (seq_load->flag & SEQ_LOAD_SOUND_CACHE) {
       if (seq->sound) {
-        BKE_sound_cache(seq->sound);
+        seq->sound->flags |= SOUND_FLAGS_CACHING;
       }
     }
 
@@ -5837,7 +5835,7 @@ static Sequence *seq_dupli(const Scene *scene_src,
   /* When using SEQ_DUPE_UNIQUE_NAME, it is mandatory to add new sequences in relevant container
    * (scene or meta's one), *before* checking for unique names. Otherwise the meta's list is empty
    * and hence we miss all seqs in that meta that have already been duplicated (see T55668).
-   * Note that unique name check itslef could be done at a later step in calling code, once all
+   * Note that unique name check itself could be done at a later step in calling code, once all
    * seqs have bee duplicated (that was first, simpler solution), but then handling of animation
    * data will be broken (see T60194). */
   if (new_seq_list != NULL) {

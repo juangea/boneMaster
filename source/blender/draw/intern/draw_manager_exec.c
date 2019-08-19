@@ -22,6 +22,7 @@
 
 #include "draw_manager.h"
 
+#include "BLI_math.h"
 #include "BLI_math_bits.h"
 #include "BLI_memblock.h"
 
@@ -225,7 +226,7 @@ void drw_state_set(DRWState state)
     if (CHANGED_ANY_STORE_VAR(DRW_STATE_BLEND_ALPHA | DRW_STATE_BLEND_ALPHA_PREMUL |
                                   DRW_STATE_BLEND_ADD | DRW_STATE_BLEND_MUL |
                                   DRW_STATE_BLEND_ADD_FULL | DRW_STATE_BLEND_OIT |
-                                  DRW_STATE_BLEND_ALPHA_UNDER_PREMUL,
+                                  DRW_STATE_BLEND_ALPHA_UNDER_PREMUL | DRW_STATE_BLEND_CUSTOM,
                               test)) {
       if (test) {
         glEnable(GL_BLEND);
@@ -261,6 +262,11 @@ void drw_state_set(DRWState state)
         else if ((state & DRW_STATE_BLEND_ADD_FULL) != 0) {
           /* Let alpha accumulate. */
           glBlendFunc(GL_ONE, GL_ONE);
+        }
+        else if ((state & DRW_STATE_BLEND_CUSTOM) != 0) {
+          /* Custom blend parameters using dual source blending.
+           * Can only be used with one Draw Buffer. */
+          glBlendFunc(GL_ONE, GL_SRC1_COLOR);
         }
         else {
           BLI_assert(0);
@@ -481,6 +487,26 @@ bool DRW_culling_plane_test(const DRWView *view, const float plane[4])
 {
   view = view ? view : DST.view_default;
   return draw_culling_plane_test(&view->frustum_corners, plane);
+}
+
+/* Return True if the given box intersect the current view frustum.
+ * This function will have to be replaced when world space bb per objects is implemented. */
+bool DRW_culling_min_max_test(const DRWView *view, float obmat[4][4], float min[3], float max[3])
+{
+  view = view ? view : DST.view_default;
+  float tobmat[4][4];
+  transpose_m4_m4(tobmat, obmat);
+  for (int i = 6; i--;) {
+    float frustum_plane_local[4], bb_near[3], bb_far[3];
+    mul_v4_m4v4(frustum_plane_local, tobmat, view->frustum_planes[i]);
+    aabb_get_near_far_from_plane(frustum_plane_local, min, max, bb_near, bb_far);
+
+    if (plane_point_side_v3(frustum_plane_local, bb_far) < 0.0f) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 void DRW_culling_frustum_corners_get(const DRWView *view, BoundBox *corners)

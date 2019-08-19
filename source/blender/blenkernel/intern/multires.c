@@ -385,12 +385,20 @@ static void multires_ccg_mark_as_modified(SubdivCCG *subdiv_ccg, MultiresModifie
   }
 }
 
-void multires_mark_as_modified(Object *ob, MultiresModifiedFlags flags)
+void multires_mark_as_modified(Depsgraph *depsgraph, Object *object, MultiresModifiedFlags flags)
 {
-  if (ob == NULL) {
+  if (object == NULL) {
     return;
   }
-  Mesh *mesh = ob->data;
+  /* NOTE: CCG live inside of evaluated object.
+   *
+   * While this is a bit weird to tag the only one, this is how other areas were built
+   * historically: they are tagging multires for update and then rely on object re-evaluation to
+   * do an actual update.
+   *
+   * In a longer term maybe special dependency graph tag can help sanitizing this a bit. */
+  Object *object_eval = DEG_get_evaluated_object(depsgraph, object);
+  Mesh *mesh = object_eval->data;
   SubdivCCG *subdiv_ccg = mesh->runtime.subdiv_ccg;
   if (subdiv_ccg == NULL) {
     return;
@@ -1070,7 +1078,7 @@ typedef struct MultiresThreadedData {
 
 static void multires_disp_run_cb(void *__restrict userdata,
                                  const int pidx,
-                                 const ParallelRangeTLS *__restrict UNUSED(tls))
+                                 const TaskParallelTLS *__restrict UNUSED(tls))
 {
   MultiresThreadedData *tdata = userdata;
 
@@ -1222,7 +1230,7 @@ static void multiresModifier_disp_run(
     }
   }
 
-  ParallelRangeSettings settings;
+  TaskParallelSettings settings;
   BLI_parallel_range_settings_defaults(&settings);
   settings.min_iter_per_thread = CCG_TASK_LIMIT;
 
