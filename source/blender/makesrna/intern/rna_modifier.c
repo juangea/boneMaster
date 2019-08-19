@@ -55,6 +55,7 @@
 #include "WM_api.h"
 #include "WM_types.h"
 
+
 const EnumPropertyItem rna_enum_object_modifier_type_items[] = {
     {0, "", 0, N_("Modify"), ""},
     {eModifierType_DataTransfer, "DATA_TRANSFER", ICON_MOD_DATA_TRANSFER, "Data Transfer", ""},
@@ -909,8 +910,9 @@ static void rna_Smoke_set_type(Main *bmain, Scene *scene, PointerRNA *ptr)
   Object *ob = (Object *)ptr->id.data;
 
   /* nothing changed */
-  if ((smd->type & MOD_SMOKE_TYPE_DOMAIN) && smd->domain)
+  if ((smd->type & MOD_SMOKE_TYPE_DOMAIN) && smd->domain) {
     return;
+  }
 
   smokeModifier_free(smd);       /* XXX TODO: completely free all 3 pointers */
   smokeModifier_createType(smd); /* create regarding of selected type */
@@ -1024,8 +1026,9 @@ static void rna_UVProjectModifier_num_projectors_set(PointerRNA *ptr, int value)
   int a;
 
   md->num_projectors = CLAMPIS(value, 1, MOD_UVPROJECT_MAXPROJECTORS);
-  for (a = md->num_projectors; a < MOD_UVPROJECT_MAXPROJECTORS; a++)
+  for (a = md->num_projectors; a < MOD_UVPROJECT_MAXPROJECTORS; a++) {
     md->projectors[a] = NULL;
+  }
 }
 
 static void rna_OceanModifier_init_update(Main *bmain, Scene *scene, PointerRNA *ptr)
@@ -1174,8 +1177,6 @@ static const EnumPropertyItem *rna_DataTransferModifier_layers_select_src_itemf(
     return rna_enum_dt_layers_select_src_items;
   }
 
-  Depsgraph *depsgraph = CTX_data_depsgraph(C);
-
   /* No active here! */
   RNA_enum_items_add_value(
       &item, &totitem, rna_enum_dt_layers_select_src_items, DT_LAYERS_ALL_SRC);
@@ -1215,6 +1216,7 @@ static const EnumPropertyItem *rna_DataTransferModifier_layers_select_src_itemf(
       Mesh *me_eval;
       int num_data, i;
 
+      Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
       Scene *scene_eval = DEG_get_evaluated_scene(depsgraph);
       Object *ob_src_eval = DEG_get_evaluated_object(depsgraph, ob_src);
 
@@ -1240,6 +1242,7 @@ static const EnumPropertyItem *rna_DataTransferModifier_layers_select_src_itemf(
       Mesh *me_eval;
       int num_data, i;
 
+      Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
       Scene *scene_eval = DEG_get_evaluated_scene(depsgraph);
       Object *ob_src_eval = DEG_get_evaluated_object(depsgraph, ob_src);
 
@@ -1442,8 +1445,9 @@ static bool rna_ParticleInstanceModifier_particle_system_poll(PointerRNA *ptr,
   ParticleInstanceModifierData *psmd = ptr->data;
   ParticleSystem *psys = value.data;
 
-  if (!psmd->ob)
+  if (!psmd->ob) {
     return false;
+  }
 
   /* make sure psys is in the object */
   return BLI_findindex(&psmd->ob->particlesystem, psys) != -1;
@@ -1455,8 +1459,9 @@ static PointerRNA rna_ParticleInstanceModifier_particle_system_get(PointerRNA *p
   ParticleSystem *psys;
   PointerRNA rptr;
 
-  if (!psmd->ob)
+  if (!psmd->ob) {
     return PointerRNA_NULL;
+  }
 
   psys = BLI_findlink(&psmd->ob->particlesystem, psmd->psys - 1);
   RNA_pointer_create((ID *)psmd->ob, &RNA_ParticleSystem, psys, &rptr);
@@ -1469,8 +1474,9 @@ static void rna_ParticleInstanceModifier_particle_system_set(PointerRNA *ptr,
 {
   ParticleInstanceModifierData *psmd = ptr->data;
 
-  if (!psmd->ob)
+  if (!psmd->ob) {
     return;
+  }
 
   psmd->psys = BLI_findindex(&psmd->ob->particlesystem, value.data) + 1;
   CLAMP_MIN(psmd->psys, 1);
@@ -2238,7 +2244,7 @@ static void rna_def_modifier_armature(BlenderRNA *brna)
   RNA_def_property_pointer_funcs(
       prop, NULL, "rna_ArmatureModifier_object_set", NULL, "rna_Armature_object_poll");
   RNA_def_property_flag(prop, PROP_EDITABLE | PROP_ID_SELF_CHECK);
-  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_STATIC);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_update(prop, 0, "rna_Modifier_dependency_update");
 
   prop = RNA_def_property(srna, "use_bone_envelopes", PROP_BOOLEAN, PROP_NONE);
@@ -6069,7 +6075,8 @@ static void rna_def_modifier_datatransfer(BlenderRNA *brna)
       0.0f,
       1.0f,
       "Mix Factor",
-      "Factor to use when applying data to destination (exact behavior depends on mix mode)",
+      "Factor to use when applying data to destination (exact behavior depends on mix mode, "
+      "multiplied with weights from vertex group when defined)",
       0.0f,
       1.0f);
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
@@ -6347,13 +6354,13 @@ void RNA_def_modifier(BlenderRNA *brna)
   RNA_def_property_boolean_sdna(prop, NULL, "mode", eModifierMode_Realtime);
   RNA_def_property_ui_text(prop, "Realtime", "Display modifier in viewport");
   RNA_def_property_flag(prop, PROP_LIB_EXCEPTION);
-  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_STATIC);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
   RNA_def_property_ui_icon(prop, ICON_RESTRICT_VIEW_ON, 1);
 
   prop = RNA_def_property(srna, "show_render", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "mode", eModifierMode_Render);
-  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_STATIC);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_ui_text(prop, "Render", "Use modifier during render");
   RNA_def_property_ui_icon(prop, ICON_RESTRICT_RENDER_ON, 1);
   RNA_def_property_update(prop, NC_OBJECT | ND_MODIFIER, NULL);
@@ -6373,7 +6380,7 @@ void RNA_def_modifier(BlenderRNA *brna)
   prop = RNA_def_property(srna, "show_expanded", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_flag(prop, PROP_NO_DEG_UPDATE);
   RNA_def_property_boolean_sdna(prop, NULL, "mode", eModifierMode_Expanded);
-  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_STATIC);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_ui_text(prop, "Expanded", "Set modifier expanded in the user interface");
   RNA_def_property_ui_icon(prop, ICON_DISCLOSURE_TRI_RIGHT, 1);
 
