@@ -22,6 +22,7 @@
 #include "openvdb_util.h"
 #include "openvdb_level_set.h"
 #include "openvdb_transform.h"
+#include "intern/particle_tools.h"
 
 int OpenVDB_getVersionHex()
 {
@@ -229,6 +230,27 @@ void OpenVDBReader_get_meta_v3_int(OpenVDBReader *reader, const char *name, int 
 void OpenVDBReader_get_meta_mat4(OpenVDBReader *reader, const char *name, float value[4][4])
 {
   reader->mat4sMeta(name, value);
+}
+/* ****************************** Particle List ****************************** */
+
+ParticleList *OpenVDB_create_part_list(size_t totpart, float rad_scale, float vel_scale)
+{
+  return new ParticleList(totpart, rad_scale, vel_scale);
+}
+
+void OpenVDB_part_list_free(ParticleList *part_list)
+{
+  delete part_list;
+  part_list = NULL;
+}
+
+void OpenVDB_add_particle(ParticleList *part_list, float pos[3], float rad, float vel[3])
+{
+  openvdb::Vec3R nvel(vel);
+  float nrad = rad * part_list->radius_scale();
+  nvel *= part_list->velocity_scale();
+
+  part_list->add(pos, nrad, nvel);
 }
 
 OpenVDBLevelSet *OpenVDBLevelSet_create(bool initGrid, OpenVDBTransform *xform)

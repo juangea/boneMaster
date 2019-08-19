@@ -80,7 +80,7 @@ struct OpenVDBLevelSet *BKE_mesh_remesh_voxel_ovdb_mesh_to_level_set_create(
     faces[i * 3 + 2] = vt->tri[2];
   }
 
-  struct OpenVDBLevelSet *level_set = OpenVDBLevelSet_create(false, NULL);
+  struct OpenVDBLevelSet *level_set = OpenVDBLevelSet_create(false, 0.0f, 0.0f);
   OpenVDBLevelSet_mesh_to_level_set(level_set, verts, faces, totverts, totfaces, transform);
 
   MEM_freeN(verts);

@@ -182,6 +182,11 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         layout.row().prop(md, "spread")
 
     def BOOLEAN(self, layout, _ob, md):
+        solver = md.solver
+        if not bpy.app.build_options.mod_boolean:
+            if solver == 'CARVE':
+                layout.label("Built without Carve solver")
+
         split = layout.split()
 
         col = split.column()
@@ -192,10 +197,15 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         col.label(text="Object:")
         col.prop(md, "object", text="")
 
-        layout.prop(md, "double_threshold")
+        split = layout.split()
+        split.column().label(text="Solver:")
+        split.column().prop(md, "solver", text="")
 
-        if bpy.app.debug:
-            layout.prop(md, "debug_options")
+        if solver == 'BMESH':
+            layout.prop(md, "double_threshold")
+
+            if bpy.app.debug:
+                layout.prop(md, "debug_options")
 
     def BUILD(self, layout, _ob, md):
         split = layout.split()
@@ -434,6 +444,9 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
     def FLUID_SIMULATION(self, layout, _ob, _md):
         layout.label(text="Settings are inside the Physics tab")
 
+    def FRACTURE(self, layout, _ob, _md):
+        layout.label(text="Settings are inside the Physics tab")
+
     def HOOK(self, layout, ob, md):
         use_falloff = (md.falloff_type != 'NONE')
         split = layout.split()
@@ -651,6 +664,7 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
 
     def MULTIRES(self, layout, ob, md):
         layout.row().prop(md, "subdivision_type", expand=True)
+        layout.row().prop(md, "use_opensubdiv")
 
         split = layout.split()
         col = split.column()
@@ -1013,6 +1027,7 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
     def SUBSURF(self, layout, ob, md):
         from bpy import context
         layout.row().prop(md, "subdivision_type", expand=True)
+        layout.row().prop(md, "use_opensubdiv")
 
         split = layout.split()
         col = split.column()
@@ -1024,6 +1039,8 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
             scene.cycles.feature_set == 'EXPERIMENTAL'
         )
         if show_adaptive_options:
+            col.label(text="View:")
+            col.prop(md, "levels", text="Levels")
             col.label(text="Render:")
             col.prop(ob.cycles, "use_adaptive_subdivision", text="Adaptive")
             if ob.cycles.use_adaptive_subdivision:
@@ -1037,11 +1054,10 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
             col.prop(md, "levels", text="Levels")
         else:
             col.label(text="Subdivisions:")
-            sub = col.column(align=True)
-            sub.prop(md, "render_levels", text="Render")
-            sub.prop(md, "levels", text="Viewport")
-
-            col.prop(md, "quality")
+            col.prop(md, "levels", text="View")
+            col.prop(md, "render_levels", text="Render")
+            if hasattr(md, "quality") and md.use_opensubdiv:
+                col.prop(md, "quality")
 
         col = split.column()
         col.label(text="Options:")
@@ -1217,10 +1233,21 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
             row.prop(md, "octree_depth")
             row.prop(md, "scale")
 
-        if md.mode == 'SHARP':
-            layout.prop(md, "sharpness")
-
         if md.mode == 'VOXEL':
+            row = layout.row()
+            row.prop(md, "input")
+            if 'PARTICLES' in md.input:
+                layout.prop(md, "psys")
+
+                col = layout.column(align=True)
+                col.prop(md, "part_min_radius")
+                col.prop(md, "part_scale_factor")
+                col.prop(md, "part_vel_factor")
+
+                col = layout.column()
+                col.prop(md, "part_trail")
+                col.prop(md, "part_trail_size")
+
             col = layout.column(align=True)
             col.prop(md, "voxel_size")
             col.prop(md, "isovalue")
@@ -1238,6 +1265,7 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
             row = layout.row()
             row.prop(md, "relax_triangles")
             row.prop(md, "reproject_vertex_paint")
+            layout.prop(md, "accumulate")
             layout.label(text="CSG Operands")
             layout.operator("remesh.csg_add", text="", icon="ADD")
             for i,csg in enumerate(md.csg_operands):
@@ -1282,6 +1310,15 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
             layout.prop_search(md, "size_vertex_group", ob, "vertex_groups", text = "Size Vertex Group")
             layout.prop(md, "use_smooth_shade")
         else:
+            layout.prop(md, "use_smooth_shade")
+            layout.prop(md, "use_remove_disconnected")
+            row = layout.row()
+            row.active = md.use_remove_disconnected
+            row.prop(md, "threshold")
+
+            if md.mode == 'SHARP':
+                layout.prop(md, "sharpness")
+
             layout.prop(md, "use_smooth_shade")
             layout.prop(md, "use_remove_disconnected")
             row = layout.row()
@@ -1714,90 +1751,7 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         col.prop(md, "thresh", text="Threshold")
         col.prop(md, "face_influence")
 
-    def PARTICLE_MESHER(self, layout, ob, md):
-        if not bpy.app.build_options.openvdb:
-            layout.label("Built without OpenVDB support")
-            return
 
-        if not bpy.app.build_options.mod_partmesher:
-            layout.label("Built without the particle mesher modifier")
-            return
-
-        row = layout.row()
-        row.label(text="Particle System:")
-        row.prop_search(md, "particle_system", ob, "particle_systems", text="")
-        layout.separator()
-
-        split = layout.split()
-        col = split.column()
-        col.prop(md, "voxel_size")
-        col.prop(md, "half_width")
-        col.prop(md, "part_scale_factor")
-        col.prop(md, "min_part_radius")
-        col = split.column()
-        sub = col.row()
-        subsub = sub.column()
-        subsub.active = md.generate_trails
-        subsub.prop(md, "generate_trails")
-        subsub.prop(md, "trail_size")
-        subsub.prop(md, "part_vel_factor")
-        sub = col.row()
-        subsub = sub.column()
-        subsub.active = md.generate_mask
-        subsub.prop(md, "generate_mask")
-        subsub.prop(md, "mask_width")
-        layout.separator()
-
-        row = layout.row()
-        row.label(text="Mesher Options:")
-        row = layout.row()
-        row.prop(md, "adaptivity")
-        row.prop(md, "isovalue")
-        row = layout.row()
-        row.label(text="Mask Object:")
-        row.prop(md, "invert_mask")
-        row = layout.row()
-        row.prop(md, "object", text="")
-        row.prop(md, "mask_offset")
-        row = layout.row()
-        row.prop(md, "ext_band")
-        row.prop(md, "int_band")
-        layout.separator()
-
-        row = layout.row()
-        row.label(text="Level Set Filters:")
-        row = layout.row()
-        row.template_list("DATA_UL_level_set_filters", "levelset_filter_items", md, "filter",
-                          md, "active_levelset_filter_index", rows=3)
-
-        col = row.column()
-        sub = col.row()
-        subsub = sub.column(align=True)
-        subsub.operator("object.levelset_filter_add", icon='ADD', text="")
-        subsub.operator("object.levelset_filter_remove", icon='REMOVE', text="")
-        sub = col.row()
-        subsub = sub.column(align=True)
-        subsub.operator("object.levelset_filter_move",
-                        icon='TRIA_UP', text="").direction = 'UP'
-        subsub.operator("object.levelset_filter_move",
-                        icon='TRIA_DOWN', text="").direction = 'DOWN'
-
-        filter = md.active_levelset_filter
-
-        if filter:
-            split = layout.split()
-            col = split.column()
-            col.label(text="Type:")
-            col.prop(filter, "type", text="")
-            col.label(text="Accuracy:")
-            col.prop(filter, "accuracy", text="")
-            col = split.column()
-            col.label(text="Settings:")
-            col.prop(filter, "iterations")
-            if filter.type in {'MEDIAN', 'MEAN', 'GAUSSIAN'}:
-                col.prop(filter, "width")
-            if filter.type in {'OFFSET'}:
-                col.prop(filter, "offset")
 
 
 class DATA_PT_gpencil_modifiers(ModifierButtonsPanel, Panel):

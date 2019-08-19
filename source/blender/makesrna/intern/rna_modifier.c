@@ -4813,15 +4813,15 @@ static void rna_def_modifier_remesh(BlenderRNA *brna)
 
   static const EnumPropertyItem mesh_items[] =  {
       {MOD_REMESH_VERTICES, 
-       "VERTICES", 
+       "MESH", 
        0, 
-       "Vertices", 
-       "Output a metaball surface using vertex input data"},
+       "Mesh", 
+       "Output a metaball or voxel mesh using mesh input data"},
       {MOD_REMESH_PARTICLES, 
        "PARTICLES", 
        0, 
        "Particles", 
-       "Output a metaball surface using particle input data"},
+       "Output a metaball or voxel mesh using particle input data"},
 	  {0, NULL, 0, NULL, NULL}
   };
 	
@@ -4975,7 +4975,7 @@ static void rna_def_modifier_remesh(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "voxel_size", PROP_FLOAT, PROP_UNSIGNED);
   RNA_def_property_float_funcs(prop, NULL, "rna_RemeshModifier_voxel_size_set", NULL);
-  RNA_def_property_range(prop, 0.001, 1.0);
+  RNA_def_property_range(prop, 0.001, 1000.0);
   RNA_def_property_float_default(prop, 0.1f);
   RNA_def_property_ui_range(prop, 0.0001, 1, 0.01, 4);
   RNA_def_property_ui_text(prop, "Voxel Size", "Voxel size used for volume evaluation");
@@ -5040,6 +5040,47 @@ static void rna_def_modifier_remesh(BlenderRNA *brna)
       prop,
       "Live Remesh",
       "Perform remesh on every modifier update, otherwise return cached mesh");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "accumulate", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", MOD_REMESH_ACCUMULATE);
+  RNA_def_property_ui_text(prop, "Accumulate",
+    "Accumulate the mesh changes over time by re-using and updating the cached mesh");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  /* voxel remesh, particle mode parameters*/
+  prop = RNA_def_property(srna, "part_min_radius", PROP_FLOAT, PROP_UNSIGNED);
+  RNA_def_property_range(prop, 0.0, 10000.0);
+  RNA_def_property_float_default(prop, 1.0f);
+  RNA_def_property_ui_range(prop, 0.0, 1, 0.01, 3);
+  RNA_def_property_ui_text(
+      prop, "Minimal Radius", "Particle minimal radius to take int account when meshing");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "part_scale_factor", PROP_FLOAT, PROP_UNSIGNED);
+  RNA_def_property_range(prop, 0.0, 10000.0);
+  RNA_def_property_float_default(prop, 1.0f);
+  RNA_def_property_ui_range(prop, 0.0, 1, 0.01, 3);
+  RNA_def_property_ui_text(prop, "Scale Factor", "Particle Scale Factor");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "part_vel_factor", PROP_FLOAT, PROP_UNSIGNED);
+  RNA_def_property_range(prop, 0.0, 10000.0);
+  RNA_def_property_float_default(prop, 1.0f);
+  RNA_def_property_ui_range(prop, 0.0, 1, 0.01, 3);
+  RNA_def_property_ui_text(prop, "Velocity Factor", "Particle Velocity Factor");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "part_trail_size", PROP_FLOAT, PROP_UNSIGNED);
+  RNA_def_property_range(prop, 0.0, 10000.0);
+  RNA_def_property_float_default(prop, 0.1f);
+  RNA_def_property_ui_range(prop, 0.0, 1, 0.01, 3);
+  RNA_def_property_ui_text(prop, "Trail Size", "Particle Trail Size");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "part_trail", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "part_trail", 0);
+  RNA_def_property_ui_text(prop, "Particle Trail", "Generate a particle trail");
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
   prop = RNA_def_property(srna, "csg_operands", PROP_COLLECTION, PROP_NONE);

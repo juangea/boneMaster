@@ -512,7 +512,8 @@ static struct OpenVDBLevelSet *csgOperation(struct OpenVDBLevelSet *level_set,
   struct OpenVDBTransform *xform = OpenVDBTransform_create();
   OpenVDBTransform_create_linear_transform(xform, size);
 
-  struct OpenVDBLevelSet *level_setB = BKE_remesh_voxel_ovdb_mesh_to_level_set_create(me, xform);
+  struct OpenVDBLevelSet *level_setB = OpenVDBLevelSet_create(false, 0.0f, 0.0f);
+  BKE_remesh_voxel_ovdb_mesh_to_level_set(level_setB, me, xform);
 
   if (vcob->sampler != OPENVDB_LEVELSET_GRIDSAMPLER_NONE) {
     level_set = OpenVDBLevelSet_transform_and_resample(
@@ -553,7 +554,7 @@ static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mes
   if (rmd->mode == MOD_REMESH_VOXEL) {
 #  if defined WITH_OPENVDB
     CSGVolume_Object *vcob;
-    struct OpenVDBLevelSet *level_set;
+    struct OpenVDBLevelSet *level_set = NULL;
 
     Object *ob_orig = DEG_get_original_object(ctx->object);
     RemeshModifierData *rmd_orig = (RemeshModifierData *)modifiers_findByName(ob_orig, md->name);
@@ -565,20 +566,65 @@ static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mes
       }
     }
 
+    if (rmd->flag & MOD_REMESH_ACCUMULATE) {
+      if (rmd_orig->levelset_cached) {
+        level_set = OpenVDB_level_set_copy(rmd_orig->levelset_cached);
+      }
+    }
+
     if (rmd->voxel_size > 0.0f) {
 
       struct OpenVDBTransform *xform = OpenVDBTransform_create();
       OpenVDBTransform_create_linear_transform(xform, rmd->voxel_size);
-      level_set = BKE_remesh_voxel_ovdb_mesh_to_level_set_create(mesh, xform);
-      OpenVDBTransform_free(xform);
 
-      for (vcob = rmd->csg_operands.first; vcob; vcob = vcob->next) {
-        if (vcob->object && (vcob->flag & MOD_REMESH_CSG_OBJECT_ENABLED)) {
-          level_set = csgOperation(level_set, vcob, ctx->object, rmd);
+      if (rmd->input & MOD_REMESH_VERTICES) {
+        if (!level_set) {
+          level_set = OpenVDBLevelSet_create(false, 0.0f, 0.0f);
+          BKE_remesh_voxel_ovdb_mesh_to_level_set(level_set, mesh, xform);
         }
       }
 
-      result = voxel_remesh(rmd, mesh, level_set);
+      if (rmd->input & MOD_REMESH_PARTICLES) {
+        bool render = ctx->flag & MOD_APPLY_RENDER;
+        Scene *scene = DEG_get_input_scene(ctx->depsgraph);
+        Object *ob = ctx->object;
+        ParticleSystem *psys = get_psys(rmd, ob, scene, render);
+        if (psys) {
+
+          if (!level_set) {
+            level_set = OpenVDBLevelSet_create(true, rmd->voxel_size, 3.0f);
+          }
+
+          BKE_remesh_voxel_ovdb_particles_to_level_set(level_set,
+                                                       psys,
+                                                       scene,
+                                                       ob,
+                                                       ctx->depsgraph,
+                                                       rmd->part_scale_factor,
+                                                       rmd->part_vel_factor,
+                                                       rmd->part_min_radius,
+                                                       rmd->part_trail,
+                                                       rmd->part_trail_size);
+        }
+      }
+
+      OpenVDBTransform_free(xform);
+
+      if (level_set) {
+        for (vcob = rmd->csg_operands.first; vcob; vcob = vcob->next) {
+          if (vcob->object && (vcob->flag & MOD_REMESH_CSG_OBJECT_ENABLED)) {
+            level_set = csgOperation(level_set, vcob, ctx->object, rmd);
+          }
+        }
+
+        if (rmd_orig->levelset_cached) {
+          OpenVDBLevelSet_free(rmd_orig->levelset_cached);
+          rmd_orig->levelset_cached = NULL;
+        }
+
+        rmd_orig->levelset_cached = OpenVDB_level_set_copy(level_set);
+        result = voxel_remesh(rmd, mesh, level_set);
+      }
 
       if (result) {
         // update cache
@@ -742,6 +788,7 @@ static void copyData(const ModifierData *md_src, ModifierData *md_dst, const int
   RemeshModifierData *rmd_src = (RemeshModifierData *)md_src;
   RemeshModifierData *rmd_dst = (RemeshModifierData *)md_dst;
   Mesh *me_src = rmd_src->mesh_cached;
+  struct OpenVDBLevelSet *lvl_src = rmd_src->levelset_cached;
 
   modifier_copyData_generic(md_src, md_dst, flag);
   // only for cow copy, because cow does shallow copy only
@@ -757,6 +804,11 @@ static void copyData(const ModifierData *md_src, ModifierData *md_dst, const int
     BKE_mesh_nomain_to_mesh(me_src, me_dst, NULL, &CD_MASK_MESH, false);
     rmd_dst->mesh_cached = me_dst;
   }
+
+  if (lvl_src) {
+    struct OpenVDBLevelSet *lvl_dst = OpenVDB_level_set_copy(lvl_src);
+    rmd_dst->levelset_cached = lvl_dst;
+  }
 }
 
 static void freeData(ModifierData *md)
@@ -765,6 +817,11 @@ static void freeData(ModifierData *md)
   if (rmd->mesh_cached) {
     BKE_mesh_free(rmd->mesh_cached);
     rmd->mesh_cached = NULL;
+  }
+
+  if (rmd->levelset_cached) {
+    OpenVDBLevelSet_free(rmd->levelset_cached);
+    rmd->levelset_cached = NULL;
   }
 }
 
