@@ -22,6 +22,8 @@
 #include "openvdb_capi.h"
 #include "MEM_guardedalloc.h"
 #include "openvdb/tools/Composite.h"
+#include "openvdb/tools/ParticlesToLevelSet.h"
+#include "intern/particle_tools.h"
 
 OpenVDBLevelSet::OpenVDBLevelSet()
 {
@@ -136,7 +138,7 @@ void OpenVDBLevelSet::filter(OpenVDBLevelSet_FilterType filter_type,
       filter.laplacian();
       break;
     case OPENVDB_LEVELSET_FILTER_DILATE:
-      filter.offset(distance);
+      filter.offset(-distance);
       break;
     case OPENVDB_LEVELSET_FILTER_ERODE:
       filter.offset(distance);

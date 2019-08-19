@@ -320,6 +320,7 @@ set(SRC
   BKE_particle.h
   BKE_pbvh.h
   BKE_pointcache.h
+  BKE_remesh.h
   BKE_report.h
   BKE_rigidbody.h
   BKE_scene.h

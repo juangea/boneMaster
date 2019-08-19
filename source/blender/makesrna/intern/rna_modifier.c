@@ -4734,16 +4734,16 @@ static void rna_def_modifier_remesh(BlenderRNA *brna)
        0,
        "Sharp",
        "Output a surface that reproduces sharp edges and corners from the input mesh"},
-      {MOD_REMESH_VOXEL,
-       "VOXEL",
-       0,
-       "Voxel",
-       "Invokes the OpenVDB voxel remesher and generates quad only meshes"},
       {MOD_REMESH_METABALL, 
         "METABALL", 
         0, 
         "Metaball",
 	    "Output a surface that consists of metaballs based from the vertices or particles of the input mesh"},
+      {MOD_REMESH_VOXEL,
+       "VOXEL",
+       0,
+       "Voxel",
+       "Invokes the OpenVDB voxel remesher and generates quad meshes"},
       {0, NULL, 0, NULL, NULL},
   };
 
@@ -5022,10 +5022,10 @@ static void rna_def_modifier_remesh(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Filter Width", "OpenVDB Levelset Filter Width");
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
-  prop = RNA_def_property(srna, "filter_iterations", PROP_INT, PROP_UNSIGNED);
-  RNA_def_property_int_sdna(prop, NULL, "filter_iterations");
-  RNA_def_property_range(prop, 0, INT_MAX);
-  RNA_def_property_ui_text(prop, "Filter Iterations", "OpenVDB Levelset Filter Iterations");
+  prop = RNA_def_property(srna, "filter_distance", PROP_FLOAT, PROP_UNSIGNED);
+  RNA_def_property_float_sdna(prop, NULL, "filter_distance");
+  RNA_def_property_range(prop, 0, FLT_MAX);
+  RNA_def_property_ui_text(prop, "Filter Distance", "OpenVDB Levelset Filter Distance");
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
   prop = RNA_def_property(srna, "reproject_vertex_paint", PROP_BOOLEAN, PROP_NONE);

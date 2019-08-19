@@ -77,7 +77,7 @@ static void initData(ModifierData *md)
   rmd->filter_width = 1;
   rmd->filter_bias = OPENVDB_LEVELSET_FIRST_BIAS;
   rmd->filter_type = OPENVDB_LEVELSET_FILTER_NONE;
-  rmd->filter_iterations = 1;
+  rmd->filter_distance = 0.1f;
   rmd->flag |= MOD_REMESH_LIVE_REMESH;
 
   rmd->basesize[0] = rmd->basesize[1] = rmd->basesize[2] = 1.0f;
@@ -88,6 +88,7 @@ static void initData(ModifierData *md)
   rmd->input = 0;
   rmd->pflag = 1;
   rmd->psys = 1;
+
 }
 
 #ifdef WITH_MOD_REMESH
@@ -444,7 +445,7 @@ static Mesh *voxel_remesh(RemeshModifierData *rmd, Mesh *mesh, struct OpenVDBLev
   }
 
   OpenVDBLevelSet_filter(
-      level_set, rmd->filter_type, rmd->filter_width, rmd->filter_iterations, rmd->filter_bias);
+      level_set, rmd->filter_type, rmd->filter_width, rmd->filter_distance, rmd->filter_bias);
   target = BKE_remesh_voxel_ovdb_volume_to_mesh_nomain(
       level_set, rmd->isovalue, rmd->adaptivity, rmd->flag & MOD_REMESH_RELAX_TRIANGLES);
   OpenVDBLevelSet_free(level_set);
@@ -568,7 +569,7 @@ static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mes
 
     if (rmd->flag & MOD_REMESH_ACCUMULATE) {
       if (rmd_orig->levelset_cached) {
-        level_set = OpenVDB_level_set_copy(rmd_orig->levelset_cached);
+        level_set = OpenVDBLevelSet_copy(rmd_orig->levelset_cached);
       }
     }
 
@@ -622,7 +623,7 @@ static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mes
           rmd_orig->levelset_cached = NULL;
         }
 
-        rmd_orig->levelset_cached = OpenVDB_level_set_copy(level_set);
+        rmd_orig->levelset_cached = OpenVDBLevelSet_copy(level_set);
         result = voxel_remesh(rmd, mesh, level_set);
       }
 
@@ -806,7 +807,7 @@ static void copyData(const ModifierData *md_src, ModifierData *md_dst, const int
   }
 
   if (lvl_src) {
-    struct OpenVDBLevelSet *lvl_dst = OpenVDB_level_set_copy(lvl_src);
+    struct OpenVDBLevelSet *lvl_dst = OpenVDBLevelSet_copy(lvl_src);
     rmd_dst->levelset_cached = lvl_dst;
   }
 }

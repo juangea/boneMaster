@@ -221,16 +221,18 @@ struct OpenVDBLevelSet *OpenVDBLevelSet_transform_and_resample(struct OpenVDBLev
 
 struct OpenVDBLevelSet *OpenVDB_level_set_copy(struct OpenVDBLevelSet *level_set);
 
-
 void OpenVDBLevelSet_particles_to_level_set(struct OpenVDBLevelSet *level_set,
                                             struct ParticleList *part_list,
                                             float min_radius,
                                             bool trail,
                                             float trail_size);
 
+struct OpenVDBLevelSet *OpenVDBLevelSet_copy(struct OpenVDBLevelSet *level_set);
+
 struct ParticleList *OpenVDB_create_part_list(size_t totpart, float rad_scale, float vel_scale);
 void OpenVDB_part_list_free(struct ParticleList *part_list);
 void OpenVDB_add_particle(struct ParticleList *part_list, float pos[3], float rad, float vel[3]);
+
 #ifdef __cplusplus
 }
 #endif
