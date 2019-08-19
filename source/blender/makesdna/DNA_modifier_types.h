@@ -1591,11 +1591,11 @@ typedef struct RemeshModifierData {
   float voxel_size;
   float isovalue;
   float adaptivity;
+  float filter_distance;
   int filter_type;
   int filter_bias;
   int filter_width;
-  int filter_iterations;
-
+ 
   /*voxel, particle mode*/
   float part_scale_factor;
   float part_vel_factor;

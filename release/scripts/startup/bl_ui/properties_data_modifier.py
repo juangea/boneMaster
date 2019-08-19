@@ -1258,7 +1258,7 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
                 if md.filter_type in {"GAUSSIAN", "MEDIAN", "MEAN"}:
                     layout.prop(md, "filter_width")
                 if md.filter_type in {"DILATE", "ERODE"}:
-                    layout.prop(md, "filter_iterations")
+                    layout.prop(md, "filter_distance")
             row = layout.row()
             row.prop(md, "live_remesh")
             row.prop(md, "smooth_normals")
