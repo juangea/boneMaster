@@ -28,8 +28,21 @@
 #include "openvdb_capi.h"
 
 /* OpenVDB Voxel Remesher */
-struct OpenVDBLevelSet *BKE_remesh_voxel_ovdb_mesh_to_level_set_create(
-    Mesh *mesh, struct OpenVDBTransform *transform);
+void BKE_remesh_voxel_ovdb_mesh_to_level_set(struct OpenVDBLevelSet *level_set,
+                                                    Mesh *mesh,
+                                                    struct OpenVDBTransform *transform);
+
+void BKE_remesh_voxel_ovdb_particles_to_level_set(struct OpenVDBLevelSet *level_set,
+                                                  ParticleSystem *psys,
+                                                  struct Scene *scene,
+                                                  Object *ob,
+                                                  struct Depsgraph *depsgraph,
+                                                  float scale_factor,
+                                                  float vel_factor,
+                                                  float min_radius,
+                                                  bool trail,
+                                                  float trail_size);
+
 Mesh *BKE_remesh_voxel_ovdb_volume_to_mesh_nomain(struct OpenVDBLevelSet *level_set,
                                                   double isovalue,
                                                   double adaptivity,

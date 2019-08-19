@@ -184,7 +184,7 @@ void OpenVDBTransform_free(struct OpenVDBTransform *transform);
 void OpenVDBTransform_create_linear_transform(struct OpenVDBTransform *transform,
                                               double voxel_size);
 
-struct OpenVDBLevelSet *OpenVDBLevelSet_create(bool initGrid, struct OpenVDBTransform *xform);
+struct OpenVDBLevelSet *OpenVDBLevelSet_create(bool initGrid, float voxel_size, float half_width);
 void OpenVDBLevelSet_free(struct OpenVDBLevelSet *level_set);
 void OpenVDBLevelSet_mesh_to_level_set(struct OpenVDBLevelSet *level_set,
                                        const float *vertices,
@@ -226,6 +226,10 @@ void OpenVDBLevelSet_particles_to_level_set(struct OpenVDBLevelSet *level_set,
                                             float min_radius,
                                             bool trail,
                                             float trail_size);
+
+struct ParticleList *OpenVDB_create_part_list(size_t totpart, float rad_scale, float vel_scale);
+void OpenVDB_part_list_free(struct ParticleList *part_list);
+void OpenVDB_add_particle(struct ParticleList *part_list, float pos[3], float rad, float vel[3]);
 
 #ifdef __cplusplus
 }

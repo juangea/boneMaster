@@ -37,6 +37,7 @@
 #include "DNA_object_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
+#include "DNA_particle_types.h"
 
 #include "BKE_mesh.h"
 #include "BKE_mesh_runtime.h"
@@ -44,13 +45,20 @@
 #include "BKE_customdata.h"
 #include "BKE_bvhutils.h"
 #include "BKE_remesh.h"
+#include "BKE_particle.h"
+#include "BKE_lattice.h"
+
+#include "DEG_depsgraph_query.h"
 
 #ifdef WITH_OPENVDB
 #  include "openvdb_capi.h"
 #endif
 
-struct OpenVDBLevelSet *BKE_remesh_voxel_ovdb_mesh_to_level_set_create(
-    Mesh *mesh, struct OpenVDBTransform *transform)
+struct ParticleList;
+
+void BKE_remesh_voxel_ovdb_mesh_to_level_set(struct OpenVDBLevelSet *level_set,
+                                             Mesh *mesh,
+                                             struct OpenVDBTransform *transform)
 {
   BKE_mesh_runtime_looptri_recalc(mesh);
   const MLoopTri *looptri = BKE_mesh_runtime_looptri_ensure(mesh);
@@ -79,14 +87,78 @@ struct OpenVDBLevelSet *BKE_remesh_voxel_ovdb_mesh_to_level_set_create(
     faces[i * 3 + 2] = vt.tri[2];
   }
 
-  struct OpenVDBLevelSet *level_set = OpenVDBLevelSet_create(false, NULL);
   OpenVDBLevelSet_mesh_to_level_set(level_set, verts, faces, totverts, totfaces, transform);
 
   MEM_freeN(verts);
   MEM_freeN(faces);
   MEM_freeN(verttri);
+}
 
-  return level_set;
+static void populate_particle_list(ParticleSystem* psys,
+                                   struct ParticleList* part_list,
+                                   struct Scene *scene,
+                                   Object *ob,
+                                   struct Depsgraph *depsgraph)
+{
+    ParticleSimulationData sim = {0};
+    ParticleKey state;
+    int p;
+
+    sim.depsgraph = depsgraph;
+    sim.scene = scene;
+    sim.ob = ob;
+    sim.psys = psys;
+
+    psys->lattice_deform_data = psys_create_lattice_deform_data(&sim);
+
+    for (p = 0; p < psys->totpart; p++) {
+      float pos[3], vel[3];
+
+      if (psys->particles[p].flag & (PARS_NO_DISP | PARS_UNEXIST)) {
+        continue;
+      }
+
+      state.time = DEG_get_ctime(depsgraph);
+
+      if (psys_get_particle_state(&sim, p, &state, 0) == 0) {
+        continue;
+      }
+
+      /* location */
+      mul_v3_m4v3(pos, ob->imat, state.co);
+
+      /* velocity */
+      sub_v3_v3v3(vel, state.co, psys->particles[p].prev_state.co);
+
+      mul_v3_fl(vel, psys->part->normfac);
+
+      OpenVDB_add_particle(part_list, pos, psys->particles[p].size, vel);
+    }
+
+    if (psys->lattice_deform_data) {
+      end_latt_deform(psys->lattice_deform_data);
+      psys->lattice_deform_data = NULL;
+    }
+}
+
+void BKE_remesh_voxel_ovdb_particles_to_level_set(struct OpenVDBLevelSet *level_set,
+                                                  ParticleSystem *psys,
+                                                  struct Scene* scene,
+                                                  Object* ob,
+                                                  struct Depsgraph *depsgraph,
+                                                  float scale_factor,
+                                                  float vel_factor,
+                                                  float min_radius,
+                                                  bool trail,
+                                                  float trail_size)
+{
+  /* Generate a particle list and a level set from it */
+  struct ParticleList* part_list;
+
+  part_list = OpenVDB_create_part_list(psys->totpart, scale_factor, vel_factor);
+  populate_particle_list(psys, part_list, scene, ob, depsgraph);
+
+  OpenVDBLevelSet_particles_to_level_set(level_set, part_list, min_radius, trail, trail_size);
 }
 
 Mesh *BKE_remesh_voxel_ovdb_volume_to_mesh_nomain(struct OpenVDBLevelSet *level_set,

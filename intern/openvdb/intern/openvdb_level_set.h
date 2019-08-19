@@ -70,6 +70,10 @@ struct OpenVDBLevelSet {
                                                 openvdb::FloatGrid::Ptr gridB,
                                                 OpenVDBLevelSet_CSGOperation operation);
 
+  void OpenVDB_particles_to_level_set(ParticleList part_list,
+                                      float min_radius,
+                                      bool trail,
+                                      float trail_size);
 };
 
 #endif /* __OPENVDB_LEVEL_SET_H__ */

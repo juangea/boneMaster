@@ -26,9 +26,6 @@
 #include <openvdb/tools/LevelSetUtil.h>
 #include <openvdb/tools/ParticlesToLevelSet.h>
 
-#include "openvdb_intern.h"
-#include "openvdb_primitive.h"
-
 #include "particle_tools.h"
 
 using namespace openvdb;
@@ -141,83 +138,4 @@ void ParticleList::getPosRadVel(size_t n, Vec3R &pos, Real &rad, Vec3R &vel) con
 void ParticleList::getAtt(size_t n, Index32 &att) const
 {
 	att = Index32(n);
-}
-
-namespace internal {
-
-static void convert_to_levelset(ParticleList part_list, FloatGrid::Ptr grid,
-                                float min_radius, bool trail, float trail_size)
-{
-	/* Note: the second template argument here is the particles' attributes type,
-	 * if any. As this function will later call ParticleList::getAtt(index, attribute),
-	 * we pass void for two reasons: first, no attributes are defined for the
-	 * particles (yet), and second, disable using attributes for generating
-	 * the level set.
-	 *
-	 * TODO(kevin): quite useless to know that if we don't have the third argument...
-	 */
-	tools::ParticlesToLevelSet<FloatGrid, void> raster(*grid);
-	/* a grain size of zero disables threading */
-	raster.setGrainSize(1);
-	raster.setRmin(min_radius);
-	raster.setRmax(1e15f);
-
-	if (trail && part_list.has_velocity()) {
-		raster.rasterizeTrails(part_list, trail_size);
-	}
-	else {
-		raster.rasterizeSpheres(part_list);
-	}
-
-	if (raster.ignoredParticles()) {
-		if (raster.getMinCount() > 0) {
-			std::cout << "Minimun voxel radius is too high!\n";
-			std::cout << raster.getMinCount() << " particles are ignored!\n";
-		}
-		if (raster.getMaxCount() > 0) {
-			std::cout << "Maximum voxel radius is too low!\n";
-			std::cout << raster.getMaxCount() << " particles are ignored!\n";
-		}
-	}
-}
-
-void OpenVDB_from_particles(OpenVDBPrimitive *level_set,
-                            OpenVDBPrimitive *&mask_grid,
-                            ParticleList Pa, bool mask, float mask_width,
-                            float min_radius, bool trail, float trail_size)
-{
-	FloatGrid::Ptr ls_grid = gridPtrCast<FloatGrid>(level_set->getGridPtr());
-
-	convert_to_levelset(Pa, ls_grid, min_radius, trail, trail_size);
-
-	if (mask) {
-		FloatGrid::Ptr mask = gridPtrCast<FloatGrid>(mask_grid->getGridPtr());
-
-		if (mask == NULL) {
-			mask = FloatGrid::create(ls_grid->background());
-			mask->setGridClass(GRID_LEVEL_SET);
-		}
-
-		if (mask_width > 0.0f) {
-			std::cout << "Generating mask from level set\n";
-			mask->setTransform(ls_grid->transform().copy());
-			Pa.radius_scale() *= (1.0f + mask_width);
-			convert_to_levelset(Pa, mask, min_radius, trail, trail_size);
-
-			if (mask_width < 1.0f) {
-				FloatGrid::Ptr mask_grid_min = FloatGrid::create(ls_grid->background());
-				mask_grid_min->setGridClass(GRID_LEVEL_SET);
-				mask_grid_min->setTransform(ls_grid->transform().copy());
-				Pa.radius_scale() *= (1.0f - mask_width) / (1.0f + mask_width);
-				convert_to_levelset(Pa, mask_grid_min, min_radius, trail, trail_size);
-
-				tools::csgDifference(*mask, *mask_grid_min);
-			}
-		}
-
-		tools::sdfToFogVolume(*mask);
-		mask_grid->setGrid(mask);
-	}
-}
-
 }

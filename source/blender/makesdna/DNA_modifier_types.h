@@ -1504,10 +1504,10 @@ typedef enum eRemeshModifierMode {
   MOD_REMESH_MASS_POINT = 1,
   /* keeps sharp edges */
   MOD_REMESH_SHARP_FEATURES = 2,
-  /* OpenVDB voxel remesh */
-  MOD_REMESH_VOXEL = 3,
   /* metaball remesh, turns vertices or particles into metaballs */
-  MOD_REMESH_METABALL = 4,
+  MOD_REMESH_METABALL = 3,
+  /* OpenVDB voxel remesh */
+  MOD_REMESH_VOXEL = 4,
 } eRemeshModifierMode;
 
 typedef enum MetaballRemeshFlags {
@@ -1595,6 +1595,14 @@ typedef struct RemeshModifierData {
   int filter_bias;
   int filter_width;
   int filter_iterations;
+
+  /*voxel, particle mode*/
+  float part_scale_factor;
+  float part_vel_factor;
+  float part_min_radius;
+  float part_trail_size;
+  int part_trail;
+  int _pad2;
 
   /* volume csg */
   struct ListBase csg_operands;

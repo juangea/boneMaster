@@ -4806,15 +4806,15 @@ static void rna_def_modifier_remesh(BlenderRNA *brna)
 
   static const EnumPropertyItem mesh_items[] =  {
       {MOD_REMESH_VERTICES, 
-       "VERTICES", 
+       "MESH", 
        0, 
-       "Vertices", 
-       "Output a metaball surface using vertex input data"},
+       "Mesh", 
+       "Output a metaball or voxel mesh using mesh input data"},
       {MOD_REMESH_PARTICLES, 
        "PARTICLES", 
        0, 
        "Particles", 
-       "Output a metaball surface using particle input data"},
+       "Output a metaball or voxel mesh using particle input data"},
 	  {0, NULL, 0, NULL, NULL}
   };
 	
