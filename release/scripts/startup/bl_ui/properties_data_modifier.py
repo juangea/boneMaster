@@ -18,7 +18,7 @@
 
 # <pep8 compliant>
 import bpy
-from bpy.types import Panel
+from bpy.types import Panel, UIList
 from bpy.app.translations import pgettext_iface as iface_
 
 
@@ -27,6 +27,16 @@ class ModifierButtonsPanel:
     bl_region_type = 'WINDOW'
     bl_context = "modifier"
     bl_options = {'HIDE_HEADER'}
+
+
+class DATA_UL_level_set_filters(UIList):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        if self.layout_type in {'DEFAULT', 'COMPACT'}:
+            layout.prop(item, "name", text="", emboss=False, icon_value=icon)
+            layout.prop(item, "mute", text="", emboss=False)
+        elif self.layout_type in {'GRID'}:
+            layout.alignment = 'CENTER'
+            layout.label(text="", icon_value=icon)
 
 
 class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
@@ -172,6 +182,11 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         layout.row().prop(md, "spread")
 
     def BOOLEAN(self, layout, _ob, md):
+        solver = md.solver
+        if not bpy.app.build_options.mod_boolean:
+            if solver == 'CARVE':
+                layout.label("Built without Carve solver")
+
         split = layout.split()
 
         col = split.column()
@@ -182,10 +197,15 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         col.label(text="Object:")
         col.prop(md, "object", text="")
 
-        layout.prop(md, "double_threshold")
+        split = layout.split()
+        split.column().label(text="Solver:")
+        split.column().prop(md, "solver", text="")
 
-        if bpy.app.debug:
-            layout.prop(md, "debug_options")
+        if solver == 'BMESH':
+            layout.prop(md, "double_threshold")
+
+            if bpy.app.debug:
+                layout.prop(md, "debug_options")
 
     def BUILD(self, layout, _ob, md):
         split = layout.split()
@@ -424,6 +444,9 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
     def FLUID_SIMULATION(self, layout, _ob, _md):
         layout.label(text="Settings are inside the Physics tab")
 
+    def FRACTURE(self, layout, _ob, _md):
+        layout.label(text="Settings are inside the Physics tab")
+
     def HOOK(self, layout, ob, md):
         use_falloff = (md.falloff_type != 'NONE')
         split = layout.split()
@@ -641,6 +664,7 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
 
     def MULTIRES(self, layout, ob, md):
         layout.row().prop(md, "subdivision_type", expand=True)
+        layout.row().prop(md, "use_opensubdiv")
 
         split = layout.split()
         col = split.column()
@@ -1003,6 +1027,7 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
     def SUBSURF(self, layout, ob, md):
         from bpy import context
         layout.row().prop(md, "subdivision_type", expand=True)
+        layout.row().prop(md, "use_opensubdiv")
 
         split = layout.split()
         col = split.column()
@@ -1014,6 +1039,8 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
             scene.cycles.feature_set == 'EXPERIMENTAL'
         )
         if show_adaptive_options:
+            col.label(text="View:")
+            col.prop(md, "levels", text="Levels")
             col.label(text="Render:")
             col.prop(ob.cycles, "use_adaptive_subdivision", text="Adaptive")
             if ob.cycles.use_adaptive_subdivision:
@@ -1027,11 +1054,10 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
             col.prop(md, "levels", text="Levels")
         else:
             col.label(text="Subdivisions:")
-            sub = col.column(align=True)
-            sub.prop(md, "render_levels", text="Render")
-            sub.prop(md, "levels", text="Viewport")
-
-            col.prop(md, "quality")
+            col.prop(md, "levels", text="View")
+            col.prop(md, "render_levels", text="Render")
+            if hasattr(md, "quality") and md.use_opensubdiv:
+                col.prop(md, "quality")
 
         col = split.column()
         col.label(text="Options:")
@@ -1195,25 +1221,109 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         col.prop(md, "width", slider=True)
         col.prop(md, "narrowness", slider=True)
 
-    def REMESH(self, layout, _ob, md):
+    def REMESH(self, layout, ob, md):
         if not bpy.app.build_options.mod_remesh:
             layout.label(text="Built without Remesh modifier")
             return
 
         layout.prop(md, "mode")
 
-        row = layout.row()
-        row.prop(md, "octree_depth")
-        row.prop(md, "scale")
+        if md.mode not in {'VOXEL', 'METABALL'}:
+            row = layout.row()
+            row.prop(md, "octree_depth")
+            row.prop(md, "scale")
 
-        if md.mode == 'SHARP':
-            layout.prop(md, "sharpness")
+        if md.mode == 'VOXEL':
+            row = layout.row()
+            row.prop(md, "input")
+            if 'PARTICLES' in md.input:
+                layout.prop(md, "psys")
 
-        layout.prop(md, "use_smooth_shade")
-        layout.prop(md, "use_remove_disconnected")
-        row = layout.row()
-        row.active = md.use_remove_disconnected
-        row.prop(md, "threshold")
+                col = layout.column(align=True)
+                col.prop(md, "part_min_radius")
+                col.prop(md, "part_scale_factor")
+                col.prop(md, "part_vel_factor")
+
+                col = layout.column()
+                col.prop(md, "part_trail")
+                col.prop(md, "part_trail_size")
+
+            col = layout.column(align=True)
+            col.prop(md, "voxel_size")
+            col.prop(md, "isovalue")
+            col.prop(md, "adaptivity")
+            layout.prop(md, "filter_type")
+            if md.filter_type != "NONE":
+                layout.prop(md, "filter_bias")
+                if md.filter_type in {"GAUSSIAN", "MEDIAN", "MEAN"}:
+                    layout.prop(md, "filter_width")
+                if md.filter_type in {"DILATE", "ERODE"}:
+                    layout.prop(md, "filter_distance")
+            row = layout.row()
+            row.prop(md, "live_remesh")
+            row.prop(md, "smooth_normals")
+            row = layout.row()
+            row.prop(md, "relax_triangles")
+            row.prop(md, "reproject_vertex_paint")
+            layout.prop(md, "accumulate")
+            layout.label(text="CSG Operands")
+            layout.operator("remesh.csg_add", text="", icon="ADD")
+            for i,csg in enumerate(md.csg_operands):
+                box = layout.box()
+                row = box.row(align=True)
+                icon = "HIDE_ON"
+                if csg.enabled:
+                    icon = "HIDE_OFF"
+                row.prop(csg, "enabled", text="", icon=icon, emboss=True)
+                row.prop(csg, "object", text="")
+                row.prop(csg, "operation", text="")
+                row = box.row(align=True)
+                icon = "RESTRICT_VIEW_ON"
+                if csg.sync_voxel_size:
+                    icon = "RESTRICT_VIEW_OFF"
+                row.prop(csg, "use_voxel_percentage", text="", icon='CANCEL', emboss=True)
+                if not csg.use_voxel_percentage:
+                    row.prop(csg, "sync_voxel_size", text="", icon=icon, emboss=True)
+                    row.prop(csg, "voxel_size")
+                else:
+                    row.prop(csg, "voxel_percentage")
+                row.prop(csg, "sampler", text="")
+                row.operator("remesh.csg_remove", text="", icon="REMOVE").index = i
+                row.operator("remesh.csg_move_up", text="", icon="TRIA_UP").index = i
+                row.operator("remesh.csg_move_down", text="", icon="TRIA_DOWN").index = i
+        elif md.mode == 'METABALL':
+            row = layout.row()
+            row.prop(md, "input")
+            if 'PARTICLES' in md.input:
+                row = layout.row()
+                row.prop(md, "psys")
+                row = layout.row()
+                row.prop(md, "filter")
+            row = layout.row()
+            col = row.column(align=True)
+            col.prop(md, "mball_size")
+            col = row.column(align=True)
+            col.label(text="Display Parameters:")
+            col.prop(md, "mball_threshold")
+            col.prop(md, "mball_resolution")
+            col.prop(md, "mball_render_resolution")
+            layout.prop_search(md, "size_vertex_group", ob, "vertex_groups", text = "Size Vertex Group")
+            layout.prop(md, "use_smooth_shade")
+        else:
+            layout.prop(md, "use_smooth_shade")
+            layout.prop(md, "use_remove_disconnected")
+            row = layout.row()
+            row.active = md.use_remove_disconnected
+            row.prop(md, "threshold")
+
+            if md.mode == 'SHARP':
+                layout.prop(md, "sharpness")
+
+            layout.prop(md, "use_smooth_shade")
+            layout.prop(md, "use_remove_disconnected")
+            row = layout.row()
+            row.active = md.use_remove_disconnected
+            row.prop(md, "threshold")
 
     @staticmethod
     def vertex_weight_mask(layout, ob, md):
@@ -1640,6 +1750,8 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         row.prop(md, "invert_vertex_group", text="", icon='ARROW_LEFTRIGHT')
         col.prop(md, "thresh", text="Threshold")
         col.prop(md, "face_influence")
+
+
 
 
 class DATA_PT_gpencil_modifiers(ModifierButtonsPanel, Panel):
@@ -2226,6 +2338,7 @@ class DATA_PT_gpencil_modifiers(ModifierButtonsPanel, Panel):
 
 
 classes = (
+    DATA_UL_level_set_filters,
     DATA_PT_modifiers,
     DATA_PT_gpencil_modifiers,
 )

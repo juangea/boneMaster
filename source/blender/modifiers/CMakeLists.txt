@@ -152,6 +152,22 @@ if(WITH_INTERNATIONAL)
   add_definitions(-DWITH_INTERNATIONAL)
 endif()
 
+if(WITH_OPENVDB)
+  list(APPEND INC
+     ../../../intern/openvdb
+  )
+  list(APPEND LIB
+     bf_intern_openvdb
+  )
+  add_definitions(-DWITH_OPENVDB)
+
+  if(WITH_OPENVDB_BLOSC)
+    add_definitions(
+      -DWITH_OPENVDB_BLOSC
+    )
+  endif()
+endif()
+
 # So we can have special tricks in modifier system.
 add_definitions(${GL_DEFINITIONS})
 

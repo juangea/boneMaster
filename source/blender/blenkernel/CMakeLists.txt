@@ -179,6 +179,7 @@ set(SRC
   intern/pbvh.c
   intern/pbvh_bmesh.c
   intern/pointcache.c
+  intern/remesh_voxel.c
   intern/report.c
   intern/rigidbody.c
   intern/scene.c
@@ -319,6 +320,7 @@ set(SRC
   BKE_particle.h
   BKE_pbvh.h
   BKE_pointcache.h
+  BKE_remesh.h
   BKE_report.h
   BKE_rigidbody.h
   BKE_scene.h

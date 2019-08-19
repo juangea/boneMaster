@@ -87,6 +87,7 @@
 #include "WM_types.h"
 
 #include "object_intern.h"
+#include "openvdb_capi.h"
 
 static void modifier_skin_customdata_delete(struct Object *ob);
 
@@ -2531,4 +2532,247 @@ void OBJECT_OT_surfacedeform_bind(wmOperatorType *ot)
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
   edit_modifier_properties(ot);
+}
+
+static bool remesh_update_check(bContext *C, wmOperator *op)
+{
+  Object *ob = ED_object_active_context(C);
+  RemeshModifierData *rmd = (RemeshModifierData *)edit_modifier_property_get(
+      op, ob, eModifierType_Remesh);
+  bool do_update = true;
+
+  if (rmd->mode == MOD_REMESH_VOXEL) {
+    if (((rmd->flag & MOD_REMESH_LIVE_REMESH) == 0) && rmd->mesh_cached) {
+      do_update = false;
+    }
+  }
+
+  return do_update;
+}
+
+static bool remesh_csg_poll(bContext *C)
+{
+  return edit_modifier_poll_generic(C, &RNA_RemeshModifier, 0, true);
+}
+
+static int remesh_csg_add_exec(bContext *C, wmOperator *op)
+{
+  Object *ob = ED_object_active_context(C);
+  Main *bmain = CTX_data_main(C);
+  RemeshModifierData *rmd = (RemeshModifierData *)edit_modifier_property_get(
+      op, ob, eModifierType_Remesh);
+
+  if (rmd == NULL) {
+    return OPERATOR_CANCELLED;
+  }
+
+  CSGVolume_Object *vcob = MEM_callocN(sizeof(CSGVolume_Object), "vcob");
+  vcob->voxel_size = rmd->voxel_size;
+  vcob->flag |= MOD_REMESH_CSG_OBJECT_ENABLED;
+  vcob->flag |= MOD_REMESH_CSG_SYNC_VOXEL_SIZE;
+  vcob->sampler = eRemeshModifierSampler_None;
+  vcob->voxel_percentage = 100.0f;
+
+  BLI_addtail(&rmd->csg_operands, vcob);
+
+  if (remesh_update_check(C, op)) {
+    if (BLI_listbase_is_single(&rmd->csg_operands)) {
+      /*trigger update to detach modifier transform relation from modifier */
+      DEG_relations_tag_update(bmain);
+    }
+
+    DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY | ID_RECALC_COPY_ON_WRITE);
+    WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, ob);
+  }
+
+  return OPERATOR_FINISHED;
+}
+
+static int remesh_csg_add_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
+{
+  if (edit_modifier_invoke_properties(C, op))
+    return remesh_csg_add_exec(C, op);
+  else
+    return OPERATOR_CANCELLED;
+}
+
+void REMESH_OT_csg_add(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Add CSG Object";
+  ot->description = "Add CSG Object to remesh modifier";
+  ot->idname = "REMESH_OT_csg_add";
+
+  /* api callbacks */
+  ot->poll = remesh_csg_poll;
+  ot->invoke = remesh_csg_add_invoke;
+  ot->exec = remesh_csg_add_exec;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
+  edit_modifier_properties(ot);
+}
+
+static int remesh_csg_remove_exec(bContext *C, wmOperator *op)
+{
+  Object *ob = ED_object_active_context(C);
+  Main *bmain = CTX_data_main(C);
+  RemeshModifierData *rmd = (RemeshModifierData *)edit_modifier_property_get(
+      op, ob, eModifierType_Remesh);
+  int index = RNA_int_get(op->ptr, "index");
+
+  if (rmd == NULL) {
+    return OPERATOR_CANCELLED;
+  }
+
+  CSGVolume_Object *vcob = (CSGVolume_Object *)BLI_findlink(&rmd->csg_operands, index);
+  if (vcob) {
+    BLI_remlink(&rmd->csg_operands, vcob);
+  }
+
+  if (remesh_update_check(C, op)) {
+    if (BLI_listbase_is_empty(&rmd->csg_operands)) {
+      /*trigger update to detach modifier transform relation from modifier */
+      DEG_relations_tag_update(bmain);
+    }
+
+    DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY | ID_RECALC_COPY_ON_WRITE);
+    WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, ob);
+  }
+
+  return OPERATOR_FINISHED;
+}
+
+static int remesh_csg_remove_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
+{
+  if (edit_modifier_invoke_properties(C, op))
+    return remesh_csg_remove_exec(C, op);
+  else
+    return OPERATOR_CANCELLED;
+}
+
+void REMESH_OT_csg_remove(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Remove CSG Object";
+  ot->description = "Remove CSG Object at index";
+  ot->idname = "REMESH_OT_csg_remove";
+
+  /* api callbacks */
+  ot->poll = remesh_csg_poll;
+  ot->invoke = remesh_csg_remove_invoke;
+  ot->exec = remesh_csg_remove_exec;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
+  edit_modifier_properties(ot);
+
+  RNA_def_int(
+      ot->srna, "index", 0, 0, INT_MAX, "Index", "Index of the Object to remove", 0, INT_MAX);
+}
+
+static int remesh_csg_move_up_exec(bContext *C, wmOperator *op)
+{
+  Object *ob = ED_object_active_context(C);
+  RemeshModifierData *rmd = (RemeshModifierData *)edit_modifier_property_get(
+      op, ob, eModifierType_Remesh);
+  int index = RNA_int_get(op->ptr, "index");
+
+  if (rmd == NULL) {
+    return OPERATOR_CANCELLED;
+  }
+
+  CSGVolume_Object *vcob = (CSGVolume_Object *)BLI_findlink(&rmd->csg_operands, index);
+  if (vcob) {
+    BLI_remlink(&rmd->csg_operands, vcob);
+    BLI_insertlinkbefore(&rmd->csg_operands, vcob->prev, vcob);
+  }
+
+  if (remesh_update_check(C, op)) {
+    DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY | ID_RECALC_COPY_ON_WRITE);
+    WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, ob);
+  }
+
+  return OPERATOR_FINISHED;
+}
+
+static int remesh_csg_move_up_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
+{
+  if (edit_modifier_invoke_properties(C, op))
+    return remesh_csg_move_up_exec(C, op);
+  else
+    return OPERATOR_CANCELLED;
+}
+
+void REMESH_OT_csg_move_up(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Move CSG Object up";
+  ot->description = "Move CSG Object at index to previous index";
+  ot->idname = "REMESH_OT_csg_move_up";
+
+  /* api callbacks */
+  ot->poll = remesh_csg_poll;
+  ot->invoke = remesh_csg_move_up_invoke;
+  ot->exec = remesh_csg_move_up_exec;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
+  edit_modifier_properties(ot);
+
+  RNA_def_int(
+      ot->srna, "index", 0, 0, INT_MAX, "Index", "Index of the Object to move up", 0, INT_MAX);
+}
+
+static int remesh_csg_move_down_exec(bContext *C, wmOperator *op)
+{
+  Object *ob = ED_object_active_context(C);
+  RemeshModifierData *rmd = (RemeshModifierData *)edit_modifier_property_get(
+      op, ob, eModifierType_Remesh);
+  int index = RNA_int_get(op->ptr, "index");
+
+  if (rmd == NULL) {
+    return OPERATOR_CANCELLED;
+  }
+
+  CSGVolume_Object *vcob = (CSGVolume_Object *)BLI_findlink(&rmd->csg_operands, index);
+  if (vcob) {
+    BLI_remlink(&rmd->csg_operands, vcob);
+    BLI_insertlinkafter(&rmd->csg_operands, vcob->next, vcob);
+  }
+
+  if (remesh_update_check(C, op)) {
+    DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY | ID_RECALC_COPY_ON_WRITE);
+    WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, ob);
+  }
+
+  return OPERATOR_FINISHED;
+}
+
+static int remesh_csg_move_down_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
+{
+  if (edit_modifier_invoke_properties(C, op))
+    return remesh_csg_move_down_exec(C, op);
+  else
+    return OPERATOR_CANCELLED;
+}
+
+void REMESH_OT_csg_move_down(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Move CSG Object down";
+  ot->description = "Move CSG Object at index to next index";
+  ot->idname = "REMESH_OT_csg_move_down";
+
+  /* api callbacks */
+  ot->poll = remesh_csg_poll;
+  ot->invoke = remesh_csg_move_down_invoke;
+  ot->exec = remesh_csg_move_down_exec;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
+  edit_modifier_properties(ot);
+
+  RNA_def_int(
+      ot->srna, "index", 0, 0, INT_MAX, "Index", "Index of the Object to move down", 0, INT_MAX);
 }

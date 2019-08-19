@@ -1346,6 +1346,7 @@ typedef struct KernelIntegrator {
 
   /* int pad1, pad2, pad3;*/
   int pad1;
+  /*int pad1;*/
 } KernelIntegrator;
 static_assert_align(KernelIntegrator, 16);
 

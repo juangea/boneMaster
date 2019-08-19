@@ -59,6 +59,7 @@ if(WITH_OPENVDB)
     intern/openvdb_writer.cc
     intern/openvdb_level_set.cc
     intern/openvdb_transform.cc
+    intern/particle_tools.cpp
     openvdb_capi.cc
     openvdb_util.cc
 
@@ -67,6 +68,7 @@ if(WITH_OPENVDB)
     intern/openvdb_writer.h
     intern/openvdb_level_set.h
     intern/openvdb_transform.h
+    intern/particle_tools.h
     openvdb_util.h
   )
 

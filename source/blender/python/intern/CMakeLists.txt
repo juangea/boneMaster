@@ -295,6 +295,10 @@ if(WITH_ALEMBIC)
   )
 endif()
 
+if(WITH_MOD_PARTMESHER)
+	add_definitions(-DWITH_MOD_PARTMESHER)
+endif()
+
 if(WITH_OPENIMAGEIO)
   add_definitions(-DWITH_OPENIMAGEIO)
   list(APPEND INC

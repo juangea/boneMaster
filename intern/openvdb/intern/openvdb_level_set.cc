@@ -22,6 +22,8 @@
 #include "openvdb_capi.h"
 #include "MEM_guardedalloc.h"
 #include "openvdb/tools/Composite.h"
+#include "openvdb/tools/ParticlesToLevelSet.h"
+#include "intern/particle_tools.h"
 
 OpenVDBLevelSet::OpenVDBLevelSet()
 {
@@ -136,7 +138,7 @@ void OpenVDBLevelSet::filter(OpenVDBLevelSet_FilterType filter_type,
       filter.laplacian();
       break;
     case OPENVDB_LEVELSET_FILTER_DILATE:
-      filter.offset(distance);
+      filter.offset(-distance);
       break;
     case OPENVDB_LEVELSET_FILTER_ERODE:
       filter.offset(distance);
@@ -173,4 +175,42 @@ const openvdb::FloatGrid::Ptr &OpenVDBLevelSet::get_grid()
 void OpenVDBLevelSet::set_grid(const openvdb::FloatGrid::Ptr &grid)
 {
   this->grid = grid;
+}
+
+void OpenVDBLevelSet::particles_to_level_set(ParticleList part_list,
+                                            float min_radius,
+                                            bool trail,
+                                            float trail_size)
+{
+  /* Note: the second template argument here is the particles' attributes type,
+   * if any. As this function will later call ParticleList::getAtt(index, attribute),
+   * we pass void for two reasons: first, no attributes are defined for the
+   * particles (yet), and second, disable using attributes for generating
+   * the level set.
+   *
+   * TODO(kevin): quite useless to know that if we don't have the third argument...
+   */
+  openvdb::tools::ParticlesToLevelSet<openvdb::FloatGrid, void> raster(*(this->grid));
+  /* a grain size of zero disables threading */
+  raster.setGrainSize(0);
+  raster.setRmin(min_radius);
+  raster.setRmax(1e15f);
+
+  if (trail && part_list.has_velocity()) {
+    raster.rasterizeTrails(part_list, trail_size);
+  }
+  else {
+    raster.rasterizeSpheres(part_list);
+  }
+
+  if (raster.ignoredParticles()) {
+    if (raster.getMinCount() > 0) {
+      std::cout << "Minimun voxel radius is too high!\n";
+      std::cout << raster.getMinCount() << " particles are ignored!\n";
+    }
+    if (raster.getMaxCount() > 0) {
+      std::cout << "Maximum voxel radius is too low!\n";
+      std::cout << raster.getMaxCount() << " particles are ignored!\n";
+    }
+  }
 }

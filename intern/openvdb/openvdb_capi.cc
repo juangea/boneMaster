@@ -22,6 +22,7 @@
 #include "openvdb_util.h"
 #include "openvdb_level_set.h"
 #include "openvdb_transform.h"
+#include "intern/particle_tools.h"
 
 int OpenVDB_getVersionHex()
 {
@@ -230,16 +231,33 @@ void OpenVDBReader_get_meta_mat4(OpenVDBReader *reader, const char *name, float 
 {
   reader->mat4sMeta(name, value);
 }
+/* ****************************** Particle List ****************************** */
 
-OpenVDBLevelSet *OpenVDBLevelSet_create(bool initGrid, OpenVDBTransform *xform)
+ParticleList *OpenVDB_create_part_list(size_t totpart, float rad_scale, float vel_scale)
+{
+  return new ParticleList(totpart, rad_scale, vel_scale);
+}
+
+void OpenVDB_part_list_free(ParticleList *part_list)
+{
+  delete part_list;
+  part_list = NULL;
+}
+
+void OpenVDB_add_particle(ParticleList *part_list, float pos[3], float rad, float vel[3])
+{
+  openvdb::Vec3R nvel(vel);
+  float nrad = rad * part_list->radius_scale();
+  nvel *= part_list->velocity_scale();
+
+  part_list->add(pos, nrad, nvel);
+}
+
+OpenVDBLevelSet *OpenVDBLevelSet_create(bool initGrid, float voxel_size, float half_width)
 {
   OpenVDBLevelSet *level_set = new OpenVDBLevelSet();
   if (initGrid) {
-    openvdb::FloatGrid::Ptr grid = openvdb::FloatGrid::create();
-    grid->setGridClass(openvdb::GRID_LEVEL_SET);
-    if (xform) {
-      grid->setTransform(xform->get_transform());
-    }
+    openvdb::FloatGrid::Ptr grid = openvdb::createLevelSet<openvdb::FloatGrid>(voxel_size, half_width);
     level_set->set_grid(grid);
   }
   return level_set;
@@ -365,8 +383,26 @@ OpenVDBLevelSet *OpenVDBLevelSet_transform_and_resample(struct OpenVDBLevelSet *
   targetGrid = openvdb::tools::levelSetRebuild(*targetGrid, isolevel, 1.0f);
   openvdb::tools::pruneLevelSet(targetGrid->tree());
 
-  OpenVDBLevelSet *level_set = OpenVDBLevelSet_create(false, NULL);
+  OpenVDBLevelSet *level_set = OpenVDBLevelSet_create(false, 0.0f, 0.0f);
   level_set->set_grid(targetGrid);
 
   return level_set;
+}
+
+void OpenVDBLevelSet_particles_to_level_set(OpenVDBLevelSet *level_set,
+                                            struct ParticleList *part_list,
+                                            float min_radius,
+                                            bool trail,
+                                            float trail_size)
+{
+  level_set->particles_to_level_set(*part_list, min_radius, trail, trail_size);
+}
+
+struct OpenVDBLevelSet *OpenVDBLevelSet_copy(struct OpenVDBLevelSet *level_set)
+{
+  struct OpenVDBLevelSet *lvl_copy = OpenVDBLevelSet_create(false, 0.0f, 0.0f);
+  openvdb::FloatGrid::Ptr grid_copy = level_set->get_grid()->deepCopy();
+  lvl_copy->set_grid(grid_copy);
+
+  return lvl_copy;
 }
