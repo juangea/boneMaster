@@ -47,8 +47,6 @@ index 0711e699..c14210b6 100644
          endif()
      endif()
  
-<<<<<<< HEAD
-=======
 diff '--ignore-matching-lines=:' -ur '--exclude=*.svn*' -u -r
 --- a/cmake/install.cmake	2019-08-12 18:02:20.794402575 +0200
 +++ b/cmake/install.cmake	2019-08-12 18:06:07.470045703 +0200
@@ -119,4 +117,3 @@ diff '--ignore-matching-lines=:' -ur '--exclude=*.svn*' -u -r
  if(OIDN_STATIC_LIB)
    set(OIDN_LIB_TYPE STATIC)
  else()
->>>>>>> juanBoneMaster
