@@ -55,7 +55,6 @@
 #include "WM_api.h"
 #include "WM_types.h"
 
-#include "openvdb_capi.h" /*For particle mesher modifier */
 
 const EnumPropertyItem rna_enum_object_modifier_type_items[] = {
     {0, "", 0, N_("Modify"), ""},

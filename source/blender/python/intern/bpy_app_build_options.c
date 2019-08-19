@@ -59,7 +59,6 @@ static PyStructSequence_Field app_builtopts_info_fields[] = {
     {(char *)"openmp", NULL},
     {(char *)"openvdb", NULL},
     {(char *)"alembic", NULL},
-    {(char *)"mod_partmesher", NULL},
     {NULL},
 };
 
@@ -267,12 +266,6 @@ static PyObject *make_builtopts_info(void)
   SetObjIncref(Py_True);
 #else
   SetObjIncref(Py_False);
-#endif
-
-#ifdef WITH_MOD_PARTMESHER
-	SetObjIncref(Py_True);
-#else
-	SetObjIncref(Py_False);
 #endif
 
 #undef SetObjIncref
