@@ -102,6 +102,7 @@ typedef ccl_global struct SplitBranchedState {
   SPLIT_DATA_ENTRY(ccl_global PathState, path_state, 1) \
   SPLIT_DATA_ENTRY(ccl_global Intersection, isect, 1) \
   SPLIT_DATA_ENTRY(ccl_global BsdfEval, bsdf_eval, 1) \
+  SPLIT_DATA_ENTRY(ccl_global int, lamp, 1) \
   SPLIT_DATA_ENTRY(ccl_global int, is_lamp, 1) \
   SPLIT_DATA_ENTRY(ccl_global Ray, light_ray, 1) \
   SPLIT_DATA_ENTRY( \
@@ -122,6 +123,7 @@ typedef ccl_global struct SplitBranchedState {
   SPLIT_DATA_ENTRY(ccl_global PathState, path_state, 1) \
   SPLIT_DATA_ENTRY(ccl_global Intersection, isect, 1) \
   SPLIT_DATA_ENTRY(ccl_global BsdfEval, bsdf_eval, 1) \
+  SPLIT_DATA_ENTRY(ccl_global int, lamp, 1) \
   SPLIT_DATA_ENTRY(ccl_global int, is_lamp, 1) \
   SPLIT_DATA_ENTRY(ccl_global Ray, light_ray, 1) \
   SPLIT_DATA_ENTRY(ShaderDataTinyStorage, sd_DL_shadow, 1) \
