@@ -182,11 +182,6 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         layout.row().prop(md, "spread")
 
     def BOOLEAN(self, layout, _ob, md):
-        solver = md.solver
-        if not bpy.app.build_options.mod_boolean:
-            if solver == 'CARVE':
-                layout.label("Built without Carve solver")
-
         split = layout.split()
 
         col = split.column()
@@ -197,15 +192,10 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         col.label(text="Object:")
         col.prop(md, "object", text="")
 
-        split = layout.split()
-        split.column().label(text="Solver:")
-        split.column().prop(md, "solver", text="")
+        layout.prop(md, "double_threshold")
 
-        if solver == 'BMESH':
-            layout.prop(md, "double_threshold")
-
-            if bpy.app.debug:
-                layout.prop(md, "debug_options")
+        if bpy.app.debug:
+            layout.prop(md, "debug_options")
 
     def BUILD(self, layout, _ob, md):
         split = layout.split()
@@ -442,9 +432,6 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         layout.operator("object.explode_refresh", text="Refresh")
 
     def FLUID_SIMULATION(self, layout, _ob, _md):
-        layout.label(text="Settings are inside the Physics tab")
-
-    def FRACTURE(self, layout, _ob, _md):
         layout.label(text="Settings are inside the Physics tab")
 
     def HOOK(self, layout, ob, md):
@@ -1027,7 +1014,6 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
     def SUBSURF(self, layout, ob, md):
         from bpy import context
         layout.row().prop(md, "subdivision_type", expand=True)
-        layout.row().prop(md, "use_opensubdiv")
 
         split = layout.split()
         col = split.column()
@@ -1056,7 +1042,7 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
             col.label(text="Subdivisions:")
             col.prop(md, "levels", text="View")
             col.prop(md, "render_levels", text="Render")
-            if hasattr(md, "quality") and md.use_opensubdiv:
+            if hasattr(md, "quality"):
                 col.prop(md, "quality")
 
         col = split.column()
