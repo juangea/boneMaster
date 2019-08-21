@@ -920,6 +920,38 @@ class CYCLES_RENDER_PT_passes_debug(CyclesButtonsPanel, Panel):
         layout.prop(cycles_view_layer, "pass_debug_ray_bounces")
 
 
+class CYCLES_RENDER_PT_lightgroups(CyclesButtonsPanel, Panel):
+    bl_label = "Lightgroups"
+    bl_context = "view_layer"
+    bl_parent_id = "CYCLES_RENDER_PT_passes"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+
+        cycles_view_layer = context.view_layer.cycles
+
+        row = layout.row()
+        col = row.column()
+        col.template_list("UI_UL_list", "ASDF", cycles_view_layer, "lightgroups", cycles_view_layer, "active_lightgroup", rows=3)
+
+        col = row.column()
+        sub = col.column(align=True)
+        sub.operator("cycles.lightgroup_add", icon='ADD', text="")
+        sub.operator("cycles.lightgroup_remove", icon='REMOVE', text="")
+        if len(cycles_view_layer.lightgroups) > 0:
+            sub.operator("cycles.lightgroup_move", icon='TRIA_UP', text="").direction = 'UP'
+            sub.operator("cycles.lightgroup_move", icon='TRIA_DOWN', text="").direction = 'DOWN'
+
+            lg = cycles_view_layer.lightgroups[cycles_view_layer.active_lightgroup]
+            row = layout.row()
+            col = row.column()
+            col.prop(lg, "collection")
+            col.prop(lg, "include_world")
+
+
+
 class CYCLES_RENDER_PT_denoising(CyclesButtonsPanel, Panel):
     bl_label = "Denoising"
     bl_context = "view_layer"
@@ -2158,6 +2190,7 @@ classes = (
     CYCLES_RENDER_PT_passes_light,
     CYCLES_RENDER_PT_passes_crypto,
     CYCLES_RENDER_PT_passes_debug,
+    CYCLES_RENDER_PT_lightgroups,
     CYCLES_RENDER_PT_filter,
     CYCLES_RENDER_PT_override,
     CYCLES_RENDER_PT_denoising,
