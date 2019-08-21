@@ -247,6 +247,14 @@ ccl_device_inline float lamp_random_number(KernelGlobals *kg, int lamp)
   return kernel_tex_fetch(__lights, lamp).random;
 }
 
+ccl_device_inline uint lamp_lightgroups(KernelGlobals *kg, int lamp)
+{
+  if (lamp == LAMP_NONE)
+    return 0;
+
+  return kernel_tex_fetch(__lights, lamp).lightgroups;
+}
+
 /* Per object random number for shader variation */
 
 ccl_device_inline float object_random_number(KernelGlobals *kg, int object)

@@ -163,6 +163,10 @@ void Pass::add(PassType type, vector<Pass> &passes, const char *name)
     case PASS_CRYPTOMATTE:
       pass.components = 4;
       break;
+    case PASS_LIGHTGROUP:
+      pass.components = 4;
+      pass.exposure = true;
+      break;
     default:
       assert(false);
       break;
@@ -323,6 +327,7 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
   kfilm->use_light_pass = use_light_visibility || use_sample_clamp;
 
   bool have_cryptomatte = false;
+  int num_lightgroups = 0;
 
   for (size_t i = 0; i < passes.size(); i++) {
     Pass &pass = passes[i];
@@ -459,6 +464,12 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
                                       kfilm->pass_stride;
         have_cryptomatte = true;
         break;
+      case PASS_LIGHTGROUP:
+        kfilm->pass_lightgroup = (num_lightgroups > 0) ?
+                                     min(kfilm->pass_lightgroup, kfilm->pass_stride) :
+                                     kfilm->pass_stride;
+        num_lightgroups++;
+        break;
       default:
         assert(false);
         break;
@@ -466,6 +477,8 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
 
     kfilm->pass_stride += pass.components;
   }
+
+  kfilm->num_lightgroups = min(num_lightgroups, LIGHTGROUPS_MAX);
 
   kfilm->pass_denoising_data = 0;
   kfilm->pass_denoising_clean = 0;

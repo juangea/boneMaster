@@ -70,6 +70,8 @@ NODE_DEFINE(Integrator)
   SOCKET_BOOLEAN(sample_all_lights_indirect, "Sample All Lights Indirect", true);
   SOCKET_FLOAT(light_sampling_threshold, "Light Sampling Threshold", 0.05f);
 
+  SOCKET_UINT(background_lightgroups, "Background Lightgroups", 0);
+
   static NodeEnum method_enum;
   method_enum.insert("path", PATH);
   method_enum.insert("branched_path", BRANCHED_PATH);
@@ -181,6 +183,8 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
   else {
     kintegrator->light_inv_rr_threshold = 0.0f;
   }
+
+  kintegrator->background_lightgroups = background_lightgroups;
 
   /* sobol directions table */
   int max_samples = 1;

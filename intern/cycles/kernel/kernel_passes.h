@@ -390,6 +390,14 @@ ccl_device_inline void kernel_write_light_passes(KernelGlobals *kg,
   }
   if (light_flag & PASSMASK(MIST))
     kernel_write_pass_float(buffer + kernel_data.film.pass_mist, 1.0f - L->mist);
+
+  if (light_flag & PASSMASK(LIGHTGROUP)) {
+    int offset = kernel_data.film.pass_lightgroup;
+    for (int i = 0; i < kernel_data.film.num_lightgroups; i++) {
+      kernel_write_pass_float3(buffer + offset, L->lightgroups[i]);
+      offset += 4;
+    }
+  }
 #endif
 }
 

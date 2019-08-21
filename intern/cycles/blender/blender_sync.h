@@ -184,6 +184,8 @@ class BlenderSync {
   void *world_map;
   bool world_recalc;
 
+  vector<std::pair<BL::Collection, bool>> lightgroups;
+
   Scene *scene;
   bool preview;
   bool experimental;

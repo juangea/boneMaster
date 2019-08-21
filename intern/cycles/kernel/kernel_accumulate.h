@@ -174,13 +174,13 @@ ccl_device_inline float3 bsdf_eval_sum(const BsdfEval *eval)
  * visible as the first non-transparent hit, while indirectly visible are the
  * bounces after that. */
 
-ccl_device_inline void path_radiance_init(PathRadiance *L, int use_light_pass)
+ccl_device_inline void path_radiance_init(KernelGlobals *kg, PathRadiance *L)
 {
   /* clear all */
 #ifdef __PASSES__
-  L->use_light_pass = use_light_pass;
+  L->use_light_pass = kernel_data.film.use_light_pass;
 
-  if (use_light_pass) {
+  if (kernel_data.film.use_light_pass) {
     L->indirect = make_float3(0.0f, 0.0f, 0.0f);
     L->direct_emission = make_float3(0.0f, 0.0f, 0.0f);
 
@@ -214,6 +214,10 @@ ccl_device_inline void path_radiance_init(PathRadiance *L, int use_light_pass)
     L->state.subsurface = make_float3(0.0f, 0.0f, 0.0f);
     L->state.scatter = make_float3(0.0f, 0.0f, 0.0f);
     L->state.direct = make_float3(0.0f, 0.0f, 0.0f);
+
+    for (int i = 0; i < kernel_data.film.num_lightgroups; i++) {
+      L->lightgroups[i] = make_float3(0.0f, 0.0f, 0.0f);
+    }
   }
   else
 #endif
@@ -285,10 +289,12 @@ ccl_device_inline void path_radiance_bsdf_bounce(KernelGlobals *kg,
   }
 }
 
-ccl_device_inline void path_radiance_accum_emission(PathRadiance *L,
+ccl_device_inline void path_radiance_accum_emission(KernelGlobals *kg,
+                                                    PathRadiance *L,
                                                     ccl_addr_space PathState *state,
                                                     float3 throughput,
-                                                    float3 value)
+                                                    float3 value,
+                                                    int lamp)
 {
 #ifdef __SHADOW_TRICKS__
   if (state->flag & PATH_RAY_SHADOW_CATCHER) {
@@ -304,6 +310,15 @@ ccl_device_inline void path_radiance_accum_emission(PathRadiance *L,
       L->direct_emission += throughput * value;
     else
       L->indirect += throughput * value;
+
+    uint lightgroups = lamp_lightgroups(kg, lamp);
+    if (lightgroups) {
+      for (int i = 0; i < kernel_data.film.num_lightgroups; i++) {
+        if (lightgroups & (1 << i)) {
+          L->lightgroups[i] += throughput * value;
+        }
+      }
+    }
   }
   else
 #endif
@@ -372,12 +387,14 @@ ccl_device_inline void path_radiance_accum_total_ao(PathRadiance *L,
 #endif
 }
 
-ccl_device_inline void path_radiance_accum_light(PathRadiance *L,
+ccl_device_inline void path_radiance_accum_light(KernelGlobals *kg,
+                                                 PathRadiance *L,
                                                  ccl_addr_space PathState *state,
                                                  float3 throughput,
                                                  BsdfEval *bsdf_eval,
                                                  float3 shadow,
                                                  float shadow_fac,
+                                                 int lamp,
                                                  bool is_lamp)
 {
 #ifdef __SHADOW_TRICKS__
@@ -412,6 +429,16 @@ ccl_device_inline void path_radiance_accum_light(PathRadiance *L,
       /* indirectly visible lighting after BSDF bounce */
       L->indirect += throughput * bsdf_eval_sum(bsdf_eval) * shadow;
     }
+
+    uint lightgroups = lamp_lightgroups(kg, lamp);
+    if (lightgroups) {
+      float3 total = throughput * bsdf_eval_sum(bsdf_eval) * shadow;
+      for (int i = 0; i < kernel_data.film.num_lightgroups; i++) {
+        if (lightgroups & (1 << i)) {
+          L->lightgroups[i] += total;
+        }
+      }
+    }
   }
   else
 #endif
@@ -437,7 +464,8 @@ ccl_device_inline void path_radiance_accum_total_light(PathRadiance *L,
 #endif
 }
 
-ccl_device_inline void path_radiance_accum_background(PathRadiance *L,
+ccl_device_inline void path_radiance_accum_background(KernelGlobals *kg,
+                                                      PathRadiance *L,
                                                       ccl_addr_space PathState *state,
                                                       float3 throughput,
                                                       float3 value)
@@ -462,6 +490,15 @@ ccl_device_inline void path_radiance_accum_background(PathRadiance *L,
       L->direct_emission += throughput * value;
     else
       L->indirect += throughput * value;
+
+    uint lightgroups = kernel_data.integrator.background_lightgroups;
+    if (lightgroups) {
+      for (int i = 0; i < kernel_data.film.num_lightgroups; i++) {
+        if (lightgroups & (1 << i)) {
+          L->lightgroups[i] += throughput * value;
+        }
+      }
+    }
   }
   else
 #endif

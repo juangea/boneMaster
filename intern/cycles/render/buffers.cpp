@@ -253,7 +253,7 @@ bool RenderBuffers::get_pass_rect(
     }
 
     /* Tell Cryptomatte passes apart by their name. */
-    if (pass.type == PASS_CRYPTOMATTE) {
+    if (pass.type == PASS_CRYPTOMATTE || pass.type == PASS_LIGHTGROUP) {
       if (pass.name != name) {
         pass_offset += pass.components;
         continue;

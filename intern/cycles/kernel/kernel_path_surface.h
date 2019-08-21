@@ -77,12 +77,14 @@ ccl_device_noinline void kernel_branched_path_surface_connect_light(
 
             if (!shadow_blocked(kg, sd, emission_sd, state, &light_ray, &shadow)) {
               /* accumulate */
-              path_radiance_accum_light(L,
+              path_radiance_accum_light(kg,
+                                        L,
                                         state,
                                         throughput * num_samples_inv,
                                         &L_light,
                                         shadow,
                                         num_samples_inv,
+                                        ls.lamp,
                                         is_lamp);
             }
             else {
@@ -124,12 +126,14 @@ ccl_device_noinline void kernel_branched_path_surface_connect_light(
 
             if (!shadow_blocked(kg, sd, emission_sd, state, &light_ray, &shadow)) {
               /* accumulate */
-              path_radiance_accum_light(L,
+              path_radiance_accum_light(kg,
+                                        L,
                                         state,
                                         throughput * num_samples_inv,
                                         &L_light,
                                         shadow,
                                         num_samples_inv,
+                                        ls.lamp,
                                         is_lamp);
             }
             else {
@@ -156,12 +160,14 @@ ccl_device_noinline void kernel_branched_path_surface_connect_light(
 
         if (!shadow_blocked(kg, sd, emission_sd, state, &light_ray, &shadow)) {
           /* accumulate */
-          path_radiance_accum_light(L,
+          path_radiance_accum_light(kg,
+                                    L,
                                     state,
                                     throughput * num_samples_adjust,
                                     &L_light,
                                     shadow,
                                     num_samples_adjust,
+                                    ls.lamp,
                                     is_lamp);
         }
         else {
@@ -287,7 +293,8 @@ ccl_device_inline void kernel_path_surface_connect_light(KernelGlobals *kg,
 
       if (!shadow_blocked(kg, sd, emission_sd, state, &light_ray, &shadow)) {
         /* accumulate */
-        path_radiance_accum_light(L, state, throughput, &L_light, shadow, 1.0f, is_lamp);
+        path_radiance_accum_light(
+            kg, L, state, throughput, &L_light, shadow, 1.0f, ls.lamp, is_lamp);
       }
       else {
         path_radiance_accum_total_light(L, state, throughput, &L_light);

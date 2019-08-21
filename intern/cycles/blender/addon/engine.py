@@ -281,3 +281,10 @@ def register_passes(engine, scene, srl):
                              "denoising_subsurface_direct", "denoising_subsurface_indirect")
             if any(getattr(crl, option) for option in clean_options):
                 engine.register_pass(scene, srl, "Denoising Clean", 3, "RGB", 'COLOR')
+
+    lightgroup_names = []
+    for lightgroup in crl.lightgroups:
+        name = lightgroup.name
+        if lightgroup.group and not name in lightgroup_names:
+            engine.register_pass(scene, srl, "LG "+name, 3, "RGB", 'COLOR')
+            lightgroup_names.append(name)

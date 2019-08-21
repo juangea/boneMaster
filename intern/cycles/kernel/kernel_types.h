@@ -51,6 +51,8 @@ CCL_NAMESPACE_BEGIN
 #define BSSRDF_MAX_BOUNCES 256
 #define LOCAL_MAX_HITS 4
 
+#define LIGHTGROUPS_MAX 8
+
 #define VOLUME_BOUNDS_MAX 1024
 
 #define BECKMANN_TABLE_SIZE 256
@@ -388,6 +390,7 @@ typedef enum PassType {
   PASS_VOLUME_DIRECT,
   PASS_VOLUME_INDIRECT,
   /* No Scatter color since it's tricky to define what it would even mean. */
+  PASS_LIGHTGROUP,
   PASS_CATEGORY_LIGHT_END = 63,
 } PassType;
 
@@ -520,6 +523,8 @@ typedef ccl_addr_space struct PathRadiance {
   float3 indirect_transmission;
   float3 indirect_subsurface;
   float3 indirect_scatter;
+
+  float3 lightgroups[LIGHTGROUPS_MAX];
 
   float4 shadow;
   float mist;
@@ -1213,6 +1218,9 @@ typedef struct KernelFilm {
   int cryptomatte_depth;
   int pass_cryptomatte;
 
+  int pass_lightgroup;
+  int num_lightgroups;
+
   int pass_mist;
   float mist_start;
   float mist_inv_depth;
@@ -1327,7 +1335,7 @@ typedef struct KernelIntegrator {
 
   int max_closures;
 
-  int pad1;
+  uint background_lightgroups;
 } KernelIntegrator;
 static_assert_align(KernelIntegrator, 16);
 
@@ -1463,7 +1471,7 @@ typedef struct KernelLight {
   float max_bounces;
   float random;
   float strength[3];
-  float pad1;
+  uint lightgroups;
   Transform tfm;
   Transform itfm;
   union {
