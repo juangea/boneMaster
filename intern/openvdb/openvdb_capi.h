@@ -24,6 +24,8 @@
 extern "C" {
 #endif
 
+#include <stddef.h>
+
 /* Level Set Filters */
 typedef enum OpenVDBLevelSet_FilterType {
   OPENVDB_LEVELSET_FILTER_NONE = 0,
@@ -65,6 +67,7 @@ struct OpenVDBLevelSet;
 struct OpenVDBFloatGrid;
 struct OpenVDBIntGrid;
 struct OpenVDBVectorGrid;
+struct ParticleList;
 
 struct OpenVDBVolumeToMeshData {
   int tottriangles;

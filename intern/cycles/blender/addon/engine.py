@@ -287,5 +287,11 @@ def register_passes(engine, scene, srl):
     for lightgroup in crl.lightgroups:
         name = lightgroup.name
         if lightgroup.collection and not name in lightgroup_names:
+
+            #prevent orphaning the collection by setting a fake user, 
+            #for some reason is usercount == 0 somewhen after activating
+            #use nodes in compositor
+            lightgroup.collection.use_fake_user = True
+
             engine.register_pass(scene, srl, "LG "+name, 3, "RGB", 'COLOR')
             lightgroup_names.append(name)
