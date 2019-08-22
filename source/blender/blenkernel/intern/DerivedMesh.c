@@ -819,21 +819,6 @@ void DM_interp_vert_data(DerivedMesh *source,
       &source->vertData, &dest->vertData, src_indices, weights, NULL, count, dest_index);
 }
 
-DerivedMesh *mesh_create_derived(Mesh *me, float (*vertCos)[3])
-{
-  DerivedMesh *dm = CDDM_from_mesh(me);
-
-  if (!dm) {
-    return NULL;
-  }
-
-  if (vertCos) {
-    CDDM_apply_vert_coords(dm, vertCos);
-  }
-
-  return dm;
-}
-
 static float (*get_editbmesh_orco_verts(BMEditMesh *em))[3]
 {
   BMIter iter;
@@ -904,7 +889,7 @@ static Mesh *create_orco_mesh(Object *ob, Mesh *me, BMEditMesh *em, int layer)
   orco = get_orco_coords(ob, em, layer, &free);
 
   if (orco) {
-    BKE_mesh_apply_vert_coords(mesh, orco);
+    BKE_mesh_vert_coords_apply(mesh, orco);
     if (free) {
       MEM_freeN(orco);
     }
@@ -924,10 +909,10 @@ static void add_orco_mesh(Object *ob, BMEditMesh *em, Mesh *mesh, Mesh *mesh_orc
     free = 1;
 
     if (mesh_orco->totvert == totvert) {
-      orco = BKE_mesh_vertexCos_get(mesh_orco, NULL);
+      orco = BKE_mesh_vert_coords_alloc(mesh_orco, NULL);
     }
     else {
-      orco = BKE_mesh_vertexCos_get(mesh, NULL);
+      orco = BKE_mesh_vert_coords_alloc(mesh, NULL);
     }
   }
   else {
@@ -1223,14 +1208,14 @@ static void mesh_calc_modifiers(struct Depsgraph *depsgraph,
 
       if (mti->type == eModifierTypeType_OnlyDeform && !sculpt_dyntopo) {
         if (!deformed_verts) {
-          deformed_verts = BKE_mesh_vertexCos_get(mesh_input, &num_deformed_verts);
+          deformed_verts = BKE_mesh_vert_coords_alloc(mesh_input, &num_deformed_verts);
         }
         else if (isPrevDeform && mti->dependsOnNormals && mti->dependsOnNormals(md)) {
           if (mesh_final == NULL) {
             mesh_final = BKE_mesh_copy_for_eval(mesh_input, true);
             ASSERT_IS_VALID_MESH(mesh_final);
           }
-          BKE_mesh_apply_vert_coords(mesh_final, deformed_verts);
+          BKE_mesh_vert_coords_apply(mesh_final, deformed_verts);
         }
 
         modwrap_deformVerts(md, &mectx, mesh_final, deformed_verts, num_deformed_verts);
@@ -1254,7 +1239,7 @@ static void mesh_calc_modifiers(struct Depsgraph *depsgraph,
       mesh_deform = BKE_mesh_copy_for_eval(mesh_input, true);
 
       if (deformed_verts) {
-        BKE_mesh_apply_vert_coords(mesh_deform, deformed_verts);
+        BKE_mesh_vert_coords_apply(mesh_deform, deformed_verts);
       }
     }
   }
@@ -1337,10 +1322,10 @@ static void mesh_calc_modifiers(struct Depsgraph *depsgraph,
           /* Deforming a mesh, read the vertex locations
            * out of the mesh and deform them. Once done with this
            * run of deformers verts will be written back. */
-          deformed_verts = BKE_mesh_vertexCos_get(mesh_final, &num_deformed_verts);
+          deformed_verts = BKE_mesh_vert_coords_alloc(mesh_final, &num_deformed_verts);
         }
         else {
-          deformed_verts = BKE_mesh_vertexCos_get(mesh_input, &num_deformed_verts);
+          deformed_verts = BKE_mesh_vert_coords_alloc(mesh_input, &num_deformed_verts);
         }
       }
       /* if this is not the last modifier in the stack then recalculate the normals
@@ -1348,7 +1333,7 @@ static void mesh_calc_modifiers(struct Depsgraph *depsgraph,
       else if (isPrevDeform && mti->dependsOnNormals && mti->dependsOnNormals(md)) {
         /* XXX, this covers bug #23673, but we may need normal calc for other types */
         if (mesh_final) {
-          BKE_mesh_apply_vert_coords(mesh_final, deformed_verts);
+          BKE_mesh_vert_coords_apply(mesh_final, deformed_verts);
         }
       }
 
@@ -1367,7 +1352,7 @@ static void mesh_calc_modifiers(struct Depsgraph *depsgraph,
       /* apply vertex coordinates or build a Mesh as necessary */
       if (mesh_final) {
         if (deformed_verts) {
-          BKE_mesh_apply_vert_coords(mesh_final, deformed_verts);
+          BKE_mesh_vert_coords_apply(mesh_final, deformed_verts);
         }
       }
       else {
@@ -1375,7 +1360,7 @@ static void mesh_calc_modifiers(struct Depsgraph *depsgraph,
         ASSERT_IS_VALID_MESH(mesh_final);
 
         if (deformed_verts) {
-          BKE_mesh_apply_vert_coords(mesh_final, deformed_verts);
+          BKE_mesh_vert_coords_apply(mesh_final, deformed_verts);
         }
 
         /* Initialize original indices the first time we evaluate a
@@ -1554,7 +1539,7 @@ static void mesh_calc_modifiers(struct Depsgraph *depsgraph,
     }
   }
   if (deformed_verts) {
-    BKE_mesh_apply_vert_coords(mesh_final, deformed_verts);
+    BKE_mesh_vert_coords_apply(mesh_final, deformed_verts);
     MEM_freeN(deformed_verts);
     deformed_verts = NULL;
   }
@@ -1614,14 +1599,14 @@ static void mesh_calc_modifiers(struct Depsgraph *depsgraph,
   }
 }
 
-float (*editbmesh_get_vertex_cos(BMEditMesh *em, int *r_numVerts))[3]
+float (*editbmesh_vert_coords_alloc(BMEditMesh *em, int *r_vert_len))[3]
 {
   BMIter iter;
   BMVert *eve;
   float(*cos)[3];
   int i;
 
-  *r_numVerts = em->bm->totvert;
+  *r_vert_len = em->bm->totvert;
 
   cos = MEM_malloc_arrayN(em->bm->totvert, 3 * sizeof(float), "vertexcos");
 
@@ -1793,10 +1778,10 @@ static void editbmesh_calc_modifiers(struct Depsgraph *depsgraph,
           /* Deforming a derived mesh, read the vertex locations
            * out of the mesh and deform them. Once done with this
            * run of deformers verts will be written back. */
-          deformed_verts = BKE_mesh_vertexCos_get(mesh_final, &num_deformed_verts);
+          deformed_verts = BKE_mesh_vert_coords_alloc(mesh_final, &num_deformed_verts);
         }
         else {
-          deformed_verts = editbmesh_get_vertex_cos(em_input, &num_deformed_verts);
+          deformed_verts = editbmesh_vert_coords_alloc(em_input, &num_deformed_verts);
         }
       }
       else if (isPrevDeform && mti->dependsOnNormals && mti->dependsOnNormals(md)) {
@@ -1806,7 +1791,7 @@ static void editbmesh_calc_modifiers(struct Depsgraph *depsgraph,
           mesh_copy_autosmooth(mesh_final, mesh_input);
         }
         BLI_assert(deformed_verts != NULL);
-        BKE_mesh_apply_vert_coords(mesh_final, deformed_verts);
+        BKE_mesh_vert_coords_apply(mesh_final, deformed_verts);
       }
 
       if (mti->deformVertsEM) {
@@ -1826,7 +1811,7 @@ static void editbmesh_calc_modifiers(struct Depsgraph *depsgraph,
             BKE_id_free(NULL, mesh_final);
           }
           mesh_final = mesh_tmp;
-          BKE_mesh_apply_vert_coords(mesh_final, deformed_verts);
+          BKE_mesh_vert_coords_apply(mesh_final, deformed_verts);
         }
         else if (mesh_final == mesh_cage) {
           /* 'me' may be changed by this modifier, so we need to copy it. */
@@ -1840,7 +1825,7 @@ static void editbmesh_calc_modifiers(struct Depsgraph *depsgraph,
         mesh_copy_autosmooth(mesh_final, mesh_input);
 
         if (deformed_verts) {
-          BKE_mesh_apply_vert_coords(mesh_final, deformed_verts);
+          BKE_mesh_vert_coords_apply(mesh_final, deformed_verts);
         }
       }
 
@@ -1910,7 +1895,7 @@ static void editbmesh_calc_modifiers(struct Depsgraph *depsgraph,
     if (r_cage && i == cageIndex) {
       if (mesh_final && deformed_verts) {
         mesh_cage = BKE_mesh_copy_for_eval(mesh_final, false);
-        BKE_mesh_apply_vert_coords(mesh_cage, deformed_verts);
+        BKE_mesh_vert_coords_apply(mesh_cage, deformed_verts);
       }
       else if (mesh_final) {
         mesh_cage = mesh_final;
@@ -1942,7 +1927,7 @@ static void editbmesh_calc_modifiers(struct Depsgraph *depsgraph,
         BKE_id_free(NULL, mesh_final);
       }
       mesh_final = mesh_tmp;
-      BKE_mesh_apply_vert_coords(mesh_final, deformed_verts);
+      BKE_mesh_vert_coords_apply(mesh_final, deformed_verts);
     }
   }
   else if (!deformed_verts && mesh_cage) {

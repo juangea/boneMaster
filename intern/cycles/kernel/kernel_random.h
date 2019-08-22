@@ -202,7 +202,7 @@ ccl_device_inline void path_rng_init(KernelGlobals *kg,
     *rng_hash = ((y & DITHER_COORD_MASK) << DITHER_Y_SHIFT) | (x & DITHER_COORD_MASK) | DITHER_MASK;
   }
   else {
-    *rng_hash = hash_int_2d(x, y);
+    *rng_hash = hash_uint2(x, y);
     *rng_hash = (*rng_hash ^ kernel_data.integrator.seed) & (~DITHER_MASK); //
   }
 

@@ -1125,7 +1125,7 @@ typedef struct GP_Sculpt_Settings {
 /* GP_Sculpt_Settings.flag */
 typedef enum eGP_Sculpt_SettingsFlag {
   /* only affect selected points */
-  GP_SCULPT_SETT_FLAG_SELECT_MASK = (1 << 0),
+  GP_SCULPT_SETT_FLAG_DEPRECATED = (1 << 0),
   /* apply brush to position */
   GP_SCULPT_SETT_FLAG_APPLY_POSITION = (1 << 1),
   /* apply brush to strength */
@@ -1141,6 +1141,16 @@ typedef enum eGP_Sculpt_SettingsFlag {
   /* apply primitive curve */
   GP_SCULPT_SETT_FLAG_PRIMITIVE_CURVE = (1 << 7),
 } eGP_Sculpt_SettingsFlag;
+
+/* GP_Sculpt_Settings.gpencil_selectmode_sculpt */
+typedef enum eGP_Sculpt_SelectMaskFlag {
+  /* only affect selected points */
+  GP_SCULPT_MASK_SELECTMODE_POINT = (1 << 0),
+  /* only affect selected strokes */
+  GP_SCULPT_MASK_SELECTMODE_STROKE = (1 << 1),
+  /* only affect selected segmenst */
+  GP_SCULPT_MASK_SELECTMODE_SEGMENT = (1 << 2),
+} eGP_Sculpt_SelectMaskFlag;
 
 /* Settings for GP Interpolation Operators */
 typedef struct GP_Interpolate_Settings {
@@ -1412,8 +1422,10 @@ typedef struct ToolSettings {
 
   /** Default stroke thickness for annotation strokes. */
   short annotate_thickness;
-  /** Stroke selection mode. */
-  short gpencil_selectmode;
+  /** Stroke selection mode for Edit. */
+  char gpencil_selectmode_edit;
+  /** Stroke selection mode for Sculpt. */
+  char gpencil_selectmode_sculpt;
 
   /* Grease Pencil Sculpt */
   struct GP_Sculpt_Settings gp_sculpt;
@@ -1448,16 +1460,14 @@ typedef struct ToolSettings {
 
   char edge_mode_live_unwrap;
 
-  char _pad1[1];
-
   /* Transform */
   char transform_pivot_point;
   char transform_flag;
-  char snap_mode, snap_node_mode;
-  char snap_uv_mode;
   char snap_flag;
   char snap_target;
   char snap_transform_mode_flag;
+  short snap_mode, snap_node_mode;
+  short snap_uv_mode;
 
   char proportional_edit, prop_mode;
   /** Proportional edit, object mode. */
@@ -1480,7 +1490,7 @@ typedef struct ToolSettings {
   char vgroupsubset;
 
   /* UV painting */
-  char _pad2[3];
+  char _pad2[1];
   char uv_sculpt_settings;
   char uv_relax_method;
   /* XXX: these sculpt_paint_* fields are deprecated, use the
@@ -2035,11 +2045,15 @@ enum {
 #define SCE_SNAP_MODE_FACE (1 << 2)
 #define SCE_SNAP_MODE_VOLUME (1 << 3)
 #define SCE_SNAP_MODE_INCREMENT (1 << 4)
+#define SCE_SNAP_MODE_EDGE_MIDPOINT (1 << 5)
+#define SCE_SNAP_MODE_EDGE_PERPENDICULAR (1 << 6)
 
 /* ToolSettings.snap_node_mode */
-#define SCE_SNAP_MODE_GRID (1 << 5)
 #define SCE_SNAP_MODE_NODE_X (1 << 6)
 #define SCE_SNAP_MODE_NODE_Y (1 << 7)
+
+/* ToolSettings.snap_mode and ToolSettings.snap_node_mode */
+#define SCE_SNAP_MODE_GRID (1 << 8)
 
 /** #ToolSettings.snap_transform_mode_flag */
 enum {

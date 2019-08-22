@@ -454,7 +454,8 @@ static void *extract_tris_init(const MeshRenderData *mr, void *UNUSED(ibo))
     BMFace *efa;
     BM_ITER_MESH (efa, &iter, mr->bm, BM_FACES_OF_MESH) {
       if (!BM_elem_flag_test(efa, BM_ELEM_HIDDEN)) {
-        mat_tri_len[efa->mat_nr] += efa->len - 2;
+        int mat = min_ii(efa->mat_nr, mr->mat_len - 1);
+        mat_tri_len[mat] += efa->len - 2;
       }
     }
   }
@@ -462,7 +463,8 @@ static void *extract_tris_init(const MeshRenderData *mr, void *UNUSED(ibo))
     const MPoly *mpoly = mr->mpoly;
     for (int p = 0; p < mr->poly_len; p++, mpoly++) {
       if (!(mr->use_hide && (mpoly->flag & ME_HIDE))) {
-        mat_tri_len[mpoly->mat_nr] += mpoly->totloop - 2;
+        int mat = min_ii(mpoly->mat_nr, mr->mat_len - 1);
+        mat_tri_len[mat] += mpoly->totloop - 2;
       }
     }
   }
@@ -508,8 +510,9 @@ static void extract_tris_looptri_mesh(const MeshRenderData *mr,
   if (!(mr->use_hide && (mpoly->flag & ME_HIDE))) {
     MeshExtract_Tri_Data *data = _data;
     int *mat_tri_ofs = data->tri_mat_end;
+    int mat = min_ii(mpoly->mat_nr, mr->mat_len - 1);
     GPU_indexbuf_set_tri_verts(
-        &data->elb, mat_tri_ofs[mpoly->mat_nr]++, mlt->tri[0], mlt->tri[1], mlt->tri[2]);
+        &data->elb, mat_tri_ofs[mat]++, mlt->tri[0], mlt->tri[1], mlt->tri[2]);
   }
 }
 
@@ -3790,7 +3793,7 @@ static void *extract_select_idx_init(const MeshRenderData *mr, void *buf)
   return vbo->data;
 }
 
-/* TODO Use glVertexID to get loop index and use the data structure on the CPU to retreive the
+/* TODO Use glVertexID to get loop index and use the data structure on the CPU to retrieve the
  * select element associated with this loop ID. This would remove the need for this separate index
  * VBOs. We could upload the p/e/v_origindex as a buffer texture and sample it inside the shader to
  * output original index. */

@@ -63,10 +63,13 @@ const EnumPropertyItem rna_enum_node_socket_in_out_items[] = {
     {SOCK_IN, "IN", 0, "Input", ""}, {SOCK_OUT, "OUT", 0, "Output", ""}, {0, NULL, 0, NULL, NULL}};
 
 #ifndef RNA_RUNTIME
-static const EnumPropertyItem rna_enum_node_socket_draw_shape_items[] = {
-    {SOCK_DRAW_SHAPE_CIRCLE, "CIRCLE", 0, "Circle", ""},
-    {SOCK_DRAW_SHAPE_SQUARE, "SQUARE", 0, "Square", ""},
-    {SOCK_DRAW_SHAPE_DIAMOND, "DIAMOND", 0, "Diamond", ""},
+static const EnumPropertyItem rna_enum_node_socket_display_shape_items[] = {
+    {SOCK_DISPLAY_SHAPE_CIRCLE, "CIRCLE", 0, "Circle", ""},
+    {SOCK_DISPLAY_SHAPE_SQUARE, "SQUARE", 0, "Square", ""},
+    {SOCK_DISPLAY_SHAPE_DIAMOND, "DIAMOND", 0, "Diamond", ""},
+    {SOCK_DISPLAY_SHAPE_CIRCLE_DOT, "CIRCLE_DOT", 0, "Circle with inner dot", ""},
+    {SOCK_DISPLAY_SHAPE_SQUARE_DOT, "SQUARE_DOT", 0, "Square with inner dot", ""},
+    {SOCK_DISPLAY_SHAPE_DIAMOND_DOT, "DIAMOND_DOT", 0, "Diamond with inner dot", ""},
     {0, NULL, 0, NULL, NULL}};
 
 static const EnumPropertyItem node_socket_type_items[] = {
@@ -100,44 +103,81 @@ static const EnumPropertyItem node_chunksize_items[] = {
 #endif
 
 const EnumPropertyItem rna_enum_node_math_items[] = {
-    {NODE_MATH_ADD, "ADD", 0, "Add", ""},
-    {NODE_MATH_SUB, "SUBTRACT", 0, "Subtract", ""},
-    {NODE_MATH_MUL, "MULTIPLY", 0, "Multiply", ""},
-    {NODE_MATH_DIVIDE, "DIVIDE", 0, "Divide", ""},
+    {NODE_MATH_ADD, "ADD", 0, "Add", "A + B"},
+    {NODE_MATH_SUBTRACT, "SUBTRACT", 0, "Subtract", "A - B"},
+    {NODE_MATH_MULTIPLY, "MULTIPLY", 0, "Multiply", "A * B"},
+    {NODE_MATH_DIVIDE, "DIVIDE", 0, "Divide", "A / B"},
     {0, "", ICON_NONE, NULL, NULL},
-    {NODE_MATH_POW, "POWER", 0, "Power", ""},
-    {NODE_MATH_LOG, "LOGARITHM", 0, "Logarithm", ""},
-    {NODE_MATH_SQRT, "SQRT", 0, "Square Root", ""},
-    {NODE_MATH_ABS, "ABSOLUTE", 0, "Absolute", ""},
+    {NODE_MATH_POWER, "POWER", 0, "Power", "A power B"},
+    {NODE_MATH_LOGARITHM, "LOGARITHM", 0, "Logarithm", "Logarithm A base B"},
+    {NODE_MATH_SQRT, "SQRT", 0, "Square Root", "Square root of A"},
+    {NODE_MATH_ABSOLUTE, "ABSOLUTE", 0, "Absolute", "Magnitude of A"},
     {0, "", ICON_NONE, NULL, NULL},
-    {NODE_MATH_MIN, "MINIMUM", 0, "Minimum", ""},
-    {NODE_MATH_MAX, "MAXIMUM", 0, "Maximum", ""},
-    {NODE_MATH_LESS, "LESS_THAN", 0, "Less Than", ""},
-    {NODE_MATH_GREATER, "GREATER_THAN", 0, "Greater Than", ""},
+    {NODE_MATH_MINIMUM, "MINIMUM", 0, "Minimum", "The minimum from A and B"},
+    {NODE_MATH_MAXIMUM, "MAXIMUM", 0, "Maximum", "The maximum from A and B"},
+    {NODE_MATH_LESS_THAN, "LESS_THAN", 0, "Less Than", "1 if A < B else 0"},
+    {NODE_MATH_GREATER_THAN, "GREATER_THAN", 0, "Greater Than", "1 if A > B else 0"},
     {0, "", ICON_NONE, NULL, NULL},
-    {NODE_MATH_ROUND, "ROUND", 0, "Round", ""},
-    {NODE_MATH_FLOOR, "FLOOR", 0, "Floor", ""},
-    {NODE_MATH_CEIL, "CEIL", 0, "Ceil", ""},
-    {NODE_MATH_FRACT, "FRACT", 0, "Fract", ""},
-    {NODE_MATH_MOD, "MODULO", 0, "Modulo", ""},
+    {NODE_MATH_ROUND,
+     "ROUND",
+     0,
+     "Round",
+     "Round A to the nearest integer. Round upward if the fraction part is 0.5"},
+    {NODE_MATH_FLOOR, "FLOOR", 0, "Floor", "The largest integer smaller than or equal A"},
+    {NODE_MATH_CEIL, "CEIL", 0, "Ceil", "The smallest integer greater than or equal A"},
+    {NODE_MATH_FRACTION, "FRACT", 0, "Fraction", "The fraction part of A"},
+    {NODE_MATH_MODULO, "MODULO", 0, "Modulo", "A mod B"},
     {0, "", ICON_NONE, NULL, NULL},
-    {NODE_MATH_SIN, "SINE", 0, "Sine", ""},
-    {NODE_MATH_COS, "COSINE", 0, "Cosine", ""},
-    {NODE_MATH_TAN, "TANGENT", 0, "Tangent", ""},
-    {NODE_MATH_ASIN, "ARCSINE", 0, "Arcsine", ""},
-    {NODE_MATH_ACOS, "ARCCOSINE", 0, "Arccosine", ""},
-    {NODE_MATH_ATAN, "ARCTANGENT", 0, "Arctangent", ""},
-    {NODE_MATH_ATAN2, "ARCTAN2", 0, "Arctan2", ""},
+    {NODE_MATH_SINE, "SINE", 0, "Sine", "sin(A)"},
+    {NODE_MATH_COSINE, "COSINE", 0, "Cosine", "cos(A)"},
+    {NODE_MATH_TANGENT, "TANGENT", 0, "Tangent", "tan(A)"},
+    {NODE_MATH_ARCSINE, "ARCSINE", 0, "Arcsine", "arcsin(A)"},
+    {NODE_MATH_ARCCOSINE, "ARCCOSINE", 0, "Arccosine", "arccos(A)"},
+    {NODE_MATH_ARCTANGENT, "ARCTANGENT", 0, "Arctangent", "arctan(A)"},
+    {NODE_MATH_ARCTAN2, "ARCTAN2", 0, "Arctan2", "The signed angle arctan(A / B)"},
     {0, NULL, 0, NULL, NULL},
 };
 
 const EnumPropertyItem rna_enum_node_vec_math_items[] = {
-    {0, "ADD", 0, "Add", ""},
-    {1, "SUBTRACT", 0, "Subtract", ""},
-    {2, "AVERAGE", 0, "Average", ""},
-    {3, "DOT_PRODUCT", 0, "Dot Product", ""},
-    {4, "CROSS_PRODUCT", 0, "Cross Product", ""},
-    {5, "NORMALIZE", 0, "Normalize", ""},
+    {NODE_VECTOR_MATH_ADD, "ADD", 0, "Add", "A + B"},
+    {NODE_VECTOR_MATH_SUBTRACT, "SUBTRACT", 0, "Subtract", "A - B"},
+    {NODE_VECTOR_MATH_MULTIPLY, "MULTIPLY", 0, "Multiply", "Entrywise multiply"},
+    {NODE_VECTOR_MATH_DIVIDE, "DIVIDE", 0, "Divide", "Entrywise divide"},
+    {0, "", ICON_NONE, NULL, NULL},
+    {NODE_VECTOR_MATH_CROSS_PRODUCT, "CROSS_PRODUCT", 0, "Cross Product", "A cross B"},
+    {NODE_VECTOR_MATH_PROJECT, "PROJECT", 0, "Project", "Project A onto B"},
+    {NODE_VECTOR_MATH_REFLECT,
+     "REFLECT",
+     0,
+     "Reflect",
+     "Reflect A around the normal B. B needn't be normalized"},
+    {NODE_VECTOR_MATH_DOT_PRODUCT, "DOT_PRODUCT", 0, "Dot Product", "A dot B"},
+    {0, "", ICON_NONE, NULL, NULL},
+    {NODE_VECTOR_MATH_DISTANCE, "DISTANCE", 0, "Distance", "Distance between A and B"},
+    {NODE_VECTOR_MATH_LENGTH, "LENGTH", 0, "Length", "Length of A"},
+    {NODE_VECTOR_MATH_SCALE, "SCALE", 0, "Scale", "A multiplied by Scale"},
+    {NODE_VECTOR_MATH_NORMALIZE, "NORMALIZE", 0, "Normalize", "Normalize A"},
+    {0, "", ICON_NONE, NULL, NULL},
+    {NODE_VECTOR_MATH_SNAP,
+     "SNAP",
+     0,
+     "Snap",
+     "Round A to the largest integer multiple of B less than or equal A"},
+    {NODE_VECTOR_MATH_FLOOR, "FLOOR", 0, "Floor", "Entrywise floor"},
+    {NODE_VECTOR_MATH_CEIL, "CEIL", 0, "Ceil", "Entrywise ceil"},
+    {NODE_VECTOR_MATH_MODULO, "MODULO", 0, "Modulo", "Entrywise modulo"},
+    {NODE_VECTOR_MATH_FRACTION, "FRACTION", 0, "Fraction", "The fraction part of A entrywise"},
+    {NODE_VECTOR_MATH_ABSOLUTE, "ABSOLUTE", 0, "Absolute", "Entrywise absolute"},
+    {NODE_VECTOR_MATH_MINIMUM, "MINIMUM", 0, "Minimum", "Entrywise minimum"},
+    {NODE_VECTOR_MATH_MAXIMUM, "MAXIMUM", 0, "Maximum", "Entrywise maximum"},
+    {0, NULL, 0, NULL, NULL},
+};
+
+const EnumPropertyItem rna_enum_node_tex_dimensions_items[] = {
+    {1, "1D", 0, "1D", "Use the scalar value W as input"},
+    {2, "2D", 0, "2D", "Use the 2D vector (x, y) as input. The z component is ignored"},
+    {3, "3D", 0, "3D", "Use the 3D vector Vector as input"},
+    {4, "4D", 0, "4D", "Use the 4D vector (x, y, z, w) as input"},
     {0, NULL, 0, NULL, NULL},
 };
 
@@ -3780,6 +3820,7 @@ static void def_group(StructRNA *srna)
   RNA_def_property_pointer_funcs(
       prop, NULL, "rna_NodeGroup_node_tree_set", NULL, "rna_NodeGroup_node_tree_poll");
   RNA_def_property_flag(prop, PROP_EDITABLE);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_ui_text(prop, "Node Tree", "");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_NodeGroup_update");
 
@@ -3852,7 +3893,7 @@ static void def_math(StructRNA *srna)
   RNA_def_property_enum_sdna(prop, NULL, "custom1");
   RNA_def_property_enum_items(prop, rna_enum_node_math_items);
   RNA_def_property_ui_text(prop, "Operation", "");
-  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_ShaderNode_socket_update");
 
   prop = RNA_def_property(srna, "use_clamp", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "custom2", SHD_MATH_CLAMP);
@@ -3868,7 +3909,7 @@ static void def_vector_math(StructRNA *srna)
   RNA_def_property_enum_sdna(prop, NULL, "custom1");
   RNA_def_property_enum_items(prop, rna_enum_node_vec_math_items);
   RNA_def_property_ui_text(prop, "Operation", "");
-  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_ShaderNode_socket_update");
 }
 
 static void def_rgb_curve(StructRNA *srna)
@@ -3954,6 +3995,7 @@ static void def_texture(StructRNA *srna)
   RNA_def_property_pointer_sdna(prop, NULL, "id");
   RNA_def_property_struct_type(prop, "Texture");
   RNA_def_property_flag(prop, PROP_EDITABLE);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_ui_text(prop, "Texture", "");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 
@@ -4152,6 +4194,7 @@ static void def_sh_tex_environment(StructRNA *srna)
   RNA_def_property_pointer_sdna(prop, NULL, "id");
   RNA_def_property_struct_type(prop, "Image");
   RNA_def_property_flag(prop, PROP_EDITABLE);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_ui_text(prop, "Image", "");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_tex_image_update");
 
@@ -4230,6 +4273,7 @@ static void def_sh_tex_image(StructRNA *srna)
   RNA_def_property_pointer_sdna(prop, NULL, "id");
   RNA_def_property_struct_type(prop, "Image");
   RNA_def_property_flag(prop, PROP_EDITABLE);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_ui_text(prop, "Image", "");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_tex_image_update");
 
@@ -4464,6 +4508,18 @@ static void def_sh_tex_wave(StructRNA *srna)
   RNA_def_property_update(prop, 0, "rna_Node_update");
 }
 
+static void def_sh_tex_white_noise(StructRNA *srna)
+{
+  PropertyRNA *prop;
+
+  prop = RNA_def_property(srna, "dimensions", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, NULL, "custom1");
+  RNA_def_property_enum_items(prop, rna_enum_node_tex_dimensions_items);
+  RNA_def_property_ui_text(
+      prop, "Dimensions", "The number of dimensions to evaluate the noise in");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_ShaderNode_socket_update");
+}
+
 static void def_sh_tex_coord(StructRNA *srna)
 {
   PropertyRNA *prop;
@@ -4472,6 +4528,7 @@ static void def_sh_tex_coord(StructRNA *srna)
   RNA_def_property_pointer_sdna(prop, NULL, "id");
   RNA_def_property_struct_type(prop, "Object");
   RNA_def_property_flag(prop, PROP_EDITABLE | PROP_ID_REFCOUNT);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_ui_text(
       prop, "Object", "Use coordinates from this object (for object texture coordinates output)");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update_relations");
@@ -4606,6 +4663,7 @@ static void def_sh_tex_pointdensity(StructRNA *srna)
   RNA_def_property_pointer_sdna(prop, NULL, "id");
   RNA_def_property_struct_type(prop, "Object");
   RNA_def_property_flag(prop, PROP_EDITABLE | PROP_ID_REFCOUNT);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_ui_text(prop, "Object", "Object to take point data from");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 
@@ -5459,6 +5517,7 @@ static void def_cmp_image(StructRNA *srna)
   RNA_def_property_pointer_sdna(prop, NULL, "id");
   RNA_def_property_struct_type(prop, "Image");
   RNA_def_property_flag(prop, PROP_EDITABLE);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_ui_text(prop, "Image", "");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Image_Node_update_id");
 
@@ -5486,6 +5545,7 @@ static void def_cmp_render_layers(StructRNA *srna)
   RNA_def_property_pointer_funcs(prop, NULL, "rna_Node_scene_set", NULL, NULL);
   RNA_def_property_struct_type(prop, "Scene");
   RNA_def_property_flag(prop, PROP_EDITABLE | PROP_ID_REFCOUNT);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_ui_text(prop, "Scene", "");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_view_layer_update");
 
@@ -6172,6 +6232,7 @@ static void def_cmp_defocus(StructRNA *srna)
   RNA_def_property_pointer_funcs(prop, NULL, "rna_Node_scene_set", NULL, NULL);
   RNA_def_property_struct_type(prop, "Scene");
   RNA_def_property_flag(prop, PROP_EDITABLE | PROP_ID_REFCOUNT);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_ui_text(
       prop, "Scene", "Scene from which to select the active camera (render scene if undefined)");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
@@ -7800,10 +7861,10 @@ static void rna_def_node_socket(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Type", "Data type");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_NodeSocket_update");
 
-  prop = RNA_def_property(srna, "draw_shape", PROP_ENUM, PROP_NONE);
-  RNA_def_property_enum_sdna(prop, NULL, "draw_shape");
-  RNA_def_property_enum_items(prop, rna_enum_node_socket_draw_shape_items);
-  RNA_def_property_enum_default(prop, SOCK_DRAW_SHAPE_CIRCLE);
+  prop = RNA_def_property(srna, "display_shape", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, NULL, "display_shape");
+  RNA_def_property_enum_items(prop, rna_enum_node_socket_display_shape_items);
+  RNA_def_property_enum_default(prop, SOCK_DISPLAY_SHAPE_CIRCLE);
   RNA_def_property_ui_text(prop, "Shape", "Socket shape");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_NodeSocket_update");
 

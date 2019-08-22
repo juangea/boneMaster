@@ -44,48 +44,6 @@
 /** \name Draw Utilities
  * \{ */
 
-static void select_id_framebuffer_setup(struct SELECTID_Context *select_ctx)
-{
-  DefaultTextureList *dtxl = DRW_viewport_texture_list_get();
-  int size[2];
-  size[0] = GPU_texture_width(dtxl->depth);
-  size[1] = GPU_texture_height(dtxl->depth);
-
-  if (select_ctx->framebuffer_select_id == NULL) {
-    select_ctx->framebuffer_select_id = GPU_framebuffer_create();
-  }
-
-  if ((select_ctx->texture_u32 != NULL) &&
-      ((GPU_texture_width(select_ctx->texture_u32) != size[0]) ||
-       (GPU_texture_height(select_ctx->texture_u32) != size[1]))) {
-    GPU_texture_free(select_ctx->texture_u32);
-    select_ctx->texture_u32 = NULL;
-  }
-
-  /* Make sure the depth texture is attached.
-   * It may disappear when loading another Blender session. */
-  GPU_framebuffer_texture_attach(select_ctx->framebuffer_select_id, dtxl->depth, 0, 0);
-
-  if (select_ctx->texture_u32 == NULL) {
-    select_ctx->texture_u32 = GPU_texture_create_2d(size[0], size[1], GPU_R32UI, NULL, NULL);
-    GPU_framebuffer_texture_attach(
-        select_ctx->framebuffer_select_id, select_ctx->texture_u32, 0, 0);
-
-    GPU_framebuffer_check_valid(select_ctx->framebuffer_select_id, NULL);
-  }
-}
-
-/* Remove all tags from drawn or culled objects. */
-void select_id_context_clear(struct SELECTID_Context *select_ctx)
-{
-  select_ctx->objects_drawn_len = 0;
-  select_ctx->index_drawn_len = 1;
-  select_id_framebuffer_setup(select_ctx);
-  GPU_framebuffer_bind(select_ctx->framebuffer_select_id);
-  GPU_framebuffer_clear_color_depth(
-      select_ctx->framebuffer_select_id, (const float[4]){0.0f}, 1.0f);
-}
-
 void select_id_object_min_max(Object *obj, float r_min[3], float r_max[3])
 {
   BoundBox *bb;
@@ -151,12 +109,11 @@ static void draw_select_id_edit_mesh(SELECTID_StorageList *stl,
 
   BM_mesh_elem_table_ensure(em->bm, BM_VERT | BM_EDGE | BM_FACE);
 
-  struct GPUBatch *geom_faces;
-  DRWShadingGroup *face_shgrp;
   if (select_mode & SCE_SELECT_FACE) {
-    geom_faces = DRW_mesh_batch_cache_get_triangles_with_select_id(me);
-    face_shgrp = DRW_shgroup_create_sub(stl->g_data->shgrp_face_flat);
+    struct GPUBatch *geom_faces = DRW_mesh_batch_cache_get_triangles_with_select_id(me);
+    DRWShadingGroup *face_shgrp = DRW_shgroup_create_sub(stl->g_data->shgrp_face_flat);
     DRW_shgroup_uniform_int_copy(face_shgrp, "offset", *(int *)&initial_offset);
+    DRW_shgroup_call_no_cull(face_shgrp, geom_faces, ob);
 
     if (draw_facedot) {
       struct GPUBatch *geom_facedots = DRW_mesh_batch_cache_get_facedots_with_select_id(me);
@@ -165,11 +122,13 @@ static void draw_select_id_edit_mesh(SELECTID_StorageList *stl,
     *r_face_offset = initial_offset + em->bm->totface;
   }
   else {
-    geom_faces = DRW_mesh_batch_cache_get_surface(me);
-    face_shgrp = stl->g_data->shgrp_face_unif;
+    if (ob->dt >= OB_SOLID) {
+      struct GPUBatch *geom_faces = DRW_mesh_batch_cache_get_surface(me);
+      DRWShadingGroup *face_shgrp = stl->g_data->shgrp_face_unif;
+      DRW_shgroup_call_no_cull(face_shgrp, geom_faces, ob);
+    }
     *r_face_offset = initial_offset;
   }
-  DRW_shgroup_call_no_cull(face_shgrp, geom_faces, ob);
 
   /* Unlike faces, only draw edges if edge select mode. */
   if (select_mode & SCE_SELECT_EDGE) {

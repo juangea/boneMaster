@@ -58,6 +58,7 @@
 #include "BKE_paint.h"
 #include "BKE_report.h"
 #include "BKE_workspace.h"
+#include "BKE_scene.h"
 
 #include "UI_interface.h"
 #include "UI_resources.h"
@@ -76,6 +77,7 @@
 #include "ED_gpencil.h"
 #include "ED_object.h"
 #include "ED_screen.h"
+#include "ED_transform_snap_object_context.h"
 #include "ED_view3d.h"
 #include "ED_select_utils.h"
 #include "ED_space_api.h"
@@ -220,6 +222,17 @@ void GPENCIL_OT_editmode_toggle(wmOperatorType *ot)
 }
 
 /* set select mode */
+static bool gpencil_selectmode_toggle_poll(bContext *C)
+{
+  /* edit only supported with grease pencil objects */
+  Object *ob = CTX_data_active_object(C);
+  if ((ob == NULL) || (ob->type != OB_GPENCIL) || (ob->mode != OB_MODE_EDIT_GPENCIL)) {
+    return false;
+  }
+
+  return ED_operator_view3d_active(C);
+}
+
 static int gpencil_selectmode_toggle_exec(bContext *C, wmOperator *op)
 {
   Scene *scene = CTX_data_scene(C);
@@ -227,7 +240,7 @@ static int gpencil_selectmode_toggle_exec(bContext *C, wmOperator *op)
   const int mode = RNA_int_get(op->ptr, "mode");
 
   /* Just set mode */
-  ts->gpencil_selectmode = mode;
+  ts->gpencil_selectmode_edit = mode;
 
   WM_main_add_notifier(NC_SCENE | ND_TOOLSETTINGS, NULL);
   DEG_id_tag_update(&scene->id, ID_RECALC_COPY_ON_WRITE);
@@ -246,7 +259,7 @@ void GPENCIL_OT_selectmode_toggle(wmOperatorType *ot)
 
   /* callbacks */
   ot->exec = gpencil_selectmode_toggle_exec;
-  ot->poll = gp_strokes_edit3d_poll;
+  ot->poll = gpencil_selectmode_toggle_poll;
 
   /* flags */
   ot->flag = OPTYPE_UNDO | OPTYPE_REGISTER;
@@ -3343,11 +3356,14 @@ static int gp_strokes_reproject_exec(bContext *C, wmOperator *op)
 {
   bGPdata *gpd = ED_gpencil_data_get_active(C);
   Scene *scene = CTX_data_scene(C);
+  Main *bmain = CTX_data_main(C);
   ToolSettings *ts = CTX_data_tool_settings(C);
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   Object *ob = CTX_data_active_object(C);
   ARegion *ar = CTX_wm_region(C);
   RegionView3D *rv3d = ar->regiondata;
+  SnapObjectContext *sctx = NULL;
+  int oldframe = (int)DEG_get_ctime(depsgraph);
 
   GP_SpaceConversion gsc = {NULL};
   eGP_ReprojectModes mode = RNA_enum_get(op->ptr, "type");
@@ -3357,17 +3373,22 @@ static int gp_strokes_reproject_exec(bContext *C, wmOperator *op)
   /* init space conversion stuff */
   gp_point_conversion_init(C, &gsc);
 
-  /* init autodist for geometry projection */
-  if (mode == GP_REPROJECT_SURFACE) {
-    view3d_region_operator_needs_opengl(CTX_wm_window(C), gsc.ar);
-    ED_view3d_autodist_init(depsgraph, gsc.ar, CTX_wm_view3d(C), 0);
-  }
-
-  // TODO: For deforming geometry workflow, create new frames?
+  int cfra_prv = INT_MIN;
+  /* init snap context for geometry projection */
+  sctx = ED_transform_snap_object_context_create_view3d(
+      bmain, scene, depsgraph, 0, ar, CTX_wm_view3d(C));
 
   /* Go through each editable + selected stroke, adjusting each of its points one by one... */
   GP_EDITABLE_STROKES_BEGIN (gpstroke_iter, C, gpl, gps) {
     if (gps->flag & GP_STROKE_SELECT) {
+
+      /* update frame to get the new location of objects */
+      if ((mode == GP_REPROJECT_SURFACE) && (cfra_prv != gpf_->framenum)) {
+        cfra_prv = gpf_->framenum;
+        CFRA = gpf_->framenum;
+        BKE_scene_graph_update_for_newframe(depsgraph, bmain);
+      }
+
       bGPDspoint *pt;
       int i;
       /* Adjust each point */
@@ -3378,6 +3399,7 @@ static int gp_strokes_reproject_exec(bContext *C, wmOperator *op)
         /* Note: We can't use gp_point_to_xy() here because that uses ints for the screen-space
          * coordinates, resulting in lost precision, which in turn causes stair-stepping
          * artifacts in the final points. */
+
         bGPDspoint pt2;
         gp_point_to_parent_space(pt, gpstroke_iter.diff_mat, &pt2);
         gp_point_to_xy_fl(&gsc, gps, &pt2, &xy[0], &xy[1]);
@@ -3434,17 +3456,26 @@ static int gp_strokes_reproject_exec(bContext *C, wmOperator *op)
         }
         else {
           /* Geometry - Snap to surfaces of visible geometry */
-          /* XXX: There will be precision loss (possible stair-step artifacts)
-           * from this conversion to satisfy the API's */
-          const int screen_co[2] = {(int)xy[0], (int)xy[1]};
+          float ray_start[3];
+          float ray_normal[3];
+          /* magic value for initial depth copied from the default
+           * value of Python's Scene.ray_cast function
+           */
+          float depth = 1.70141e+38f;
+          float location[3] = {0.0f, 0.0f, 0.0f};
+          float normal[3] = {0.0f, 0.0f, 0.0f};
 
-          int depth_margin = 0;  // XXX: 4 for strokes, 0 for normal
-          float depth;
-
-          /* XXX: The proper procedure computes the depths into an array,
-           * to have smooth transitions when all else fails... */
-          if (ED_view3d_autodist_depth(gsc.ar, screen_co, depth_margin, &depth)) {
-            ED_view3d_autodist_simple(gsc.ar, screen_co, &pt->x, 0, &depth);
+          ED_view3d_win_to_ray(ar, xy, &ray_start[0], &ray_normal[0]);
+          if (ED_transform_snap_object_project_ray(sctx,
+                                                   &(const struct SnapObjectParams){
+                                                       .snap_select = SNAP_ALL,
+                                                   },
+                                                   &ray_start[0],
+                                                   &ray_normal[0],
+                                                   &depth,
+                                                   &location[0],
+                                                   &normal[0])) {
+            copy_v3_v3(&pt->x, location);
           }
           else {
             /* Default to planar */
@@ -3461,6 +3492,15 @@ static int gp_strokes_reproject_exec(bContext *C, wmOperator *op)
   }
   GP_EDITABLE_STROKES_END(gpstroke_iter);
 
+  /* return frame state and DB to original state */
+  CFRA = oldframe;
+  BKE_scene_graph_update_for_newframe(depsgraph, bmain);
+
+  if (sctx != NULL) {
+    ED_transform_snap_object_context_destroy(sctx);
+  }
+
+  /* update changed data */
   DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
   WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED, NULL);
   return OPERATOR_FINISHED;
@@ -3546,7 +3586,7 @@ static void gp_smooth_stroke(bContext *C, wmOperator *op)
           }
           if (smooth_thickness) {
             /* thickness need to repeat process several times */
-            for (int r2 = 0; r2 < r * 10; r2++) {
+            for (int r2 = 0; r2 < r * 20; r2++) {
               BKE_gpencil_smooth_stroke_thickness(gps, i, factor);
             }
           }
@@ -4302,7 +4342,7 @@ void GPENCIL_OT_stroke_smooth(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   /* properties */
-  prop = RNA_def_int(ot->srna, "repeat", 1, 1, 10, "Repeat", "", 1, 5);
+  prop = RNA_def_int(ot->srna, "repeat", 1, 1, 50, "Repeat", "", 1, 20);
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 
   RNA_def_float(ot->srna, "factor", 0.5f, 0.0f, 2.0f, "Factor", "", 0.0f, 2.0f);
