@@ -200,7 +200,7 @@ class SEQUENCER_MT_preview_zoom(Menu):
 
             layout.operator(
                 "sequencer.view_zoom_ratio",
-                text=iface_(f"Zoom {a:d}:{b:d}"),
+                text=iface_("Zoom %d:%d") % (a, b),
                 translate=False,
             ).ratio = a / b
         layout.operator_context = 'INVOKE_DEFAULT'
@@ -2128,6 +2128,7 @@ classes = (
 
     SEQUENCER_PT_strip,
 
+    SEQUENCER_PT_effect,
     SEQUENCER_PT_adjust,
     SEQUENCER_PT_adjust_comp,
     SEQUENCER_PT_adjust_transform,
@@ -2137,7 +2138,6 @@ classes = (
     SEQUENCER_PT_adjust_color,
     SEQUENCER_PT_adjust_sound,
 
-    SEQUENCER_PT_effect,
     SEQUENCER_PT_scene,
     SEQUENCER_PT_mask,
     SEQUENCER_PT_effect_text_style,
