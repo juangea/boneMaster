@@ -92,7 +92,7 @@ static void initData(ModifierData *md)
   rmd->part_trail_size = 1.0f;
   rmd->part_min_radius = 0.1f;
   rmd->part_scale_factor = 2.0f;
-  rmd->part_vel_factor = 2.0f;
+  rmd->part_vel_factor = 0.25f;
 
 }
 

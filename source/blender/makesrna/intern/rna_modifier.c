@@ -5064,7 +5064,7 @@ static void rna_def_modifier_remesh(BlenderRNA *brna)
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
   prop = RNA_def_property(srna, "part_vel_factor", PROP_FLOAT, PROP_UNSIGNED);
-  RNA_def_property_range(prop, 0.001, FLT_MAX);
+  RNA_def_property_range(prop, 0.0001, FLT_MAX);
   RNA_def_property_float_default(prop, 1.0f);
   RNA_def_property_ui_range(prop, 0.0, 1, 0.01, 3);
   RNA_def_property_ui_text(prop, "Velocity Factor", "Particle Velocity Factor");
