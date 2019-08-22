@@ -89,6 +89,11 @@ static void initData(ModifierData *md)
   rmd->pflag = 1;
   rmd->psys = 1;
 
+  rmd->part_trail_size = 1.0f;
+  rmd->part_min_radius = 0.1f;
+  rmd->part_scale_factor = 2.0f;
+  rmd->part_vel_factor = 2.0f;
+
 }
 
 #ifdef WITH_MOD_REMESH

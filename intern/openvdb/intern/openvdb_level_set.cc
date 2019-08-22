@@ -192,7 +192,7 @@ void OpenVDBLevelSet::particles_to_level_set(ParticleList part_list,
    */
   openvdb::tools::ParticlesToLevelSet<openvdb::FloatGrid, void> raster(*(this->grid));
   /* a grain size of zero disables threading */
-  raster.setGrainSize(0);
+  raster.setGrainSize(1);
   raster.setRmin(min_radius);
   raster.setRmax(1e15f);
 
@@ -205,7 +205,7 @@ void OpenVDBLevelSet::particles_to_level_set(ParticleList part_list,
 
   if (raster.ignoredParticles()) {
     if (raster.getMinCount() > 0) {
-      std::cout << "Minimun voxel radius is too high!\n";
+      std::cout << "Minimum voxel radius is too high!\n";
       std::cout << raster.getMinCount() << " particles are ignored!\n";
     }
     if (raster.getMaxCount() > 0) {
