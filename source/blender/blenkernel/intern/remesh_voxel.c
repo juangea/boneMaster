@@ -103,11 +103,13 @@ static void populate_particle_list(ParticleSystem* psys,
     ParticleSimulationData sim = {0};
     ParticleKey state;
     int p;
+    float ob_iquat[4];
 
     sim.depsgraph = depsgraph;
     sim.scene = scene;
     sim.ob = ob;
     sim.psys = psys;
+    mat4_to_quat(ob_iquat, ob->imat);
 
     psys->lattice_deform_data = psys_create_lattice_deform_data(&sim);
 
@@ -128,8 +130,8 @@ static void populate_particle_list(ParticleSystem* psys,
       mul_v3_m4v3(pos, ob->imat, state.co);
 
       /* velocity */
-      sub_v3_v3v3(vel, state.co, psys->particles[p].prev_state.co);
-
+      copy_v3_v3(vel, state.vel);
+      mul_qt_v3(ob_iquat, vel);
       mul_v3_fl(vel, psys->part->normfac);
 
       OpenVDB_add_particle(part_list, pos, psys->particles[p].size, vel);
