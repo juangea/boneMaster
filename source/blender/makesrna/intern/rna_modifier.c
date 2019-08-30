@@ -461,7 +461,7 @@ const EnumPropertyItem rna_enum_axis_flag_xyz_items[] = {
 static bool rna_CSG_object_poll(PointerRNA *UNUSED(ptr), PointerRNA value)
 {
   int type = ((Object *)value.id.data)->type;
-  return type == OB_MESH;  // || type == OB_CURVE;
+  return type == OB_MESH || type == OB_CURVE || type == OB_FONT || type == OB_SURF;
 }
 
 static void rna_UVProject_projectors_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
@@ -881,7 +881,7 @@ static void rna_CSGVolume_object_set(PointerRNA *ptr, PointerRNA value, ReportLi
   id_lib_extern((ID *)ob);
   vcob->object = ob;
   if (ob) {
-    ob->dt = OB_WIRE;
+    ob->dt = OB_BOUNDBOX;
     DEG_id_tag_update(&ob->id, ID_RECALC_TRANSFORM);
     WM_main_add_notifier(NC_OBJECT | ND_DRAW, ob);
   }
