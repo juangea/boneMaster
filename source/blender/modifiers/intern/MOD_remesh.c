@@ -515,6 +515,7 @@ static struct OpenVDBLevelSet *csgOperation(struct OpenVDBLevelSet *level_set,
     case OB_CURVE:
     case OB_SURF:
       me = BKE_mesh_new_from_object(NULL, vcob->object, true);
+      if (!me) return level_set;
       break;
 
     default:
