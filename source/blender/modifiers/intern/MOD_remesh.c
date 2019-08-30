@@ -502,19 +502,25 @@ static struct OpenVDBLevelSet *csgOperation(struct OpenVDBLevelSet *level_set,
   float omat[4][4];
   float size;
 
-  if (type == OB_MESH)
+  switch (type)
   {
-    me_orig = BKE_object_get_final_mesh(vcob->object);
-    me = BKE_mesh_new_nomain(
-        me_orig->totvert, me_orig->totedge, me_orig->totface, me_orig->totloop, me_orig->totpoly);
+    case OB_MESH:
+      me_orig = BKE_object_get_final_mesh(vcob->object);
+      me = BKE_mesh_new_nomain(
+          me_orig->totvert, me_orig->totedge, me_orig->totface, me_orig->totloop, me_orig->totpoly);
 
-    BKE_mesh_nomain_to_mesh(me_orig, me, vcob->object, &CD_MASK_MESH, false);
+      BKE_mesh_nomain_to_mesh(me_orig, me, vcob->object, &CD_MASK_MESH, false);
+      break;
+    case OB_FONT:
+    case OB_CURVE:
+    case OB_SURF:
+      me = BKE_mesh_new_from_object(NULL, vcob->object, true);
+      break;
+
+    default:
+      return level_set;
   }
 
-  if (type == OB_CURVE || type == OB_SURF || type == OB_FONT) {
-    me = BKE_mesh_new_from_object(NULL, vcob->object, true);
-  }
- 
   size = (vcob->flag & MOD_REMESH_CSG_VOXEL_PERCENTAGE) ?
                    rmd->voxel_size * vcob->voxel_percentage / 100.0f :
                    vcob->voxel_size;
