@@ -658,6 +658,10 @@ static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mes
 
         // save a copy
         rmd_orig->mesh_cached = copy_mesh(result);
+
+        // adaptivity can mess up normals, try to recalc them by tagging them as dirty
+        if (rmd->adaptivity > 0.0f)
+           result->runtime.cd_dirty_vert |= CD_MASK_NORMAL;
       }
 
       return result;
@@ -674,19 +678,19 @@ static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mes
 
   if (rmd->mode == MOD_REMESH_METABALL) {
     ParticleSystem* psys = NULL;
-	bool render = ctx->flag & MOD_APPLY_RENDER;
-	psys = get_psys(rmd, ctx->object, DEG_get_input_scene(ctx->depsgraph), render);
-	result = repolygonize(rmd, ctx->object, mesh, psys, render);
+	  bool render = ctx->flag & MOD_APPLY_RENDER;
+	  psys = get_psys(rmd, ctx->object, DEG_get_input_scene(ctx->depsgraph), render);
+	  result = repolygonize(rmd, ctx->object, mesh, psys, render);
 
     if (result && (rmd->flag & MOD_REMESH_SMOOTH_SHADING)) {
-		MPoly *mpoly = result->mpoly;
-		int i, totpoly = result->totpoly;
+		  MPoly *mpoly = result->mpoly;
+		  int i, totpoly = result->totpoly;
 
-		/* Apply smooth shading to output faces */
-		for (i = 0; i < totpoly; i++) {
-			mpoly[i].flag |= ME_SMOOTH;
-		}
-	}
+		  /* Apply smooth shading to output faces */
+		  for (i = 0; i < totpoly; i++) {
+			  mpoly[i].flag |= ME_SMOOTH;
+		  }
+	  }
   }
   else
   {
