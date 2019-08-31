@@ -112,23 +112,26 @@ ccl_device_noinline_cpu void kernel_branched_path_surface_connect_light(
           has_emission = direct_emission(
               kg, sd, emission_sd, &ls, state, &light_ray, &L_light, &is_lamp, terminate);
         }
+        /* trace shadow ray */
+        float3 shadow;
+
+        const bool blocked = shadow_blocked(kg, sd, emission_sd, state, &light_ray, &shadow);
+
+        if (has_emission) {
+
+          
+          if (!blocked) {
+            /* accumulate */
+            path_radiance_accum_light(
+                kg, L, state, throughput * num_samples_inv, &L_light, shadow, num_samples_inv, ls.lamp, is_lamp);
+          }
+          else {
+            path_radiance_accum_total_light(L, state, throughput * num_samples_inv, &L_light);
+          }
+        }        
       }
 
-      /* trace shadow ray */
-      float3 shadow;
 
-      const bool blocked = shadow_blocked(kg, sd, emission_sd, state, &light_ray, &shadow);
-
-      if (has_emission) {
-        if (!blocked) {
-          /* accumulate */
-          path_radiance_accum_light(
-              L, state, throughput * num_samples_inv, &L_light, shadow, num_samples_inv, is_lamp);
-        }
-        else {
-          path_radiance_accum_total_light(L, state, throughput * num_samples_inv, &L_light);
-        }
-      }
     }
   }
 #  endif
@@ -241,22 +244,23 @@ ccl_device_inline void kernel_path_surface_connect_light(KernelGlobals *kg,
       has_emission = direct_emission(
           kg, sd, emission_sd, &ls, state, &light_ray, &L_light, &is_lamp, terminate);
     }
+    /* trace shadow ray */
+    float3 shadow;
+
+    const bool blocked = shadow_blocked(kg, sd, emission_sd, state, &light_ray, &shadow);
+
+    if (has_emission) {
+      if (!blocked) {
+        /* accumulate */
+        path_radiance_accum_light(kg, L, state, throughput, &L_light, shadow, 1.0f, ls.lamp, is_lamp);
+      }
+      else {
+        path_radiance_accum_total_light(L, state, throughput, &L_light);
+      }
+    }    
   }
 
-  /* trace shadow ray */
-  float3 shadow;
 
-  const bool blocked = shadow_blocked(kg, sd, emission_sd, state, &light_ray, &shadow);
-
-  if (has_emission) {
-    if (!blocked) {
-      /* accumulate */
-      path_radiance_accum_light(L, state, throughput, &L_light, shadow, 1.0f, is_lamp);
-    }
-    else {
-      path_radiance_accum_total_light(L, state, throughput, &L_light);
-    }
-  }
 #  endif
 #endif
 }

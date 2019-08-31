@@ -145,6 +145,8 @@ NODE_DEFINE(Light)
   SOCKET_INT(max_bounces, "Max Bounces", 1024);
   SOCKET_UINT(random_id, "Random ID", 0);
 
+  SOCKET_UINT(lightgroups, "Lightgroups", 0);
+
   SOCKET_BOOLEAN(is_portal, "Is Portal", false);
   SOCKET_BOOLEAN(is_enabled, "Is Enabled", true);
 
@@ -839,6 +841,8 @@ void LightManager::device_update_points(Device *, DeviceScene *dscene, Scene *sc
 
     klights[light_index].tfm = light->tfm;
     klights[light_index].itfm = transform_inverse(light->tfm);
+
+    klights[light_index].lightgroups = light->lightgroups;
 
     light_index++;
   }

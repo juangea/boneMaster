@@ -146,7 +146,8 @@ ccl_device_forceinline void kernel_branched_path_volume(KernelGlobals *kg,
 
     /* emission and transmittance */
     if (volume_segment.closure_flag & SD_EMISSION)
-      path_radiance_accum_emission(L, state, *throughput, volume_segment.accum_emission);
+      path_radiance_accum_emission(
+          kg, L, state, *throughput, volume_segment.accum_emission, LAMP_NONE);
     *throughput *= volume_segment.accum_transmittance;
 
     /* free cached steps */
@@ -376,7 +377,7 @@ ccl_device void kernel_branched_path_integrate(KernelGlobals *kg,
   /* initialize */
   float3 throughput = make_float3(1.0f, 1.0f, 1.0f);
 
-  path_radiance_init(L, kernel_data.film.use_light_pass);
+  path_radiance_init(kg, L);
 
   /* shader data memory used for both volumes and surfaces, saves stack space */
   ShaderData sd;

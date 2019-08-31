@@ -48,17 +48,18 @@ ccl_device_inline void kernel_path_volume_connect_light(KernelGlobals *kg,
       has_emission = direct_emission(
           kg, sd, emission_sd, &ls, state, &light_ray, &L_light, &is_lamp, terminate);
     }
+    /* trace shadow ray */
+    float3 shadow;
+
+    const bool blocked = shadow_blocked(kg, sd, emission_sd, state, &light_ray, &shadow);
+
+    if (has_emission && !blocked) {
+      /* accumulate */
+      path_radiance_accum_light(kg, L, state, throughput, &L_light, shadow, 1.0f, ls.lamp, is_lamp);
+    }    
   }
 
-  /* trace shadow ray */
-  float3 shadow;
 
-  const bool blocked = shadow_blocked(kg, sd, emission_sd, state, &light_ray, &shadow);
-
-  if (has_emission && !blocked) {
-    /* accumulate */
-    path_radiance_accum_light(L, state, throughput, &L_light, shadow, 1.0f, is_lamp);
-  }
 #  endif /* __EMISSION__ */
 }
 
@@ -238,18 +239,19 @@ ccl_device void kernel_branched_path_volume_connect_light(KernelGlobals *kg,
                 kg, sd, emission_sd, &ls, state, &light_ray, &L_light, &is_lamp, terminate);
           }
         }
+        /* trace shadow ray */
+        float3 shadow;
+
+        const bool blocked = shadow_blocked(kg, sd, emission_sd, state, &light_ray, &shadow);
+
+        if (has_emission && !blocked) {
+          /* accumulate */
+          path_radiance_accum_light(
+              kg, L, state, tp * num_samples_inv, &L_light, shadow, num_samples_inv,ls.lamp, is_lamp);
+        }        
       }
 
-      /* trace shadow ray */
-      float3 shadow;
 
-      const bool blocked = shadow_blocked(kg, sd, emission_sd, state, &light_ray, &shadow);
-
-      if (has_emission && !blocked) {
-        /* accumulate */
-        path_radiance_accum_light(
-            L, state, tp * num_samples_inv, &L_light, shadow, num_samples_inv, is_lamp);
-      }
     }
   }
 #    endif /* __EMISSION__ */

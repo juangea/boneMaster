@@ -235,6 +235,19 @@ void BlenderSync::sync_light(BL::Object &b_parent,
   light->use_transmission = (visibility & PATH_RAY_TRANSMIT) != 0;
   light->use_scatter = (visibility & PATH_RAY_VOLUME_SCATTER) != 0;
 
+  /* light groups */
+  for (int i = 0; i < lightgroups.size(); i++) {
+    BL::Collection &b_collection = lightgroups[i].first;
+    BL::Collection::all_objects_iterator b_object_iter;
+    for (b_collection.all_objects.begin(b_object_iter);
+         b_object_iter != b_collection.all_objects.end();
+         ++b_object_iter) {
+      if (b_object_iter->name() == b_ob.name()) {
+        light->lightgroups |= (1 << i);
+      }
+    }
+  }
+
   /* tag */
   light->tag_update(scene);
 }
@@ -250,6 +263,14 @@ void BlenderSync::sync_background_light(bool use_portal)
     enum SamplingMethod { SAMPLING_NONE = 0, SAMPLING_AUTOMATIC, SAMPLING_MANUAL, SAMPLING_NUM };
     int sampling_method = get_enum(cworld, "sampling_method", SAMPLING_NUM, SAMPLING_AUTOMATIC);
     bool sample_as_light = (sampling_method != SAMPLING_NONE);
+
+    uint lightgroup_mask = 0;
+    for (int i = 0; i < lightgroups.size(); i++) {
+      if (lightgroups[i].second) {
+        lightgroup_mask |= (1 << i);
+      }
+    }
+    scene->integrator->background_lightgroups = lightgroup_mask;
 
     if (sample_as_light || use_portal) {
       /* test if we need to sync */
@@ -274,6 +295,8 @@ void BlenderSync::sync_background_light(bool use_portal)
           light->samples = samples * samples;
         else
           light->samples = samples;
+
+        light->lightgroups = lightgroup_mask;
 
         light->tag_update(scene);
         light_map.set_recalc(b_world);
