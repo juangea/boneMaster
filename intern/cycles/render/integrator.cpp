@@ -81,6 +81,7 @@ NODE_DEFINE(Integrator)
   SOCKET_ENUM(sampling_pattern, "Sampling Pattern", sampling_pattern_enum, SAMPLING_PATTERN_SOBOL);
   SOCKET_FLOAT(scrambling_distance, "Scrambling Distance", 1.0f);
   SOCKET_BOOLEAN(use_auto_scramble, "Auto Scramble", true);
+  SOCKET_BOOLEAN(use_dithered_sampling, "Use Dithered Sampling", false);
   
   return type;
 }
@@ -216,6 +217,21 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
 
   dscene->sobol_directions.copy_to_device();
 
+  /* Sobol dithering table */
+	if(use_dithered_sampling) {
+		int dither_size = sobol_dither_matrix_size();
+		float2 *dither_matrix = dscene->sobol_dither.resize(dither_size*dither_size);
+
+		sobol_generate_dither_matrix(dither_matrix);
+
+		dscene->sobol_dither.copy_to_device(); //device->tex_alloc("__sobol_dither", 
+
+		kintegrator->dither_size = dither_size;
+	}
+	else {
+		kintegrator->dither_size = 0;
+	}
+
   /* Clamping. */
   bool use_sample_clamp = (sample_clamp_direct != 0.0f || sample_clamp_indirect != 0.0f);
   if (use_sample_clamp != scene->film->use_sample_clamp) {
@@ -228,7 +244,8 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
 
 void Integrator::device_free(Device *, DeviceScene *dscene)
 {
-  dscene->sobol_directions.free();
+	dscene->sobol_directions.free();
+	dscene->sobol_dither.free();
 }
 
 bool Integrator::modified(const Integrator &integrator)

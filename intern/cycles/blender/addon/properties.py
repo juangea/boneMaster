@@ -109,6 +109,7 @@ enum_use_layer_samples = (
 
 enum_sampling_pattern = (
     ('SOBOL', "Sobol", "Use Sobol random sampling pattern"),
+    ('DITHERED_SOBOL', "Dithered Sobol", "Use dithered Sobol random sampling pattern"),
     ('CORRELATED_MUTI_JITTER', "Correlated Multi-Jitter", "Use Correlated Multi-Jitter random sampling pattern"),
 )
 
@@ -193,7 +194,7 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
     use_auto_tiles: BoolProperty(
         name="Auto Tiles",
         description="Automatically manage tile size and draw order for optimal performance and memory usage",
-        default=True,
+        default=False,
     )
 
     samples: IntProperty(
