@@ -234,7 +234,9 @@ void BKE_view_layer_free_ex(ViewLayer *view_layer, const bool do_id_user)
   BKE_freestyle_config_free(&view_layer->freestyle_config, do_id_user);
 
   if (view_layer->id_properties) {
-    IDP_FreeProperty(view_layer->id_properties);
+    /* take for example light group collections into account here, those are
+     * collections being referenced by a pointer property beneath a property group */
+    IDP_FreeProperty_ex(view_layer->id_properties, do_id_user);
   }
 
   MEM_SAFE_FREE(view_layer->object_bases_array);
