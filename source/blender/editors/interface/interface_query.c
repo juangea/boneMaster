@@ -528,8 +528,8 @@ bool ui_region_contains_point_px(const ARegion *ar, int x, int y)
     return false;
   }
 
-  /* also, check that with view2d, that the mouse is not over the scrollbars
-   * NOTE: care is needed here, since the mask rect may include the scrollbars
+  /* also, check that with view2d, that the mouse is not over the scroll-bars
+   * NOTE: care is needed here, since the mask rect may include the scroll-bars
    * even when they are not visible, so we need to make a copy of the mask to
    * use to check
    */
@@ -567,6 +567,32 @@ bool ui_region_contains_rect_px(const ARegion *ar, const rcti *rect_px)
   }
 
   return true;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Screen (#bScreen) Spatial
+ * \{ */
+
+/** Check if the cursor is over any popups. */
+ARegion *ui_screen_region_find_mouse_over_ex(bScreen *screen, int x, int y)
+{
+  for (ARegion *ar = screen->regionbase.first; ar; ar = ar->next) {
+    rcti winrct;
+
+    ui_region_winrct_get_no_margin(ar, &winrct);
+
+    if (BLI_rcti_isect_pt(&winrct, x, y)) {
+      return ar;
+    }
+  }
+  return NULL;
+}
+
+ARegion *ui_screen_region_find_mouse_over(bScreen *screen, const wmEvent *event)
+{
+  return ui_screen_region_find_mouse_over_ex(screen, event->x, event->y);
 }
 
 /** \} */

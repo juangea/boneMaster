@@ -65,6 +65,8 @@
 #include "BKE_node.h"
 #include "BKE_report.h"
 #include "BKE_screen.h"
+#include "BKE_scene.h"
+#include "BKE_sound.h"
 #include "BKE_keyconfig.h"
 
 #include "BKE_addon.h"
@@ -77,6 +79,8 @@
 
 #include "RE_engine.h"
 #include "RE_pipeline.h" /* RE_ free stuff */
+
+#include "IMB_thumbs.h"
 
 #ifdef WITH_PYTHON
 #  include "BPY_extern.h"
@@ -123,6 +127,7 @@
 #include "COM_compositor.h"
 
 #include "DEG_depsgraph.h"
+#include "DEG_depsgraph_query.h"
 
 #include "DRW_engine.h"
 
@@ -163,7 +168,7 @@ void WM_init_state_start_with_console_set(bool value)
 /**
  * Since we cannot know in advance if we will require the draw manager
  * context when starting blender in background mode (specially true with
- * scripts) we deferre the ghost initialization the most as possible
+ * scripts) we defer the ghost initialization the most as possible
  * so that it does not break anything that can run in headless mode (as in
  * without display server attached).
  */
@@ -195,6 +200,30 @@ void WM_init_opengl(Main *bmain)
   opengl_is_init = true;
 }
 
+static void sound_jack_sync_callback(Main *bmain, int mode, float time)
+{
+  /* Ugly: Blender doesn't like it when the animation is played back during rendering. */
+  if (G.is_rendering) {
+    return;
+  }
+
+  wmWindowManager *wm = bmain->wm.first;
+
+  for (wmWindow *window = wm->windows.first; window != NULL; window = window->next) {
+    Scene *scene = WM_window_get_active_scene(window);
+    if ((scene->audio.flag & AUDIO_SYNC) == 0) {
+      continue;
+    }
+    ViewLayer *view_layer = WM_window_get_active_view_layer(window);
+    Depsgraph *depsgraph = BKE_scene_get_depsgraph(scene, view_layer, false);
+    if (depsgraph == NULL) {
+      continue;
+    }
+    Scene *scene_eval = DEG_get_evaluated_scene(depsgraph);
+    BKE_sound_jack_scene_update(scene_eval, mode, time);
+  }
+}
+
 /* only called once, for startup */
 void WM_init(bContext *C, int argc, const char **argv)
 {
@@ -202,6 +231,7 @@ void WM_init(bContext *C, int argc, const char **argv)
   if (!G.background) {
     wm_ghost_init(C); /* note: it assigns C to ghost! */
     wm_init_cursor_data();
+    BKE_sound_jack_sync_callback_set(sound_jack_sync_callback);
   }
 
   GHOST_CreateSystemPaths();
@@ -239,7 +269,7 @@ void WM_init(bContext *C, int argc, const char **argv)
 
   BLT_lang_init();
   /* Must call first before doing any '.blend' file reading,
-   * since versionning code may create new IDs... See T57066. */
+   * since versioning code may create new IDs... See T57066. */
   BLT_lang_set(NULL);
 
   /* Init icons before reading .blend files for preview icons, which can
@@ -270,6 +300,9 @@ void WM_init(bContext *C, int argc, const char **argv)
 
   /* Call again to set from userpreferences... */
   BLT_lang_set(NULL);
+
+  /* That one is generated on demand, we need to be sure it's clear on init. */
+  IMB_thumb_clear_translations();
 
   if (!G.background) {
 
@@ -317,8 +350,9 @@ void WM_init(bContext *C, int argc, const char **argv)
 
   /* allow a path of "", this is what happens when making a new file */
 #if 0
-  if (BKE_main_blendfile_path_from_global()[0] == '\0')
+  if (BKE_main_blendfile_path_from_global()[0] == '\0') {
     BLI_make_file_string("/", G_MAIN->name, BKE_appdir_folder_default(), "untitled.blend");
+  }
 #endif
 
   BLI_strncpy(G.lib, BKE_main_blendfile_path_from_global(), sizeof(G.lib));
@@ -433,7 +467,7 @@ void wm_exit_schedule_delayed(const bContext *C)
 /**
  * \note doesn't run exit() call #WM_exit() for that.
  */
-void WM_exit_ext(bContext *C, const bool do_python)
+void WM_exit_ex(bContext *C, const bool do_python)
 {
   wmWindowManager *wm = C ? CTX_wm_manager(C) : NULL;
 
@@ -490,6 +524,7 @@ void WM_exit_ext(bContext *C, const bool do_python)
 
   BKE_addon_pref_type_free();
   BKE_keyconfig_pref_type_free();
+  BKE_material_gpencil_default_free();
 
   wm_operatortype_free();
   wm_dropbox_free();
@@ -632,7 +667,7 @@ void WM_exit_ext(bContext *C, const bool do_python)
  */
 void WM_exit(bContext *C)
 {
-  WM_exit_ext(C, 1);
+  WM_exit_ex(C, true);
 
   printf("\nBlender quit\n");
 

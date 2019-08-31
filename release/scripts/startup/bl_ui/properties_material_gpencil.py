@@ -22,7 +22,7 @@ from bpy.types import Menu, Panel, UIList
 from rna_prop_ui import PropertyPanel
 from bl_ui.utils import PresetPanel
 
-from .properties_grease_pencil_common import (
+from bl_ui.properties_grease_pencil_common import (
     GreasePencilMaterialsPanel,
 )
 
@@ -44,6 +44,9 @@ class GPENCIL_MT_color_context_menu(Menu):
         layout.operator("gpencil.stroke_lock_color", text="Lock Unselected")
         layout.operator("gpencil.lock_layer", text="Lock Unused")
 
+        layout.separator()
+
+        layout.operator("object.material_slot_remove_unused")
 
 class GPENCIL_UL_matslots(UIList):
     def draw_item(self, _context, layout, _data, item, icon, _active_data, _active_propname, _index):
@@ -120,6 +123,7 @@ class MATERIAL_PT_gpencil_strokecolor(GPMaterialButtonsPanel, Panel):
         ma = context.material
         if ma is not None and ma.grease_pencil is not None:
             gpcolor = ma.grease_pencil
+            self.layout.enabled = not gpcolor.lock
             self.layout.prop(gpcolor, "show_stroke", text="")
 
     def draw(self, context):
@@ -131,7 +135,7 @@ class MATERIAL_PT_gpencil_strokecolor(GPMaterialButtonsPanel, Panel):
             gpcolor = ma.grease_pencil
 
             col = layout.column()
-            col.active = not gpcolor.lock
+            col.enabled = not gpcolor.lock
 
             col.prop(gpcolor, "mode")
 
@@ -145,22 +149,20 @@ class MATERIAL_PT_gpencil_strokecolor(GPMaterialButtonsPanel, Panel):
                 if gpcolor.mode == 'LINE':
                     col.prop(gpcolor, "pixel_size", text="UV Factor")
 
-                col.prop(gpcolor, "use_stroke_pattern", text="Use As Pattern")
+                col.prop(gpcolor, "use_stroke_pattern", text="Use As Stencil Mask")
                 if gpcolor.use_stroke_pattern is False:
                     col.prop(gpcolor, "use_stroke_texture_mix", text="Mix Color")
                     if gpcolor.use_stroke_texture_mix is True:
                         col.prop(gpcolor, "mix_stroke_factor", text="Factor")
 
-            if (
-                    gpcolor.stroke_style == 'SOLID' or
-                    gpcolor.use_stroke_pattern or
-                    gpcolor.use_stroke_texture_mix
-            ):
+            if (gpcolor.stroke_style == 'SOLID' or gpcolor.use_stroke_pattern or gpcolor.use_stroke_texture_mix):
                 col.prop(gpcolor, "color", text="Color")
 
             if gpcolor.mode in {'DOTS', 'BOX'}:
                 col.prop(gpcolor, "alignment_mode")
 
+            if gpcolor.mode == 'LINE' and gpcolor.stroke_style != 'TEXTURE':
+                col.prop(gpcolor, "use_overlap_strokes")
 
 class MATERIAL_PT_gpencil_fillcolor(GPMaterialButtonsPanel, Panel):
     bl_label = "Fill"
@@ -169,6 +171,7 @@ class MATERIAL_PT_gpencil_fillcolor(GPMaterialButtonsPanel, Panel):
     def draw_header(self, context):
         ma = context.material
         gpcolor = ma.grease_pencil
+        self.layout.enabled = not gpcolor.lock
         self.layout.prop(gpcolor, "show_fill", text="")
 
     def draw(self, context):
@@ -180,7 +183,7 @@ class MATERIAL_PT_gpencil_fillcolor(GPMaterialButtonsPanel, Panel):
 
         # color settings
         col = layout.column()
-        col.active = not gpcolor.lock
+        col.enabled = not gpcolor.lock
         col.prop(gpcolor, "fill_style", text="Style")
 
         if gpcolor.fill_style == 'GRADIENT':
@@ -189,25 +192,25 @@ class MATERIAL_PT_gpencil_fillcolor(GPMaterialButtonsPanel, Panel):
         if gpcolor.fill_style != 'TEXTURE':
             col.prop(gpcolor, "fill_color", text="Color")
 
-            if gpcolor.fill_style in {'GRADIENT', 'CHESSBOARD'}:
+            if gpcolor.fill_style in {'GRADIENT', 'CHECKER'}:
                 col.prop(gpcolor, "mix_color", text="Secondary Color")
 
             if gpcolor.fill_style == 'GRADIENT':
                 col.prop(gpcolor, "mix_factor", text="Mix Factor", slider=True)
 
-            if gpcolor.fill_style in {'GRADIENT', 'CHESSBOARD'}:
+            if gpcolor.fill_style in {'GRADIENT', 'CHECKER'}:
                 col.prop(gpcolor, "flip", text="Flip Colors")
 
                 col.prop(gpcolor, "pattern_shift", text="Location")
                 col.prop(gpcolor, "pattern_scale", text="Scale")
 
-            if gpcolor.gradient_type == 'RADIAL' and gpcolor.fill_style not in {'SOLID', 'CHESSBOARD'}:
+            if gpcolor.gradient_type == 'RADIAL' and gpcolor.fill_style not in {'SOLID', 'CHECKER'}:
                 col.prop(gpcolor, "pattern_radius", text="Radius")
             else:
                 if gpcolor.fill_style != 'SOLID':
                     col.prop(gpcolor, "pattern_angle", text="Angle")
 
-            if gpcolor.fill_style == 'CHESSBOARD':
+            if gpcolor.fill_style == 'CHECKER':
                 col.prop(gpcolor, "pattern_gridsize", text="Box Size")
 
         # Texture
@@ -215,7 +218,7 @@ class MATERIAL_PT_gpencil_fillcolor(GPMaterialButtonsPanel, Panel):
             col.template_ID(gpcolor, "fill_image", open="image.open")
 
             if gpcolor.fill_style == 'TEXTURE':
-                col.prop(gpcolor, "use_fill_pattern", text="Use As Pattern")
+                col.prop(gpcolor, "use_fill_pattern", text="Use As Stencil Mask")
                 if gpcolor.use_fill_pattern is True:
                     col.prop(gpcolor, "fill_color", text="Color")
 
@@ -271,8 +274,7 @@ class MATERIAL_PT_gpencil_material_presets(PresetPanel, Panel):
     preset_add_operator = "scene.gpencil_material_preset_add"
 
 
-classes = (
-    GPENCIL_UL_matslots,
+classes = (GPENCIL_UL_matslots,
     GPENCIL_MT_color_context_menu,
     MATERIAL_PT_gpencil_slots,
     MATERIAL_PT_gpencil_preview,
@@ -281,8 +283,7 @@ classes = (
     MATERIAL_PT_gpencil_strokecolor,
     MATERIAL_PT_gpencil_fillcolor,
     MATERIAL_PT_gpencil_options,
-    MATERIAL_PT_gpencil_custom_props,
-)
+    MATERIAL_PT_gpencil_custom_props,)
 
 if __name__ == "__main__":  # only for live edit.
     from bpy.utils import register_class

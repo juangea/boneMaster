@@ -57,20 +57,15 @@
 #define SOLID 0
 #define GRADIENT 1
 #define RADIAL 2
-#define CHESS 3
+#define CHECKER 3
 #define TEXTURE 4
 #define PATTERN 5
-
-#define GP_SET_SRC_GPS(src_gps) \
-  if (src_gps) \
-  src_gps = src_gps->next
 
 /* Get number of vertex for using in GPU VBOs */
 static void gpencil_calc_vertex(GPENCIL_StorageList *stl,
                                 tGPencilObjectCache *cache_ob,
                                 GpencilBatchCache *cache,
-                                bGPdata *gpd,
-                                int cfra_eval)
+                                bGPdata *gpd)
 {
   if (!cache->is_dirty) {
     return;
@@ -86,18 +81,19 @@ static void gpencil_calc_vertex(GPENCIL_StorageList *stl,
                            (bool)((draw_ctx->v3d->flag2 & V3D_HIDE_OVERLAYS) == 0) :
                            true;
   const bool do_onion = (bool)((gpd->flag & GP_DATA_STROKE_WEIGHTMODE) == 0) && overlay &&
-                        main_onion && DRW_gpencil_onion_active(gpd) && !playing;
+                        main_onion && gpencil_onion_active(gpd) && !playing;
 
-  const bool time_remap = BKE_gpencil_has_time_modifiers(ob);
   const bool is_multiedit = (bool)GPENCIL_MULTIEDIT_SESSIONS_ON(gpd);
 
   cache_ob->tot_vertex = 0;
   cache_ob->tot_triangles = 0;
+  int idx_eval = 0;
 
   for (bGPDlayer *gpl = gpd->layers.first; gpl; gpl = gpl->next) {
     bGPDframe *init_gpf = NULL;
     const bool is_onion = ((do_onion) && (gpl->onion_flag & GP_LAYER_ONIONSKIN));
     if (gpl->flag & GP_LAYER_HIDE) {
+      idx_eval++;
       continue;
     }
 
@@ -106,15 +102,7 @@ static void gpencil_calc_vertex(GPENCIL_StorageList *stl,
       init_gpf = gpl->frames.first;
     }
     else {
-      /* verify time modifiers */
-      if ((time_remap) && (!stl->storage->simplify_modif)) {
-        int remap_cfra = BKE_gpencil_time_modifier(
-            draw_ctx->depsgraph, draw_ctx->scene, ob, gpl, cfra_eval, stl->storage->is_render);
-        init_gpf = BKE_gpencil_layer_getframe(gpl, remap_cfra, GP_GETFRAME_USE_PREV);
-      }
-      else {
-        init_gpf = gpl->actframe;
-      }
+      init_gpf = &ob->runtime.gpencil_evaluated_frames[idx_eval];
     }
 
     if (init_gpf == NULL) {
@@ -130,6 +118,7 @@ static void gpencil_calc_vertex(GPENCIL_StorageList *stl,
         break;
       }
     }
+    idx_eval++;
   }
 
   cache->b_fill.tot_vertex = cache_ob->tot_triangles * 3;
@@ -232,18 +221,18 @@ static void gpencil_calc_stroke_fill_uv(
 }
 
 /* recalc the internal geometry caches for fill and uvs */
-static void DRW_gpencil_recalc_geometry_caches(Object *ob,
-                                               bGPDlayer *gpl,
-                                               MaterialGPencilStyle *gp_style,
-                                               bGPDstroke *gps)
+static void gpencil_recalc_geometry_caches(Object *ob,
+                                           bGPDlayer *gpl,
+                                           MaterialGPencilStyle *gp_style,
+                                           bGPDstroke *gps)
 {
   if (gps->flag & GP_STROKE_RECALC_GEOMETRY) {
     /* Calculate triangles cache for filling area (must be done only after changes) */
     if ((gps->tot_triangles == 0) || (gps->triangles == NULL)) {
-      if ((gps->totpoints > 2) &&
+      if ((gps->totpoints > 2) && (gp_style->flag & GP_STYLE_FILL_SHOW) &&
           ((gp_style->fill_rgba[3] > GPENCIL_ALPHA_OPACITY_THRESH) || (gp_style->fill_style > 0) ||
-           (gpl->blend_mode != eGplBlendMode_Normal))) {
-        DRW_gpencil_triangulate_stroke_fill(ob, gps);
+           (gpl->blend_mode != eGplBlendMode_Regular))) {
+        gpencil_triangulate_stroke_fill(ob, gps);
       }
     }
 
@@ -334,9 +323,7 @@ static void set_wireframe_color(Object *ob,
         float wire_col[3];
         hsv_to_rgb_v(hsv, &wire_col[0]);
 
-        stl->shgroups[id].wire_color[0] = wire_col[0];
-        stl->shgroups[id].wire_color[1] = wire_col[1];
-        stl->shgroups[id].wire_color[2] = wire_col[2];
+        copy_v3_v3(stl->shgroups[id].wire_color, wire_col);
         stl->shgroups[id].wire_color[3] = alpha;
         break;
       }
@@ -357,16 +344,15 @@ static void set_wireframe_color(Object *ob,
 }
 
 /* create shading group for filling */
-static DRWShadingGroup *DRW_gpencil_shgroup_fill_create(GPENCIL_e_data *e_data,
-                                                        GPENCIL_Data *vedata,
-                                                        DRWPass *pass,
-                                                        GPUShader *shader,
-                                                        Object *ob,
-                                                        bGPdata *gpd,
-                                                        bGPDlayer *gpl,
-                                                        MaterialGPencilStyle *gp_style,
-                                                        int id,
-                                                        int shading_type[2])
+static DRWShadingGroup *gpencil_shgroup_fill_create(GPENCIL_Data *vedata,
+                                                    DRWPass *pass,
+                                                    GPUShader *shader,
+                                                    Object *ob,
+                                                    bGPdata *gpd,
+                                                    bGPDlayer *gpl,
+                                                    MaterialGPencilStyle *gp_style,
+                                                    int id,
+                                                    int shading_type[2])
 {
   GPENCIL_StorageList *stl = ((GPENCIL_Data *)vedata)->stl;
   const DRWContextState *draw_ctx = DRW_context_state_get();
@@ -390,8 +376,8 @@ static DRWShadingGroup *DRW_gpencil_shgroup_fill_create(GPENCIL_e_data *e_data,
         stl->shgroups[id].fill_style = RADIAL;
       }
       break;
-    case GP_STYLE_FILL_STYLE_CHESSBOARD:
-      stl->shgroups[id].fill_style = CHESS;
+    case GP_STYLE_FILL_STYLE_CHECKER:
+      stl->shgroups[id].fill_style = CHECKER;
       break;
     case GP_STYLE_FILL_STYLE_TEXTURE:
       if (gp_style->flag & GP_STYLE_FILL_PATTERN) {
@@ -467,6 +453,8 @@ static DRWShadingGroup *DRW_gpencil_shgroup_fill_create(GPENCIL_e_data *e_data,
     else {
       GPUTexture *texture = GPU_texture_from_blender(gp_style->ima, &iuser, GL_TEXTURE_2D);
       DRW_shgroup_uniform_texture(grp, "myTexture", texture);
+      DRW_shgroup_uniform_bool_copy(
+          grp, "myTexturePremultiplied", (image->alpha_mode == IMA_ALPHA_PREMUL));
 
       stl->shgroups[id].texture_clamp = gp_style->flag & GP_STYLE_COLOR_TEX_CLAMP ? 1 : 0;
       DRW_shgroup_uniform_int(grp, "texture_clamp", &stl->shgroups[id].texture_clamp, 1);
@@ -476,7 +464,7 @@ static DRWShadingGroup *DRW_gpencil_shgroup_fill_create(GPENCIL_e_data *e_data,
   }
   else {
     /* if no texture defined, need a blank texture to avoid errors in draw manager */
-    DRW_shgroup_uniform_texture(grp, "myTexture", e_data->gpencil_blank_texture);
+    DRW_shgroup_uniform_texture(grp, "myTexture", stl->g_data->gpencil_blank_texture);
     stl->shgroups[id].texture_clamp = 0;
     DRW_shgroup_uniform_int(grp, "texture_clamp", &stl->shgroups[id].texture_clamp, 1);
   }
@@ -485,7 +473,7 @@ static DRWShadingGroup *DRW_gpencil_shgroup_fill_create(GPENCIL_e_data *e_data,
 }
 
 /* check if some onion is enabled */
-bool DRW_gpencil_onion_active(bGPdata *gpd)
+bool gpencil_onion_active(bGPdata *gpd)
 {
   for (bGPDlayer *gpl = gpd->layers.first; gpl; gpl = gpl->next) {
     if (gpl->onion_flag & GP_LAYER_ONIONSKIN) {
@@ -496,19 +484,18 @@ bool DRW_gpencil_onion_active(bGPdata *gpd)
 }
 
 /* create shading group for strokes */
-DRWShadingGroup *DRW_gpencil_shgroup_stroke_create(GPENCIL_e_data *e_data,
-                                                   GPENCIL_Data *vedata,
-                                                   DRWPass *pass,
-                                                   GPUShader *shader,
-                                                   Object *ob,
-                                                   bGPdata *gpd,
-                                                   bGPDlayer *gpl,
-                                                   bGPDstroke *gps,
-                                                   MaterialGPencilStyle *gp_style,
-                                                   int id,
-                                                   bool onion,
-                                                   const float scale,
-                                                   const int shading_type[2])
+DRWShadingGroup *gpencil_shgroup_stroke_create(GPENCIL_Data *vedata,
+                                               DRWPass *pass,
+                                               GPUShader *shader,
+                                               Object *ob,
+                                               bGPdata *gpd,
+                                               bGPDlayer *gpl,
+                                               bGPDstroke *gps,
+                                               MaterialGPencilStyle *gp_style,
+                                               int id,
+                                               bool onion,
+                                               const float scale,
+                                               const int shading_type[2])
 {
   GPENCIL_StorageList *stl = ((GPENCIL_Data *)vedata)->stl;
   const float *viewport_size = DRW_viewport_size_get();
@@ -633,32 +620,33 @@ DRWShadingGroup *DRW_gpencil_shgroup_stroke_create(GPENCIL_e_data *e_data,
     else {
       GPUTexture *texture = GPU_texture_from_blender(gp_style->sima, &iuser, GL_TEXTURE_2D);
       DRW_shgroup_uniform_texture(grp, "myTexture", texture);
+      DRW_shgroup_uniform_bool_copy(
+          grp, "myTexturePremultiplied", (image->alpha_mode == IMA_ALPHA_PREMUL));
 
       BKE_image_release_ibuf(image, ibuf, NULL);
     }
   }
   else {
     /* if no texture defined, need a blank texture to avoid errors in draw manager */
-    DRW_shgroup_uniform_texture(grp, "myTexture", e_data->gpencil_blank_texture);
+    DRW_shgroup_uniform_texture(grp, "myTexture", stl->g_data->gpencil_blank_texture);
   }
 
   return grp;
 }
 
 /* create shading group for points */
-static DRWShadingGroup *DRW_gpencil_shgroup_point_create(GPENCIL_e_data *e_data,
-                                                         GPENCIL_Data *vedata,
-                                                         DRWPass *pass,
-                                                         GPUShader *shader,
-                                                         Object *ob,
-                                                         bGPdata *gpd,
-                                                         bGPDlayer *gpl,
-                                                         bGPDstroke *gps,
-                                                         MaterialGPencilStyle *gp_style,
-                                                         int id,
-                                                         bool onion,
-                                                         const float scale,
-                                                         const int shading_type[2])
+static DRWShadingGroup *gpencil_shgroup_point_create(GPENCIL_Data *vedata,
+                                                     DRWPass *pass,
+                                                     GPUShader *shader,
+                                                     Object *ob,
+                                                     bGPdata *gpd,
+                                                     bGPDlayer *gpl,
+                                                     bGPDstroke *gps,
+                                                     MaterialGPencilStyle *gp_style,
+                                                     int id,
+                                                     bool onion,
+                                                     const float scale,
+                                                     const int shading_type[2])
 {
   GPENCIL_StorageList *stl = ((GPENCIL_Data *)vedata)->stl;
   const float *viewport_size = DRW_viewport_size_get();
@@ -789,13 +777,15 @@ static DRWShadingGroup *DRW_gpencil_shgroup_point_create(GPENCIL_e_data *e_data,
     else {
       GPUTexture *texture = GPU_texture_from_blender(gp_style->sima, &iuser, GL_TEXTURE_2D);
       DRW_shgroup_uniform_texture(grp, "myTexture", texture);
+      DRW_shgroup_uniform_bool_copy(
+          grp, "myTexturePremultiplied", (image->alpha_mode == IMA_ALPHA_PREMUL));
 
       BKE_image_release_ibuf(image, ibuf, NULL);
     }
   }
   else {
     /* if no texture defined, need a blank texture to avoid errors in draw manager */
-    DRW_shgroup_uniform_texture(grp, "myTexture", e_data->gpencil_blank_texture);
+    DRW_shgroup_uniform_texture(grp, "myTexture", stl->g_data->gpencil_blank_texture);
   }
 
   return grp;
@@ -819,7 +809,7 @@ static void gpencil_add_fill_vertexdata(GpencilBatchCache *cache,
     interp_v3_v3v3(tfill, gps->runtime.tmp_fill_rgba, tintcolor, tintcolor[3]);
     tfill[3] = gps->runtime.tmp_fill_rgba[3] * opacity;
     if ((tfill[3] > GPENCIL_ALPHA_OPACITY_THRESH) || (gp_style->fill_style > 0) ||
-        (gpl->blend_mode != eGplBlendMode_Normal)) {
+        (gpl->blend_mode != eGplBlendMode_Regular)) {
       if (cache->is_dirty) {
         const float *color;
         if (!onion) {
@@ -836,7 +826,7 @@ static void gpencil_add_fill_vertexdata(GpencilBatchCache *cache,
         }
         /* create vertex data */
         const int old_len = cache->b_fill.vbo_len;
-        DRW_gpencil_get_fill_geom(&cache->b_fill, ob, gps, color);
+        gpencil_get_fill_geom(&cache->b_fill, ob, gps, color);
 
         /* add to list of groups */
         if (old_len < cache->b_fill.vbo_len) {
@@ -902,7 +892,7 @@ static void gpencil_add_stroke_vertexdata(GpencilBatchCache *cache,
     if ((gps->totpoints > 1) && (gp_style->mode == GP_STYLE_MODE_LINE)) {
       /* create vertex data */
       const int old_len = cache->b_stroke.vbo_len;
-      DRW_gpencil_get_stroke_geom(&cache->b_stroke, gps, sthickness, ink);
+      gpencil_get_stroke_geom(&cache->b_stroke, gps, sthickness, ink);
 
       /* add to list of groups */
       if (old_len < cache->b_stroke.vbo_len) {
@@ -920,7 +910,7 @@ static void gpencil_add_stroke_vertexdata(GpencilBatchCache *cache,
     else {
       /* create vertex data */
       const int old_len = cache->b_point.vbo_len;
-      DRW_gpencil_get_point_geom(&cache->b_point, gps, sthickness, ink, alignment_mode);
+      gpencil_get_point_geom(&cache->b_point, gps, sthickness, ink, alignment_mode);
 
       /* add to list of groups */
       if (old_len < cache->b_point.vbo_len) {
@@ -948,6 +938,17 @@ static void gpencil_add_editpoints_vertexdata(GpencilBatchCache *cache,
 {
   const DRWContextState *draw_ctx = DRW_context_state_get();
   View3D *v3d = draw_ctx->v3d;
+  ToolSettings *ts = draw_ctx->scene->toolsettings;
+  const bool use_sculpt_mask = (GPENCIL_SCULPT_MODE(gpd) && (ts->gpencil_selectmode_sculpt &
+                                                             (GP_SCULPT_MASK_SELECTMODE_POINT |
+                                                              GP_SCULPT_MASK_SELECTMODE_STROKE |
+                                                              GP_SCULPT_MASK_SELECTMODE_SEGMENT)));
+
+  const bool show_sculpt_points = (GPENCIL_SCULPT_MODE(gpd) &&
+                                   (ts->gpencil_selectmode_sculpt &
+                                    (GP_SCULPT_MASK_SELECTMODE_POINT |
+                                     GP_SCULPT_MASK_SELECTMODE_SEGMENT)));
+
   MaterialGPencilStyle *gp_style = BKE_material_gpencil_settings_get(ob, gps->mat_nr + 1);
 
   /* alpha factor for edit points/line to make them more subtle */
@@ -960,11 +961,24 @@ static void gpencil_add_editpoints_vertexdata(GpencilBatchCache *cache,
     }
     const bool is_weight_paint = (gpd) && (gpd->flag & GP_DATA_STROKE_WEIGHTMODE);
 
+    /* If Sculpt mode and the mask is disabled, the select must be hidden. */
+    const bool hide_select = GPENCIL_SCULPT_MODE(gpd) && !use_sculpt_mask;
+
+    /* Show Edit points if:
+     *  Edit mode: Not in Stroke selection mode
+     *  Sculpt mode: Not in Stroke mask mode and any other mask mode enabled
+     *  Weight mode: Always
+     */
+    const bool show_points = (show_sculpt_points) || (is_weight_paint) ||
+                             (GPENCIL_EDIT_MODE(gpd) &&
+                              ((ts->gpencil_selectmode_edit & GP_SELECTMODE_STROKE) == 0));
+
     if (cache->is_dirty) {
       if ((obact == ob) && ((v3d->flag2 & V3D_HIDE_OVERLAYS) == 0) &&
           (v3d->gp_flag & V3D_GP_SHOW_EDIT_LINES)) {
+
         /* line of the original stroke */
-        DRW_gpencil_get_edlin_geom(&cache->b_edlin, gps, edit_alpha, gpd->flag);
+        gpencil_get_edlin_geom(&cache->b_edlin, gps, edit_alpha, hide_select);
 
         /* add to list of groups */
         cache->grp_cache = gpencil_group_cache_add(cache->grp_cache,
@@ -977,12 +991,18 @@ static void gpencil_add_editpoints_vertexdata(GpencilBatchCache *cache,
                                                    &cache->grp_size,
                                                    &cache->grp_used);
       }
+
+      /* If the points are hidden return. */
+      if ((!show_points) || (hide_select)) {
+        return;
+      }
+
       /* edit points */
       if ((gps->flag & GP_STROKE_SELECT) || (is_weight_paint)) {
         if ((gpl->flag & GP_LAYER_UNLOCK_COLOR) ||
             ((gp_style->flag & GP_STYLE_COLOR_LOCKED) == 0)) {
           if (obact == ob) {
-            DRW_gpencil_get_edit_geom(&cache->b_edit, gps, edit_alpha, gpd->flag);
+            gpencil_get_edit_geom(&cache->b_edit, gps, edit_alpha, gpd->flag);
 
             /* add to list of groups */
             cache->grp_cache = gpencil_group_cache_add(cache->grp_cache,
@@ -1008,8 +1028,7 @@ static void gpencil_draw_strokes(GpencilBatchCache *cache,
                                  Object *ob,
                                  bGPdata *gpd,
                                  bGPDlayer *gpl,
-                                 bGPDframe *src_gpf,
-                                 bGPDframe *derived_gpf,
+                                 bGPDframe *gpf,
                                  const float opacity,
                                  const float tintcolor[4],
                                  const bool custonion,
@@ -1020,8 +1039,7 @@ static void gpencil_draw_strokes(GpencilBatchCache *cache,
   const DRWContextState *draw_ctx = DRW_context_state_get();
   Scene *scene = draw_ctx->scene;
   View3D *v3d = draw_ctx->v3d;
-  bGPDstroke *gps, *src_gps;
-  float viewmatrix[4][4];
+  bGPDstroke *gps;
   const bool is_multiedit = (bool)GPENCIL_MULTIEDIT_SESSIONS_ON(gpd);
   const bool playing = stl->storage->is_playing;
   const bool is_render = (bool)stl->storage->is_render;
@@ -1035,43 +1053,25 @@ static void gpencil_draw_strokes(GpencilBatchCache *cache,
   Depsgraph *depsgraph = DRW_context_state_get()->depsgraph;
 
   /* get parent matrix and save as static data */
-  ED_gpencil_parent_location(depsgraph, ob, gpd, gpl, viewmatrix);
-  copy_m4_m4(derived_gpf->runtime.viewmatrix, viewmatrix);
-
   if ((cache_ob != NULL) && (cache_ob->is_dup_ob)) {
-    copy_m4_m4(derived_gpf->runtime.viewmatrix, cache_ob->obmat);
-  }
-
-  /* apply geometry modifiers */
-  if ((cache->is_dirty) && (ob->greasepencil_modifiers.first) && (!is_multiedit)) {
-    if (!stl->storage->simplify_modif) {
-      if (BKE_gpencil_has_geometry_modifiers(ob)) {
-        BKE_gpencil_geometry_modifiers(depsgraph, ob, gpl, derived_gpf, stl->storage->is_render);
-      }
-    }
-  }
-
-  if (src_gpf) {
-    src_gps = src_gpf->strokes.first;
+    copy_m4_m4(gpf->runtime.parent_obmat, cache_ob->obmat);
   }
   else {
-    src_gps = NULL;
+    ED_gpencil_parent_location(depsgraph, ob, gpd, gpl, gpf->runtime.parent_obmat);
   }
 
-  for (gps = derived_gpf->strokes.first; gps; gps = gps->next) {
+  for (gps = gpf->strokes.first; gps; gps = gps->next) {
     MaterialGPencilStyle *gp_style = BKE_material_gpencil_settings_get(ob, gps->mat_nr + 1);
 
     /* check if stroke can be drawn */
     if (gpencil_can_draw_stroke(gp_style, gps, false, is_mat_preview) == false) {
-      GP_SET_SRC_GPS(src_gps);
       continue;
     }
 
     /* be sure recalc all cache in source stroke to avoid recalculation when frame change
      * and improve fps */
-    if (src_gps) {
-      DRW_gpencil_recalc_geometry_caches(ob, gpl, gp_style, src_gps);
-    }
+    gpencil_recalc_geometry_caches(
+        ob, gpl, gp_style, (gps->runtime.gps_orig) ? gps->runtime.gps_orig : gps);
 
     /* if the fill has any value, it's considered a fill and is not drawn if simplify fill is
      * enabled */
@@ -1079,53 +1079,39 @@ static void gpencil_draw_strokes(GpencilBatchCache *cache,
         (scene->r.simplify_gpencil & SIMPLIFY_GPENCIL_REMOVE_FILL_LINE)) {
       if ((gp_style->fill_rgba[3] > GPENCIL_ALPHA_OPACITY_THRESH) ||
           (gp_style->fill_style > GP_STYLE_FILL_STYLE_SOLID) ||
-          (gpl->blend_mode != eGplBlendMode_Normal)) {
-        GP_SET_SRC_GPS(src_gps);
+          (gpl->blend_mode != eGplBlendMode_Regular)) {
+
         continue;
       }
     }
 
-    if ((gpl->actframe->framenum == derived_gpf->framenum) || (!is_multiedit) ||
-        (overlay_multiedit)) {
-      /* copy color to temp fields to apply temporal changes in the stroke */
-      copy_v4_v4(gps->runtime.tmp_stroke_rgba, gp_style->stroke_rgba);
-      copy_v4_v4(gps->runtime.tmp_fill_rgba, gp_style->fill_rgba);
-
-      /* apply modifiers (only modify geometry, but not create ) */
-      if ((cache->is_dirty) && (ob->greasepencil_modifiers.first) && (!is_multiedit)) {
-        if (!stl->storage->simplify_modif) {
-          BKE_gpencil_stroke_modifiers(
-              depsgraph, ob, gpl, derived_gpf, gps, stl->storage->is_render);
-        }
-      }
-
+    if ((gpl->actframe->framenum == gpf->framenum) || (!is_multiedit) || (overlay_multiedit)) {
       /* hide any blend layer */
-      if ((!stl->storage->simplify_blend) || (gpl->blend_mode == eGplBlendMode_Normal)) {
+      if ((!stl->storage->simplify_blend) || (gpl->blend_mode == eGplBlendMode_Regular)) {
         /* fill */
         if ((gp_style->flag & GP_STYLE_FILL_SHOW) && (!stl->storage->simplify_fill) &&
             ((gps->flag & GP_STROKE_NOFILL) == 0)) {
           gpencil_add_fill_vertexdata(
-              cache, ob, gpl, derived_gpf, gps, opacity, tintcolor, false, custonion);
+              cache, ob, gpl, gpf, gps, opacity, tintcolor, false, custonion);
         }
         /* stroke */
         /* No fill strokes, must show stroke always */
         if (((gp_style->flag & GP_STYLE_STROKE_SHOW) || (gps->flag & GP_STROKE_NOFILL)) &&
             ((gp_style->stroke_rgba[3] > GPENCIL_ALPHA_OPACITY_THRESH) ||
-             (gpl->blend_mode == eGplBlendMode_Normal))) {
+             (gpl->blend_mode == eGplBlendMode_Regular))) {
           /* recalc strokes uv (geometry can be changed by modifiers) */
           if (gps->flag & GP_STROKE_RECALC_GEOMETRY) {
             ED_gpencil_calc_stroke_uv(ob, gps);
           }
 
           gpencil_add_stroke_vertexdata(
-              cache, ob, gpl, derived_gpf, gps, opacity, tintcolor, false, custonion);
+              cache, ob, gpl, gpf, gps, opacity, tintcolor, false, custonion);
         }
       }
     }
 
     /* edit points (only in edit mode and not play animation not render) */
-    if ((draw_ctx->obact == ob) && (src_gps) && (!playing) && (!is_render) &&
-        (!cache_ob->is_dup_ob)) {
+    if ((draw_ctx->obact == ob) && (!playing) && (!is_render) && (!cache_ob->is_dup_ob)) {
       if ((gpl->flag & GP_LAYER_LOCKED) == 0) {
         if (!stl->g_data->shgrps_edit_line) {
           stl->g_data->shgrps_edit_line = DRW_shgroup_create(e_data->gpencil_line_sh,
@@ -1138,11 +1124,9 @@ static void gpencil_draw_strokes(GpencilBatchCache *cache,
           DRW_shgroup_uniform_vec2(stl->g_data->shgrps_edit_point, "Viewport", viewport_size, 1);
         }
 
-        gpencil_add_editpoints_vertexdata(cache, ob, gpd, gpl, derived_gpf, src_gps);
+        gpencil_add_editpoints_vertexdata(cache, ob, gpd, gpl, gpf, gps);
       }
     }
-
-    GP_SET_SRC_GPS(src_gps);
   }
 }
 
@@ -1177,11 +1161,8 @@ static void gpencil_draw_onion_strokes(GpencilBatchCache *cache,
   GPENCIL_StorageList *stl = ((GPENCIL_Data *)vedata)->stl;
   Depsgraph *depsgraph = DRW_context_state_get()->depsgraph;
 
-  float viewmatrix[4][4];
-
   /* get parent matrix and save as static data */
-  ED_gpencil_parent_location(depsgraph, ob, gpd, gpl, viewmatrix);
-  copy_m4_m4(gpf->runtime.viewmatrix, viewmatrix);
+  ED_gpencil_parent_location(depsgraph, ob, gpd, gpl, gpf->runtime.parent_obmat);
 
   for (bGPDstroke *gps = gpf->strokes.first; gps; gps = gps->next) {
     MaterialGPencilStyle *gp_style = BKE_material_gpencil_settings_get(ob, gps->mat_nr + 1);
@@ -1359,28 +1340,9 @@ static void gpencil_draw_onionskins(GpencilBatchCache *cache,
   }
 }
 
-static void gpencil_copy_frame(bGPDframe *gpf, bGPDframe *derived_gpf)
-{
-  derived_gpf->prev = gpf->prev;
-  derived_gpf->next = gpf->next;
-  derived_gpf->framenum = gpf->framenum;
-  derived_gpf->flag = gpf->flag;
-  derived_gpf->key_type = gpf->key_type;
-  derived_gpf->runtime = gpf->runtime;
-  copy_m4_m4(derived_gpf->runtime.viewmatrix, gpf->runtime.viewmatrix);
-
-  /* copy strokes */
-  BLI_listbase_clear(&derived_gpf->strokes);
-  for (bGPDstroke *gps_src = gpf->strokes.first; gps_src; gps_src = gps_src->next) {
-    /* make copy of source stroke */
-    bGPDstroke *gps_dst = BKE_gpencil_stroke_duplicate(gps_src);
-    BLI_addtail(&derived_gpf->strokes, gps_dst);
-  }
-}
-
 /* Triangulate stroke for high quality fill (this is done only if cache is null or stroke was
  * modified) */
-void DRW_gpencil_triangulate_stroke_fill(Object *ob, bGPDstroke *gps)
+void gpencil_triangulate_stroke_fill(Object *ob, bGPDstroke *gps)
 {
   BLI_assert(gps->totpoints >= 3);
 
@@ -1456,11 +1418,18 @@ void DRW_gpencil_triangulate_stroke_fill(Object *ob, bGPDstroke *gps)
   MEM_SAFE_FREE(uv);
 }
 
+/* Check if stencil is required */
+static bool gpencil_is_stencil_required(MaterialGPencilStyle *gp_style)
+{
+  return (bool)((gp_style->stroke_style == GP_STYLE_STROKE_STYLE_SOLID) &&
+                ((gp_style->flag & GP_STYLE_DISABLE_STENCIL) == 0));
+}
+
 /* draw stroke in drawing buffer */
-void DRW_gpencil_populate_buffer_strokes(GPENCIL_e_data *e_data,
-                                         void *vedata,
-                                         ToolSettings *ts,
-                                         Object *ob)
+void gpencil_populate_buffer_strokes(GPENCIL_e_data *e_data,
+                                     void *vedata,
+                                     ToolSettings *ts,
+                                     Object *ob)
 {
   GPENCIL_PassList *psl = ((GPENCIL_Data *)vedata)->psl;
   GPENCIL_StorageList *stl = ((GPENCIL_Data *)vedata)->stl;
@@ -1490,7 +1459,7 @@ void DRW_gpencil_populate_buffer_strokes(GPENCIL_e_data *e_data,
   /* Check if may need to draw the active stroke cache, only if this layer is the active layer
    * that is being edited. (Stroke buffer is currently stored in gp-data)
    */
-  if (gpd->runtime.sbuffer_size > 0) {
+  if (gpd->runtime.sbuffer_used > 0) {
     if ((gpd->runtime.sbuffer_sflag & GP_STROKE_ERASER) == 0) {
       /* It should also be noted that sbuffer contains temporary point types
        * i.e. tGPspoints NOT bGPDspoints
@@ -1503,10 +1472,9 @@ void DRW_gpencil_populate_buffer_strokes(GPENCIL_e_data *e_data,
       stl->storage->alignment_mode = (gp_style) ? gp_style->alignment_mode : GP_STYLE_FOLLOW_PATH;
 
       /* if only one point, don't need to draw buffer because the user has no time to see it */
-      if (gpd->runtime.sbuffer_size > 1) {
+      if (gpd->runtime.sbuffer_used > 1) {
         if ((gp_style) && (gp_style->mode == GP_STYLE_MODE_LINE)) {
-          stl->g_data->shgrps_drawing_stroke = DRW_gpencil_shgroup_stroke_create(
-              e_data,
+          stl->g_data->shgrps_drawing_stroke = gpencil_shgroup_stroke_create(
               vedata,
               psl->drawing_pass,
               e_data->gpencil_stroke_sh,
@@ -1519,10 +1487,18 @@ void DRW_gpencil_populate_buffer_strokes(GPENCIL_e_data *e_data,
               false,
               1.0f,
               (const int *)stl->storage->shade_render);
+
+          if (gpencil_is_stencil_required(gp_style)) {
+            DRW_shgroup_stencil_mask(stl->g_data->shgrps_drawing_stroke, 0x01);
+          }
+          else {
+            /* Disable stencil for this type */
+            DRW_shgroup_state_disable(stl->g_data->shgrps_drawing_stroke,
+                                      DRW_STATE_WRITE_STENCIL | DRW_STATE_STENCIL_NEQUAL);
+          }
         }
         else {
-          stl->g_data->shgrps_drawing_stroke = DRW_gpencil_shgroup_point_create(
-              e_data,
+          stl->g_data->shgrps_drawing_stroke = gpencil_shgroup_point_create(
               vedata,
               psl->drawing_pass,
               e_data->gpencil_point_sh,
@@ -1535,29 +1511,24 @@ void DRW_gpencil_populate_buffer_strokes(GPENCIL_e_data *e_data,
               false,
               1.0f,
               (const int *)stl->storage->shade_render);
-        }
-
-        /* clean previous version of the batch */
-        if (stl->storage->buffer_stroke) {
-          GPU_BATCH_DISCARD_SAFE(e_data->batch_buffer_stroke);
-          MEM_SAFE_FREE(e_data->batch_buffer_stroke);
-          stl->storage->buffer_stroke = false;
+          /* Disable stencil for this type */
+          DRW_shgroup_state_disable(stl->g_data->shgrps_drawing_stroke,
+                                    DRW_STATE_WRITE_STENCIL | DRW_STATE_STENCIL_NEQUAL);
         }
 
         /* use unit matrix because the buffer is in screen space and does not need conversion */
         if (gpd->runtime.mode == GP_STYLE_MODE_LINE) {
-          e_data->batch_buffer_stroke = DRW_gpencil_get_buffer_stroke_geom(gpd, lthick);
+          stl->g_data->batch_buffer_stroke = gpencil_get_buffer_stroke_geom(gpd, lthick);
         }
         else {
-          e_data->batch_buffer_stroke = DRW_gpencil_get_buffer_point_geom(gpd, lthick);
+          stl->g_data->batch_buffer_stroke = gpencil_get_buffer_point_geom(gpd, lthick);
         }
 
         /* buffer strokes, must show stroke always */
-        DRW_shgroup_call(stl->g_data->shgrps_drawing_stroke,
-                         e_data->batch_buffer_stroke,
-                         stl->storage->unit_matrix);
+        DRW_shgroup_call(
+            stl->g_data->shgrps_drawing_stroke, stl->g_data->batch_buffer_stroke, NULL);
 
-        if ((gpd->runtime.sbuffer_size >= 3) &&
+        if ((gpd->runtime.sbuffer_used >= 3) &&
             (gpd->runtime.sfill[3] > GPENCIL_ALPHA_OPACITY_THRESH) &&
             ((gpd->runtime.sbuffer_sflag & GP_STROKE_NOFILL) == 0) &&
             ((brush->gpencil_settings->flag & GP_BRUSH_DISSABLE_LASSO) == 0) &&
@@ -1568,21 +1539,13 @@ void DRW_gpencil_populate_buffer_strokes(GPENCIL_e_data *e_data,
           }
           stl->g_data->shgrps_drawing_fill = DRW_shgroup_create(e_data->gpencil_drawing_fill_sh,
                                                                 psl->drawing_pass);
+          /* Disable stencil for this type */
+          DRW_shgroup_state_disable(stl->g_data->shgrps_drawing_fill,
+                                    DRW_STATE_WRITE_STENCIL | DRW_STATE_STENCIL_NEQUAL);
 
-          /* clean previous version of the batch */
-          if (stl->storage->buffer_fill) {
-            GPU_BATCH_DISCARD_SAFE(e_data->batch_buffer_fill);
-            MEM_SAFE_FREE(e_data->batch_buffer_fill);
-            stl->storage->buffer_fill = false;
-          }
-
-          e_data->batch_buffer_fill = DRW_gpencil_get_buffer_fill_geom(gpd);
-          DRW_shgroup_call(stl->g_data->shgrps_drawing_fill,
-                           e_data->batch_buffer_fill,
-                           stl->storage->unit_matrix);
-          stl->storage->buffer_fill = true;
+          stl->g_data->batch_buffer_fill = gpencil_get_buffer_fill_geom(gpd);
+          DRW_shgroup_call(stl->g_data->shgrps_drawing_fill, stl->g_data->batch_buffer_fill, NULL);
         }
-        stl->storage->buffer_stroke = true;
       }
     }
   }
@@ -1599,24 +1562,16 @@ void DRW_gpencil_populate_buffer_strokes(GPENCIL_e_data *e_data,
     DRWShadingGroup *shgrp = DRW_shgroup_create(e_data->gpencil_edit_point_sh, psl->drawing_pass);
     const float *viewport_size = DRW_viewport_size_get();
     DRW_shgroup_uniform_vec2(shgrp, "Viewport", viewport_size, 1);
+    /* Disable stencil for this type */
+    DRW_shgroup_state_disable(shgrp, DRW_STATE_WRITE_STENCIL | DRW_STATE_STENCIL_NEQUAL);
+    stl->g_data->batch_buffer_ctrlpoint = gpencil_get_buffer_ctrlpoint_geom(gpd);
 
-    /* clean previous version of the batch */
-    if (stl->storage->buffer_ctrlpoint) {
-      GPU_BATCH_DISCARD_SAFE(e_data->batch_buffer_ctrlpoint);
-      MEM_SAFE_FREE(e_data->batch_buffer_ctrlpoint);
-      stl->storage->buffer_ctrlpoint = false;
-    }
-
-    e_data->batch_buffer_ctrlpoint = DRW_gpencil_get_buffer_ctrlpoint_geom(gpd);
-
-    DRW_shgroup_call(shgrp, e_data->batch_buffer_ctrlpoint, stl->storage->unit_matrix);
-
-    stl->storage->buffer_ctrlpoint = true;
+    DRW_shgroup_call(shgrp, stl->g_data->batch_buffer_ctrlpoint, NULL);
   }
 }
 
 /* create all missing batches */
-static void DRW_gpencil_create_batches(GpencilBatchCache *cache)
+static void gpencil_create_batches(GpencilBatchCache *cache)
 {
   if ((cache->b_point.vbo) && (cache->b_point.batch == NULL)) {
     cache->b_point.batch = GPU_batch_create_ex(
@@ -1641,11 +1596,11 @@ static void DRW_gpencil_create_batches(GpencilBatchCache *cache)
 }
 
 /* create all shading groups */
-static void DRW_gpencil_shgroups_create(GPENCIL_e_data *e_data,
-                                        void *vedata,
-                                        Object *ob,
-                                        GpencilBatchCache *cache,
-                                        tGPencilObjectCache *cache_ob)
+static void gpencil_shgroups_create(GPENCIL_e_data *e_data,
+                                    void *vedata,
+                                    Object *ob,
+                                    GpencilBatchCache *cache,
+                                    tGPencilObjectCache *cache_ob)
 {
   GPENCIL_StorageList *stl = ((GPENCIL_Data *)vedata)->stl;
   GPENCIL_PassList *psl = ((GPENCIL_Data *)vedata)->psl;
@@ -1669,7 +1624,7 @@ static void DRW_gpencil_shgroups_create(GPENCIL_e_data *e_data,
                            true;
   const bool main_onion = v3d != NULL ? (v3d->gp_flag & V3D_GP_SHOW_ONION_SKIN) : true;
   const bool do_onion = (bool)((gpd->flag & GP_DATA_STROKE_WEIGHTMODE) == 0) && main_onion &&
-                        DRW_gpencil_onion_active(gpd) && overlay;
+                        gpencil_onion_active(gpd) && overlay;
 
   int start_stroke = 0;
   int start_point = 0;
@@ -1677,10 +1632,16 @@ static void DRW_gpencil_shgroups_create(GPENCIL_e_data *e_data,
   int start_edit = 0;
   int start_edlin = 0;
 
+  uint stencil_id = 1;
   for (int i = 0; i < cache->grp_used; i++) {
     elm = &cache->grp_cache[i];
     array_elm = &cache_ob->shgrp_array[idx];
     const float scale = cache_ob->scale;
+
+    /* Limit stencil id */
+    if (stencil_id > 255) {
+      stencil_id = 1;
+    }
 
     /* save last group when change */
     if (gpl_prev == NULL) {
@@ -1690,7 +1651,7 @@ static void DRW_gpencil_shgroups_create(GPENCIL_e_data *e_data,
     else {
       if (elm->gpl != gpl_prev) {
         /* first layer is always blend Normal */
-        array_elm->mode = idx == 0 ? eGplBlendMode_Normal : gpl->blend_mode;
+        array_elm->mode = idx == 0 ? eGplBlendMode_Regular : gpl->blend_mode;
         array_elm->end_shgrp = shgrp;
         gpl_prev = elm->gpl;
         tag_first = true;
@@ -1713,100 +1674,101 @@ static void DRW_gpencil_shgroups_create(GPENCIL_e_data *e_data,
       break;
     }
 
+    float(*obmat)[4] = (!cache_ob->is_dup_ob) ? gpf->runtime.parent_obmat : cache_ob->obmat;
     switch (elm->type) {
       case eGpencilBatchGroupType_Stroke: {
         const int len = elm->vertex_idx - start_stroke;
 
-        shgrp = DRW_gpencil_shgroup_stroke_create(e_data,
-                                                  vedata,
-                                                  stroke_pass,
-                                                  e_data->gpencil_stroke_sh,
-                                                  ob,
-                                                  gpd,
-                                                  gpl,
-                                                  gps,
-                                                  gp_style,
-                                                  stl->storage->shgroup_id,
-                                                  elm->onion,
-                                                  scale,
-                                                  cache_ob->shading_type);
+        shgrp = gpencil_shgroup_stroke_create(vedata,
+                                              stroke_pass,
+                                              e_data->gpencil_stroke_sh,
+                                              ob,
+                                              gpd,
+                                              gpl,
+                                              gps,
+                                              gp_style,
+                                              stl->storage->shgroup_id,
+                                              elm->onion,
+                                              scale,
+                                              cache_ob->shading_type);
         if ((do_onion) || (elm->onion == false)) {
-          DRW_shgroup_call_range(shgrp,
-                                 cache->b_stroke.batch,
-                                 (!cache_ob->is_dup_ob) ? gpf->runtime.viewmatrix :
-                                                          cache_ob->obmat,
-                                 start_stroke,
-                                 len);
+          DRW_shgroup_call_range_obmat(shgrp, cache->b_stroke.batch, obmat, start_stroke, len);
         }
         stl->storage->shgroup_id++;
         start_stroke = elm->vertex_idx;
+
+        /* set stencil mask id */
+        if (gpencil_is_stencil_required(gp_style)) {
+          DRW_shgroup_stencil_mask(shgrp, stencil_id);
+          stencil_id++;
+        }
+        else {
+          /* Disable stencil for this type */
+          DRW_shgroup_state_disable(shgrp, DRW_STATE_WRITE_STENCIL | DRW_STATE_STENCIL_NEQUAL);
+          /* set stencil mask id as not used */
+          DRW_shgroup_stencil_mask(shgrp, 0x0);
+        }
         break;
       }
       case eGpencilBatchGroupType_Point: {
         const int len = elm->vertex_idx - start_point;
 
-        shgrp = DRW_gpencil_shgroup_point_create(e_data,
-                                                 vedata,
-                                                 stroke_pass,
-                                                 e_data->gpencil_point_sh,
-                                                 ob,
-                                                 gpd,
-                                                 gpl,
-                                                 gps,
-                                                 gp_style,
-                                                 stl->storage->shgroup_id,
-                                                 elm->onion,
-                                                 scale,
-                                                 cache_ob->shading_type);
+        shgrp = gpencil_shgroup_point_create(vedata,
+                                             stroke_pass,
+                                             e_data->gpencil_point_sh,
+                                             ob,
+                                             gpd,
+                                             gpl,
+                                             gps,
+                                             gp_style,
+                                             stl->storage->shgroup_id,
+                                             elm->onion,
+                                             scale,
+                                             cache_ob->shading_type);
 
         if ((do_onion) || (elm->onion == false)) {
-          DRW_shgroup_call_range(shgrp,
-                                 cache->b_point.batch,
-                                 (!cache_ob->is_dup_ob) ? gpf->runtime.viewmatrix :
-                                                          cache_ob->obmat,
-                                 start_point,
-                                 len);
+          DRW_shgroup_call_range_obmat(shgrp, cache->b_point.batch, obmat, start_point, len);
         }
         stl->storage->shgroup_id++;
         start_point = elm->vertex_idx;
+
+        /* Disable stencil for this type */
+        DRW_shgroup_state_disable(shgrp, DRW_STATE_WRITE_STENCIL | DRW_STATE_STENCIL_NEQUAL);
+        /* set stencil mask id as not used */
+        DRW_shgroup_stencil_mask(shgrp, 0x0);
         break;
       }
       case eGpencilBatchGroupType_Fill: {
         const int len = elm->vertex_idx - start_fill;
 
-        shgrp = DRW_gpencil_shgroup_fill_create(e_data,
-                                                vedata,
-                                                stroke_pass,
-                                                e_data->gpencil_fill_sh,
-                                                ob,
-                                                gpd,
-                                                gpl,
-                                                gp_style,
-                                                stl->storage->shgroup_id,
-                                                cache_ob->shading_type);
+        shgrp = gpencil_shgroup_fill_create(vedata,
+                                            stroke_pass,
+                                            e_data->gpencil_fill_sh,
+                                            ob,
+                                            gpd,
+                                            gpl,
+                                            gp_style,
+                                            stl->storage->shgroup_id,
+                                            cache_ob->shading_type);
 
         if ((do_onion) || (elm->onion == false)) {
-          DRW_shgroup_call_range(shgrp,
-                                 cache->b_fill.batch,
-                                 (!cache_ob->is_dup_ob) ? gpf->runtime.viewmatrix :
-                                                          cache_ob->obmat,
-                                 start_fill,
-                                 len);
+          DRW_shgroup_call_range_obmat(shgrp, cache->b_fill.batch, obmat, start_fill, len);
         }
         stl->storage->shgroup_id++;
         start_fill = elm->vertex_idx;
+
+        /* Disable stencil for this type */
+        DRW_shgroup_state_disable(shgrp, DRW_STATE_WRITE_STENCIL | DRW_STATE_STENCIL_NEQUAL);
+        /* set stencil mask id as not used */
+        DRW_shgroup_stencil_mask(shgrp, 0x0);
         break;
       }
       case eGpencilBatchGroupType_Edit: {
         if (stl->g_data->shgrps_edit_point) {
           const int len = elm->vertex_idx - start_edit;
           /* use always the same group */
-          DRW_shgroup_call_range(stl->g_data->shgrps_edit_point,
-                                 cache->b_edit.batch,
-                                 (!cache_ob->is_dup_ob) ? gpf->runtime.viewmatrix :
-                                                          cache_ob->obmat,
-                                 start_edit,
-                                 len);
+          DRW_shgroup_call_range_obmat(
+              stl->g_data->shgrps_edit_point, cache->b_edit.batch, obmat, start_edit, len);
 
           start_edit = elm->vertex_idx;
         }
@@ -1816,12 +1778,8 @@ static void DRW_gpencil_shgroups_create(GPENCIL_e_data *e_data,
         if (stl->g_data->shgrps_edit_line) {
           const int len = elm->vertex_idx - start_edlin;
           /* use always the same group */
-          DRW_shgroup_call_range(stl->g_data->shgrps_edit_line,
-                                 cache->b_edlin.batch,
-                                 (!cache_ob->is_dup_ob) ? gpf->runtime.viewmatrix :
-                                                          cache_ob->obmat,
-                                 start_edlin,
-                                 len);
+          DRW_shgroup_call_range_obmat(
+              stl->g_data->shgrps_edit_line, cache->b_edlin.batch, obmat, start_edlin, len);
 
           start_edlin = elm->vertex_idx;
         }
@@ -1834,8 +1792,8 @@ static void DRW_gpencil_shgroups_create(GPENCIL_e_data *e_data,
     /* save first group */
     if ((shgrp != NULL) && (tag_first)) {
       array_elm = &cache_ob->shgrp_array[idx];
-      array_elm->mode = idx == 0 ? eGplBlendMode_Normal : gpl->blend_mode;
-      array_elm->clamp_layer = gpl->flag & GP_LAYER_USE_MASK;
+      array_elm->mode = idx == 0 ? eGplBlendMode_Regular : gpl->blend_mode;
+      array_elm->mask_layer = gpl->flag & GP_LAYER_USE_MASK;
       array_elm->blend_opacity = gpl->opacity;
       array_elm->init_shgrp = shgrp;
       cache_ob->tot_layers++;
@@ -1846,15 +1804,15 @@ static void DRW_gpencil_shgroups_create(GPENCIL_e_data *e_data,
 
   /* save last group */
   if (shgrp != NULL) {
-    array_elm->mode = idx == 0 ? eGplBlendMode_Normal : gpl->blend_mode;
+    array_elm->mode = idx == 0 ? eGplBlendMode_Regular : gpl->blend_mode;
     array_elm->end_shgrp = shgrp;
   }
 }
 /* populate a datablock for multiedit (no onions, no modifiers) */
-void DRW_gpencil_populate_multiedit(GPENCIL_e_data *e_data,
-                                    void *vedata,
-                                    Object *ob,
-                                    tGPencilObjectCache *cache_ob)
+void gpencil_populate_multiedit(GPENCIL_e_data *e_data,
+                                void *vedata,
+                                Object *ob,
+                                tGPencilObjectCache *cache_ob)
 {
   bGPdata *gpd = (bGPdata *)ob->data;
   bGPDframe *gpf = NULL;
@@ -1868,7 +1826,7 @@ void DRW_gpencil_populate_multiedit(GPENCIL_e_data *e_data,
   const bool playing = stl->storage->is_playing;
 
   /* calc max size of VBOs */
-  gpencil_calc_vertex(stl, cache_ob, cache, gpd, cfra_eval);
+  gpencil_calc_vertex(stl, cache_ob, cache, gpd);
 
   /* draw strokes */
   for (bGPDlayer *gpl = gpd->layers.first; gpl; gpl = gpl->next) {
@@ -1888,7 +1846,6 @@ void DRW_gpencil_populate_multiedit(GPENCIL_e_data *e_data,
                                gpd,
                                gpl,
                                gpf,
-                               gpf,
                                gpl->opacity,
                                gpl->tintcolor,
                                false,
@@ -1906,7 +1863,6 @@ void DRW_gpencil_populate_multiedit(GPENCIL_e_data *e_data,
                              gpd,
                              gpl,
                              gpf,
-                             gpf,
                              gpl->opacity,
                              gpl->tintcolor,
                              false,
@@ -1916,51 +1872,39 @@ void DRW_gpencil_populate_multiedit(GPENCIL_e_data *e_data,
   }
 
   /* create batchs and shading groups */
-  DRW_gpencil_create_batches(cache);
-  DRW_gpencil_shgroups_create(e_data, vedata, ob, cache, cache_ob);
+  gpencil_create_batches(cache);
+  gpencil_shgroups_create(e_data, vedata, ob, cache, cache_ob);
 
   cache->is_dirty = false;
 }
 
-/* ensure there is a derived frame */
-static void gpencil_ensure_derived_frame(bGPdata *gpd,
-                                         bGPDlayer *gpl,
-                                         bGPDframe *gpf,
-                                         GpencilBatchCache *cache,
-                                         bGPDframe **derived_gpf)
-{
-  /* create derived frames array data or expand */
-  int derived_idx = BLI_findindex(&gpd->layers, gpl);
-  *derived_gpf = &cache->derived_array[derived_idx];
-
-  /* if no derived frame or dirty cache, create a new one */
-  if ((*derived_gpf == NULL) || (cache->is_dirty)) {
-    if (*derived_gpf != NULL) {
-      /* first clear temp data */
-      BKE_gpencil_free_frame_runtime_data(*derived_gpf);
-    }
-    /* create new data (do not assign new memory)*/
-    gpencil_copy_frame(gpf, *derived_gpf);
-  }
-}
-
 /* helper for populate a complete grease pencil datablock */
-void DRW_gpencil_populate_datablock(GPENCIL_e_data *e_data,
-                                    void *vedata,
-                                    Object *ob,
-                                    tGPencilObjectCache *cache_ob)
+void gpencil_populate_datablock(GPENCIL_e_data *e_data,
+                                void *vedata,
+                                Object *ob,
+                                tGPencilObjectCache *cache_ob)
 {
   GPENCIL_StorageList *stl = ((GPENCIL_Data *)vedata)->stl;
   const DRWContextState *draw_ctx = DRW_context_state_get();
   const ViewLayer *view_layer = DEG_get_evaluated_view_layer(draw_ctx->depsgraph);
   Scene *scene = draw_ctx->scene;
 
-  bGPdata *gpd = (bGPdata *)ob->data;
+  /* TODO: Review why is needed this recalc when render cycles + GP object in background.
+   * We need these lines to keep running the background render, but asap we get an alternative
+   * solution, we must remove it and keep all logic inside gpencil_modifier module. (antoniov)
+   */
+  if (ob->runtime.gpencil_tot_layers == 0) {
+    BKE_gpencil_modifiers_calc(draw_ctx->depsgraph, draw_ctx->scene, ob);
+  }
+
+  /* Use original data to shared in edit/transform operators */
+  bGPdata *gpd_eval = (bGPdata *)ob->data;
+  bGPdata *gpd = (bGPdata *)DEG_get_original_id(&gpd_eval->id);
 
   View3D *v3d = draw_ctx->v3d;
   int cfra_eval = (int)DEG_get_ctime(draw_ctx->depsgraph);
 
-  bGPDframe *derived_gpf = NULL;
+  bGPDframe *gpf_eval = NULL;
   const bool overlay = v3d != NULL ? (bool)((v3d->flag2 & V3D_HIDE_OVERLAYS) == 0) : true;
   const bool time_remap = BKE_gpencil_has_time_modifiers(ob);
 
@@ -1975,19 +1919,13 @@ void DRW_gpencil_populate_datablock(GPENCIL_e_data *e_data,
 
   /* if object is duplicate, only create shading groups */
   if (cache_ob->is_dup_ob) {
-    DRW_gpencil_shgroups_create(e_data, vedata, ob, cache, cache_ob);
+    gpencil_shgroups_create(e_data, vedata, ob, cache, cache_ob);
     return;
   }
 
   /* calc max size of VBOs */
-  gpencil_calc_vertex(stl, cache_ob, cache, gpd, cfra_eval);
+  gpencil_calc_vertex(stl, cache_ob, cache, gpd);
 
-  /* init general modifiers data */
-  if (!stl->storage->simplify_modif) {
-    if ((cache->is_dirty) && (ob->greasepencil_modifiers.first)) {
-      BKE_gpencil_lattice_init(ob);
-    }
-  }
   /* draw normal strokes */
   for (bGPDlayer *gpl = gpd->layers.first; gpl; gpl = gpl->next) {
     /* don't draw layer if hidden */
@@ -2035,8 +1973,9 @@ void DRW_gpencil_populate_datablock(GPENCIL_e_data *e_data,
       opacity = opacity * v3d->overlay.gpencil_fade_layer;
     }
 
-    /* create derived frames array data or expand */
-    gpencil_ensure_derived_frame(gpd, gpl, gpf, cache, &derived_gpf);
+    /* Get evaluated frames array data */
+    int idx_eval = BLI_findindex(&gpd->layers, gpl);
+    gpf_eval = &ob->runtime.gpencil_evaluated_frames[idx_eval];
 
     /* draw onion skins */
     if (!ID_IS_LINKED(&gpd->id)) {
@@ -2050,33 +1989,18 @@ void DRW_gpencil_populate_datablock(GPENCIL_e_data *e_data,
       }
     }
     /* draw normal strokes */
-    gpencil_draw_strokes(cache,
-                         e_data,
-                         vedata,
-                         ob,
-                         gpd,
-                         gpl,
-                         gpf,
-                         derived_gpf,
-                         opacity,
-                         gpl->tintcolor,
-                         false,
-                         cache_ob);
-  }
-
-  /* clear any lattice data */
-  if ((cache->is_dirty) && (ob->greasepencil_modifiers.first)) {
-    BKE_gpencil_lattice_clear(ob);
+    gpencil_draw_strokes(
+        cache, e_data, vedata, ob, gpd, gpl, gpf_eval, opacity, gpl->tintcolor, false, cache_ob);
   }
 
   /* create batchs and shading groups */
-  DRW_gpencil_create_batches(cache);
-  DRW_gpencil_shgroups_create(e_data, vedata, ob, cache, cache_ob);
+  gpencil_create_batches(cache);
+  gpencil_shgroups_create(e_data, vedata, ob, cache, cache_ob);
 
   cache->is_dirty = false;
 }
 
-void DRW_gpencil_populate_particles(GPENCIL_e_data *e_data, GHash *gh_objects, void *vedata)
+void gpencil_populate_particles(GPENCIL_e_data *e_data, GHash *gh_objects, void *vedata)
 {
   GPENCIL_StorageList *stl = ((GPENCIL_Data *)vedata)->stl;
 
@@ -2084,15 +2008,15 @@ void DRW_gpencil_populate_particles(GPENCIL_e_data *e_data, GHash *gh_objects, v
   for (int i = 0; i < stl->g_data->gp_cache_used; i++) {
     tGPencilObjectCache *cache_ob = &stl->g_data->gp_object_cache[i];
     if (cache_ob->is_dup_ob) {
-      /* reasign duplicate objects because memory for particles is not available
-       * and need to use the original datablock and runtime data */
+      /* Reassign duplicate objects because memory for particles is not available
+       * and need to use the original data-block and run-time data. */
       Object *ob = (Object *)BLI_ghash_lookup(gh_objects, cache_ob->name);
       if (ob) {
         cache_ob->ob = ob;
         cache_ob->gpd = (bGPdata *)ob->data;
         GpencilBatchCache *cache = ob->runtime.gpencil_cache;
         if (cache != NULL) {
-          DRW_gpencil_shgroups_create(e_data, vedata, ob, cache, cache_ob);
+          gpencil_shgroups_create(e_data, vedata, ob, cache, cache_ob);
         }
       }
     }

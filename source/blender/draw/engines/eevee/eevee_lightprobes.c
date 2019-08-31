@@ -66,7 +66,7 @@ bool EEVEE_lightprobes_obj_visibility_cb(bool vis_in, void *user_data)
   EEVEE_ObjectEngineData *oed = (EEVEE_ObjectEngineData *)user_data;
 
   /* test disabled if group is NULL */
-  if (oed->test_data->collection == NULL) {
+  if (oed == NULL || oed->test_data->collection == NULL) {
     return vis_in;
   }
 
@@ -212,6 +212,7 @@ void EEVEE_lightprobes_init(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata)
 
   common_data->spec_toggle = true;
   common_data->ssr_toggle = true;
+  common_data->ssrefract_toggle = true;
   common_data->sss_toggle = true;
 
   /* Placeholder planar pool: used when rendering planar reflections (avoid dependency loop). */
@@ -344,6 +345,7 @@ void EEVEE_lightprobes_cache_init(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedat
 
       if (wo->use_nodes && wo->nodetree) {
         static float error_col[3] = {1.0f, 0.0f, 1.0f};
+        static float queue_col[3] = {0.5f, 0.5f, 0.5f};
         struct GPUMaterial *gpumat = EEVEE_material_world_lightprobe_get(scene, wo);
 
         eGPUMaterialStatus status = GPU_material_status(gpumat);
@@ -360,6 +362,10 @@ void EEVEE_lightprobes_cache_init(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedat
             DRW_shgroup_uniform_block(grp, "light_block", sldata->light_ubo);
             DRW_shgroup_uniform_block(grp, "shadow_block", sldata->shadow_ubo);
             DRW_shgroup_call(grp, geom, NULL);
+            break;
+          case GPU_MAT_QUEUED:
+            stl->g_data->queued_shaders_count++;
+            col = queue_col;
             break;
           default:
             col = error_col;
@@ -398,7 +404,7 @@ void EEVEE_lightprobes_cache_init(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedat
       DRW_shgroup_uniform_block(grp, "planar_block", sldata->planar_ubo);
       DRW_shgroup_uniform_block(grp, "grid_block", sldata->grid_ubo);
 
-      DRW_shgroup_call_procedural_triangles(grp, cube_len * 2, NULL);
+      DRW_shgroup_call_procedural_triangles(grp, NULL, cube_len * 2);
     }
 
     /* Grid Display */
@@ -424,7 +430,7 @@ void EEVEE_lightprobes_cache_init(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedat
         DRW_shgroup_uniform_block(shgrp, "grid_block", sldata->grid_ubo);
         DRW_shgroup_uniform_block(shgrp, "common_block", sldata->common_ubo);
         int tri_count = egrid->resolution[0] * egrid->resolution[1] * egrid->resolution[2] * 2;
-        DRW_shgroup_call_procedural_triangles(shgrp, tri_count, NULL);
+        DRW_shgroup_call_procedural_triangles(shgrp, NULL, tri_count);
       }
     }
 
@@ -754,7 +760,7 @@ void EEVEE_lightprobes_cache_finish(EEVEE_ViewLayerData *sldata, EEVEE_Data *ved
   }
   planar_pool_ensure_alloc(vedata, pinfo->num_planar);
 
-  /* If lightcache auto-update is enable we tag the relevant part
+  /* If light-cache auto-update is enable we tag the relevant part
    * of the cache to update and fire up a baking job. */
   if (!DRW_state_is_image_render() && !DRW_state_is_opengl_render() &&
       (pinfo->do_grid_update || pinfo->do_cube_update)) {
@@ -787,7 +793,7 @@ void EEVEE_lightprobes_cache_finish(EEVEE_ViewLayerData *sldata, EEVEE_Data *ved
 
     DRW_shgroup_uniform_texture_ref(grp, "source", &txl->planar_pool);
     DRW_shgroup_uniform_float(grp, "fireflyFactor", &sldata->common_data.ssr_firefly_fac, 1);
-    DRW_shgroup_call_procedural_triangles(grp, pinfo->num_planar, NULL);
+    DRW_shgroup_call_procedural_triangles(grp, NULL, pinfo->num_planar);
   }
 }
 
@@ -911,6 +917,7 @@ static void lightbake_render_scene_face(int face, EEVEE_BakeRenderData *user_dat
   DRW_draw_pass(psl->sss_pass); /* Only output standard pass */
   DRW_draw_pass(psl->sss_pass_cull);
   EEVEE_draw_default_passes(psl);
+  DRW_draw_pass(psl->transparent_pass);
 }
 
 /* Render the scene to the probe_rt texture. */
@@ -970,8 +977,8 @@ static void lightbake_render_scene_reflected(int layer, EEVEE_BakeRenderData *us
 
   DRW_draw_pass(psl->depth_pass_clip);
   DRW_draw_pass(psl->depth_pass_clip_cull);
-  DRW_draw_pass(psl->refract_depth_pass);
-  DRW_draw_pass(psl->refract_depth_pass_cull);
+  DRW_draw_pass(psl->refract_depth_pass_clip);
+  DRW_draw_pass(psl->refract_depth_pass_clip_cull);
 
   DRW_draw_pass(psl->probe_background);
   EEVEE_create_minmax_buffer(vedata, tmp_planar_depth, layer);
@@ -1206,7 +1213,7 @@ void EEVEE_lightbake_filter_visibility(EEVEE_ViewLayerData *sldata,
   DRW_draw_pass(psl->probe_visibility_compute);
 }
 
-/* Actually a simple downsampling */
+/* Actually a simple down-sampling. */
 static void downsample_planar(void *vedata, int level)
 {
   EEVEE_PassList *psl = ((EEVEE_Data *)vedata)->psl;
@@ -1258,6 +1265,7 @@ void EEVEE_lightprobes_refresh_planar(EEVEE_ViewLayerData *sldata, EEVEE_Data *v
   common_data->prb_num_planar = 0;
   /* Turn off ssr to avoid black specular */
   common_data->ssr_toggle = false;
+  common_data->ssrefract_toggle = false;
   common_data->sss_toggle = false;
 
   common_data->ray_type = EEVEE_RAY_GLOSSY;
@@ -1267,7 +1275,7 @@ void EEVEE_lightprobes_refresh_planar(EEVEE_ViewLayerData *sldata, EEVEE_Data *v
   /* Rendering happens here! */
   eevee_lightbake_render_scene_to_planars(sldata, vedata);
 
-  /* Make sure no aditionnal visibility check runs after this. */
+  /* Make sure no additional visibility check runs after this. */
   pinfo->vis_data.collection = NULL;
 
   DRW_uniformbuffer_update(sldata->planar_ubo, &sldata->probes->planar_data);
@@ -1275,6 +1283,7 @@ void EEVEE_lightprobes_refresh_planar(EEVEE_ViewLayerData *sldata, EEVEE_Data *v
   /* Restore */
   common_data->prb_num_planar = pinfo->num_planar;
   common_data->ssr_toggle = true;
+  common_data->ssrefract_toggle = true;
   common_data->sss_toggle = true;
 
   /* Prefilter for SSR */

@@ -66,8 +66,9 @@ void EEVEE_mist_output_init(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata)
   }
 
   /* Create FrameBuffer. */
-  DRW_texture_ensure_fullscreen_2d(
-      &txl->mist_accum, GPU_R32F, 0); /* Should be enough precision for many samples. */
+
+  /* Should be enough precision for many samples. */
+  DRW_texture_ensure_fullscreen_2d(&txl->mist_accum, GPU_R32F, 0);
 
   GPU_framebuffer_ensure_config(&fbl->mist_accum_fb,
                                 {GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(txl->mist_accum)});
@@ -106,7 +107,7 @@ void EEVEE_mist_output_init(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata)
   g_data->mist_falloff *= 0.5f;
 
   /* Create Pass and shgroup. */
-  DRW_PASS_CREATE(psl->mist_accum_ps, DRW_STATE_WRITE_COLOR | DRW_STATE_ADDITIVE);
+  DRW_PASS_CREATE(psl->mist_accum_ps, DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD);
   DRWShadingGroup *grp = DRW_shgroup_create(e_data.mist_sh, psl->mist_accum_ps);
   DRW_shgroup_uniform_texture_ref(grp, "depthBuffer", &dtxl->depth);
   DRW_shgroup_uniform_block(grp, "common_block", sldata->common_ubo);

@@ -28,6 +28,7 @@
 
 #include "GPU_batch.h"
 #include "GPU_batch_presets.h"
+#include "GPU_extensions.h"
 #include "GPU_matrix.h"
 #include "GPU_shader.h"
 
@@ -178,6 +179,25 @@ void GPU_batch_instbuf_set(GPUBatch *batch, GPUVertBuf *inst, bool own_vbo)
   }
   else {
     batch->owns_flag &= ~GPU_BATCH_OWNS_INSTANCES;
+  }
+}
+
+void GPU_batch_elembuf_set(GPUBatch *batch, GPUIndexBuf *elem, bool own_ibo)
+{
+  BLI_assert(elem != NULL);
+  /* redo the bindings */
+  GPU_batch_vao_cache_clear(batch);
+
+  if (batch->elem != NULL && (batch->owns_flag & GPU_BATCH_OWNS_INDEX)) {
+    GPU_indexbuf_discard(batch->elem);
+  }
+  batch->elem = elem;
+
+  if (own_ibo) {
+    batch->owns_flag |= GPU_BATCH_OWNS_INDEX;
+  }
+  else {
+    batch->owns_flag &= ~GPU_BATCH_OWNS_INDEX;
   }
 }
 
@@ -361,13 +381,23 @@ static void create_bindings(GPUVertBuf *verts,
   const GPUVertFormat *format = &verts->format;
 
   const uint attr_len = format->attr_len;
-  const uint stride = format->stride;
+  uint stride = format->stride;
+  uint offset = 0;
 
   GPU_vertbuf_use(verts);
 
   for (uint a_idx = 0; a_idx < attr_len; ++a_idx) {
     const GPUVertAttr *a = &format->attrs[a_idx];
-    const GLvoid *pointer = (const GLubyte *)0 + a->offset + v_first * stride;
+
+    if (format->deinterleaved) {
+      offset += ((a_idx == 0) ? 0 : format->attrs[a_idx - 1].sz) * verts->vertex_len;
+      stride = a->sz;
+    }
+    else {
+      offset = a->offset;
+    }
+
+    const GLvoid *pointer = (const GLubyte *)0 + offset + v_first * stride;
 
     for (uint n_idx = 0; n_idx < a->name_len; ++n_idx) {
       const char *name = GPU_vertformat_attr_name_get(format, a, n_idx);
@@ -418,8 +448,11 @@ static void create_bindings(GPUVertBuf *verts,
 
 static void batch_update_program_bindings(GPUBatch *batch, uint v_first)
 {
-  for (int v = 0; v < GPU_BATCH_VBO_MAX_LEN && batch->verts[v] != NULL; ++v) {
-    create_bindings(batch->verts[v], batch->interface, (batch->inst) ? 0 : v_first, false);
+  /* Reverse order so first vbos have more prevalence (in term of attrib override). */
+  for (int v = GPU_BATCH_VBO_MAX_LEN - 1; v > -1; --v) {
+    if (batch->verts[v] != NULL) {
+      create_bindings(batch->verts[v], batch->interface, (batch->inst) ? 0 : v_first, false);
+    }
   }
   if (batch->inst) {
     create_bindings(batch->inst, batch->interface, v_first, true);
@@ -545,46 +578,29 @@ void GPU_batch_uniform_mat4(GPUBatch *batch, const char *name, const float data[
   glUniformMatrix4fv(uniform->location, 1, GL_FALSE, (const float *)data);
 }
 
-static void primitive_restart_enable(const GPUIndexBuf *el)
-{
-  // TODO(fclem) Replace by GL_PRIMITIVE_RESTART_FIXED_INDEX when we have ogl 4.3
-  glEnable(GL_PRIMITIVE_RESTART);
-  GLuint restart_index = (GLuint)0xFFFFFFFF;
-
-#if GPU_TRACK_INDEX_RANGE
-  if (el->index_type == GPU_INDEX_U8) {
-    restart_index = (GLuint)0xFF;
-  }
-  else if (el->index_type == GPU_INDEX_U16) {
-    restart_index = (GLuint)0xFFFF;
-  }
-#endif
-
-  glPrimitiveRestartIndex(restart_index);
-}
-
-static void primitive_restart_disable(void)
-{
-  glDisable(GL_PRIMITIVE_RESTART);
-}
-
 static void *elem_offset(const GPUIndexBuf *el, int v_first)
 {
 #if GPU_TRACK_INDEX_RANGE
-  if (el->index_type == GPU_INDEX_U8) {
-    return (GLubyte *)0 + v_first;
-  }
-  else if (el->index_type == GPU_INDEX_U16) {
-    return (GLushort *)0 + v_first;
+  if (el->index_type == GPU_INDEX_U16) {
+    return (GLushort *)0 + v_first + el->index_start;
   }
 #endif
-  return (GLuint *)0 + v_first;
+  return (GLuint *)0 + v_first + el->index_start;
 }
 
 /* Use when drawing with GPU_batch_draw_advanced */
 void GPU_batch_bind(GPUBatch *batch)
 {
   glBindVertexArray(batch->vao_id);
+
+#if GPU_TRACK_INDEX_RANGE
+  /* Can be removed if GL 4.3 is required. */
+  if (!GLEW_ARB_ES3_compatibility && batch->elem != NULL) {
+    GLuint restart_index = (batch->elem->index_type == GPU_INDEX_U16) ? (GLuint)0xFFFF :
+                                                                        (GLuint)0xFFFFFFFF;
+    glPrimitiveRestartIndex(restart_index);
+  }
+#endif
 }
 
 void GPU_batch_draw(GPUBatch *batch)
@@ -616,7 +632,7 @@ void GPU_batch_draw_advanced(GPUBatch *batch, int v_first, int v_count, int i_fi
     i_count = (batch->inst) ? batch->inst->vertex_len : 1;
   }
 
-  if (!GLEW_ARB_base_instance) {
+  if (!GPU_arb_base_instance_is_supported()) {
     if (i_first > 0 && i_count > 0) {
       /* If using offset drawing with instancing, we must
        * use the default VAO and redo bindings. */
@@ -641,11 +657,7 @@ void GPU_batch_draw_advanced(GPUBatch *batch, int v_first, int v_count, int i_fi
 #endif
     void *v_first_ofs = elem_offset(el, v_first);
 
-    if (el->use_prim_restart) {
-      primitive_restart_enable(el);
-    }
-
-    if (GLEW_ARB_base_instance) {
+    if (GPU_arb_base_instance_is_supported()) {
       glDrawElementsInstancedBaseVertexBaseInstance(
           batch->gl_prim_type, v_count, index_type, v_first_ofs, i_count, base_index, i_first);
     }
@@ -653,18 +665,20 @@ void GPU_batch_draw_advanced(GPUBatch *batch, int v_first, int v_count, int i_fi
       glDrawElementsInstancedBaseVertex(
           batch->gl_prim_type, v_count, index_type, v_first_ofs, i_count, base_index);
     }
-
-    if (el->use_prim_restart) {
-      primitive_restart_disable();
-    }
   }
   else {
-    if (GLEW_ARB_base_instance) {
+#ifdef __APPLE__
+    glDisable(GL_PRIMITIVE_RESTART);
+#endif
+    if (GPU_arb_base_instance_is_supported()) {
       glDrawArraysInstancedBaseInstance(batch->gl_prim_type, v_first, v_count, i_count, i_first);
     }
     else {
       glDrawArraysInstanced(batch->gl_prim_type, v_first, v_count, i_count);
     }
+#ifdef __APPLE__
+    glEnable(GL_PRIMITIVE_RESTART);
+#endif
   }
 }
 

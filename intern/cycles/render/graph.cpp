@@ -130,6 +130,7 @@ ShaderOutput *ShaderNode::output(ustring name)
 void ShaderNode::remove_input(ShaderInput *input)
 {
   assert(input->link == NULL);
+  delete input;
   inputs.erase(remove(inputs.begin(), inputs.end(), input), inputs.end());
 }
 
@@ -977,7 +978,7 @@ void ShaderGraph::bump_from_displacement(bool use_object_space)
   foreach (NodePair &pair, nodes_dy)
     pair.second->bump = SHADER_BUMP_DY;
 
-  /* add set normal node and connect the bump normal ouput to the set normal
+  /* add set normal node and connect the bump normal output to the set normal
    * output, so it can finally set the shader normal, note we are only doing
    * this for bump from displacement, this will be the only bump allowed to
    * overwrite the shader normal */

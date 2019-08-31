@@ -611,13 +611,14 @@ static int node_select_modal(bContext *C, wmOperator *op, const wmEvent *event)
     return ret_value | OPERATOR_PASS_THROUGH;
   }
   else if (ELEM(event->type, MOUSEMOVE, INBETWEEN_MOUSEMOVE)) {
-    const int dx = mval[0] - event->mval[0];
-    const int dy = mval[1] - event->mval[1];
-    const float tweak_threshold = U.tweak_threshold * U.dpi_fac;
+    const int drag_delta[2] = {
+        mval[0] - event->mval[0],
+        mval[1] - event->mval[1],
+    };
     /* If user moves mouse more than defined threshold, we consider select operator as
      * finished. Otherwise, it is still running until we get an 'release' event. In any
      * case, we pass through event, but select op is not finished yet. */
-    if (abs(dx) + abs(dy) > tweak_threshold) {
+    if (WM_event_drag_test_with_delta(event, drag_delta)) {
       return OPERATOR_FINISHED | OPERATOR_PASS_THROUGH;
     }
     else {
@@ -1233,8 +1234,18 @@ static uiBlock *node_find_menu(bContext *C, ARegion *ar, void *arg_op)
   UI_block_flag_enable(block, UI_BLOCK_LOOP | UI_BLOCK_MOVEMOUSE_QUIT | UI_BLOCK_SEARCH_MENU);
   UI_block_theme_style_set(block, UI_BLOCK_THEME_STYLE_POPUP);
 
-  but = uiDefSearchBut(
-      block, search, 0, ICON_VIEWZOOM, sizeof(search), 10, 10, 9 * UI_UNIT_X, UI_UNIT_Y, 0, 0, "");
+  but = uiDefSearchBut(block,
+                       search,
+                       0,
+                       ICON_VIEWZOOM,
+                       sizeof(search),
+                       10,
+                       10,
+                       UI_searchbox_size_x(),
+                       UI_UNIT_Y,
+                       0,
+                       0,
+                       "");
   UI_but_func_search_set(but, NULL, node_find_cb, op->type, false, node_find_call_cb, NULL);
   UI_but_flag_enable(but, UI_BUT_ACTIVATE_ON_INIT);
 
@@ -1255,7 +1266,7 @@ static uiBlock *node_find_menu(bContext *C, ARegion *ar, void *arg_op)
            NULL);
 
   /* Move it downwards, mouse over button. */
-  UI_block_bounds_set_popup(block, 6, (const int[2]){0, -UI_UNIT_Y});
+  UI_block_bounds_set_popup(block, 0.3f * U.widget_unit, (const int[2]){0, -UI_UNIT_Y});
 
   return block;
 }

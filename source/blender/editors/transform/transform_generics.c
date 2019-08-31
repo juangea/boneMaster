@@ -81,6 +81,7 @@
 #include "BKE_workspace.h"
 
 #include "DEG_depsgraph.h"
+#include "DEG_depsgraph_query.h"
 
 #include "ED_anim_api.h"
 #include "ED_armature.h"
@@ -819,6 +820,9 @@ static void pose_transform_mirror_update(Object *ob, PoseInitData_Mirror *pid)
           pid++;
         }
         BKE_pchan_apply_mat4(pchan, pchan_mtx_final, false);
+
+        /* set flag to let autokeyframe know to keyframe the mirrred bone */
+        pchan->bone->flag |= BONE_TRANSFORM_MIRROR;
       }
     }
   }
@@ -897,7 +901,7 @@ static void recalcData_objects(TransInfo *t)
         DEG_id_tag_update(tc->obedit->data, 0); /* sets recalc flags */
         BMEditMesh *em = BKE_editmesh_from_object(tc->obedit);
         EDBM_mesh_normals_update(em);
-        BKE_editmesh_tessface_calc(em);
+        BKE_editmesh_looptri_calc(em);
       }
     }
     else if (t->obedit_type == OB_ARMATURE) { /* no recalc flag, does pose */
@@ -1043,7 +1047,6 @@ static void recalcData_objects(TransInfo *t)
 
     FOREACH_TRANS_DATA_CONTAINER (t, tc) {
       Object *ob = tc->poseobj;
-      bArmature *arm = ob->data;
       bPose *pose = ob->pose;
 
       if (pose->flag & POSE_MIRROR_EDIT) {
@@ -1080,15 +1083,7 @@ static void recalcData_objects(TransInfo *t)
         BLI_gset_insert(motionpath_updates, ob);
       }
 
-      /* old optimize trick... this enforces to bypass the depgraph */
-      if (!(arm->flag & ARM_DELAYDEFORM)) {
-        DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY); /* sets recalc flags */
-        /* transformation of pose may affect IK tree, make sure it is rebuilt */
-        BIK_clear_data(ob->pose);
-      }
-      else {
-        BKE_pose_where_is(t->depsgraph, t->scene, ob);
-      }
+      DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
     }
 
     /* Update motion paths once for all transformed bones in an object. */
@@ -1155,6 +1150,14 @@ static void recalcData_objects(TransInfo *t)
       /* Update motion paths once for all transformed objects. */
       ED_objects_recalculate_paths(t->context, t->scene, true);
     }
+
+    if (t->options & CTX_OBMODE_XFORM_SKIP_CHILDREN) {
+      trans_obchild_in_obmode_update_all(t);
+    }
+
+    if (t->options & CTX_OBMODE_XFORM_OBDATA) {
+      trans_obdata_in_obmode_update_all(t);
+    }
   }
 }
 
@@ -1182,6 +1185,8 @@ static void recalcData_sequencer(TransInfo *t)
 
     seq_prev = seq;
   }
+
+  DEG_id_tag_update(&t->scene->id, ID_RECALC_SEQUENCER_STRIPS);
 
   flushTransSeq(t);
 }
@@ -1395,7 +1400,6 @@ void initTransDataContainers_FromObjectData(TransInfo *t,
  */
 void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *event)
 {
-  Depsgraph *depsgraph = CTX_data_depsgraph(C);
   Scene *sce = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   const eObjectMode object_mode = OBACT(view_layer) ? OBACT(view_layer)->mode : OB_MODE_OBJECT;
@@ -1407,7 +1411,7 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
   bGPdata *gpd = CTX_data_gpencil_data(C);
   PropertyRNA *prop;
 
-  t->depsgraph = depsgraph;
+  t->depsgraph = CTX_data_depsgraph_pointer(C);
   t->scene = sce;
   t->view_layer = view_layer;
   t->sa = sa;
@@ -1696,7 +1700,8 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
     }
   }
   else {
-    if (U.flag & USER_RELEASECONFIRM) {
+    if (ISMOUSE(t->launch_event) && (U.flag & USER_RELEASECONFIRM)) {
+      /* Global "release confirm" on mouse bindings */
       t->flag |= T_RELEASE_CONFIRM;
     }
   }

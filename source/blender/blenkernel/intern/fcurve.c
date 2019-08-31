@@ -382,8 +382,8 @@ FCurve *rna_get_fcurve_context_ui(bContext *C,
   }
 
   /* there must be some RNA-pointer + property combon */
-  if (prop && tptr.id.data && RNA_property_animateable(&tptr, prop)) {
-    AnimData *adt = BKE_animdata_from_id(tptr.id.data);
+  if (prop && tptr.owner_id && RNA_property_animateable(&tptr, prop)) {
+    AnimData *adt = BKE_animdata_from_id(tptr.owner_id);
     int step = (
         /* Always 1 in case we have no context (can't check in 'ancestors' of given RNA ptr). */
         C ? 2 : 1);
@@ -391,7 +391,7 @@ FCurve *rna_get_fcurve_context_ui(bContext *C,
 
     if (!adt && C) {
       path = BKE_animdata_driver_path_hack(C, &tptr, prop, NULL);
-      adt = BKE_animdata_from_id(tptr.id.data);
+      adt = BKE_animdata_from_id(tptr.owner_id);
       step--;
     }
 
@@ -438,7 +438,7 @@ FCurve *rna_get_fcurve_context_ui(bContext *C,
             if (tpath && tpath != path) {
               MEM_freeN(path);
               path = tpath;
-              adt = BKE_animdata_from_id(tptr.id.data);
+              adt = BKE_animdata_from_id(tptr.owner_id);
             }
             else {
               adt = NULL;
@@ -506,8 +506,10 @@ static int binarysearch_bezt_index_ex(
    */
   for (loopbreaker = 0; (start <= end) && (loopbreaker < maxloop); loopbreaker++) {
     /* compute and get midpoint */
-    int mid = start + ((end - start) /
-                       2); /* we calculate the midpoint this way to avoid int overflows... */
+
+    /* We calculate the midpoint this way to avoid int overflows... */
+    int mid = start + ((end - start) / 2);
+
     float midfra = array[mid].vec[1][0];
 
     /* check if exactly equal to midpoint */
@@ -1113,7 +1115,7 @@ void calchandles_fcurve(FCurve *fcu)
     first->f5 = last->f5 = HD_AUTOTYPE_SPECIAL;
   }
 
-  /* do a second pass for auto handle: compute the handle to have 0 accelaration step */
+  /* do a second pass for auto handle: compute the handle to have 0 acceleration step */
   if (fcu->auto_smoothing != FCURVE_SMOOTH_NONE) {
     BKE_nurb_handle_smooth_fcurve(fcu->bezt, fcu->totvert, cycle);
   }
@@ -1728,10 +1730,20 @@ static float dvar_eval_transChan(ChannelDriver *driver, DriverVar *dvar)
      */
     float eul[3];
 
-    mat4_to_eulO(eul, rot_order, mat);
+    if (dtar->rotation_mode == DTAR_ROTMODE_AUTO) {
+      mat4_to_eulO(eul, rot_order, mat);
 
-    if (use_eulers) {
-      compatible_eul(eul, oldEul);
+      if (use_eulers) {
+        compatible_eul(eul, oldEul);
+      }
+    }
+    else if (dtar->rotation_mode >= DTAR_ROTMODE_EULER_MIN &&
+             dtar->rotation_mode <= DTAR_ROTMODE_EULER_MAX) {
+      mat4_to_eulO(eul, dtar->rotation_mode, mat);
+    }
+    else {
+      BLI_assert(false);
+      zero_v3(eul);
     }
 
     return eul[dtar->transChan - DTAR_TRANSCHAN_ROTX];
@@ -1744,7 +1756,7 @@ static float dvar_eval_transChan(ChannelDriver *driver, DriverVar *dvar)
 
 /* ......... */
 
-/* Table of Driver Varaiable Type Info Data */
+/* Table of Driver Variable Type Info Data */
 static DriverVarTypeInfo dvar_types[MAX_DVAR_TYPES] = {
     BEGIN_DVAR_TYPEDEF(DVAR_TYPE_SINGLE_PROP) dvar_eval_singleProp, /* eval callback */
     1,                                                              /* number of targets used */
@@ -2687,7 +2699,7 @@ static float fcurve_eval_keyframes(FCurve *fcu, BezTriple *bezts, float evaltime
 
             if (fabsf(v1[1] - v4[1]) < FLT_EPSILON && fabsf(v2[1] - v3[1]) < FLT_EPSILON &&
                 fabsf(v3[1] - v4[1]) < FLT_EPSILON) {
-              /* Optimisation: If all the handles are flat/at the same values,
+              /* Optimization: If all the handles are flat/at the same values,
                * the value is simply the shared value (see T40372 -> F91346)
                */
               cvalue = v1[1];

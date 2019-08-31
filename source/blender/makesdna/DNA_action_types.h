@@ -772,6 +772,7 @@ typedef enum eDopeSheet_FilterFlag {
 /* DopeSheet filter-flags - Overflow (filterflag2) */
 typedef enum eDopeSheet_FilterFlag2 {
   ADS_FILTER_NOCACHEFILES = (1 << 1),
+  ADS_FILTER_NOMOVIECLIPS = (1 << 2),
 } eDopeSheet_FilterFlag2;
 
 /* DopeSheet general flags */
@@ -846,8 +847,7 @@ typedef enum eSAction_Flag {
   SACTION_POSEMARKERS_SHOW = (1 << 6),
   /* don't draw action channels using group colors (where applicable) */
   SACTION_NODRAWGCOLORS = (1 << 7),
-  /* don't draw current frame number beside frame indicator */
-  SACTION_NODRAWCFRANUM = (1 << 8),
+  /* SACTION_NODRAWCFRANUM = (1 << 8), DEPRECATED */
   /* don't perform realtime updates */
   SACTION_NOREALTIMEUPDATES = (1 << 10),
   /* move markers as well as keyframes */

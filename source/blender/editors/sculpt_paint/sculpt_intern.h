@@ -35,7 +35,6 @@
 
 struct KeyBlock;
 struct Object;
-struct SculptOrigVertData;
 struct SculptUndoNode;
 struct bContext;
 
@@ -46,22 +45,22 @@ bool sculpt_poll(struct bContext *C);
 bool sculpt_poll_view3d(struct bContext *C);
 
 /* Stroke */
+
+typedef struct SculptCursorGeometryInfo {
+  float location[3];
+  float normal[3];
+  float active_vertex_co[3];
+} SculptCursorGeometryInfo;
+
 bool sculpt_stroke_get_location(struct bContext *C, float out[3], const float mouse[2]);
+bool sculpt_cursor_geometry_info_update(bContext *C,
+                                        SculptCursorGeometryInfo *out,
+                                        const float mouse[2],
+                                        bool use_sampled_normal);
 
 /* Dynamic topology */
 void sculpt_pbvh_clear(Object *ob);
 void sculpt_dyntopo_node_layers_add(struct SculptSession *ss);
-void sculpt_update_after_dynamic_topology_toggle(struct Depsgraph *depsgraph,
-                                                 struct Scene *scene,
-                                                 struct Object *ob);
-void sculpt_dynamic_topology_enable_ex(struct Depsgraph *depsgraph,
-                                       struct Scene *scene,
-                                       struct Object *ob);
-
-void sculpt_dynamic_topology_disable_ex(struct Depsgraph *depsgraph,
-                                        struct Scene *scene,
-                                        struct Object *ob,
-                                        struct SculptUndoNode *unode);
 void sculpt_dynamic_topology_disable(bContext *C, struct SculptUndoNode *unode);
 
 /* Undo */
@@ -73,6 +72,7 @@ typedef enum {
   SCULPT_UNDO_DYNTOPO_BEGIN,
   SCULPT_UNDO_DYNTOPO_END,
   SCULPT_UNDO_DYNTOPO_SYMMETRIZE,
+  SCULPT_UNDO_GEOMETRY,
 } SculptUndoType;
 
 typedef struct SculptUndoNode {
@@ -104,17 +104,19 @@ typedef struct SculptUndoNode {
   /* bmesh */
   struct BMLogEntry *bm_entry;
   bool applied;
-  CustomData bm_enter_vdata;
-  CustomData bm_enter_edata;
-  CustomData bm_enter_ldata;
-  CustomData bm_enter_pdata;
-  int bm_enter_totvert;
-  int bm_enter_totedge;
-  int bm_enter_totloop;
-  int bm_enter_totpoly;
 
   /* shape keys */
   char shapeName[sizeof(((KeyBlock *)0))->name];
+
+  /* geometry modification operations and bmesh enter data */
+  CustomData geom_vdata;
+  CustomData geom_edata;
+  CustomData geom_ldata;
+  CustomData geom_pdata;
+  int geom_totvert;
+  int geom_totedge;
+  int geom_totloop;
+  int geom_totpoly;
 
   size_t undo_size;
 } SculptUndoNode;
@@ -171,6 +173,7 @@ typedef struct SculptThreadedTaskData {
   float (*area_cos)[3];
   float (*area_nos)[3];
   int *count;
+  bool any_vertex_sampled;
 
   ThreadMutex mutex;
 
@@ -235,7 +238,7 @@ float tex_strength(struct SculptSession *ss,
                    const int thread_id);
 
 /* just for vertex paint. */
-void sculpt_pbvh_calc_area_normal(const struct Brush *brush,
+bool sculpt_pbvh_calc_area_normal(const struct Brush *brush,
                                   Object *ob,
                                   PBVHNode **nodes,
                                   int totnode,
@@ -349,7 +352,7 @@ SculptUndoNode *sculpt_undo_get_node(PBVHNode *node);
 void sculpt_undo_push_begin(const char *name);
 void sculpt_undo_push_end(void);
 
-void sculpt_vertcos_to_key(Object *ob, KeyBlock *kb, float (*vertCos)[3]);
+void sculpt_vertcos_to_key(Object *ob, KeyBlock *kb, const float (*vertCos)[3]);
 
 void sculpt_update_object_bounding_box(struct Object *ob);
 

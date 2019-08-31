@@ -40,6 +40,7 @@ endif()
 
 BLENDER_TEST(BLI_array_store "bf_blenlib")
 BLENDER_TEST(BLI_array_utils "bf_blenlib")
+BLENDER_TEST(BLI_delaunay_2d "bf_blenlib")
 BLENDER_TEST(BLI_expr_pylike_eval "bf_blenlib")
 BLENDER_TEST(BLI_edgehash "bf_blenlib")
 BLENDER_TEST(BLI_ghash "bf_blenlib")
@@ -61,5 +62,6 @@ BLENDER_TEST(BLI_string_utf8 "bf_blenlib")
 BLENDER_TEST(BLI_task "bf_blenlib;bf_intern_numaapi")
 
 BLENDER_TEST_PERFORMANCE(BLI_ghash_performance "bf_blenlib")
+BLENDER_TEST_PERFORMANCE(BLI_task_performance "bf_blenlib")
 
 unset(BLI_path_util_extra_libs)

@@ -37,17 +37,12 @@ extern "C" {
 struct Base;
 struct Collection;
 struct Depsgraph;
-struct ID;
-struct IDProperty;
 struct LayerCollection;
-struct ListBase;
 struct Main;
 struct Object;
-struct RenderEngine;
 struct Scene;
 struct View3D;
 struct ViewLayer;
-struct WorkSpace;
 
 struct ViewLayer *BKE_view_layer_default_view(const struct Scene *scene);
 struct ViewLayer *BKE_view_layer_default_render(const struct Scene *scene);
@@ -118,11 +113,11 @@ void BKE_base_set_visible(struct Scene *scene,
                           struct ViewLayer *view_layer,
                           struct Base *base,
                           bool extend);
-bool BKE_layer_collection_isolate(struct Scene *scene,
+void BKE_layer_collection_isolate(struct Scene *scene,
                                   struct ViewLayer *view_layer,
                                   struct LayerCollection *lc,
                                   bool extend);
-bool BKE_layer_collection_set_visible(struct ViewLayer *view_layer,
+void BKE_layer_collection_set_visible(struct ViewLayer *view_layer,
                                       struct LayerCollection *lc,
                                       const bool visible,
                                       const bool hierarchy);

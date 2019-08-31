@@ -32,14 +32,13 @@
 /* Needed for the instance iterator. */
 #include "DNA_object_types.h"
 
-struct ID;
-
 struct BLI_Iterator;
-struct Base;
 struct CustomData_MeshMasks;
 struct Depsgraph;
 struct DupliObject;
+struct ID;
 struct ListBase;
+struct PointerRNA;
 struct Scene;
 struct ViewLayer;
 
@@ -67,6 +66,9 @@ float DEG_get_ctime(const Depsgraph *graph);
 bool DEG_id_type_updated(const struct Depsgraph *depsgraph, short id_type);
 bool DEG_id_type_any_updated(const struct Depsgraph *depsgraph);
 
+/* Check if given ID type is present in the depsgraph */
+bool DEG_id_type_any_exists(const struct Depsgraph *depsgraph, short id_type);
+
 /* Get additional evaluation flags for the given ID. */
 uint32_t DEG_get_eval_flags_for_id(const struct Depsgraph *graph, struct ID *id);
 
@@ -78,7 +80,7 @@ void DEG_get_customdata_mask_for_object(const struct Depsgraph *graph,
 /* Get scene at its evaluated state.
  *
  * Technically, this is a copied-on-written and fully evaluated version of the input scene.
- * This function will check that the datablock has been expanded (and copied) from the original
+ * This function will check that the data-block has been expanded (and copied) from the original
  * one. Assert will happen if it's not. */
 struct Scene *DEG_get_evaluated_scene(const struct Depsgraph *graph);
 
@@ -106,15 +108,20 @@ struct ID *DEG_get_original_id(struct ID *id);
 /* Check whether given ID is an original,
  *
  * Original IDs are considered all the IDs which are not covered by copy-on-write system and are
- * not out-of-main localized datablocks. */
+ * not out-of-main localized data-blocks. */
 bool DEG_is_original_id(struct ID *id);
 bool DEG_is_original_object(struct Object *object);
 
 /* Opposite of the above.
  *
- * If the datablock is not original it must be evaluated, and vice versa. */
+ * If the data-block is not original it must be evaluated, and vice versa. */
 bool DEG_is_evaluated_id(struct ID *id);
 bool DEG_is_evaluated_object(struct Object *object);
+
+/* Check whether depsgraph os fully evaluated. This includes the following checks:
+ * - Relations are up-to-date.
+ * - Nothing is tagged for update. */
+bool DEG_is_fully_evaluated(const struct Depsgraph *depsgraph);
 
 /* ************************ DEG object iterators ********************* */
 
@@ -211,6 +218,9 @@ void DEG_iterator_ids_end(struct BLI_Iterator *iter);
 /* ************************ DEG traversal ********************* */
 
 typedef void (*DEGForeachIDCallback)(ID *id, void *user_data);
+typedef void (*DEGForeachIDComponentCallback)(ID *id,
+                                              eDepsObjectComponentType component,
+                                              void *user_data);
 
 /* NOTE: Modifies runtime flags in depsgraph nodes, so can not be used in
  * parallel. Keep an eye on that!
@@ -223,6 +233,14 @@ void DEG_foreach_dependent_ID(const Depsgraph *depsgraph,
                               const ID *id,
                               DEGForeachIDCallback callback,
                               void *user_data);
+
+/* Starts traversal from given component of the given ID, invokes callback for every other
+ * component  which is directly on indirectly dependent on the source one. */
+void DEG_foreach_dependent_ID_component(const Depsgraph *depsgraph,
+                                        const ID *id,
+                                        eDepsObjectComponentType source_component_type,
+                                        DEGForeachIDComponentCallback callback,
+                                        void *user_data);
 
 void DEG_foreach_ID(const Depsgraph *depsgraph, DEGForeachIDCallback callback, void *user_data);
 

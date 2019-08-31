@@ -220,8 +220,10 @@ void immBegin(GPUPrimType prim_type, uint vertex_len)
   /* does the current buffer have enough room? */
   const uint available_bytes = IMM_BUFFER_SIZE - imm.buffer_offset;
   /* ensure vertex data is aligned */
-  const uint pre_padding = padding(
-      imm.buffer_offset, imm.vertex_format.stride); /* might waste a little space, but it's safe */
+
+  /* Might waste a little space, but it's safe. */
+  const uint pre_padding = padding(imm.buffer_offset, imm.vertex_format.stride);
+
   if ((bytes_needed + pre_padding) <= available_bytes) {
     imm.buffer_offset += pre_padding;
   }
@@ -383,9 +385,16 @@ void immEnd(void)
   }
   else {
     glUnmapBuffer(GL_ARRAY_BUFFER);
+
     if (imm.vertex_len > 0) {
       immDrawSetup();
+#ifdef __APPLE__
+      glDisable(GL_PRIMITIVE_RESTART);
+#endif
       glDrawArrays(convert_prim_type_to_gl(imm.prim_type), 0, imm.vertex_len);
+#ifdef __APPLE__
+      glEnable(GL_PRIMITIVE_RESTART);
+#endif
     }
     /* These lines are causing crash on startup on some old GPU + drivers.
      * They are not required so just comment them. (T55722) */

@@ -244,7 +244,12 @@ typedef struct SpaceOutliner {
   char search_string[64];
   struct TreeStoreElem search_tse;
 
-  short flag, outlinevis, storeflag, search_flags;
+  short flag, outlinevis, storeflag;
+  char search_flags;
+
+  /** Selection syncing flag (#WM_OUTLINER_SYNC_SELECT_FROM_OBJECT and similar flags). */
+  char sync_select_dirty;
+
   int filter;
   char filter_state;
   char show_restrict_flags;
@@ -263,6 +268,7 @@ typedef enum eSpaceOutliner_Flag {
   SO_FLAG_UNUSED_1 = (1 << 2), /* cleared */
   SO_HIDE_KEYINGSETINFO = (1 << 3),
   SO_SKIP_SORT_ALPHA = (1 << 4),
+  SO_SYNC_SELECT = (1 << 5),
 } eSpaceOutliner_Flag;
 
 /* SpaceOutliner.filter */
@@ -283,11 +289,12 @@ typedef enum eSpaceOutliner_Filter {
 
   SO_FILTER_UNUSED_12 = (1 << 12),         /* cleared */
   SO_FILTER_OB_STATE_VISIBLE = (1 << 13),  /* Not set via DNA. */
-  SO_FILTER_OB_STATE_SELECTED = (1 << 14), /* Not set via DNA. */
-  SO_FILTER_OB_STATE_ACTIVE = (1 << 15),   /* Not set via DNA. */
-  SO_FILTER_NO_COLLECTION = (1 << 16),
+  SO_FILTER_OB_STATE_HIDDEN = (1 << 14),   /* Not set via DNA. */
+  SO_FILTER_OB_STATE_SELECTED = (1 << 15), /* Not set via DNA. */
+  SO_FILTER_OB_STATE_ACTIVE = (1 << 16),   /* Not set via DNA. */
+  SO_FILTER_NO_COLLECTION = (1 << 17),
 
-  SO_FILTER_ID_TYPE = (1 << 17),
+  SO_FILTER_ID_TYPE = (1 << 18),
 } eSpaceOutliner_Filter;
 
 #define SO_FILTER_OB_TYPE \
@@ -295,7 +302,8 @@ typedef enum eSpaceOutliner_Filter {
    SO_FILTER_NO_OB_LAMP | SO_FILTER_NO_OB_CAMERA | SO_FILTER_NO_OB_OTHERS)
 
 #define SO_FILTER_OB_STATE \
-  (SO_FILTER_OB_STATE_VISIBLE | SO_FILTER_OB_STATE_SELECTED | SO_FILTER_OB_STATE_ACTIVE)
+  (SO_FILTER_OB_STATE_VISIBLE | SO_FILTER_OB_STATE_HIDDEN | SO_FILTER_OB_STATE_SELECTED | \
+   SO_FILTER_OB_STATE_ACTIVE)
 
 #define SO_FILTER_ANY \
   (SO_FILTER_NO_OB_CONTENT | SO_FILTER_NO_CHILDREN | SO_FILTER_OB_TYPE | SO_FILTER_OB_STATE | \
@@ -305,8 +313,9 @@ typedef enum eSpaceOutliner_Filter {
 typedef enum eSpaceOutliner_StateFilter {
   SO_FILTER_OB_ALL = 0,
   SO_FILTER_OB_VISIBLE = 1,
-  SO_FILTER_OB_SELECTED = 2,
-  SO_FILTER_OB_ACTIVE = 3,
+  SO_FILTER_OB_HIDDEN = 2,
+  SO_FILTER_OB_SELECTED = 3,
+  SO_FILTER_OB_ACTIVE = 4,
 } eSpaceOutliner_StateFilter;
 
 /* SpaceOutliner.show_restrict_flags */
@@ -418,8 +427,7 @@ typedef enum eGraphEdit_Flag {
   SIPO_NOTRANSKEYCULL = (1 << 1),
   /* don't show any keyframe handles at all */
   SIPO_NOHANDLES = (1 << 2),
-  /* don't show current frame number beside indicator line */
-  SIPO_NODRAWCFRANUM = (1 << 3),
+  /* SIPO_NODRAWCFRANUM = (1 << 3), DEPRECATED */
   /* show timing in seconds instead of frames */
   SIPO_DRAWTIME = (1 << 4),
   /* only show keyframes for selected F-Curves */
@@ -494,8 +502,7 @@ typedef enum eSpaceNla_Flag {
   /* draw timing in seconds instead of frames */
   SNLA_DRAWTIME = (1 << 2),
   SNLA_FLAG_UNUSED_3 = (1 << 3),
-  /* don't draw frame number beside frame indicator */
-  SNLA_NODRAWCFRANUM = (1 << 4),
+  /* SNLA_NODRAWCFRANUM = (1 << 4), DEPRECATED */
   /* don't draw influence curves on strips */
   SNLA_NOSTRIPCURVES = (1 << 5),
   /* don't perform realtime updates */
@@ -579,7 +586,7 @@ typedef enum eSpaceSeq_Flag {
   SEQ_DRAW_COLOR_SEPARATED = (1 << 2),
   SEQ_SHOW_SAFE_MARGINS = (1 << 3),
   SEQ_SHOW_GPENCIL = (1 << 4),
-  SEQ_NO_DRAW_CFRANUM = (1 << 5),
+  /* SEQ_NO_DRAW_CFRANUM = (1 << 5), DEPRECATED */
   SEQ_USE_ALPHA = (1 << 6),     /* use RGBA display mode for preview */
   SEQ_ALL_WAVEFORMS = (1 << 7), /* draw all waveforms */
   SEQ_NO_WAVEFORMS = (1 << 8),  /* draw no waveforms */
@@ -1111,8 +1118,6 @@ typedef enum eSpaceImage_Flag {
   SI_SHOW_R = (1 << 27),
   SI_SHOW_G = (1 << 28),
   SI_SHOW_B = (1 << 29),
-
-  SI_NO_DRAWEDGES = (1 << 30),
 } eSpaceImage_Flag;
 
 /* SpaceImage.other_uv_filter */
@@ -1628,16 +1633,20 @@ typedef enum eSpace_Type {
   SPACE_SEQ = 8,
   SPACE_TEXT = 9,
 #ifdef DNA_DEPRECATED
-  SPACE_IMASEL = 10, /* deprecated */
+  SPACE_IMASEL = 10, /* Deprecated */
   SPACE_SOUND = 11,  /* Deprecated */
 #endif
   SPACE_ACTION = 12,
   SPACE_NLA = 13,
   /* TODO: fully deprecate */
   SPACE_SCRIPT = 14, /* Deprecated */
-  SPACE_TIME = 15,   /* Deprecated */
+#ifdef DNA_DEPRECATED
+  SPACE_TIME = 15, /* Deprecated */
+#endif
   SPACE_NODE = 16,
-  SPACE_LOGIC = 17, /* deprecated */
+#ifdef DNA_DEPRECATED
+  SPACE_LOGIC = 17, /* Deprecated */
+#endif
   SPACE_CONSOLE = 18,
   SPACE_USERPREF = 19,
   SPACE_CLIP = 20,

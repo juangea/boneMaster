@@ -28,19 +28,19 @@
 
 struct BMLog;
 struct BMesh;
-struct CCGDerivedMesh;
 struct CCGElem;
 struct CCGKey;
 struct CustomData;
 struct DMFlagMat;
-struct GPUBatch;
 struct GPU_PBVH_Buffers;
+struct IsectRayPrecalc;
 struct MLoop;
 struct MLoopTri;
 struct MPoly;
 struct MVert;
 struct PBVH;
 struct PBVHNode;
+struct SubdivCCG;
 
 typedef struct PBVH PBVH;
 typedef struct PBVHNode PBVHNode;
@@ -133,11 +133,14 @@ bool BKE_pbvh_node_raycast(PBVH *bvh,
                            bool use_origco,
                            const float ray_start[3],
                            const float ray_normal[3],
-                           float *depth);
+                           struct IsectRayPrecalc *isect_precalc,
+                           float *depth,
+                           int *active_vertex_index,
+                           float *face_normal);
 
 bool BKE_pbvh_bmesh_node_raycast_detail(PBVHNode *node,
                                         const float ray_start[3],
-                                        const float ray_normal[3],
+                                        struct IsectRayPrecalc *isect_precalc,
                                         float *depth,
                                         float *r_edge_length);
 
@@ -166,8 +169,6 @@ bool BKE_pbvh_node_find_nearest_to_ray(PBVH *bvh,
 
 void BKE_pbvh_draw_cb(PBVH *bvh,
                       float (*planes)[4],
-                      float (*fnors)[3],
-                      bool show_vcol,
                       void (*draw_fn)(void *user_data, struct GPU_PBVH_Buffers *buffers),
                       void *user_data);
 
@@ -256,9 +257,11 @@ struct GSet *BKE_pbvh_bmesh_node_faces(PBVHNode *node);
 void BKE_pbvh_bmesh_node_save_orig(PBVHNode *node);
 void BKE_pbvh_bmesh_after_stroke(PBVH *bvh);
 
-/* Update Normals/Bounding Box/Redraw and clear flags */
+/* Update Bounding Box/Redraw and clear flags */
 
-void BKE_pbvh_update(PBVH *bvh, int flags, float (*face_nors)[3]);
+void BKE_pbvh_update_bounds(PBVH *bvh, int flags);
+void BKE_pbvh_update_normals(PBVH *bvh, struct SubdivCCG *subdiv_ccg);
+void BKE_pbvh_update_draw_buffers(PBVH *bvh, bool show_vcol);
 void BKE_pbvh_redraw_BB(PBVH *bvh, float bb_min[3], float bb_max[3]);
 void BKE_pbvh_get_grid_updates(PBVH *bvh, bool clear, void ***r_gridfaces, int *r_totface);
 void BKE_pbvh_grids_update(PBVH *bvh,
@@ -276,9 +279,9 @@ float *BKE_pbvh_node_layer_disp_get(PBVH *pbvh, PBVHNode *node);
 void BKE_pbvh_node_layer_disp_free(PBVHNode *node);
 
 /* vertex deformer */
-float (*BKE_pbvh_get_vertCos(struct PBVH *pbvh))[3];
-void BKE_pbvh_apply_vertCos(struct PBVH *pbvh, float (*vertCos)[3], const int totvert);
-bool BKE_pbvh_isDeformed(struct PBVH *pbvh);
+float (*BKE_pbvh_vert_coords_alloc(struct PBVH *pbvh))[3];
+void BKE_pbvh_vert_coords_apply(struct PBVH *pbvh, const float (*vertCos)[3], const int totvert);
+bool BKE_pbvh_is_deformed(struct PBVH *pbvh);
 
 /* Vertex Iterator */
 
@@ -299,6 +302,7 @@ typedef struct PBVHVertexIter {
   int gx;
   int gy;
   int i;
+  int index;
 
   /* grid */
   struct CCGElem **grids;
@@ -367,6 +371,7 @@ void pbvh_vertex_iter_init(PBVH *bvh, PBVHNode *node, PBVHVertexIter *vi, int mo
             continue; \
           vi.co = vi.mvert->co; \
           vi.no = vi.mvert->no; \
+          vi.index = vi.vert_indices[vi.i]; \
           if (vi.vmask) \
             vi.mask = &vi.vmask[vi.vert_indices[vi.gx]]; \
         } \
@@ -383,6 +388,7 @@ void pbvh_vertex_iter_init(PBVH *bvh, PBVHNode *node, PBVHVertexIter *vi, int mo
             continue; \
           vi.co = vi.bm_vert->co; \
           vi.fno = vi.bm_vert->no; \
+          vi.index = BM_elem_index_get(vi.bm_vert); \
           vi.mask = BM_ELEM_CD_GET_VOID_P(vi.bm_vert, vi.cd_vert_mask_offset); \
         }
 
@@ -407,7 +413,6 @@ bool BKE_pbvh_node_vert_update_check_any(PBVH *bvh, PBVHNode *node);
 // void BKE_pbvh_node_BB_expand(PBVHNode *node, float co[3]);
 
 bool pbvh_has_mask(PBVH *bvh);
-void pbvh_show_diffuse_color_set(PBVH *bvh, bool show_diffuse_color);
 void pbvh_show_mask_set(PBVH *bvh, bool show_mask);
 
 #endif /* __BKE_PBVH_H__ */

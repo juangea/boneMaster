@@ -28,17 +28,11 @@
 extern "C" {
 #endif
 
-struct DupliObject;
 struct ImBuf;
 struct Image;
 struct ImageUser;
 struct Main;
-struct Object;
-struct RegionView3D;
-struct Scene;
 struct SmokeModifierData;
-struct View3D;
-struct ViewLayer;
 
 #include "DNA_object_enums.h"
 
@@ -50,13 +44,6 @@ struct ViewLayer;
  * - this is called when starting Blender, for opengl rendering. */
 
 void GPU_state_init(void);
-
-/* Programmable point size
- * - shaders set their own point size when enabled
- * - use glPointSize when disabled */
-
-void GPU_enable_program_point_size(void);
-void GPU_disable_program_point_size(void);
 
 /* Mipmap settings
  * - these will free textures on changes */

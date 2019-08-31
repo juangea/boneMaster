@@ -125,8 +125,8 @@ static void do_version_workspaces_create_from_screens(Main *bmain)
     }
 
     if (screen_parent) {
-      /* fullscreen with "Back to Previous" option, don't create
-       * a new workspace, add layout workspace containing parent */
+      /* Full-screen with "Back to Previous" option, don't create
+       * a new workspace, add layout workspace containing parent. */
       workspace = BLI_findstring(
           &bmain->workspaces, screen_parent->id.name + 2, offsetof(ID, name) + 2);
     }
@@ -718,21 +718,114 @@ static void do_version_constraints_copy_scale_power(ListBase *lb)
 static void do_versions_seq_alloc_transform_and_crop(ListBase *seqbase)
 {
   for (Sequence *seq = seqbase->first; seq != NULL; seq = seq->next) {
-    if (seq->strip->transform == NULL) {
-      seq->strip->transform = MEM_callocN(sizeof(struct StripTransform), "StripTransform");
-    }
+    if (ELEM(seq->type, SEQ_TYPE_SOUND_RAM, SEQ_TYPE_SOUND_HD) == 0) {
+      if (seq->strip->transform == NULL) {
+        seq->strip->transform = MEM_callocN(sizeof(struct StripTransform), "StripTransform");
+      }
 
-    if (seq->strip->crop == NULL) {
-      seq->strip->crop = MEM_callocN(sizeof(struct StripCrop), "StripCrop");
-    }
+      if (seq->strip->crop == NULL) {
+        seq->strip->crop = MEM_callocN(sizeof(struct StripCrop), "StripCrop");
+      }
 
-    if (seq->seqbase.first != NULL) {
-      do_versions_seq_alloc_transform_and_crop(&seq->seqbase);
+      if (seq->seqbase.first != NULL) {
+        do_versions_seq_alloc_transform_and_crop(&seq->seqbase);
+      }
     }
   }
 }
 
-void do_versions_after_linking_280(Main *bmain)
+/* Return true if there is something to convert. */
+static void do_versions_material_convert_legacy_blend_mode(bNodeTree *ntree, char blend_method)
+{
+  bool need_update = false;
+
+  /* Iterate backwards from end so we don't encounter newly added links. */
+  bNodeLink *prevlink;
+  for (bNodeLink *link = ntree->links.last; link; link = prevlink) {
+    prevlink = link->prev;
+
+    /* Detect link to replace. */
+    bNode *fromnode = link->fromnode;
+    bNodeSocket *fromsock = link->fromsock;
+    bNode *tonode = link->tonode;
+    bNodeSocket *tosock = link->tosock;
+
+    if (!(tonode->type == SH_NODE_OUTPUT_MATERIAL && STREQ(tosock->identifier, "Surface"))) {
+      continue;
+    }
+
+    /* Only do outputs that are enabled for EEVEE */
+    if (!ELEM(tonode->custom1, SHD_OUTPUT_ALL, SHD_OUTPUT_EEVEE)) {
+      continue;
+    }
+
+    if (blend_method == 1 /* MA_BM_ADD */) {
+      nodeRemLink(ntree, link);
+
+      bNode *add_node = nodeAddStaticNode(NULL, ntree, SH_NODE_ADD_SHADER);
+      add_node->locx = 0.5f * (fromnode->locx + tonode->locx);
+      add_node->locy = 0.5f * (fromnode->locy + tonode->locy);
+
+      bNodeSocket *shader1_socket = add_node->inputs.first;
+      bNodeSocket *shader2_socket = add_node->inputs.last;
+      bNodeSocket *add_socket = nodeFindSocket(add_node, SOCK_OUT, "Shader");
+
+      bNode *transp_node = nodeAddStaticNode(NULL, ntree, SH_NODE_BSDF_TRANSPARENT);
+      transp_node->locx = add_node->locx;
+      transp_node->locy = add_node->locy - 110.0f;
+
+      bNodeSocket *transp_socket = nodeFindSocket(transp_node, SOCK_OUT, "BSDF");
+
+      /* Link to input and material output node. */
+      nodeAddLink(ntree, fromnode, fromsock, add_node, shader1_socket);
+      nodeAddLink(ntree, transp_node, transp_socket, add_node, shader2_socket);
+      nodeAddLink(ntree, add_node, add_socket, tonode, tosock);
+
+      need_update = true;
+    }
+    else if (blend_method == 2 /* MA_BM_MULTIPLY */) {
+      nodeRemLink(ntree, link);
+
+      bNode *transp_node = nodeAddStaticNode(NULL, ntree, SH_NODE_BSDF_TRANSPARENT);
+
+      bNodeSocket *color_socket = nodeFindSocket(transp_node, SOCK_IN, "Color");
+      bNodeSocket *transp_socket = nodeFindSocket(transp_node, SOCK_OUT, "BSDF");
+
+      /* If incomming link is from a closure socket, we need to convert it. */
+      if (fromsock->type == SOCK_SHADER) {
+        transp_node->locx = 0.33f * fromnode->locx + 0.66f * tonode->locx;
+        transp_node->locy = 0.33f * fromnode->locy + 0.66f * tonode->locy;
+
+        bNode *shtorgb_node = nodeAddStaticNode(NULL, ntree, SH_NODE_SHADERTORGB);
+        shtorgb_node->locx = 0.66f * fromnode->locx + 0.33f * tonode->locx;
+        shtorgb_node->locy = 0.66f * fromnode->locy + 0.33f * tonode->locy;
+
+        bNodeSocket *shader_socket = nodeFindSocket(shtorgb_node, SOCK_IN, "Shader");
+        bNodeSocket *rgba_socket = nodeFindSocket(shtorgb_node, SOCK_OUT, "Color");
+
+        nodeAddLink(ntree, fromnode, fromsock, shtorgb_node, shader_socket);
+        nodeAddLink(ntree, shtorgb_node, rgba_socket, transp_node, color_socket);
+      }
+      else {
+        transp_node->locx = 0.5f * (fromnode->locx + tonode->locx);
+        transp_node->locy = 0.5f * (fromnode->locy + tonode->locy);
+
+        nodeAddLink(ntree, fromnode, fromsock, transp_node, color_socket);
+      }
+
+      /* Link to input and material output node. */
+      nodeAddLink(ntree, transp_node, transp_socket, tonode, tosock);
+
+      need_update = true;
+    }
+  }
+
+  if (need_update) {
+    ntreeUpdateTree(NULL, ntree);
+  }
+}
+
+void do_versions_after_linking_280(Main *bmain, ReportList *UNUSED(reports))
 {
   bool use_collection_compat_28 = true;
 
@@ -782,7 +875,7 @@ void do_versions_after_linking_280(Main *bmain)
     }
 
     /* We need to assign lib pointer to generated hidden collections *after* all have been created,
-     * otherwise we'll end up with several datablocks sharing same name/library,
+     * otherwise we'll end up with several data-blocks sharing same name/library,
      * which is FORBIDDEN!
      * Note: we need this to be recursive,
      * since a child collection may be sorted before its parent in bmain. */
@@ -1127,6 +1220,28 @@ void do_versions_after_linking_280(Main *bmain)
       camera->dof_ob = NULL;
     }
   }
+
+  if (!MAIN_VERSION_ATLEAST(bmain, 281, 2)) {
+    /* Replace Multiply and Additive blend mode by Alpha Blend
+     * now that we use dualsource blending. */
+    /* We take care of doing only nodetrees that are always part of materials
+     * with old blending modes. */
+    for (Material *ma = bmain->materials.first; ma; ma = ma->id.next) {
+      bNodeTree *ntree = ma->nodetree;
+      if (ma->blend_method == 1 /* MA_BM_ADD */) {
+        if (ma->use_nodes) {
+          do_versions_material_convert_legacy_blend_mode(ntree, 1 /* MA_BM_ADD */);
+        }
+        ma->blend_method = MA_BM_BLEND;
+      }
+      else if (ma->blend_method == 2 /* MA_BM_MULTIPLY */) {
+        if (ma->use_nodes) {
+          do_versions_material_convert_legacy_blend_mode(ntree, 2 /* MA_BM_MULTIPLY */);
+        }
+        ma->blend_method = MA_BM_BLEND;
+      }
+    }
+  }
 }
 
 /* NOTE: This version patch is intended for versions < 2.52.2,
@@ -1178,12 +1293,11 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
 
     /* MTexPoly now removed. */
     if (DNA_struct_find(fd->filesdna, "MTexPoly")) {
-      const int cd_mtexpoly = 15; /* CD_MTEXPOLY, deprecated */
       for (Mesh *me = bmain->meshes.first; me; me = me->id.next) {
         /* If we have UV's, so this file will have MTexPoly layers too! */
         if (me->mloopuv != NULL) {
           CustomData_update_typemap(&me->pdata);
-          CustomData_free_layers(&me->pdata, cd_mtexpoly, me->totpoly);
+          CustomData_free_layers(&me->pdata, CD_MTEXPOLY, me->totpoly);
           BKE_mesh_update_customdata_pointers(me, false);
         }
       }
@@ -1346,12 +1460,12 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
           /* sculpt brushes */
           GP_Sculpt_Settings *gset = &scene->toolsettings->gp_sculpt;
           if ((gset) && (gset->cur_falloff == NULL)) {
-            gset->cur_falloff = curvemapping_add(1, 0.0f, 0.0f, 1.0f, 1.0f);
-            curvemapping_initialize(gset->cur_falloff);
-            curvemap_reset(gset->cur_falloff->cm,
-                           &gset->cur_falloff->clipr,
-                           CURVE_PRESET_GAUSS,
-                           CURVEMAP_SLOPE_POSITIVE);
+            gset->cur_falloff = BKE_curvemapping_add(1, 0.0f, 0.0f, 1.0f, 1.0f);
+            BKE_curvemapping_initialize(gset->cur_falloff);
+            BKE_curvemap_reset(gset->cur_falloff->cm,
+                               &gset->cur_falloff->clipr,
+                               CURVE_PRESET_GAUSS,
+                               CURVEMAP_SLOPE_POSITIVE);
           }
         }
       }
@@ -2352,7 +2466,7 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
           for (SpaceLink *sl = sa->spacedata.first; sl; sl = sl->next) {
             if (sl->spacetype == SPACE_VIEW3D) {
               View3D *v3d = (View3D *)sl;
-              v3d->shading.flag |= V3D_SHADING_XRAY_BONE;
+              v3d->shading.flag |= V3D_SHADING_XRAY_WIREFRAME;
             }
           }
         }
@@ -2667,9 +2781,9 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
               navigation_region = MEM_callocN(sizeof(ARegion),
                                               "userpref navigation-region do_versions");
 
-              BLI_insertlinkbefore(regionbase,
-                                   main_region,
-                                   navigation_region); /* order matters, addhead not addtail! */
+              /* Order matters, addhead not addtail! */
+              BLI_insertlinkbefore(regionbase, main_region, navigation_region);
+
               navigation_region->regiontype = RGN_TYPE_NAV_BAR;
               navigation_region->alignment = RGN_ALIGN_LEFT;
             }
@@ -2740,13 +2854,6 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
     for (Camera *ca = bmain->cameras.first; ca; ca = ca->id.next) {
       ca->drawsize *= 2.0f;
     }
-    for (Object *ob = bmain->objects.first; ob; ob = ob->id.next) {
-      if (ob->type != OB_EMPTY) {
-        if (UNLIKELY(ob->transflag & OB_DUPLICOLLECTION)) {
-          BKE_object_type_set_empty_for_versioning(ob);
-        }
-      }
-    }
 
     /* Grease pencil primitive curve */
     if (!DNA_struct_elem_find(
@@ -2754,12 +2861,12 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
       for (Scene *scene = bmain->scenes.first; scene; scene = scene->id.next) {
         GP_Sculpt_Settings *gset = &scene->toolsettings->gp_sculpt;
         if ((gset) && (gset->cur_primitive == NULL)) {
-          gset->cur_primitive = curvemapping_add(1, 0.0f, 0.0f, 1.0f, 1.0f);
-          curvemapping_initialize(gset->cur_primitive);
-          curvemap_reset(gset->cur_primitive->cm,
-                         &gset->cur_primitive->clipr,
-                         CURVE_PRESET_BELL,
-                         CURVEMAP_SLOPE_POSITIVE);
+          gset->cur_primitive = BKE_curvemapping_add(1, 0.0f, 0.0f, 1.0f, 1.0f);
+          BKE_curvemapping_initialize(gset->cur_primitive);
+          BKE_curvemap_reset(gset->cur_primitive->cm,
+                             &gset->cur_primitive->clipr,
+                             CURVE_PRESET_BELL,
+                             CURVEMAP_SLOPE_POSITIVE);
         }
       }
     }
@@ -3073,8 +3180,8 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
     }
 
     LISTBASE_FOREACH (bArmature *, arm, &bmain->armatures) {
-      arm->flag &= ~(ARM_FLAG_UNUSED_1 | ARM_FLAG_UNUSED_5 | ARM_FLAG_UNUSED_7 |
-                     ARM_FLAG_UNUSED_12);
+      arm->flag &= ~(ARM_FLAG_UNUSED_1 | ARM_FLAG_UNUSED_5 | ARM_FLAG_UNUSED_6 |
+                     ARM_FLAG_UNUSED_7 | ARM_FLAG_UNUSED_12);
     }
 
     LISTBASE_FOREACH (Text *, text, &bmain->texts) {
@@ -3413,11 +3520,11 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
             ARegion *ar = NULL;
             if (sl->spacetype == SPACE_CLIP) {
               if (((SpaceClip *)sl)->view == SC_VIEW_GRAPH) {
-                ar = do_versions_find_region(regionbase, RGN_TYPE_PREVIEW);
+                ar = do_versions_find_region_or_null(regionbase, RGN_TYPE_PREVIEW);
               }
             }
             else {
-              ar = do_versions_find_region(regionbase, RGN_TYPE_WINDOW);
+              ar = do_versions_find_region_or_null(regionbase, RGN_TYPE_WINDOW);
             }
 
             if (ar != NULL) {
@@ -3493,7 +3600,7 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
     }
   }
 
-  if (!MAIN_VERSION_ATLEAST(bmain, 280, 72)) {
+  if (!MAIN_VERSION_ATLEAST(bmain, 280, 74)) {
     for (Scene *scene = bmain->scenes.first; scene; scene = scene->id.next) {
       if (scene->ed != NULL) {
         do_versions_seq_alloc_transform_and_crop(&scene->ed->seqbase);
@@ -3501,7 +3608,108 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
     }
   }
 
+  if (!MAIN_VERSION_ATLEAST(bmain, 280, 75)) {
+    for (Scene *scene = bmain->scenes.first; scene; scene = scene->id.next) {
+      if (scene->master_collection != NULL) {
+        scene->master_collection->flag &= ~(COLLECTION_RESTRICT_VIEWPORT |
+                                            COLLECTION_RESTRICT_SELECT |
+                                            COLLECTION_RESTRICT_RENDER);
+      }
+
+      UnitSettings *unit = &scene->unit;
+      if (unit->system == USER_UNIT_NONE) {
+        unit->length_unit = (char)USER_UNIT_ADAPTIVE;
+        unit->mass_unit = (char)USER_UNIT_ADAPTIVE;
+      }
+
+      RenderData *render_data = &scene->r;
+      switch (render_data->ffcodecdata.ffmpeg_preset) {
+        case FFM_PRESET_ULTRAFAST:
+        case FFM_PRESET_SUPERFAST:
+          render_data->ffcodecdata.ffmpeg_preset = FFM_PRESET_REALTIME;
+          break;
+        case FFM_PRESET_VERYFAST:
+        case FFM_PRESET_FASTER:
+        case FFM_PRESET_FAST:
+        case FFM_PRESET_MEDIUM:
+          render_data->ffcodecdata.ffmpeg_preset = FFM_PRESET_GOOD;
+          break;
+        case FFM_PRESET_SLOW:
+        case FFM_PRESET_SLOWER:
+        case FFM_PRESET_VERYSLOW:
+          render_data->ffcodecdata.ffmpeg_preset = FFM_PRESET_BEST;
+      }
+    }
+
+    LISTBASE_FOREACH (bArmature *, arm, &bmain->armatures) {
+      arm->flag &= ~(ARM_FLAG_UNUSED_6);
+    }
+  }
+
+  if (!MAIN_VERSION_ATLEAST(bmain, 281, 1)) {
+    LISTBASE_FOREACH (Object *, ob, &bmain->objects) {
+      for (ModifierData *md = ob->modifiers.first; md; md = md->next) {
+        if (md->type == eModifierType_DataTransfer) {
+          /* Now datatransfer's mix factor is multiplied with weights when any,
+           * instead of being ignored,
+           * we need to take care of that to keep 'old' files compatible. */
+          DataTransferModifierData *dtmd = (DataTransferModifierData *)md;
+          if (dtmd->defgrp_name[0] != '\0') {
+            dtmd->mix_factor = 1.0f;
+          }
+        }
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_ATLEAST(bmain, 281, 3)) {
+    if (U.view_rotate_sensitivity_turntable == 0) {
+      U.view_rotate_sensitivity_turntable = DEG2RADF(0.4f);
+      U.view_rotate_sensitivity_trackball = 1.0f;
+    }
+    for (bScreen *screen = bmain->screens.first; screen; screen = screen->id.next) {
+      for (ScrArea *sa = screen->areabase.first; sa; sa = sa->next) {
+        for (SpaceLink *sl = sa->spacedata.first; sl; sl = sl->next) {
+          if (sl->spacetype == SPACE_TEXT) {
+            ListBase *regionbase = (sl == sa->spacedata.first) ? &sa->regionbase : &sl->regionbase;
+            ARegion *ar = do_versions_find_region_or_null(regionbase, RGN_TYPE_UI);
+            if (ar) {
+              ar->alignment = RGN_ALIGN_RIGHT;
+            }
+          }
+          /* Mark outliners as dirty for syncing and enable synced selection */
+          if (sl->spacetype == SPACE_OUTLINER) {
+            SpaceOutliner *soutliner = (SpaceOutliner *)sl;
+            soutliner->sync_select_dirty |= WM_OUTLINER_SYNC_SELECT_FROM_ALL;
+            soutliner->flag |= SO_SYNC_SELECT;
+          }
+        }
+      }
+    }
+    for (Mesh *mesh = bmain->meshes.first; mesh; mesh = mesh->id.next) {
+      if (mesh->remesh_voxel_size == 0.0f) {
+        mesh->remesh_voxel_size = 0.1f;
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_ATLEAST(bmain, 281, 4)) {
+    ID *id;
+    FOREACH_MAIN_ID_BEGIN (bmain, id) {
+      bNodeTree *ntree = ntreeFromID(id);
+      if (ntree) {
+        ntree->id.flag |= LIB_PRIVATE_DATA;
+      }
+    }
+    FOREACH_MAIN_ID_END;
+  }
+
   {
     /* Versioning code until next subversion bump goes here. */
+    for (Brush *br = bmain->brushes.first; br; br = br->id.next) {
+      if (br->ob_mode & OB_MODE_SCULPT && br->normal_radius_factor == 0.0f) {
+        br->normal_radius_factor = 0.5f;
+      }
+    }
   }
 }

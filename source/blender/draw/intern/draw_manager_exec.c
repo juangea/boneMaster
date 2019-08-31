@@ -22,6 +22,7 @@
 
 #include "draw_manager.h"
 
+#include "BLI_math.h"
 #include "BLI_math_bits.h"
 #include "BLI_memblock.h"
 
@@ -79,6 +80,34 @@ void drw_state_set(DRWState state)
     }
   }
 
+  /* Stencil Write */
+  {
+    DRWState test;
+    if (CHANGED_ANY_STORE_VAR(DRW_STATE_WRITE_STENCIL_ENABLED, test)) {
+      /* Stencil Write */
+      if (test) {
+        glStencilMask(0xFF);
+        if (test & DRW_STATE_WRITE_STENCIL) {
+          glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+        }
+        else if (test & DRW_STATE_WRITE_STENCIL_SHADOW_PASS) {
+          glStencilOpSeparate(GL_BACK, GL_KEEP, GL_KEEP, GL_INCR_WRAP);
+          glStencilOpSeparate(GL_FRONT, GL_KEEP, GL_KEEP, GL_DECR_WRAP);
+        }
+        else if (test & DRW_STATE_WRITE_STENCIL_SHADOW_FAIL) {
+          glStencilOpSeparate(GL_BACK, GL_KEEP, GL_DECR_WRAP, GL_KEEP);
+          glStencilOpSeparate(GL_FRONT, GL_KEEP, GL_INCR_WRAP, GL_KEEP);
+        }
+        else {
+          BLI_assert(0);
+        }
+      }
+      else {
+        glStencilMask(0x00);
+      }
+    }
+  }
+
   /* Color Write */
   {
     int test;
@@ -130,10 +159,7 @@ void drw_state_set(DRWState state)
   /* Depth Test */
   {
     DRWState test;
-    if (CHANGED_ANY_STORE_VAR(DRW_STATE_DEPTH_LESS | DRW_STATE_DEPTH_LESS_EQUAL |
-                                  DRW_STATE_DEPTH_EQUAL | DRW_STATE_DEPTH_GREATER |
-                                  DRW_STATE_DEPTH_GREATER_EQUAL | DRW_STATE_DEPTH_ALWAYS,
-                              test)) {
+    if (CHANGED_ANY_STORE_VAR(DRW_STATE_DEPTH_TEST_ENABLED, test)) {
       if (test) {
         glEnable(GL_DEPTH_TEST);
 
@@ -165,6 +191,20 @@ void drw_state_set(DRWState state)
     }
   }
 
+  /* Stencil Test */
+  {
+    int test;
+    if (CHANGED_ANY_STORE_VAR(DRW_STATE_STENCIL_TEST_ENABLED, test)) {
+      DST.stencil_mask = STENCIL_UNDEFINED;
+      if (test) {
+        glEnable(GL_STENCIL_TEST);
+      }
+      else {
+        glDisable(GL_STENCIL_TEST);
+      }
+    }
+  }
+
   /* Wire Width */
   {
     int test;
@@ -183,26 +223,27 @@ void drw_state_set(DRWState state)
   /* Blending (all buffer) */
   {
     int test;
-    if (CHANGED_ANY_STORE_VAR(DRW_STATE_BLEND | DRW_STATE_BLEND_PREMUL | DRW_STATE_ADDITIVE |
-                                  DRW_STATE_MULTIPLY | DRW_STATE_ADDITIVE_FULL |
-                                  DRW_STATE_BLEND_OIT | DRW_STATE_BLEND_PREMUL_UNDER,
+    if (CHANGED_ANY_STORE_VAR(DRW_STATE_BLEND_ALPHA | DRW_STATE_BLEND_ALPHA_PREMUL |
+                                  DRW_STATE_BLEND_ADD | DRW_STATE_BLEND_MUL |
+                                  DRW_STATE_BLEND_ADD_FULL | DRW_STATE_BLEND_OIT |
+                                  DRW_STATE_BLEND_ALPHA_UNDER_PREMUL | DRW_STATE_BLEND_CUSTOM,
                               test)) {
       if (test) {
         glEnable(GL_BLEND);
 
-        if ((state & DRW_STATE_BLEND) != 0) {
+        if ((state & DRW_STATE_BLEND_ALPHA) != 0) {
           glBlendFuncSeparate(GL_SRC_ALPHA,
                               GL_ONE_MINUS_SRC_ALPHA, /* RGB */
                               GL_ONE,
                               GL_ONE_MINUS_SRC_ALPHA); /* Alpha */
         }
-        else if ((state & DRW_STATE_BLEND_PREMUL_UNDER) != 0) {
+        else if ((state & DRW_STATE_BLEND_ALPHA_UNDER_PREMUL) != 0) {
           glBlendFunc(GL_ONE_MINUS_DST_ALPHA, GL_ONE);
         }
-        else if ((state & DRW_STATE_BLEND_PREMUL) != 0) {
+        else if ((state & DRW_STATE_BLEND_ALPHA_PREMUL) != 0) {
           glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
         }
-        else if ((state & DRW_STATE_MULTIPLY) != 0) {
+        else if ((state & DRW_STATE_BLEND_MUL) != 0) {
           glBlendFunc(GL_DST_COLOR, GL_ZERO);
         }
         else if ((state & DRW_STATE_BLEND_OIT) != 0) {
@@ -211,16 +252,21 @@ void drw_state_set(DRWState state)
                               GL_ZERO,
                               GL_ONE_MINUS_SRC_ALPHA); /* Alpha */
         }
-        else if ((state & DRW_STATE_ADDITIVE) != 0) {
+        else if ((state & DRW_STATE_BLEND_ADD) != 0) {
           /* Do not let alpha accumulate but premult the source RGB by it. */
           glBlendFuncSeparate(GL_SRC_ALPHA,
                               GL_ONE, /* RGB */
                               GL_ZERO,
                               GL_ONE); /* Alpha */
         }
-        else if ((state & DRW_STATE_ADDITIVE_FULL) != 0) {
+        else if ((state & DRW_STATE_BLEND_ADD_FULL) != 0) {
           /* Let alpha accumulate. */
           glBlendFunc(GL_ONE, GL_ONE);
+        }
+        else if ((state & DRW_STATE_BLEND_CUSTOM) != 0) {
+          /* Custom blend parameters using dual source blending.
+           * Can only be used with one Draw Buffer. */
+          glBlendFunc(GL_ONE, GL_SRC1_COLOR);
         }
         else {
           BLI_assert(0);
@@ -250,45 +296,15 @@ void drw_state_set(DRWState state)
     }
   }
 
-  /* Stencil */
+  /* Program Points Size */
   {
-    DRWState test;
-    if (CHANGED_ANY_STORE_VAR(DRW_STATE_WRITE_STENCIL | DRW_STATE_WRITE_STENCIL_SHADOW_PASS |
-                                  DRW_STATE_WRITE_STENCIL_SHADOW_FAIL | DRW_STATE_STENCIL_EQUAL |
-                                  DRW_STATE_STENCIL_NEQUAL,
-                              test)) {
-      if (test) {
-        glEnable(GL_STENCIL_TEST);
-        /* Stencil Write */
-        if ((state & DRW_STATE_WRITE_STENCIL) != 0) {
-          glStencilMask(0xFF);
-          glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
-        }
-        else if ((state & DRW_STATE_WRITE_STENCIL_SHADOW_PASS) != 0) {
-          glStencilMask(0xFF);
-          glStencilOpSeparate(GL_BACK, GL_KEEP, GL_KEEP, GL_INCR_WRAP);
-          glStencilOpSeparate(GL_FRONT, GL_KEEP, GL_KEEP, GL_DECR_WRAP);
-        }
-        else if ((state & DRW_STATE_WRITE_STENCIL_SHADOW_FAIL) != 0) {
-          glStencilMask(0xFF);
-          glStencilOpSeparate(GL_BACK, GL_KEEP, GL_DECR_WRAP, GL_KEEP);
-          glStencilOpSeparate(GL_FRONT, GL_KEEP, GL_INCR_WRAP, GL_KEEP);
-        }
-        /* Stencil Test */
-        else if ((state & (DRW_STATE_STENCIL_EQUAL | DRW_STATE_STENCIL_NEQUAL)) != 0) {
-          glStencilMask(0x00); /* disable write */
-          DST.stencil_mask = STENCIL_UNDEFINED;
-        }
-        else {
-          BLI_assert(0);
-        }
+    int test;
+    if ((test = CHANGED_TO(DRW_STATE_PROGRAM_POINT_SIZE))) {
+      if (test == 1) {
+        GPU_program_point_size(true);
       }
       else {
-        /* disable write & test */
-        DST.stencil_mask = 0;
-        glStencilMask(0x00);
-        glStencilFunc(GL_ALWAYS, 0, 0xFF);
-        glDisable(GL_STENCIL_TEST);
+        GPU_program_point_size(false);
       }
     }
   }
@@ -317,11 +333,9 @@ static void drw_stencil_set(uint mask)
 {
   if (DST.stencil_mask != mask) {
     DST.stencil_mask = mask;
-    /* Stencil Write */
-    if ((DST.state & DRW_STATE_WRITE_STENCIL) != 0) {
+    if ((DST.state & DRW_STATE_STENCIL_ALWAYS) != 0) {
       glStencilFunc(GL_ALWAYS, mask, 0xFF);
     }
-    /* Stencil Test */
     else if ((DST.state & DRW_STATE_STENCIL_EQUAL) != 0) {
       glStencilFunc(GL_EQUAL, mask, 0xFF);
     }
@@ -336,6 +350,18 @@ void DRW_state_reset_ex(DRWState state)
 {
   DST.state = ~state;
   drw_state_set(state);
+}
+
+static void drw_state_validate(void)
+{
+  /* Cannot write to stencil buffer without stencil test. */
+  if ((DST.state & DRW_STATE_WRITE_STENCIL_ENABLED)) {
+    BLI_assert(DST.state & DRW_STATE_STENCIL_TEST_ENABLED);
+  }
+  /* Cannot write to depth buffer without depth test. */
+  if ((DST.state & DRW_STATE_WRITE_DEPTH)) {
+    BLI_assert(DST.state & DRW_STATE_DEPTH_TEST_ENABLED);
+  }
 }
 
 /**
@@ -354,7 +380,6 @@ void DRW_state_reset(void)
   DRW_state_reset_ex(DRW_STATE_DEFAULT);
 
   GPU_point_size(5);
-  GPU_enable_program_point_size();
 
   /* Reset blending function */
   glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
@@ -464,6 +489,26 @@ bool DRW_culling_plane_test(const DRWView *view, const float plane[4])
   return draw_culling_plane_test(&view->frustum_corners, plane);
 }
 
+/* Return True if the given box intersect the current view frustum.
+ * This function will have to be replaced when world space bb per objects is implemented. */
+bool DRW_culling_min_max_test(const DRWView *view, float obmat[4][4], float min[3], float max[3])
+{
+  view = view ? view : DST.view_default;
+  float tobmat[4][4];
+  transpose_m4_m4(tobmat, obmat);
+  for (int i = 6; i--;) {
+    float frustum_plane_local[4], bb_near[3], bb_far[3];
+    mul_v4_m4v4(frustum_plane_local, tobmat, view->frustum_planes[i]);
+    aabb_get_near_far_from_plane(frustum_plane_local, min, max, bb_near, bb_far);
+
+    if (plane_point_side_v3(frustum_plane_local, bb_far) < 0.0f) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 void DRW_culling_frustum_corners_get(const DRWView *view, BoundBox *corners)
 {
   view = view ? view : DST.view_default;
@@ -547,6 +592,10 @@ static void draw_geometry_prepare(DRWShadingGroup *shgroup, DRWCall *call)
     infos[3] = (state->flag & DRW_CALL_NEGSCALE) ? -1.0f : 1.0f;
     GPU_shader_uniform_vector(shgroup->shader, shgroup->objectinfo, 4, 1, (float *)infos);
   }
+  if (shgroup->objectcolor != -1) {
+    GPU_shader_uniform_vector(
+        shgroup->shader, shgroup->objectcolor, 4, 1, (float *)state->ob_color);
+  }
   if (shgroup->orcotexfac != -1) {
     GPU_shader_uniform_vector(
         shgroup->shader, shgroup->orcotexfac, 3, 2, (float *)state->orcotexfac);
@@ -577,12 +626,12 @@ BLI_INLINE void draw_geometry_execute(DRWShadingGroup *shgroup,
     GPU_batch_bind(geom);
   }
 
-  /* XXX hacking gawain. we don't want to call glUseProgram! (huge performance loss) */
+  /* XXX hacking #GPUBatch. we don't want to call glUseProgram! (huge performance loss) */
   geom->program_in_use = true;
 
   GPU_batch_draw_advanced(geom, vert_first, vert_count, inst_first, inst_count);
 
-  geom->program_in_use = false; /* XXX hacking gawain */
+  geom->program_in_use = false; /* XXX hacking #GPUBatch */
 }
 
 enum {
@@ -967,6 +1016,7 @@ static void drw_draw_pass_ex(DRWPass *pass,
   drw_state_set(DST.state | DRW_STATE_WRITE_DEPTH | DRW_STATE_WRITE_COLOR);
 
   drw_state_set(pass->state);
+  drw_state_validate();
 
   DRW_stats_query_start(pass->name);
 

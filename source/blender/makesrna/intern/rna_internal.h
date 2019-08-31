@@ -29,15 +29,12 @@
 
 #define RNA_MAGIC ((int)~0)
 
-struct Depsgraph;
 struct FreestyleSettings;
 struct ID;
-struct IDOverrideStatic;
-struct IDOverrideStaticProperty;
-struct IDOverrideStaticPropertyOperation;
+struct IDOverrideLibrary;
+struct IDOverrideLibraryPropertyOperation;
 struct IDProperty;
 struct Main;
-struct Mesh;
 struct Object;
 struct ReportList;
 struct SDNA;
@@ -221,12 +218,12 @@ bool rna_AnimaData_override_apply(struct Main *bmain,
                                   struct PointerRNA *ptr_item_local,
                                   struct PointerRNA *ptr_item_reference,
                                   struct PointerRNA *ptr_item_storage,
-                                  struct IDOverrideStaticPropertyOperation *opop);
+                                  struct IDOverrideLibraryPropertyOperation *opop);
 
 void rna_def_animviz_common(struct StructRNA *srna);
 void rna_def_motionpath_common(struct StructRNA *srna);
 
-void rna_def_bone_curved_common(struct StructRNA *srna, bool is_posebone);
+void rna_def_bone_curved_common(struct StructRNA *srna, bool is_posebone, bool is_editbone);
 
 void rna_def_texmat_common(struct StructRNA *srna, const char *texspace_editable);
 void rna_def_mtex_common(struct BlenderRNA *brna,
@@ -478,7 +475,7 @@ int rna_property_override_diff_default(struct Main *bmain,
                                        const int len_a,
                                        const int len_b,
                                        const int mode,
-                                       struct IDOverrideStatic *override,
+                                       struct IDOverrideLibrary *override,
                                        const char *rna_path,
                                        const int flags,
                                        bool *r_override_changed);
@@ -493,7 +490,7 @@ bool rna_property_override_store_default(struct Main *bmain,
                                          const int len_local,
                                          const int len_reference,
                                          const int len_storage,
-                                         struct IDOverrideStaticPropertyOperation *opop);
+                                         struct IDOverrideLibraryPropertyOperation *opop);
 
 bool rna_property_override_apply_default(struct Main *bmain,
                                          struct PointerRNA *ptr_dst,
@@ -508,7 +505,7 @@ bool rna_property_override_apply_default(struct Main *bmain,
                                          struct PointerRNA *ptr_item_dst,
                                          struct PointerRNA *ptr_item_src,
                                          struct PointerRNA *ptr_item_storage,
-                                         struct IDOverrideStaticPropertyOperation *opop);
+                                         struct IDOverrideLibraryPropertyOperation *opop);
 
 /* Builtin Property Callbacks */
 

@@ -38,8 +38,6 @@ struct TransformOrientation;
 struct UnitSettings;
 struct View3DCursor;
 struct ViewLayer;
-struct ViewRender;
-struct WorkSpace;
 
 typedef enum eSceneCopyMethod {
   SCE_COPY_NEW = 0,
@@ -135,7 +133,7 @@ int BKE_scene_frame_snap_by_seconds(struct Scene *scene, double interval_in_seco
 bool BKE_scene_validate_setscene(struct Main *bmain, struct Scene *sce);
 
 float BKE_scene_frame_get(const struct Scene *scene);
-float BKE_scene_frame_get_from_ctime(const struct Scene *scene, const float frame);
+float BKE_scene_frame_to_ctime(const struct Scene *scene, const float frame);
 void BKE_scene_frame_set(struct Scene *scene, double cfra);
 
 struct TransformOrientationSlot *BKE_scene_orientation_slot_get_from_flag(struct Scene *scene,
@@ -147,7 +145,10 @@ int BKE_scene_orientation_slot_get_index(const struct TransformOrientationSlot *
 
 /* **  Scene evaluation ** */
 
+void BKE_scene_update_sound(struct Depsgraph *depsgraph, struct Main *bmain);
+
 void BKE_scene_graph_update_tagged(struct Depsgraph *depsgraph, struct Main *bmain);
+void BKE_scene_graph_evaluated_ensure(struct Depsgraph *depsgraph, struct Main *bmain);
 
 void BKE_scene_graph_update_for_newframe(struct Depsgraph *depsgraph, struct Main *bmain);
 
@@ -244,6 +245,14 @@ void BKE_scene_cursor_to_mat4(const struct View3DCursor *cursor, float mat[4][4]
 void BKE_scene_cursor_from_mat4(struct View3DCursor *cursor,
                                 const float mat[4][4],
                                 bool use_compat);
+
+/* Dependency graph evaluation. */
+
+/* Evaluate parts of sequences which needs to be done as a part of a dependency graph evaluation.
+ * This does NOT include actual rendering of the strips, but rather makes them up-to-date for
+ * animation playback and makes them ready for the sequencer's rendering pipeline to render them.
+ */
+void BKE_scene_eval_sequencer_sequences(struct Depsgraph *depsgraph, struct Scene *scene);
 
 #ifdef __cplusplus
 }

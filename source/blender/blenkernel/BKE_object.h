@@ -43,7 +43,6 @@ struct RegionView3D;
 struct RigidBodyWorld;
 struct Scene;
 struct ShaderFxData;
-struct SoftBody;
 struct View3D;
 struct ViewLayer;
 
@@ -295,6 +294,7 @@ void BKE_object_eval_transform_all(struct Depsgraph *depsgraph,
 
 void BKE_object_eval_update_shading(struct Depsgraph *depsgraph, struct Object *object);
 void BKE_object_data_select_update(struct Depsgraph *depsgraph, struct ID *object_data);
+void BKE_object_select_update(struct Depsgraph *depsgraph, struct Object *object);
 
 void BKE_object_eval_eval_base_flags(struct Depsgraph *depsgraph,
                                      struct Scene *scene,
@@ -312,7 +312,6 @@ void BKE_object_handle_update_ex(struct Depsgraph *depsgraph,
                                  struct Object *ob,
                                  struct RigidBodyWorld *rbw,
                                  const bool do_proxy_update);
-void BKE_object_sculpt_modifiers_changed(struct Object *ob);
 
 void BKE_object_sculpt_data_create(struct Object *ob);
 
@@ -388,8 +387,6 @@ bool BKE_object_modifier_update_subframe(struct Depsgraph *depsgraph,
                                          int parent_recursion,
                                          float frame,
                                          int type);
-
-void BKE_object_type_set_empty_for_versioning(struct Object *ob);
 
 bool BKE_object_empty_image_frame_is_visible_in_view3d(const struct Object *ob,
                                                        const struct RegionView3D *rv3d);

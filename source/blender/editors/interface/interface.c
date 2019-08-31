@@ -896,9 +896,8 @@ bool UI_block_active_only_flagged_buttons(const bContext *C, ARegion *ar, uiBloc
 }
 
 /* simulate button click */
-void UI_but_execute(const bContext *C, uiBut *but)
+void UI_but_execute(const bContext *C, ARegion *ar, uiBut *but)
 {
-  ARegion *ar = CTX_wm_region(C);
   void *active_back;
   ui_but_execute_begin((bContext *)C, ar, but, &active_back);
   /* Value is applied in begin. No further action required. */
@@ -909,12 +908,12 @@ void UI_but_execute(const bContext *C, uiBut *but)
  * returns false if undo needs to be disabled. */
 static bool ui_but_is_rna_undo(const uiBut *but)
 {
-  if (but->rnapoin.id.data) {
+  if (but->rnapoin.owner_id) {
     /* avoid undo push for buttons who's ID are screen or wm level
      * we could disable undo for buttons with no ID too but may have
      * unforeseen consequences, so best check for ID's we _know_ are not
      * handled by undo - campbell */
-    ID *id = but->rnapoin.id.data;
+    ID *id = but->rnapoin.owner_id;
     if (ID_CHECK_UNDO(id) == false) {
       return false;
     }
@@ -933,12 +932,7 @@ static bool ui_but_is_rna_undo(const uiBut *but)
  * (underline key in menu) */
 static void ui_menu_block_set_keyaccels(uiBlock *block)
 {
-  uiBut *but;
-
   uint menu_key_mask = 0;
-  uchar menu_key;
-  const char *str_pt;
-  int pass;
   int tot_missing = 0;
 
   /* only do it before bounding */
@@ -946,11 +940,11 @@ static void ui_menu_block_set_keyaccels(uiBlock *block)
     return;
   }
 
-  for (pass = 0; pass < 2; pass++) {
+  for (int pass = 0; pass < 2; pass++) {
     /* 2 Passes, on for first letter only, second for any letter if first fails
      * fun first pass on all buttons so first word chars always get first priority */
 
-    for (but = block->buttons.first; but; but = but->next) {
+    for (uiBut *but = block->buttons.first; but; but = but->next) {
       if (!ELEM(but->type,
                 UI_BTYPE_BUT,
                 UI_BTYPE_BUT_MENU,
@@ -961,8 +955,10 @@ static void ui_menu_block_set_keyaccels(uiBlock *block)
         /* pass */
       }
       else if (but->menu_key == '\0') {
-        if (but->str) {
-          for (str_pt = but->str; *str_pt;) {
+        if (but->str && but->str[0]) {
+          const char *str_pt = but->str;
+          uchar menu_key;
+          do {
             menu_key = tolower(*str_pt);
             if ((menu_key >= 'a' && menu_key <= 'z') && !(menu_key_mask & 1 << (menu_key - 'a'))) {
               menu_key_mask |= 1 << (menu_key - 'a');
@@ -983,7 +979,7 @@ static void ui_menu_block_set_keyaccels(uiBlock *block)
               /* just step over every char second pass and find first usable key */
               str_pt++;
             }
-          }
+          } while (*str_pt);
 
           if (*str_pt) {
             but->menu_key = menu_key;
@@ -1230,8 +1226,8 @@ static bool ui_but_event_property_operator_string(const bContext *C,
      */
     char *data_path = NULL;
 
-    if (ptr->id.data) {
-      ID *id = ptr->id.data;
+    if (ptr->owner_id) {
+      ID *id = ptr->owner_id;
 
       if (GS(id->name) == ID_SCR) {
         /* screen/editor property
@@ -1378,7 +1374,7 @@ static bool ui_but_event_property_operator_string(const bContext *C,
  *
  * but it's actually quite logical. It's designed to be 'upwards compatible'
  * for muscle memory so that the menu item locations are fixed and don't move
- * as new items are added to the menu later on. It also optimises efficiency -
+ * as new items are added to the menu later on. It also optimizes efficiency -
  * a radial menu is best kept symmetrical, with as large an angle between
  * items as possible, so that the gestural mouse movements can be fast and inexact.
  *
@@ -1462,7 +1458,7 @@ static void ui_menu_block_set_keymaps(const bContext *C, uiBlock *block)
 
 void ui_but_override_flag(uiBut *but)
 {
-  const int override_status = RNA_property_static_override_status(
+  const int override_status = RNA_property_override_library_status(
       &but->rnapoin, but->rnaprop, but->rnaindex);
 
   if (override_status & RNA_OVERRIDE_STATUS_OVERRIDDEN) {
@@ -1735,7 +1731,7 @@ static void ui_block_message_subscribe(ARegion *ar, struct wmMsgBus *mbus, uiBlo
       if ((but_prev && (but_prev->rnaprop == but->rnaprop) &&
            (but_prev->rnapoin.type == but->rnapoin.type) &&
            (but_prev->rnapoin.data == but->rnapoin.data) &&
-           (but_prev->rnapoin.id.data == but->rnapoin.id.data)) == false) {
+           (but_prev->rnapoin.owner_id == but->rnapoin.owner_id)) == false) {
         /* TODO: could make this into utility function. */
         WM_msg_subscribe_rna(mbus,
                              &but->rnapoin,
@@ -2059,7 +2055,7 @@ bool ui_but_is_compatible(const uiBut *but_a, const uiBut *but_b)
   }
 
   if (but_a->rnaprop) {
-    /* skip 'rnapoin.data', 'rnapoin.id.data'
+    /* skip 'rnapoin.data', 'rnapoin.owner_id'
      * allow different data to have the same props edited at once */
     if (but_a->rnapoin.type != but_b->rnapoin.type) {
       return false;
@@ -2483,7 +2479,7 @@ void ui_but_string_get_ex(uiBut *but,
 
       /* uiBut.custom_data points to data this tab represents (e.g. workspace).
        * uiBut.rnapoin/prop store an active value (e.g. active workspace). */
-      RNA_pointer_create(but->rnapoin.id.data, ptr_type, but->custom_data, &ptr);
+      RNA_pointer_create(but->rnapoin.owner_id, ptr_type, but->custom_data, &ptr);
       buf = RNA_struct_name_get_alloc(&ptr, str, maxlen, &buf_len);
     }
     else if (type == PROP_STRING) {
@@ -2557,8 +2553,8 @@ void ui_but_string_get_ex(uiBut *but,
         }
       }
       else {
+        const int int_digits_num = integer_digits_f(value);
         if (use_exp_float) {
-          const int int_digits_num = integer_digits_f(value);
           if (int_digits_num < -6 || int_digits_num > 12) {
             BLI_snprintf(str, maxlen, "%.*g", prec, value);
             if (r_use_exp_float) {
@@ -2572,10 +2568,8 @@ void ui_but_string_get_ex(uiBut *but,
           }
         }
         else {
-#if 0 /* TODO, but will likely break some stuff, so better after 2.79 release. */
           prec -= int_digits_num;
           CLAMP(prec, 0, UI_PRECISION_FLOAT_MAX);
-#endif
           BLI_snprintf(str, maxlen, "%.*f", prec, value);
         }
       }
@@ -2828,7 +2822,7 @@ bool ui_but_string_set(bContext *C, uiBut *but, const char *str)
 
       /* uiBut.custom_data points to data this tab represents (e.g. workspace).
        * uiBut.rnapoin/prop store an active value (e.g. active workspace). */
-      RNA_pointer_create(but->rnapoin.id.data, ptr_type, but->custom_data, &ptr);
+      RNA_pointer_create(but->rnapoin.owner_id, ptr_type, but->custom_data, &ptr);
       prop = RNA_struct_name_property(ptr_type);
       if (RNA_property_editable(&ptr, prop)) {
         RNA_property_string_set(&ptr, prop, str);
@@ -3280,7 +3274,7 @@ static void ui_but_build_drawstr_float(uiBut *but, double value)
   }
   else if (subtype == PROP_PERCENTAGE) {
     int prec = ui_but_calc_float_precision(but, value);
-    STR_CONCATF(but->drawstr, slen, "%.*f %%", prec, value);
+    STR_CONCATF(but->drawstr, slen, "%.*f%%", prec, value);
   }
   else if (subtype == PROP_PIXEL) {
     int prec = ui_but_calc_float_precision(but, value);
@@ -3293,7 +3287,7 @@ static void ui_but_build_drawstr_float(uiBut *but, double value)
       STR_CONCATF(but->drawstr, slen, "%.*f", precision, value);
     }
     else {
-      STR_CONCATF(but->drawstr, slen, "%.*f %%", MAX2(0, precision - 2), value * 100);
+      STR_CONCATF(but->drawstr, slen, "%.*f%%", MAX2(0, precision - 2), value * 100);
     }
   }
   else if (ui_but_is_unit(but)) {
@@ -3590,6 +3584,14 @@ static uiBut *ui_def_but(uiBlock *block,
   if ((type & BUTTYPE) == UI_BTYPE_LABEL) {
     BLI_assert((poin != NULL || min != 0.0f || max != 0.0f || (a1 == 0.0f && a2 != 0.0f) ||
                 (a1 != 0.0f && a1 != 1.0f)) == false);
+  }
+
+  /* Number buttons must have a click-step,
+   * assert instead of correcting the value to ensure the caller knows what they're doing.  */
+  if ((type & BUTTYPE) == UI_BTYPE_NUM) {
+    if (ELEM((type & UI_BUT_POIN_TYPES), UI_BUT_POIN_CHAR, UI_BUT_POIN_SHORT, UI_BUT_POIN_INT)) {
+      BLI_assert((int)a1 > 0);
+    }
   }
 
   if (type & UI_BUT_POIN_TYPES) { /* a pointer is required */
@@ -4241,7 +4243,7 @@ static uiBut *ui_def_but_operator_ptr(uiBlock *block,
 
   if (!str) {
     if (ot && ot->srna) {
-      str = RNA_struct_ui_name(ot->srna);
+      str = WM_operatortype_name(ot, NULL);
     }
     else {
       str = "";
@@ -6324,7 +6326,7 @@ void UI_but_string_info_get(bContext *C, uiBut *but, ...)
     char *tmp = NULL;
 
     if (type == BUT_GET_LABEL) {
-      if (but->str) {
+      if (but->str && but->str[0]) {
         const char *str_sep;
         size_t str_len;
 
@@ -6392,7 +6394,7 @@ void UI_but_string_info_get(bContext *C, uiBut *but, ...)
       }
       else if (but->optype) {
         if (type == BUT_GET_RNA_LABEL) {
-          tmp = BLI_strdup(RNA_struct_ui_name(but->optype->srna));
+          tmp = BLI_strdup(WM_operatortype_name(but->optype, NULL));
         }
         else {
           const char *t = RNA_struct_ui_description(but->optype->srna);
@@ -6401,18 +6403,35 @@ void UI_but_string_info_get(bContext *C, uiBut *but, ...)
           }
         }
       }
-      else if (ELEM(but->type, UI_BTYPE_MENU, UI_BTYPE_PULLDOWN)) {
-        MenuType *mt = UI_but_menutype_get(but);
-        if (mt) {
-          /* not all menus are from python */
-          if (mt->ext.srna) {
+      else if (ELEM(but->type, UI_BTYPE_MENU, UI_BTYPE_PULLDOWN, UI_BTYPE_POPOVER)) {
+        {
+          MenuType *mt = UI_but_menutype_get(but);
+          if (mt) {
             if (type == BUT_GET_RNA_LABEL) {
-              tmp = BLI_strdup(RNA_struct_ui_name(mt->ext.srna));
+              tmp = BLI_strdup(mt->label);
             }
             else {
-              const char *t = RNA_struct_ui_description(mt->ext.srna);
-              if (t && t[0]) {
-                tmp = BLI_strdup(t);
+              /* Not all menus are from Python. */
+              if (mt->ext.srna) {
+                const char *t = RNA_struct_ui_description(mt->ext.srna);
+                if (t && t[0]) {
+                  tmp = BLI_strdup(t);
+                }
+              }
+            }
+          }
+        }
+
+        if (tmp == NULL) {
+          PanelType *pt = UI_but_paneltype_get(but);
+          if (pt) {
+            if (type == BUT_GET_RNA_LABEL) {
+              tmp = BLI_strdup(pt->label);
+            }
+            else {
+              /* Not all panels are from Python. */
+              if (pt->ext.srna) {
+                /* Panels don't yet have descriptions, this may be added. */
               }
             }
           }

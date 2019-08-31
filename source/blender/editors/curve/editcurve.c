@@ -51,6 +51,7 @@
 
 #include "DEG_depsgraph.h"
 #include "DEG_depsgraph_build.h"
+#include "DEG_depsgraph_query.h"
 
 #include "WM_api.h"
 #include "WM_types.h"
@@ -104,13 +105,15 @@ void printknots(Object *obedit)
     if (ED_curve_nurb_select_check(nu) && nu->type == CU_NURBS) {
       if (nu->knotsu) {
         num = KNOTSU(nu);
-        for (a = 0; a < num; a++)
+        for (a = 0; a < num; a++) {
           printf("knotu %d: %f\n", a, nu->knotsu[a]);
+        }
       }
       if (nu->knotsv) {
         num = KNOTSV(nu);
-        for (a = 0; a < num; a++)
+        for (a = 0; a < num; a++) {
           printf("knotv %d: %f\n", a, nu->knotsv[a]);
+        }
       }
     }
   }
@@ -1397,8 +1400,12 @@ static int separate_exec(bContext *C, wmOperator *op)
     }
 
     /* 2. Duplicate the object and data. */
-    newbase = ED_object_add_duplicate(
-        bmain, scene, view_layer, oldbase, 0); /* 0 = fully linked. */
+    newbase = ED_object_add_duplicate(bmain,
+                                      scene,
+                                      view_layer,
+                                      oldbase,
+                                      /* 0 = fully linked. */
+                                      0);
     DEG_relations_tag_update(bmain);
 
     newob = newbase->object;
@@ -3307,7 +3314,8 @@ static int reveal_exec(bContext *C, wmOperator *op)
     }
 
     if (changed) {
-      DEG_id_tag_update(obedit->data, ID_RECALC_COPY_ON_WRITE | ID_RECALC_SELECT | ID_RECALC_GEOMETRY);
+      DEG_id_tag_update(obedit->data,
+                        ID_RECALC_COPY_ON_WRITE | ID_RECALC_SELECT | ID_RECALC_GEOMETRY);
       WM_event_add_notifier(C, NC_GEOM | ND_SELECT, obedit->data);
       changed_multi = true;
     }
@@ -4781,7 +4789,7 @@ static int make_segment_exec(bContext *C, wmOperator *op)
           BKE_nurb_handles_calc(nu1);
           ok = true;
         }
-        else if (nu1->type == CU_NURBS && nu1->bp->f1 & SELECT &&
+        else if (ELEM(nu1->type, CU_NURBS, CU_POLY) && nu1->bp->f1 & SELECT &&
                  (nu1->bp[nu1->pntsu - 1].f1 & SELECT)) {
           nu1->flagu |= CU_NURB_CYCLIC;
           BKE_nurb_knot_calc_u(nu1);
@@ -4894,7 +4902,7 @@ bool ED_curve_editnurb_select_pick(
 
         ED_curve_deselect_all(((Curve *)ob_iter->data)->editnurb);
 
-        DEG_id_tag_update(ob_iter->data, ID_RECALC_SELECT);
+        DEG_id_tag_update(ob_iter->data, ID_RECALC_SELECT | ID_RECALC_COPY_ON_WRITE);
         WM_event_add_notifier(C, NC_GEOM | ND_SELECT, ob_iter->data);
       }
       MEM_freeN(objects);
@@ -5009,7 +5017,7 @@ bool ED_curve_editnurb_select_pick(
       ED_object_base_activate(C, basact);
     }
 
-    DEG_id_tag_update(obedit->data, ID_RECALC_SELECT);
+    DEG_id_tag_update(obedit->data, ID_RECALC_SELECT | ID_RECALC_COPY_ON_WRITE);
     WM_event_add_notifier(C, NC_GEOM | ND_SELECT, obedit->data);
 
     return true;
@@ -5671,6 +5679,7 @@ static int add_vertex_invoke(bContext *C, wmOperator *op, const wmEvent *event)
               .use_object_edit_cage = false,
           },
           mval,
+          NULL,
           NULL,
           location,
           NULL);
@@ -7091,19 +7100,21 @@ static bool match_texture_space_poll(bContext *C)
 
 static int match_texture_space_exec(bContext *C, wmOperator *UNUSED(op))
 {
-  Depsgraph *depsgraph = CTX_data_depsgraph(C);
-  Scene *scene = CTX_data_scene(C);
+  /* Need to ensure the dependency graph is fully evaluated, so the display list is at a correct
+   * state. */
+  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
+  (void)depsgraph;
+
   Object *object = CTX_data_active_object(C);
+  Object *object_eval = DEG_get_evaluated_object(depsgraph, object);
   Curve *curve = (Curve *)object->data;
   float min[3], max[3], size[3], loc[3];
   int a;
 
-  if (object->runtime.curve_cache == NULL) {
-    BKE_displist_make_curveTypes(depsgraph, scene, object, false, false);
-  }
+  BLI_assert(object_eval->runtime.curve_cache != NULL);
 
   INIT_MINMAX(min, max);
-  BKE_displist_minmax(&object->runtime.curve_cache->disp, min, max);
+  BKE_displist_minmax(&object_eval->runtime.curve_cache->disp, min, max);
 
   mid_v3_v3v3(loc, min, max);
 
@@ -7130,6 +7141,7 @@ static int match_texture_space_exec(bContext *C, wmOperator *UNUSED(op))
   curve->texflag &= ~CU_AUTOSPACE;
 
   WM_event_add_notifier(C, NC_GEOM | ND_DATA, curve);
+  DEG_id_tag_update(&curve->id, ID_RECALC_GEOMETRY);
 
   return OPERATOR_FINISHED;
 }

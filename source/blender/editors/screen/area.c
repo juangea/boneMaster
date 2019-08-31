@@ -188,51 +188,17 @@ void ED_area_do_refresh(bContext *C, ScrArea *sa)
 /**
  * \brief Corner widget use for quitting fullscreen.
  */
-static void area_draw_azone_fullscreen(short x1, short y1, short x2, short y2, float alpha)
+static void area_draw_azone_fullscreen(
+    short UNUSED(x1), short UNUSED(y1), short x2, short y2, float alpha)
 {
-  int x = x2 - ((float)x2 - x1) * 0.5f / UI_DPI_FAC;
-  int y = y2 - ((float)y2 - y1) * 0.5f / UI_DPI_FAC;
-
-  /* adjust the icon distance from the corner */
-  x += 36.0f / UI_DPI_FAC;
-  y += 36.0f / UI_DPI_FAC;
-
-  /* draws from the left bottom corner of the icon */
-  x -= UI_DPI_ICON_SIZE;
-  y -= UI_DPI_ICON_SIZE;
-
-  alpha = min_ff(alpha, 0.75f);
-
-  UI_icon_draw_ex(x, y, ICON_FULLSCREEN_EXIT, 0.7f * U.inv_dpi_fac, 0.0f, alpha, NULL, false);
-
-  /* debug drawing :
-   * The click_rect is the same as defined in fullscreen_click_rcti_init
-   * Keep them both in sync */
-
-  if (G.debug_value == 101) {
-    rcti click_rect;
-    float icon_size = UI_DPI_ICON_SIZE + 7 * UI_DPI_FAC;
-
-    BLI_rcti_init(&click_rect, x, x + icon_size, y, y + icon_size);
-
-    GPUVertFormat *format = immVertexFormat();
-    uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
-
-    immBindBuiltinProgram(GPU_SHADER_2D_UNIFORM_COLOR);
-
-    immUniformColor4f(1.0f, 0.0f, 0.0f, alpha);
-    imm_draw_box_wire_2d(pos, click_rect.xmin, click_rect.ymin, click_rect.xmax, click_rect.ymax);
-
-    immUniformColor4f(0.0f, 1.0f, 1.0f, alpha);
-    immBegin(GPU_PRIM_LINES, 4);
-    immVertex2f(pos, click_rect.xmin, click_rect.ymin);
-    immVertex2f(pos, click_rect.xmax, click_rect.ymax);
-    immVertex2f(pos, click_rect.xmin, click_rect.ymax);
-    immVertex2f(pos, click_rect.xmax, click_rect.ymin);
-    immEnd();
-
-    immUnbindProgram();
-  }
+  UI_icon_draw_ex(x2 - U.widget_unit,
+                  y2 - U.widget_unit,
+                  ICON_FULLSCREEN_EXIT,
+                  U.inv_dpi_fac,
+                  min_ff(alpha, 0.75f),
+                  0.0f,
+                  NULL,
+                  false);
 }
 
 /**
@@ -368,7 +334,9 @@ static void region_draw_azones(ScrArea *sa, ARegion *ar)
         }
       }
       else if (az->type == AZONE_FULLSCREEN) {
-        area_draw_azone_fullscreen(az->x1, az->y1, az->x2, az->y2, az->alpha);
+        if (az->alpha > 0.0f) {
+          area_draw_azone_fullscreen(az->x1, az->y1, az->x2, az->y2, az->alpha);
+        }
       }
     }
     if (!IS_EQF(az->alpha, 0.0f) && ELEM(az->type, AZONE_FULLSCREEN, AZONE_REGION_SCROLL)) {
@@ -687,26 +655,33 @@ void ED_region_tag_redraw_no_rebuild(ARegion *ar)
 void ED_region_tag_refresh_ui(ARegion *ar)
 {
   if (ar) {
-    ar->do_draw |= RGN_DRAW_REFRESH_UI;
+    ar->do_draw |= RGN_REFRESH_UI;
   }
 }
 
-void ED_region_tag_redraw_partial(ARegion *ar, const rcti *rct)
+void ED_region_tag_redraw_partial(ARegion *ar, const rcti *rct, bool rebuild)
 {
   if (ar && !(ar->do_draw & RGN_DRAWING)) {
-    if (!(ar->do_draw & (RGN_DRAW | RGN_DRAW_NO_REBUILD | RGN_DRAW_PARTIAL))) {
-      /* no redraw set yet, set partial region */
-      ar->do_draw |= RGN_DRAW_PARTIAL;
-      ar->drawrct = *rct;
-    }
-    else if (ar->drawrct.xmin != ar->drawrct.xmax) {
-      BLI_assert((ar->do_draw & RGN_DRAW_PARTIAL) != 0);
-      /* partial redraw already set, expand region */
+    if (ar->do_draw & RGN_DRAW_PARTIAL) {
+      /* Partial redraw already set, expand region. */
       BLI_rcti_union(&ar->drawrct, rct);
+      if (rebuild) {
+        ar->do_draw &= ~RGN_DRAW_NO_REBUILD;
+      }
+    }
+    else if (ar->do_draw & (RGN_DRAW | RGN_DRAW_NO_REBUILD)) {
+      /* Full redraw already requested. */
+      if (rebuild) {
+        ar->do_draw &= ~RGN_DRAW_NO_REBUILD;
+      }
     }
     else {
-      BLI_assert((ar->do_draw & (RGN_DRAW | RGN_DRAW_NO_REBUILD)) != 0);
-      /* Else, full redraw is already requested, nothing to do here. */
+      /* No redraw set yet, set partial region. */
+      ar->drawrct = *rct;
+      ar->do_draw |= RGN_DRAW_PARTIAL;
+      if (!rebuild) {
+        ar->do_draw |= RGN_DRAW_NO_REBUILD;
+      }
     }
   }
 }
@@ -899,10 +874,18 @@ static void fullscreen_azone_initialize(ScrArea *sa, ARegion *ar)
   az->ar = ar;
   az->alpha = 0.0f;
 
-  az->x1 = ar->winrct.xmax - (AZONEFADEOUT - 1);
-  az->y1 = ar->winrct.ymax - (AZONEFADEOUT - 1);
-  az->x2 = ar->winrct.xmax;
-  az->y2 = ar->winrct.ymax;
+  if (U.uiflag2 & USER_REGION_OVERLAP) {
+    const rcti *rect_visible = ED_region_visible_rect(ar);
+    az->x2 = ar->winrct.xmin + rect_visible->xmax;
+    az->y2 = ar->winrct.ymin + rect_visible->ymax;
+  }
+  else {
+    az->x2 = ar->winrct.xmax;
+    az->y2 = ar->winrct.ymax;
+  }
+  az->x1 = az->x2 - AZONEFADEOUT;
+  az->y1 = az->y2 - AZONEFADEOUT;
+
   BLI_rcti_init(&az->rect, az->x1, az->x2, az->y1, az->y2);
 }
 
@@ -1069,16 +1052,11 @@ static void region_azones_scrollbars_initialize(ScrArea *sa, ARegion *ar)
 }
 
 /* *************************************************************** */
-
-static void region_azones_add(const bScreen *screen, ScrArea *sa, ARegion *ar, const int alignment)
+static void region_azones_add_edge(ScrArea *sa,
+                                   ARegion *ar,
+                                   const int alignment,
+                                   const bool is_fullscreen)
 {
-  const bool is_fullscreen = screen->state == SCREENFULL;
-
-  /* Only display tab or icons when the header region is hidden
-   * (not the tool header - they overlap). */
-  if (ar->regiontype == RGN_TYPE_TOOL_HEADER) {
-    return;
-  }
 
   /* edge code (t b l r) is along which area edge azone will be drawn */
   if (alignment == RGN_ALIGN_TOP) {
@@ -1092,6 +1070,25 @@ static void region_azones_add(const bScreen *screen, ScrArea *sa, ARegion *ar, c
   }
   else if (alignment == RGN_ALIGN_LEFT) {
     region_azone_edge_initialize(sa, ar, AE_RIGHT_TO_TOPLEFT, is_fullscreen);
+  }
+}
+
+static void region_azones_add(const bScreen *screen, ScrArea *sa, ARegion *ar)
+{
+  const bool is_fullscreen = screen->state == SCREENFULL;
+
+  /* Only display tab or icons when the header region is hidden
+   * (not the tool header - they overlap). */
+  if (ar->regiontype == RGN_TYPE_TOOL_HEADER) {
+    return;
+  }
+
+  region_azones_add_edge(sa, ar, RGN_ALIGN_ENUM_FROM_MASK(ar->alignment), is_fullscreen);
+
+  /* For a split region also continue the azone edge from the next region if this region is aligned
+   * with the next */
+  if ((ar->alignment & RGN_SPLIT_PREV) && ar->prev) {
+    region_azones_add_edge(sa, ar, RGN_ALIGN_ENUM_FROM_MASK(ar->prev->alignment), is_fullscreen);
   }
 
   if (is_fullscreen) {
@@ -1508,6 +1505,9 @@ static void region_rect_recursive(
   if (ar->winx != prev_winx || ar->winy != prev_winy) {
     ED_region_tag_redraw(ar);
   }
+
+  /* Clear, initialize on demand. */
+  memset(&ar->runtime.visible_rect, 0, sizeof(ar->runtime.visible_rect));
 }
 
 static void area_calc_totrct(ScrArea *sa, const rcti *window_rect)
@@ -1586,7 +1586,7 @@ static void ed_default_handlers(
     UI_region_handlers_add(handlers);
   }
   if (flag & ED_KEYMAP_GIZMO) {
-    BLI_assert(ar && ar->type->regionid == RGN_TYPE_WINDOW);
+    BLI_assert(ar && ELEM(ar->type->regionid, RGN_TYPE_WINDOW, RGN_TYPE_PREVIEW));
     if (ar) {
       /* Anything else is confusing, only allow this. */
       BLI_assert(&ar->handlers == handlers);
@@ -1612,9 +1612,9 @@ static void ed_default_handlers(
     keymap = WM_keymap_ensure(wm->defaultconf, "Markers", 0, 0);
     WM_event_add_keymap_handler_poll(handlers, keymap, event_in_markers_region);
 
-    /* time-scrubbing */
-    keymap = WM_keymap_ensure(wm->defaultconf, "Scrubbing", 0, 0);
-    WM_event_add_keymap_handler_poll(handlers, keymap, ED_event_in_scrubbing_region);
+    /* time-scrub */
+    keymap = WM_keymap_ensure(wm->defaultconf, "Time Scrub", 0, 0);
+    WM_event_add_keymap_handler_poll(handlers, keymap, ED_time_scrub_event_in_region);
 
     /* frame changing and timeline operators (for time spaces) */
     keymap = WM_keymap_ensure(wm->defaultconf, "Animation", 0, 0);
@@ -1709,7 +1709,7 @@ void ED_area_update_region_sizes(wmWindowManager *wm, wmWindow *win, ScrArea *ar
     }
 
     /* Some AZones use View2D data which is only updated in region init, so call that first! */
-    region_azones_add(screen, area, ar, RGN_ALIGN_ENUM_FROM_MASK(ar->alignment));
+    region_azones_add(screen, area, ar);
   }
   ED_area_azones_update(area, &win->eventstate->x);
 
@@ -1780,7 +1780,7 @@ void ED_area_initialize(wmWindowManager *wm, wmWindow *win, ScrArea *sa)
     }
 
     /* Some AZones use View2D data which is only updated in region init, so call that first! */
-    region_azones_add(screen, sa, ar, RGN_ALIGN_ENUM_FROM_MASK(ar->alignment));
+    region_azones_add(screen, sa, ar);
   }
 
   /* Avoid re-initializing tools while resizing the window. */
@@ -2689,7 +2689,7 @@ void ED_region_header_init(ARegion *ar)
 
 int ED_area_headersize(void)
 {
-  /* Accomodate widget and padding. */
+  /* Accommodate widget and padding. */
   return U.widget_unit + (int)(UI_DPI_FAC * HEADER_PADDING_Y);
 }
 
@@ -2802,11 +2802,10 @@ void ED_region_info_draw_multiline(ARegion *ar,
   uiStyle *style = UI_style_get_dpi();
   int fontid = style->widget.uifont_id;
   int scissor[4];
-  rcti rect;
   int num_lines = 0;
 
   /* background box */
-  ED_region_visible_rect(ar, &rect);
+  rcti rect = *ED_region_visible_rect(ar);
 
   /* Box fill entire width or just around text. */
   if (!full_redraw) {
@@ -3284,7 +3283,7 @@ void ED_region_grid_draw(ARegion *ar, float zoomx, float zoomy)
 
 /* If the area has overlapping regions, it returns visible rect for Region *ar */
 /* rect gets returned in local region coordinates */
-void ED_region_visible_rect(ARegion *ar, rcti *rect)
+static void region_visible_rect_calc(ARegion *ar, rcti *rect)
 {
   ARegion *arn = ar;
 
@@ -3329,6 +3328,15 @@ void ED_region_visible_rect(ARegion *ar, rcti *rect)
     }
   }
   BLI_rcti_translate(rect, -ar->winrct.xmin, -ar->winrct.ymin);
+}
+
+const rcti *ED_region_visible_rect(ARegion *ar)
+{
+  rcti *rect = &ar->runtime.visible_rect;
+  if (rect->xmin == 0 && rect->ymin == 0 && rect->xmax == 0 && rect->ymax == 0) {
+    region_visible_rect_calc(ar, rect);
+  }
+  return rect;
 }
 
 /* Cache display helpers */

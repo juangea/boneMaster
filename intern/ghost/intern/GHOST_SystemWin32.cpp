@@ -934,10 +934,9 @@ GHOST_EventCursor *GHOST_SystemWin32::processCursorEvent(GHOST_TEventType type,
       window->getClientBounds(bounds);
     }
 
-    /* could also clamp to screen bounds
-     * wrap with a window outside the view will fail atm  */
-
-    bounds.wrapPoint(x_new, y_new, 2); /* offset of one incase blender is at screen bounds */
+    /* Could also clamp to screen bounds wrap with a window outside the view will fail atm.
+     * Use offset of 8 in case the window is at screen bounds. */
+    bounds.wrapPoint(x_new, y_new, 2, window->getCursorGrabAxis());
 
     window->getCursorGrabAccum(x_accum, y_accum);
     if (x_new != x_screen || y_new != y_screen) {
@@ -1436,7 +1435,7 @@ LRESULT WINAPI GHOST_SystemWin32::s_wndProc(HWND hwnd, UINT msg, WPARAM wParam, 
         ////////////////////////////////////////////////////////////////////////
         case WM_NCMOUSEMOVE:
         /* The WM_NCMOUSEMOVE message is posted to a window when the cursor is moved
-         * within the nonclient area of the window. This message is posted to the window that
+         * within the non-client area of the window. This message is posted to the window that
          * contains the cursor. If a window has captured the mouse, this message is not posted.
          */
         case WM_NCHITTEST:
@@ -1603,7 +1602,7 @@ LRESULT WINAPI GHOST_SystemWin32::s_wndProc(HWND hwnd, UINT msg, WPARAM wParam, 
         /* An application sends the WM_NCPAINT message to a window
          * when its frame must be painted. */
         case WM_NCACTIVATE:
-        /* The WM_NCACTIVATE message is sent to a window when its nonclient area needs to be
+        /* The WM_NCACTIVATE message is sent to a window when its non-client area needs to be
          * changed to indicate an active or inactive state. */
         case WM_DESTROY:
         /* The WM_DESTROY message is sent when a window is being destroyed. It is sent to the
@@ -1612,7 +1611,7 @@ LRESULT WINAPI GHOST_SystemWin32::s_wndProc(HWND hwnd, UINT msg, WPARAM wParam, 
          * windows (if any) as they are destroyed. During the processing of the message, it can
          * be assumed that all child windows still exist. */
         case WM_NCDESTROY:
-          /* The WM_NCDESTROY message informs a window that its nonclient area is being
+          /* The WM_NCDESTROY message informs a window that its non-client area is being
            * destroyed. The DestroyWindow function sends the WM_NCDESTROY message to the window
            * following the WM_DESTROY message. WM_DESTROY is used to free the allocated memory
            * object associated with the window.

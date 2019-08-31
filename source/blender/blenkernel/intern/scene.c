@@ -37,6 +37,7 @@
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_sequence_types.h"
+#include "DNA_sound_types.h"
 #include "DNA_space_types.h"
 #include "DNA_view3d_types.h"
 #include "DNA_windowmanager_types.h"
@@ -175,10 +176,10 @@ ToolSettings *BKE_toolsettings_copy(ToolSettings *toolsettings, const int flag)
   ts->particle.object = NULL;
 
   /* duplicate Grease Pencil interpolation curve */
-  ts->gp_interpolate.custom_ipo = curvemapping_copy(ts->gp_interpolate.custom_ipo);
+  ts->gp_interpolate.custom_ipo = BKE_curvemapping_copy(ts->gp_interpolate.custom_ipo);
   /* duplicate Grease Pencil multiframe fallof */
-  ts->gp_sculpt.cur_falloff = curvemapping_copy(ts->gp_sculpt.cur_falloff);
-  ts->gp_sculpt.cur_primitive = curvemapping_copy(ts->gp_sculpt.cur_primitive);
+  ts->gp_sculpt.cur_falloff = BKE_curvemapping_copy(ts->gp_sculpt.cur_falloff);
+  ts->gp_sculpt.cur_primitive = BKE_curvemapping_copy(ts->gp_sculpt.cur_primitive);
   return ts;
 }
 
@@ -211,14 +212,14 @@ void BKE_toolsettings_free(ToolSettings *toolsettings)
 
   /* free Grease Pencil interpolation curve */
   if (toolsettings->gp_interpolate.custom_ipo) {
-    curvemapping_free(toolsettings->gp_interpolate.custom_ipo);
+    BKE_curvemapping_free(toolsettings->gp_interpolate.custom_ipo);
   }
   /* free Grease Pencil multiframe falloff curve */
   if (toolsettings->gp_sculpt.cur_falloff) {
-    curvemapping_free(toolsettings->gp_sculpt.cur_falloff);
+    BKE_curvemapping_free(toolsettings->gp_sculpt.cur_falloff);
   }
   if (toolsettings->gp_sculpt.cur_primitive) {
-    curvemapping_free(toolsettings->gp_sculpt.cur_primitive);
+    BKE_curvemapping_free(toolsettings->gp_sculpt.cur_primitive);
   }
 
   MEM_freeN(toolsettings);
@@ -267,7 +268,11 @@ void BKE_scene_copy_data(Main *bmain, Scene *sce_dst, const Scene *sce_src, cons
     /* Note: nodetree is *not* in bmain, however this specific case is handled at lower level
      *       (see BKE_libblock_copy_ex()). */
     BKE_id_copy_ex(bmain, (ID *)sce_src->nodetree, (ID **)&sce_dst->nodetree, flag);
-    BKE_libblock_relink_ex(bmain, sce_dst->nodetree, (void *)(&sce_src->id), &sce_dst->id, false);
+    BKE_libblock_relink_ex(bmain,
+                           sce_dst->nodetree,
+                           (void *)(&sce_src->id),
+                           &sce_dst->id,
+                           ID_REMAP_SKIP_NEVER_NULL_USAGE);
   }
 
   if (sce_src->rigidbody_world) {
@@ -290,7 +295,7 @@ void BKE_scene_copy_data(Main *bmain, Scene *sce_dst, const Scene *sce_src, cons
   BKE_color_managed_view_settings_copy(&sce_dst->r.bake.im_format.view_settings,
                                        &sce_src->r.bake.im_format.view_settings);
 
-  curvemapping_copy_data(&sce_dst->r.mblur_shutter_curve, &sce_src->r.mblur_shutter_curve);
+  BKE_curvemapping_copy_data(&sce_dst->r.mblur_shutter_curve, &sce_src->r.mblur_shutter_curve);
 
   /* tool settings */
   sce_dst->toolsettings = BKE_toolsettings_copy(sce_dst->toolsettings, flag_subdata);
@@ -308,8 +313,7 @@ void BKE_scene_copy_data(Main *bmain, Scene *sce_dst, const Scene *sce_src, cons
                                                             flag_subdata);
   }
 
-  /* before scene copy */
-  BKE_sound_create_scene(sce_dst);
+  BKE_sound_reset_scene_runtime(sce_dst);
 
   /* Copy sequencer, this is local data! */
   if (sce_src->ed) {
@@ -347,7 +351,7 @@ Scene *BKE_scene_copy(Main *bmain, Scene *sce, int type)
     sce_copy = BKE_scene_add(bmain, sce->id.name + 2);
 
     rv = sce_copy->r.views;
-    curvemapping_free_data(&sce_copy->r.mblur_shutter_curve);
+    BKE_curvemapping_free_data(&sce_copy->r.mblur_shutter_curve);
     sce_copy->r = sce->r;
     sce_copy->r.views = rv;
     sce_copy->unit = sce->unit;
@@ -380,7 +384,7 @@ Scene *BKE_scene_copy(Main *bmain, Scene *sce, int type)
     BKE_color_managed_view_settings_copy(&sce_copy->r.bake.im_format.view_settings,
                                          &sce->r.bake.im_format.view_settings);
 
-    curvemapping_copy_data(&sce_copy->r.mblur_shutter_curve, &sce->r.mblur_shutter_curve);
+    BKE_curvemapping_copy_data(&sce_copy->r.mblur_shutter_curve, &sce->r.mblur_shutter_curve);
 
     /* viewport display settings */
     sce_copy->display = sce->display;
@@ -399,8 +403,7 @@ Scene *BKE_scene_copy(Main *bmain, Scene *sce, int type)
       sce_copy->r.ffcodecdata.properties = IDP_CopyProperty(sce->r.ffcodecdata.properties);
     }
 
-    /* before scene copy */
-    BKE_sound_create_scene(sce_copy);
+    BKE_sound_reset_scene_runtime(sce_copy);
 
     /* grease pencil */
     sce_copy->gpd = NULL;
@@ -516,7 +519,7 @@ void BKE_scene_free_ex(Scene *sce, const bool do_id_user)
   BKE_color_managed_view_settings_free(&sce->view_settings);
 
   BKE_previewimg_free(&sce->preview);
-  curvemapping_free_data(&sce->r.mblur_shutter_curve);
+  BKE_curvemapping_free_data(&sce->r.mblur_shutter_curve);
 
   for (ViewLayer *view_layer = sce->view_layers.first, *view_layer_next; view_layer;
        view_layer = view_layer_next) {
@@ -654,12 +657,12 @@ void BKE_scene_init(Scene *sce)
   sce->r.unit_line_thickness = 1.0f;
 
   mblur_shutter_curve = &sce->r.mblur_shutter_curve;
-  curvemapping_set_defaults(mblur_shutter_curve, 1, 0.0f, 0.0f, 1.0f, 1.0f);
-  curvemapping_initialize(mblur_shutter_curve);
-  curvemap_reset(mblur_shutter_curve->cm,
-                 &mblur_shutter_curve->clipr,
-                 CURVE_PRESET_MAX,
-                 CURVEMAP_SLOPE_POS_NEG);
+  BKE_curvemapping_set_defaults(mblur_shutter_curve, 1, 0.0f, 0.0f, 1.0f, 1.0f);
+  BKE_curvemapping_initialize(mblur_shutter_curve);
+  BKE_curvemap_reset(mblur_shutter_curve->cm,
+                     &mblur_shutter_curve->clipr,
+                     CURVE_PRESET_MAX,
+                     CURVEMAP_SLOPE_POS_NEG);
 
   sce->toolsettings = MEM_callocN(sizeof(struct ToolSettings), "Tool Settings Struct");
 
@@ -705,19 +708,19 @@ void BKE_scene_init(Scene *sce)
   sce->toolsettings->imapaint.seam_bleed = 2;
 
   /* grease pencil multiframe falloff curve */
-  sce->toolsettings->gp_sculpt.cur_falloff = curvemapping_add(1, 0.0f, 0.0f, 1.0f, 1.0f);
+  sce->toolsettings->gp_sculpt.cur_falloff = BKE_curvemapping_add(1, 0.0f, 0.0f, 1.0f, 1.0f);
   CurveMapping *gp_falloff_curve = sce->toolsettings->gp_sculpt.cur_falloff;
-  curvemapping_initialize(gp_falloff_curve);
-  curvemap_reset(
+  BKE_curvemapping_initialize(gp_falloff_curve);
+  BKE_curvemap_reset(
       gp_falloff_curve->cm, &gp_falloff_curve->clipr, CURVE_PRESET_GAUSS, CURVEMAP_SLOPE_POSITIVE);
 
-  sce->toolsettings->gp_sculpt.cur_primitive = curvemapping_add(1, 0.0f, 0.0f, 1.0f, 1.0f);
+  sce->toolsettings->gp_sculpt.cur_primitive = BKE_curvemapping_add(1, 0.0f, 0.0f, 1.0f, 1.0f);
   CurveMapping *gp_primitive_curve = sce->toolsettings->gp_sculpt.cur_primitive;
-  curvemapping_initialize(gp_primitive_curve);
-  curvemap_reset(gp_primitive_curve->cm,
-                 &gp_primitive_curve->clipr,
-                 CURVE_PRESET_BELL,
-                 CURVEMAP_SLOPE_POSITIVE);
+  BKE_curvemapping_initialize(gp_primitive_curve);
+  BKE_curvemap_reset(gp_primitive_curve->cm,
+                     &gp_primitive_curve->clipr,
+                     CURVE_PRESET_BELL,
+                     CURVEMAP_SLOPE_POSITIVE);
 
   sce->toolsettings->gp_sculpt.guide.spacing = 20.0f;
 
@@ -779,7 +782,7 @@ void BKE_scene_init(Scene *sce)
   srv = sce->r.views.last;
   BLI_strncpy(srv->suffix, STEREO_RIGHT_SUFFIX, sizeof(srv->suffix));
 
-  BKE_sound_create_scene(sce);
+  BKE_sound_reset_scene_runtime(sce);
 
   /* color management */
   colorspace_name = IMB_colormanagement_role_colorspace_name_get(COLOR_ROLE_DEFAULT_SEQUENCER);
@@ -1348,11 +1351,11 @@ bool BKE_scene_validate_setscene(Main *bmain, Scene *sce)
  */
 float BKE_scene_frame_get(const Scene *scene)
 {
-  return BKE_scene_frame_get_from_ctime(scene, scene->r.cfra);
+  return BKE_scene_frame_to_ctime(scene, scene->r.cfra);
 }
 
 /* This function is used to obtain arbitrary fractional frames */
-float BKE_scene_frame_get_from_ctime(const Scene *scene, const float frame)
+float BKE_scene_frame_to_ctime(const Scene *scene, const float frame)
 {
   float ctime = frame;
   ctime += scene->r.subframe;
@@ -1507,11 +1510,42 @@ static void prepare_mesh_for_viewport_render(Main *bmain, const ViewLayer *view_
   }
 }
 
+void BKE_scene_update_sound(Depsgraph *depsgraph, Main *bmain)
+{
+  Scene *scene = DEG_get_evaluated_scene(depsgraph);
+  const int recalc = scene->id.recalc;
+  BKE_sound_ensure_scene(scene);
+  if (recalc & ID_RECALC_AUDIO_SEEK) {
+    BKE_sound_seek_scene(bmain, scene);
+  }
+  if (recalc & ID_RECALC_AUDIO_FPS) {
+    BKE_sound_update_fps(bmain, scene);
+  }
+  if (recalc & ID_RECALC_AUDIO_VOLUME) {
+    BKE_sound_set_scene_volume(scene, scene->audio.volume);
+  }
+  if (recalc & ID_RECALC_AUDIO_MUTE) {
+    const bool is_mute = (scene->audio.flag & AUDIO_MUTE);
+    BKE_sound_mute_scene(scene, is_mute);
+  }
+  if (recalc & ID_RECALC_AUDIO_LISTENER) {
+    BKE_sound_update_scene_listener(scene);
+  }
+  BKE_sound_update_scene(depsgraph, scene);
+}
+
 /* TODO(sergey): This actually should become view_layer_graph or so.
  * Same applies to update_for_newframe.
+ *
+ * If only_if_tagged is truth then the function will do nothing if the dependency graph is up
+ * to date already.
  */
-void BKE_scene_graph_update_tagged(Depsgraph *depsgraph, Main *bmain)
+static void scene_graph_update_tagged(Depsgraph *depsgraph, Main *bmain, bool only_if_tagged)
 {
+  if (only_if_tagged && DEG_is_fully_evaluated(depsgraph)) {
+    return;
+  }
+
   Scene *scene = DEG_get_input_scene(depsgraph);
   ViewLayer *view_layer = DEG_get_input_view_layer(depsgraph);
 
@@ -1535,10 +1569,9 @@ void BKE_scene_graph_update_tagged(Depsgraph *depsgraph, Main *bmain)
    * by depgraph or manual, no layer check here, gets correct flushed.
    */
   DEG_evaluate_on_refresh(depsgraph);
-  /* Update sound system animation (TODO, move to depsgraph). */
-  BKE_sound_update_scene(bmain, scene);
-
-  /* Notify python about depsgraph update */
+  /* Update sound system. */
+  BKE_scene_update_sound(depsgraph, bmain);
+  /* Notify python about depsgraph update. */
   if (run_callbacks) {
     BLI_callback_exec(bmain, &scene->id, BLI_CB_EVT_DEPSGRAPH_UPDATE_POST);
   }
@@ -1546,6 +1579,16 @@ void BKE_scene_graph_update_tagged(Depsgraph *depsgraph, Main *bmain)
   DEG_ids_check_recalc(bmain, depsgraph, scene, view_layer, false);
   /* Clear recalc flags. */
   DEG_ids_clear_recalc(bmain, depsgraph);
+}
+
+void BKE_scene_graph_update_tagged(Depsgraph *depsgraph, Main *bmain)
+{
+  scene_graph_update_tagged(depsgraph, bmain, false);
+}
+
+void BKE_scene_graph_evaluated_ensure(Depsgraph *depsgraph, Main *bmain)
+{
+  scene_graph_update_tagged(depsgraph, bmain, true);
 }
 
 /* applies changes right away, does all sets too */
@@ -1573,8 +1616,8 @@ void BKE_scene_graph_update_for_newframe(Depsgraph *depsgraph, Main *bmain)
    * by depgraph or manual, no layer check here, gets correct flushed.
    */
   DEG_evaluate_on_framechange(bmain, depsgraph, ctime);
-  /* Update sound system animation (TODO, move to depsgraph). */
-  BKE_sound_update_scene(bmain, scene);
+  /* Update sound system animation. */
+  BKE_scene_update_sound(depsgraph, bmain);
   /* Notify editors and python about recalc. */
   BLI_callback_exec(bmain, &scene->id, BLI_CB_EVT_FRAME_CHANGE_POST);
   /* Inform editors about possible changes. */
@@ -2217,6 +2260,7 @@ void BKE_scene_free_depsgraph_hash(Scene *scene)
     return;
   }
   BLI_ghash_free(scene->depsgraph_hash, depsgraph_key_free, depsgraph_key_value_free);
+  scene->depsgraph_hash = NULL;
 }
 
 /* Query depsgraph for a specific contexts. */
@@ -2402,3 +2446,71 @@ void BKE_scene_cursor_from_mat4(View3DCursor *cursor, const float mat[4][4], boo
 }
 
 /** \} */
+
+/* Dependency graph evaluation. */
+
+static void scene_sequencer_disable_sound_strips(Scene *scene)
+{
+  if (scene->sound_scene == NULL) {
+    return;
+  }
+  Sequence *seq;
+  SEQ_BEGIN (scene->ed, seq) {
+    if (seq->scene_sound != NULL) {
+      BKE_sound_remove_scene_sound(scene, seq->scene_sound);
+      seq->scene_sound = NULL;
+    }
+  }
+  SEQ_END;
+}
+
+void BKE_scene_eval_sequencer_sequences(Depsgraph *depsgraph, Scene *scene)
+{
+  DEG_debug_print_eval(depsgraph, __func__, scene->id.name, scene);
+  if (scene->ed == NULL) {
+    return;
+  }
+  BKE_sound_ensure_scene(scene);
+  Sequence *seq;
+  SEQ_BEGIN (scene->ed, seq) {
+    if (seq->scene_sound == NULL) {
+      if (seq->sound != NULL) {
+        if (seq->scene_sound == NULL) {
+          seq->scene_sound = BKE_sound_add_scene_sound_defaults(scene, seq);
+        }
+      }
+      else if (seq->type == SEQ_TYPE_SCENE) {
+        if (seq->scene != NULL) {
+          BKE_sound_ensure_scene(seq->scene);
+          seq->scene_sound = BKE_sound_scene_add_scene_sound_defaults(scene, seq);
+        }
+      }
+    }
+    if (seq->scene_sound != NULL) {
+      /* Make sure changing volume via sequence's properties panel works correct.
+       *
+       * Ideally, the entire BKE_scene_update_sound() will happen from a dependency graph, so
+       * then it is no longer needed to do such manual forced updates. */
+      if (seq->type == SEQ_TYPE_SCENE && seq->scene != NULL) {
+        BKE_sound_set_scene_volume(seq->scene, seq->scene->audio.volume);
+        if ((seq->flag & SEQ_SCENE_STRIPS) == 0) {
+          scene_sequencer_disable_sound_strips(seq->scene);
+        }
+      }
+      if (seq->sound != NULL) {
+        if (scene->id.recalc & ID_RECALC_AUDIO || seq->sound->id.recalc & ID_RECALC_AUDIO) {
+          BKE_sound_update_scene_sound(seq->scene_sound, seq->sound);
+        }
+      }
+      BKE_sound_set_scene_sound_volume(
+          seq->scene_sound, seq->volume, (seq->flag & SEQ_AUDIO_VOLUME_ANIMATED) != 0);
+      BKE_sound_set_scene_sound_pitch(
+          seq->scene_sound, seq->pitch, (seq->flag & SEQ_AUDIO_PITCH_ANIMATED) != 0);
+      BKE_sound_set_scene_sound_pan(
+          seq->scene_sound, seq->pan, (seq->flag & SEQ_AUDIO_PAN_ANIMATED) != 0);
+    }
+  }
+  SEQ_END;
+  BKE_sequencer_update_muting(scene->ed);
+  BKE_sequencer_update_sound_bounds_all(scene);
+}

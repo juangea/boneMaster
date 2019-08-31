@@ -31,7 +31,6 @@
 /* Struct Declarations */
 
 struct ARegion;
-struct ARegionType;
 struct AutoComplete;
 struct ID;
 struct IDProperty;
@@ -90,7 +89,7 @@ typedef struct uiPopupBlockHandle uiPopupBlockHandle;
  * For #ARegion.overlap regions, pass events though if they don't overlap
  * the regions contents (the usable part of the #View2D and buttons).
  *
- * The margin is needed so it's not possible to accidentally click inbetween buttons.
+ * The margin is needed so it's not possible to accidentally click in between buttons.
  */
 #define UI_REGION_OVERLAP_MARGIN (U.widget_unit / 3)
 
@@ -562,7 +561,8 @@ int UI_popover_panel_invoke(struct bContext *C,
                             bool keep_open,
                             struct ReportList *reports);
 
-uiPopover *UI_popover_begin(struct bContext *C, int menu_width) ATTR_NONNULL(1);
+uiPopover *UI_popover_begin(struct bContext *C, int menu_width, bool from_active_button)
+    ATTR_NONNULL(1);
 void UI_popover_end(struct bContext *C, struct uiPopover *head, struct wmKeyMap *keymap);
 struct uiLayout *UI_popover_layout(uiPopover *head);
 void UI_popover_once_clear(uiPopover *pup);
@@ -723,7 +723,7 @@ bool UI_block_active_only_flagged_buttons(const struct bContext *C,
                                           struct ARegion *ar,
                                           struct uiBlock *block);
 
-void UI_but_execute(const struct bContext *C, uiBut *but);
+void UI_but_execute(const struct bContext *C, struct ARegion *ar, uiBut *but);
 
 bool UI_but_online_manual_id(const uiBut *but,
                              char *r_str,

@@ -20,7 +20,7 @@
 
 from bpy.types import Header, Menu, Panel
 from bpy.app.translations import contexts as i18n_contexts
-from .space_dopesheet import (
+from bl_ui.space_dopesheet import (
     DopesheetFilterPopoverBase,
     dopesheet_filter,
 )
@@ -91,7 +91,6 @@ class NLA_MT_view(Menu):
         layout.separator()
 
         layout.prop(st, "use_realtime_update")
-        layout.prop(st, "show_frame_indicator")
 
         layout.prop(st, "show_seconds")
         layout.prop(st, "show_locked_time")
@@ -126,7 +125,7 @@ class NLA_MT_select(Menu):
 
         layout.separator()
         layout.operator("nla.select_box").axis_range = False
-        layout.operator("nla.select_box", text="Border Axis Range").axis_range = True
+        layout.operator("nla.select_box", text="Box Select (Axis Range)").axis_range = True
 
         layout.separator()
         props = layout.operator("nla.select_leftright", text="Before Current Frame")
@@ -143,7 +142,7 @@ class NLA_MT_marker(Menu):
     def draw(self, context):
         layout = self.layout
 
-        from .space_time import marker_menu_generic
+        from bl_ui.space_time import marker_menu_generic
         marker_menu_generic(layout, context)
 
 
@@ -279,7 +278,7 @@ class NLA_MT_context_menu(Menu):
 class NLA_MT_channel_context_menu(Menu):
     bl_label = "NLA Channel Context Menu"
 
-    def draw(self, context):
+    def draw(self, _context):
         layout = self.layout
 
         layout.operator_menu_enum("anim.channels_move", "direction", text="Track Ordering...")

@@ -252,8 +252,9 @@ static Object *rna_Main_objects_new(Main *bmain, ReportList *reports, const char
         break;
       default: {
         const char *idname;
-        if (RNA_enum_id_from_value(rna_enum_id_type_items, GS(data->name), &idname) == 0)
+        if (RNA_enum_id_from_value(rna_enum_id_type_items, GS(data->name), &idname) == 0) {
           idname = "UNKNOWN";
+        }
 
         BKE_reportf(reports, RPT_ERROR, "ID type '%s' is not valid for an object", idname);
         return NULL;
@@ -370,14 +371,15 @@ static Image *rna_Main_images_new(Main *bmain,
                                   int height,
                                   bool alpha,
                                   bool float_buffer,
-                                  bool stereo3d)
+                                  bool stereo3d,
+                                  bool is_data)
 {
   char safe_name[MAX_ID_NAME - 2];
   rna_idname_validate(name, safe_name);
 
   float color[4] = {0.0, 0.0, 0.0, 1.0};
   Image *image = BKE_image_add_generated(
-      bmain, width, height, safe_name, alpha ? 32 : 24, float_buffer, 0, color, stereo3d);
+      bmain, width, height, safe_name, alpha ? 32 : 24, float_buffer, 0, color, stereo3d, is_data);
   id_us_min(&image->id);
   return image;
 }
@@ -453,14 +455,15 @@ static VFont *rna_Main_fonts_load(Main *bmain,
     font = BKE_vfont_load(bmain, filepath);
   }
 
-  if (!font)
+  if (!font) {
     BKE_reportf(reports,
                 RPT_ERROR,
                 "Cannot read '%s': %s",
                 filepath,
                 errno ? strerror(errno) : TIP_("unsupported font format"));
 
-  id_us_min((ID *)font);
+    id_us_min((ID *)font);
+  }
   return font;
 }
 
@@ -552,14 +555,16 @@ static Text *rna_Main_texts_load(Main *bmain,
 
   errno = 0;
   txt = BKE_text_load_ex(bmain, filepath, BKE_main_blendfile_path(bmain), is_internal);
+  /* Texts have no user by default... Only the 'real' user flag. */
+  id_us_min(&txt->id);
 
-  if (!txt)
+  if (!txt) {
     BKE_reportf(reports,
                 RPT_ERROR,
                 "Cannot read '%s': %s",
                 filepath,
                 errno ? strerror(errno) : TIP_("unable to load text"));
-
+  }
   return txt;
 }
 
@@ -660,6 +665,16 @@ static LightProbe *rna_Main_lightprobe_new(Main *bmain, const char *name)
   LightProbe *probe = BKE_lightprobe_add(bmain, safe_name);
   id_us_min(&probe->id);
   return probe;
+}
+
+static bGPdata *rna_Main_gpencils_new(Main *bmain, const char *name)
+{
+  char safe_name[MAX_ID_NAME - 2];
+  rna_idname_validate(name, safe_name);
+
+  bGPdata *gpd = BKE_gpencil_data_addnew(bmain, safe_name);
+  id_us_min(&gpd->id);
+  return gpd;
 }
 
 /* tag functions, all the same */
@@ -1132,6 +1147,7 @@ void RNA_def_main_images(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_boolean(
       func, "float_buffer", 0, "Float Buffer", "Create an image with floating point color");
   RNA_def_boolean(func, "stereo3d", 0, "Stereo 3D", "Create left and right views");
+  RNA_def_boolean(func, "is_data", 0, "Is Data", "Create image with non-color data color space");
   /* return type */
   parm = RNA_def_pointer(func, "image", "Image", "", "New image data-block");
   RNA_def_function_return(func, parm);
@@ -1864,8 +1880,8 @@ void RNA_def_main_gpencil(BlenderRNA *brna, PropertyRNA *cprop)
   parm = RNA_def_boolean(func, "value", 0, "Value", "");
   RNA_def_parameter_flags(parm, 0, PARM_REQUIRED);
 
-  func = RNA_def_function(srna, "new", "BKE_gpencil_data_addnew");
-  RNA_def_function_flag(func, FUNC_NO_SELF | FUNC_USE_MAIN);
+  func = RNA_def_function(srna, "new", "rna_Main_gpencils_new");
+  RNA_def_function_ui_description(func, "Add a new grease pencil datablock to the main database");
   parm = RNA_def_string(func, "name", "GreasePencil", 0, "", "New name for the data-block");
   RNA_def_parameter_flags(parm, 0, PARM_REQUIRED);
   /* return type */

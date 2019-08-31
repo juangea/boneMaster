@@ -232,6 +232,9 @@ typedef struct Sequence {
 
   int cache_flag;
   int _pad2[3];
+
+  struct Sequence *orig_sequence;
+  void *_pad3;
 } Sequence;
 
 typedef struct MetaStack {
@@ -581,7 +584,7 @@ enum {
   SEQ_TYPE_LIGHTEN = 44,
   SEQ_TYPE_DODGE = 45,
   SEQ_TYPE_DARKEN = 46,
-  SEQ_TYPE_BURN = 47,
+  SEQ_TYPE_COLOR_BURN = 47,
   SEQ_TYPE_LINEAR_BURN = 48,
   SEQ_TYPE_OVERLAY = 49,
   SEQ_TYPE_HARD_LIGHT = 50,

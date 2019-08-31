@@ -90,6 +90,8 @@ static wmGizmo *wm_gizmo_create(const wmGizmoType *gzt, PointerRNA *properties)
   unit_m4(gz->matrix_basis);
   unit_m4(gz->matrix_offset);
 
+  gz->drag_part = -1;
+
   return gz;
 }
 
@@ -441,9 +443,9 @@ bool WM_gizmo_select_set(wmGizmoMap *gzmap, wmGizmo *gz, bool select)
   return wm_gizmo_select_set_ex(gzmap, gz, select, true, true);
 }
 
-void WM_gizmo_highlight_set(wmGizmoMap *gzmap, wmGizmo *gz)
+bool WM_gizmo_highlight_set(wmGizmoMap *gzmap, wmGizmo *gz)
 {
-  wm_gizmomap_highlight_set(gzmap, NULL, gz, gz ? gz->highlight_part : 0);
+  return wm_gizmomap_highlight_set(gzmap, NULL, gz, gz ? gz->highlight_part : 0);
 }
 
 bool wm_gizmo_select_and_highlight(bContext *C, wmGizmoMap *gzmap, wmGizmo *gz)

@@ -177,7 +177,7 @@ float light_visibility(LightData ld,
                        vec3 W,
 #ifndef VOLUMETRICS
                        vec3 viewPosition,
-                       vec3 viewNormal,
+                       vec3 vN,
 #endif
                        vec4 l_vector)
 {
@@ -227,15 +227,18 @@ float light_visibility(LightData ld,
 
       vec3 ray_ori = viewPosition;
 
-      if (dot(viewNormal, ray_dir) <= 0.0) {
+      /* Fix translucency shadowed by contact shadows. */
+      vN = (gl_FrontFacing) ? vN : -vN;
+
+      if (dot(vN, ray_dir) <= 0.0) {
         return vis;
       }
 
-      float bias = 0.5;                            /* Constant Bias */
-      bias += 1.0 - abs(dot(viewNormal, ray_dir)); /* Angle dependent bias */
+      float bias = 0.5;                    /* Constant Bias */
+      bias += 1.0 - abs(dot(vN, ray_dir)); /* Angle dependent bias */
       bias *= gl_FrontFacing ? data.sh_contact_offset : -data.sh_contact_offset;
 
-      vec3 nor_bias = viewNormal * bias;
+      vec3 nor_bias = vN * bias;
       ray_ori += nor_bias;
 
       ray_dir *= trace_distance;
@@ -390,8 +393,8 @@ vec3 light_translucent(LightData ld, vec3 W, vec3 N, vec4 l_vector, float scale)
         return vec3(0.0);
       }
 
-      float range = abs(data.sh_far -
-                        data.sh_near); /* Same factor as in get_cascade_world_distance(). */
+      /* Same factor as in get_cascade_world_distance(). */
+      float range = abs(data.sh_far - data.sh_near);
 
       vec4 shpos = shadows_cascade_data[scd_id].shadowmat[int(id)] * vec4(W, 1.0);
       float dist = shpos.z * range;

@@ -22,8 +22,6 @@
 #define __WM_GIZMO_INTERN_H__
 
 struct BLI_Buffer;
-struct GHashIterator;
-struct GizmoGeomInfo;
 struct wmGizmoMap;
 struct wmKeyConfig;
 
@@ -61,16 +59,24 @@ struct wmGizmoGroup *wm_gizmogroup_new_from_type(struct wmGizmoMap *gzmap,
                                                  struct wmGizmoGroupType *gzgt);
 void wm_gizmogroup_free(bContext *C, struct wmGizmoGroup *gzgroup);
 void wm_gizmogroup_gizmo_register(struct wmGizmoGroup *gzgroup, struct wmGizmo *gz);
-struct wmGizmo *wm_gizmogroup_find_intersected_gizmo(const struct wmGizmoGroup *gzgroup,
+struct wmGizmoGroup *wm_gizmogroup_find_by_type(const struct wmGizmoMap *gzmap,
+                                                const struct wmGizmoGroupType *gzgt);
+struct wmGizmo *wm_gizmogroup_find_intersected_gizmo(wmWindowManager *wm,
+                                                     const struct wmGizmoGroup *gzgroup,
                                                      struct bContext *C,
+                                                     const int event_modifier,
                                                      const int mval[2],
                                                      int *r_part);
-void wm_gizmogroup_intersectable_gizmos_to_list(const struct wmGizmoGroup *gzgroup,
+void wm_gizmogroup_intersectable_gizmos_to_list(wmWindowManager *wm,
+                                                const struct wmGizmoGroup *gzgroup,
+                                                const int event_modifier,
                                                 struct BLI_Buffer *visible_gizmos);
 bool wm_gizmogroup_is_visible_in_drawstep(const struct wmGizmoGroup *gzgroup,
                                           const eWM_GizmoFlagMapDrawStep drawstep);
 
 void wm_gizmogrouptype_setup_keymap(struct wmGizmoGroupType *gzgt, struct wmKeyConfig *keyconf);
+
+wmKeyMap *wm_gizmogroup_tweak_modal_keymap(struct wmKeyConfig *keyconf);
 
 /* -------------------------------------------------------------------- */
 /* wmGizmoMap */
@@ -90,6 +96,9 @@ struct wmGizmoMap {
 
   /** Private, true when not yet used. */
   bool is_init;
+
+  /** When set, one of of the items in 'groups' has #wmGizmoGroup.tag_remove set. */
+  bool tag_remove_group;
 
   /**
    * \brief Gizmo map runtime context

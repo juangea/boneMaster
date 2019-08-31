@@ -796,7 +796,7 @@ BLI_INLINE float computeNormalDisplacement(const float point_co[3],
 
 static void bindVert(void *__restrict userdata,
                      const int index,
-                     const ParallelRangeTLS *__restrict UNUSED(tls))
+                     const TaskParallelTLS *__restrict UNUSED(tls))
 {
   SDefBindCalcData *const data = (SDefBindCalcData *)userdata;
   float point_co[3];
@@ -1076,7 +1076,7 @@ static bool surfacedeformBind(SurfaceDeformModifierData *smd,
     mul_v3_m4v3(data.targetCos[i], smd->mat, mvert[i].co);
   }
 
-  ParallelRangeSettings settings;
+  TaskParallelSettings settings;
   BLI_parallel_range_settings_defaults(&settings);
   settings.use_threading = (numverts > 10000);
   BLI_task_parallel_range(0, numverts, &data, bindVert, &settings);
@@ -1116,7 +1116,7 @@ static bool surfacedeformBind(SurfaceDeformModifierData *smd,
 
 static void deformVert(void *__restrict userdata,
                        const int index,
-                       const ParallelRangeTLS *__restrict UNUSED(tls))
+                       const TaskParallelTLS *__restrict UNUSED(tls))
 {
   const SDefDeformData *const data = (SDefDeformData *)userdata;
   const SDefBind *sdbind = data->bind_verts[index].binds;
@@ -1247,7 +1247,7 @@ static void surfacedeformModifier_do(ModifierData *md,
       mul_v3_m4v3(data.targetCos[i], smd->mat, mvert[i].co);
     }
 
-    ParallelRangeSettings settings;
+    TaskParallelSettings settings;
     BLI_parallel_range_settings_defaults(&settings);
     settings.use_threading = (numverts > 10000);
     BLI_task_parallel_range(0, numverts, &data, deformVert, &settings);
@@ -1279,7 +1279,13 @@ static bool isDisabled(const Scene *UNUSED(scene), ModifierData *md, bool UNUSED
 {
   SurfaceDeformModifierData *smd = (SurfaceDeformModifierData *)md;
 
-  return smd->target == NULL && !(smd->verts != NULL && !(smd->flags & MOD_SDEF_BIND));
+  /* The object type check is only needed here in case we have a placeholder
+   * object assigned (because the library containing the mesh is missing).
+   *
+   * In other cases it should be impossible to have a type mismatch.
+   */
+  return (smd->target == NULL || smd->target->type != OB_MESH) &&
+         !(smd->verts != NULL && !(smd->flags & MOD_SDEF_BIND));
 }
 
 ModifierTypeInfo modifierType_SurfaceDeform = {

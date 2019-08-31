@@ -50,14 +50,6 @@
 
 #include "view3d_intern.h" /* bad level include */
 
-int view3d_effective_drawtype(const struct View3D *v3d)
-{
-  if (v3d->shading.type == OB_RENDER) {
-    return v3d->shading.prev_type;
-  }
-  return v3d->shading.type;
-}
-
 /* OpenGL Circle Drawing - Tables for Optimized Drawing Speed */
 /* 32 values of sin function (still same result!) */
 #define CIRCLE_RESOL 32
@@ -153,7 +145,7 @@ void ED_draw_object_facemap(Depsgraph *depsgraph,
 
     facemap_data = CustomData_get_layer(&me->pdata, CD_FACEMAP);
 
-    /* use gawain immediate mode fore now */
+    /* Make a batch and free it each time for now. */
     const int looptris_len = poly_to_tri_count(mpoly_len, mloop_len);
     const int vbo_len_capacity = looptris_len * 3;
     int vbo_len_used = 0;

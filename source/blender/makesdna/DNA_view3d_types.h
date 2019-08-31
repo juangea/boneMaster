@@ -25,11 +25,6 @@
 #define __DNA_VIEW3D_TYPES_H__
 
 struct BoundBox;
-struct GPUViewport;
-struct Image;
-struct Material;
-struct MovieClip;
-struct MovieClipUser;
 struct Object;
 struct RenderEngine;
 struct SmoothView3DStore;
@@ -144,7 +139,7 @@ typedef struct View3DCursor {
 
 /** 3D Viewport Shading settings. */
 typedef struct View3DShading {
-  /** Shading type (VIEW3D_SHADE_SOLID, ..). */
+  /** Shading type (OB_SOLID, ..). */
   char type;
   /** Runtime, for toggle between rendered viewport. */
   char prev_type;
@@ -419,7 +414,7 @@ enum {
   V3D_SHADING_CAVITY = (1 << 5),
   V3D_SHADING_MATCAP_FLIP_X = (1 << 6),
   V3D_SHADING_SCENE_WORLD = (1 << 7),
-  V3D_SHADING_XRAY_BONE = (1 << 8),
+  V3D_SHADING_XRAY_WIREFRAME = (1 << 8),
   V3D_SHADING_WORLD_ORIENTATION = (1 << 9),
   V3D_SHADING_BACKFACE_CULLING = (1 << 10),
   V3D_SHADING_DEPTH_OF_FIELD = (1 << 11),
@@ -433,6 +428,10 @@ enum {
   V3D_SHADING_TEXTURE_COLOR = 3,
   V3D_SHADING_OBJECT_COLOR = 4,
   V3D_SHADING_VERTEX_COLOR = 5,
+
+  /* Is used to display the object using the error color. For example when in
+   * solid texture paint mode without any textures configured */
+  V3D_SHADING_ERROR_COLOR = 999,
 };
 
 /** #View3DShading.background_type */

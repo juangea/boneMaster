@@ -267,7 +267,7 @@ int imagewrap(Tex *tex,
 
   if (texres->nor) {
     if (tex->imaflag & TEX_NORMALMAP) {
-      /* qdn: normal from color
+      /* Normal from color:
        * The invert of the red channel is to make
        * the normal map compliant with the outside world.
        * It needs to be done because in Blender
@@ -514,8 +514,8 @@ static float clipy_rctf(rctf *rf, float y1, float y2)
 
 static void boxsampleclip(struct ImBuf *ibuf, rctf *rf, TexResult *texres)
 {
-  /* sample box, is clipped already, and minx etc. have been set at ibuf size.
-   * Enlarge with antialiased edges of the pixels */
+  /* Sample box, is clipped already, and minx etc. have been set at ibuf size.
+   * Enlarge with anti-aliased edges of the pixels. */
 
   float muly, mulx, div, col[4];
   int x, y, startx, endx, starty, endy;
@@ -947,7 +947,7 @@ static void alpha_clip_aniso(
   float alphaclip;
   rctf rf;
 
-  /* TXF apha: we're doing the same alphaclip here as boxsample, but i'm doubting
+  /* TXF alpha: we're doing the same alpha-clip here as box-sample, but I'm doubting
    * if this is actually correct for the all the filtering algorithms .. */
 
   if (!(extflag == TXC_REPT || extflag == TXC_EXTD)) {

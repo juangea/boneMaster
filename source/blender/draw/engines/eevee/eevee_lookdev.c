@@ -71,24 +71,25 @@ void EEVEE_lookdev_cache_init(EEVEE_Data *vedata,
   View3D *v3d = draw_ctx->v3d;
   Scene *scene = draw_ctx->scene;
 
+  effects->lookdev_view = NULL;
+
   if (LOOK_DEV_OVERLAY_ENABLED(v3d)) {
     /* Viewport / Spheres size. */
-    rcti rect;
-    ED_region_visible_rect(draw_ctx->ar, &rect);
+    const rcti *rect = ED_region_visible_rect(draw_ctx->ar);
 
     /* Make the viewport width scale the lookdev spheres a bit.
      * Scale between 1000px and 2000px. */
     const float viewport_scale = clamp_f(
-        BLI_rcti_size_x(&rect) / (2000.0f * U.dpi_fac), 0.5f, 1.0f);
+        BLI_rcti_size_x(rect) / (2000.0f * U.dpi_fac), 0.5f, 1.0f);
     const int sphere_size = U.lookdev_sphere_size * U.dpi_fac * viewport_scale;
 
-    if (sphere_size != effects->sphere_size || rect.xmax != effects->anchor[0] ||
-        rect.ymin != effects->anchor[1]) {
+    if (sphere_size != effects->sphere_size || rect->xmax != effects->anchor[0] ||
+        rect->ymin != effects->anchor[1]) {
       /* If sphere size or anchor point moves, reset TAA to avoid ghosting issue.
        * This needs to happen early because we are changing taa_current_sample. */
       effects->sphere_size = sphere_size;
-      effects->anchor[0] = rect.xmax;
-      effects->anchor[1] = rect.ymin;
+      effects->anchor[0] = rect->xmax;
+      effects->anchor[1] = rect->ymin;
       EEVEE_temporal_sampling_reset(vedata);
     }
   }
@@ -126,7 +127,7 @@ void EEVEE_lookdev_cache_init(EEVEE_Data *vedata,
         MEM_SAFE_FREE(stl->lookdev_cube_mips);
 
         /* We do this to use a special light cache for lookdev.
-         * This lightcache needs to be per viewport. But we need to
+         * This light-cache needs to be per viewport. But we need to
          * have correct freeing when the viewport is closed. So we
          * need to reference all textures to the txl and the memblocks
          * to the stl. */

@@ -500,6 +500,7 @@ static void mask_draw_curve_type(const bContext *C,
       immUniform1i("colors_len", 2); /* "advanced" mode */
       immUniformArray4fv("colors", colors, 2);
       immUniform1f("dash_width", 4.0f);
+      immUniform1f("dash_factor", 0.5f);
       GPU_line_width(1.0f);
 
       mask_draw_array(pos, draw_method, points, tot_point);
@@ -600,7 +601,7 @@ static void draw_masklays(const bContext *C,
   GPU_blend(true);
   GPU_blend_set_func_separate(
       GPU_SRC_ALPHA, GPU_ONE_MINUS_SRC_ALPHA, GPU_ONE, GPU_ONE_MINUS_SRC_ALPHA);
-  GPU_enable_program_point_size();
+  GPU_program_point_size(true);
 
   MaskLayer *masklay;
   int i;
@@ -635,7 +636,7 @@ static void draw_masklays(const bContext *C,
     }
   }
 
-  GPU_disable_program_point_size();
+  GPU_program_point_size(false);
   GPU_blend(false);
 }
 

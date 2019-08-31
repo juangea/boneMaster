@@ -128,8 +128,7 @@ typedef struct EDIT_MESH_Shaders {
   GPUShader *depth;
 
   /* Mesh analysis shader */
-  GPUShader *mesh_analysis_face;
-  GPUShader *mesh_analysis_vertex;
+  GPUShader *mesh_analysis;
 } EDIT_MESH_Shaders;
 
 /* *********** STATIC *********** */
@@ -175,7 +174,7 @@ typedef struct EDIT_MESH_PrivateData {
   DRWView *view_faces;
   DRWView *view_faces_cage;
   DRWView *view_edges;
-  DRWView *view_wires;
+  DRWView *view_verts;
 
   int data_mask[4];
   int ghost_ob;
@@ -226,9 +225,9 @@ static void EDIT_MESH_engine_init(void *vedata)
                                  datatoc_common_globals_lib_glsl,
                                  datatoc_common_view_lib_glsl,
                                  datatoc_edit_mesh_overlay_common_lib_glsl);
-    /* Use geometry shader to draw edge wireframe. This ensure us
-     * the same result accross platforms and more flexibility. But
-     * we pay the cost of running a geometry shader.
+    /* Use geometry shader to draw edge wire-frame. This ensure us
+     * the same result across platforms and more flexibility.
+     * But we pay the cost of running a geometry shader.
      * In the future we might consider using only the vertex shader
      * and loading data manually with buffer textures. */
     const bool use_geom_shader = true;
@@ -307,15 +306,9 @@ static void EDIT_MESH_engine_init(void *vedata)
     });
 
     /* Mesh Analysis */
-    sh_data->mesh_analysis_face = GPU_shader_create_from_arrays({
+    sh_data->mesh_analysis = GPU_shader_create_from_arrays({
         .vert = (const char *[]){lib, datatoc_edit_mesh_overlay_mesh_analysis_vert_glsl, NULL},
         .frag = (const char *[]){datatoc_edit_mesh_overlay_mesh_analysis_frag_glsl, NULL},
-        .defs = (const char *[]){sh_cfg_data->def, "#define FACE_COLOR\n", NULL},
-    });
-    sh_data->mesh_analysis_vertex = GPU_shader_create_from_arrays({
-        .vert = (const char *[]){lib, datatoc_edit_mesh_overlay_mesh_analysis_vert_glsl, NULL},
-        .frag = (const char *[]){datatoc_edit_mesh_overlay_mesh_analysis_frag_glsl, NULL},
-        .defs = (const char *[]){sh_cfg_data->def, "#define VERTEX_COLOR\n", NULL},
     });
 
     MEM_freeN(lib);
@@ -333,7 +326,7 @@ static void EDIT_MESH_engine_init(void *vedata)
     stl->g_data->view_faces = (DRWView *)DRW_view_default_get();
     stl->g_data->view_faces_cage = DRW_view_create_with_zoffset(draw_ctx->rv3d, 0.5f);
     stl->g_data->view_edges = DRW_view_create_with_zoffset(draw_ctx->rv3d, 1.0f);
-    stl->g_data->view_wires = DRW_view_create_with_zoffset(draw_ctx->rv3d, 1.5f);
+    stl->g_data->view_verts = DRW_view_create_with_zoffset(draw_ctx->rv3d, 1.5f);
   }
 }
 
@@ -371,7 +364,7 @@ static void edit_mesh_create_overlay_passes(float face_alpha,
     DRW_shgroup_state_enable(grp, DRW_STATE_CLIP_PLANES);
   }
 
-  /* Cage geom needs to be offseted to avoid Z-fighting. */
+  /* Cage geom needs to be offsetted to avoid Z-fighting. */
   passes->faces_cage = DRW_pass_create("Edit Mesh Faces Cage", DRW_STATE_WRITE_COLOR | statemod);
   grp = shgrps->faces_cage = DRW_shgroup_create(face_sh, passes->faces_cage);
   DRW_shgroup_uniform_block(grp, "globalsBlock", G_draw.block_ubo);
@@ -397,8 +390,8 @@ static void edit_mesh_create_overlay_passes(float face_alpha,
   }
 
   /* Verts */
-  passes->verts = DRW_pass_create("Edit Mesh Verts",
-                                  (DRW_STATE_WRITE_COLOR | statemod) & ~DRW_STATE_BLEND);
+  DRWState state = (DRW_STATE_WRITE_COLOR | statemod) & ~DRW_STATE_BLEND_ALPHA;
+  passes->verts = DRW_pass_create("Edit Mesh Verts", state);
   if (select_vert) {
     grp = shgrps->verts = DRW_shgroup_create(vert_sh, passes->verts);
     DRW_shgroup_uniform_block(grp, "globalsBlock", G_draw.block_ubo);
@@ -488,8 +481,7 @@ static void EDIT_MESH_cache_init(void *vedata)
 
     g_data->fweights_shgrp = DRW_shgroup_create(sh_data->weight_face, psl->weight_faces);
 
-    static float alpha = 1.0f;
-    DRW_shgroup_uniform_float(g_data->fweights_shgrp, "opacity", &alpha, 1);
+    DRW_shgroup_uniform_float_copy(g_data->fweights_shgrp, "opacity", 1.0);
     DRW_shgroup_uniform_texture(g_data->fweights_shgrp, "colorramp", G_draw.weight_ramp);
     DRW_shgroup_uniform_block(g_data->fweights_shgrp, "globalsBlock", G_draw.block_ubo);
     if (rv3d->rflag & RV3D_CLIPPING) {
@@ -524,21 +516,21 @@ static void EDIT_MESH_cache_init(void *vedata)
                                        DRW_STATE_DEPTH_LESS_EQUAL);
 
     g_data->fnormals_shgrp = DRW_shgroup_create(sh_data->normals_face, psl->normals);
-    DRW_shgroup_uniform_float(g_data->fnormals_shgrp, "normalSize", &size_normal, 1);
+    DRW_shgroup_uniform_float_copy(g_data->fnormals_shgrp, "normalSize", size_normal);
     DRW_shgroup_uniform_vec4(g_data->fnormals_shgrp, "color", G_draw.block.colorNormal, 1);
     if (rv3d->rflag & RV3D_CLIPPING) {
       DRW_shgroup_state_enable(g_data->fnormals_shgrp, DRW_STATE_CLIP_PLANES);
     }
 
     g_data->vnormals_shgrp = DRW_shgroup_create(sh_data->normals, psl->normals);
-    DRW_shgroup_uniform_float(g_data->vnormals_shgrp, "normalSize", &size_normal, 1);
+    DRW_shgroup_uniform_float_copy(g_data->vnormals_shgrp, "normalSize", size_normal);
     DRW_shgroup_uniform_vec4(g_data->vnormals_shgrp, "color", G_draw.block.colorVNormal, 1);
     if (rv3d->rflag & RV3D_CLIPPING) {
       DRW_shgroup_state_enable(g_data->vnormals_shgrp, DRW_STATE_CLIP_PLANES);
     }
 
     g_data->lnormals_shgrp = DRW_shgroup_create(sh_data->normals_loop, psl->normals);
-    DRW_shgroup_uniform_float(g_data->lnormals_shgrp, "normalSize", &size_normal, 1);
+    DRW_shgroup_uniform_float_copy(g_data->lnormals_shgrp, "normalSize", size_normal);
     DRW_shgroup_uniform_vec4(g_data->lnormals_shgrp, "color", G_draw.block.colorLNormal, 1);
     if (rv3d->rflag & RV3D_CLIPPING) {
       DRW_shgroup_state_enable(g_data->lnormals_shgrp, DRW_STATE_CLIP_PLANES);
@@ -547,12 +539,11 @@ static void EDIT_MESH_cache_init(void *vedata)
 
   {
     /* Mesh Analysis Pass */
-    DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_BLEND;
+    DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_BLEND_ALPHA;
     psl->mesh_analysis_pass = DRW_pass_create("Mesh Analysis", state);
-    const bool is_vertex_color = scene->toolsettings->statvis.type == SCE_STATVIS_SHARP;
-    g_data->mesh_analysis_shgrp = DRW_shgroup_create(
-        is_vertex_color ? sh_data->mesh_analysis_vertex : sh_data->mesh_analysis_face,
-        psl->mesh_analysis_pass);
+    g_data->mesh_analysis_shgrp = DRW_shgroup_create(sh_data->mesh_analysis,
+                                                     psl->mesh_analysis_pass);
+    DRW_shgroup_uniform_texture(g_data->mesh_analysis_shgrp, "weightTex", G_draw.weight_ramp);
     if (rv3d->rflag & RV3D_CLIPPING) {
       DRW_shgroup_state_enable(g_data->mesh_analysis_shgrp, DRW_STATE_CLIP_PLANES);
     }
@@ -561,7 +552,7 @@ static void EDIT_MESH_cache_init(void *vedata)
   edit_mesh_create_overlay_passes(face_mod,
                                   g_data->data_mask,
                                   g_data->do_edges,
-                                  DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_BLEND,
+                                  DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_BLEND_ALPHA,
                                   &psl->edit_passes_in_front,
                                   &g_data->edit_in_front_shgrps);
 
@@ -569,7 +560,7 @@ static void EDIT_MESH_cache_init(void *vedata)
     edit_mesh_create_overlay_passes(face_mod,
                                     g_data->data_mask,
                                     g_data->do_edges,
-                                    DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_BLEND,
+                                    DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_BLEND_ALPHA,
                                     &psl->edit_passes,
                                     &g_data->edit_shgrps);
   }
@@ -583,11 +574,12 @@ static void EDIT_MESH_cache_init(void *vedata)
                                     &psl->edit_passes,
                                     &g_data->edit_shgrps);
 
-    DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_BLEND;
+    DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_BLEND_ALPHA;
     psl->facefill_occlude = DRW_pass_create("Front Face Color", state);
     psl->facefill_occlude_cage = DRW_pass_create("Front Face Cage Color", state);
 
     if (g_data->do_faces) {
+      const bool select_face = (tsettings->selectmode & SCE_SELECT_FACE) != 0;
       DRWShadingGroup *shgrp;
 
       /* however we loose the front faces value (because we need the depth of occluded wires and
@@ -596,6 +588,7 @@ static void EDIT_MESH_cache_init(void *vedata)
                                                                    psl->facefill_occlude);
       DRW_shgroup_uniform_block(shgrp, "globalsBlock", G_draw.block_ubo);
       DRW_shgroup_uniform_ivec4(shgrp, "dataMask", g_data->data_mask, 1);
+      DRW_shgroup_uniform_bool_copy(shgrp, "selectFaces", select_face);
       if (rv3d->rflag & RV3D_CLIPPING) {
         DRW_shgroup_state_enable(shgrp, DRW_STATE_CLIP_PLANES);
       }
@@ -604,6 +597,7 @@ static void EDIT_MESH_cache_init(void *vedata)
           sh_data->overlay_facefill, psl->facefill_occlude_cage);
       DRW_shgroup_uniform_block(shgrp, "globalsBlock", G_draw.block_ubo);
       DRW_shgroup_uniform_ivec4(shgrp, "dataMask", g_data->data_mask, 1);
+      DRW_shgroup_uniform_bool_copy(shgrp, "selectFaces", select_face);
       if (rv3d->rflag & RV3D_CLIPPING) {
         DRW_shgroup_state_enable(shgrp, DRW_STATE_CLIP_PLANES);
       }
@@ -616,7 +610,7 @@ static void EDIT_MESH_cache_init(void *vedata)
     struct GPUBatch *quad = DRW_cache_fullscreen_quad_get();
 
     psl->mix_occlude = DRW_pass_create("Mix Occluded Wires",
-                                       DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND);
+                                       DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ALPHA);
     DRWShadingGroup *mix_shgrp = DRW_shgroup_create(sh_data->overlay_mix, psl->mix_occlude);
     DRW_shgroup_call(mix_shgrp, quad, NULL);
     DRW_shgroup_uniform_float_copy(mix_shgrp, "alpha", backwire_opacity);
@@ -625,7 +619,8 @@ static void EDIT_MESH_cache_init(void *vedata)
     DRW_shgroup_uniform_texture_ref(mix_shgrp, "sceneDepth", &dtxl->depth);
   }
 
-  bool show_face_dots = (v3d->overlay.edit_flag & V3D_OVERLAY_EDIT_FACE_DOT) != 0;
+  bool show_face_dots = XRAY_FLAG_ENABLED(v3d) ||
+                        (v3d->overlay.edit_flag & V3D_OVERLAY_EDIT_FACE_DOT) != 0;
 
   if (g_data->do_faces == false && g_data->do_edges == false &&
       (tsettings->selectmode & SCE_SELECT_FACE)) {
@@ -664,17 +659,17 @@ static void edit_mesh_add_ob_to_pass(Scene *scene,
 
   geom_tris = DRW_mesh_batch_cache_get_edit_triangles(ob->data);
   geom_edges = DRW_mesh_batch_cache_get_edit_edges(ob->data);
-  DRW_shgroup_call(edge_shgrp, geom_edges, ob->obmat);
-  DRW_shgroup_call(face_shgrp, geom_tris, ob->obmat);
+  DRW_shgroup_call_no_cull(edge_shgrp, geom_edges, ob);
+  DRW_shgroup_call_no_cull(face_shgrp, geom_tris, ob);
 
   if ((tsettings->selectmode & SCE_SELECT_VERTEX) != 0) {
     geom_verts = DRW_mesh_batch_cache_get_edit_vertices(ob->data);
-    DRW_shgroup_call(vert_shgrp, geom_verts, ob->obmat);
+    DRW_shgroup_call_no_cull(vert_shgrp, geom_verts, ob);
   }
 
   if (facedot_shgrp && (tsettings->selectmode & SCE_SELECT_FACE) != 0) {
     geom_fcenter = DRW_mesh_batch_cache_get_edit_facedots(ob->data);
-    DRW_shgroup_call(facedot_shgrp, geom_fcenter, ob->obmat);
+    DRW_shgroup_call_no_cull(facedot_shgrp, geom_fcenter, ob);
   }
 }
 
@@ -699,41 +694,34 @@ static void EDIT_MESH_cache_populate(void *vedata, Object *ob)
 
       if (do_show_weight) {
         geom = DRW_cache_mesh_surface_weights_get(ob);
-        DRW_shgroup_call(g_data->fweights_shgrp, geom, ob->obmat);
+        DRW_shgroup_call_no_cull(g_data->fweights_shgrp, geom, ob);
       }
-
-      if (do_show_mesh_analysis) {
-        Mesh *me = (Mesh *)ob->data;
-        BMEditMesh *embm = me->edit_mesh;
-        const bool is_original = embm->mesh_eval_final &&
-                                 (embm->mesh_eval_final->runtime.is_original == true);
-        if (is_original) {
-          geom = DRW_cache_mesh_surface_mesh_analysis_get(ob);
-          if (geom) {
-            DRW_shgroup_call(g_data->mesh_analysis_shgrp, geom, ob->obmat);
-          }
+      else if (do_show_mesh_analysis && !XRAY_ACTIVE(v3d)) {
+        geom = DRW_cache_mesh_surface_mesh_analysis_get(ob);
+        if (geom) {
+          DRW_shgroup_call_no_cull(g_data->mesh_analysis_shgrp, geom, ob);
         }
       }
 
       if (do_occlude_wire || do_in_front) {
         geom = DRW_cache_mesh_surface_get(ob);
-        DRW_shgroup_call(do_in_front ? g_data->depth_shgrp_hidden_wire_in_front :
-                                       g_data->depth_shgrp_hidden_wire,
-                         geom,
-                         ob->obmat);
+        DRW_shgroup_call_no_cull(do_in_front ? g_data->depth_shgrp_hidden_wire_in_front :
+                                               g_data->depth_shgrp_hidden_wire,
+                                 geom,
+                                 ob);
       }
 
       if (vnormals_do) {
-        geom = DRW_mesh_batch_cache_get_edit_vertices(ob->data);
-        DRW_shgroup_call(g_data->vnormals_shgrp, geom, ob->obmat);
+        geom = DRW_mesh_batch_cache_get_edit_vnors(ob->data);
+        DRW_shgroup_call_no_cull(g_data->vnormals_shgrp, geom, ob);
       }
       if (lnormals_do) {
         geom = DRW_mesh_batch_cache_get_edit_lnors(ob->data);
-        DRW_shgroup_call(g_data->lnormals_shgrp, geom, ob->obmat);
+        DRW_shgroup_call_no_cull(g_data->lnormals_shgrp, geom, ob);
       }
       if (fnormals_do) {
         geom = DRW_mesh_batch_cache_get_edit_facedots(ob->data);
-        DRW_shgroup_call(g_data->fnormals_shgrp, geom, ob->obmat);
+        DRW_shgroup_call_no_cull(g_data->fnormals_shgrp, geom, ob);
       }
 
       if (g_data->do_zbufclip) {
@@ -791,7 +779,7 @@ static void edit_mesh_draw_components(EDIT_MESH_ComponentPassList *passes,
   DRW_view_set_active(g_data->view_edges);
   DRW_draw_pass(passes->edges);
 
-  DRW_view_set_active(g_data->view_wires);
+  DRW_view_set_active(g_data->view_verts);
   DRW_draw_pass(passes->verts);
 
   DRW_view_set_active(NULL);

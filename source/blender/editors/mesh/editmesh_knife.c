@@ -280,11 +280,11 @@ static void knife_update_header(bContext *C, wmOperator *op, KnifeTool_OpData *k
 
   BLI_snprintf(header,
                sizeof(header),
-               IFACE_("%s: confirm, %s: cancel, "
-                      "%s: start/define cut, %s: close cut, %s: new cut, "
-                      "%s: midpoint snap (%s), %s: ignore snap (%s), "
-                      "%s: angle constraint (%s), %s: cut through (%s), "
-                      "%s: panning"),
+               TIP_("%s: confirm, %s: cancel, "
+                    "%s: start/define cut, %s: close cut, %s: new cut, "
+                    "%s: midpoint snap (%s), %s: ignore snap (%s), "
+                    "%s: angle constraint (%s), %s: cut through (%s), "
+                    "%s: panning"),
                WM_MODALKEY(KNF_MODAL_CONFIRM),
                WM_MODALKEY(KNF_MODAL_CANCEL),
                WM_MODALKEY(KNF_MODAL_ADD_CUT),
@@ -2658,7 +2658,7 @@ static void knifetool_init_bmbvh(KnifeTool_OpData *kcd)
   Object *obedit_eval = (Object *)DEG_get_evaluated_id(kcd->vc.depsgraph, &kcd->em->ob->id);
   BMEditMesh *em_eval = BKE_editmesh_from_object(obedit_eval);
 
-  kcd->cagecos = (const float(*)[3])BKE_editmesh_vertexCos_get(
+  kcd->cagecos = (const float(*)[3])BKE_editmesh_vert_coords_alloc(
       kcd->vc.depsgraph, em_eval, scene_eval, NULL);
 
   kcd->bmbvh = BKE_bmbvh_new_from_editmesh(
@@ -2949,7 +2949,7 @@ static int knifetool_modal(bContext *C, wmOperator *op, const wmEvent *event)
       case KNF_MODAL_ADD_CUT_CLOSED:
         if (kcd->mode == MODE_DRAGGING) {
 
-          /* shouldn't be possible with default key-layout, just incase... */
+          /* Shouldn't be possible with default key-layout, just in case. */
           if (kcd->is_drag_hold) {
             kcd->is_drag_hold = false;
             knifetool_update_mval(kcd, kcd->curr.mval);

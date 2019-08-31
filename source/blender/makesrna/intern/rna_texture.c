@@ -186,10 +186,10 @@ static StructRNA *rna_Texture_refine(struct PointerRNA *ptr)
 
 static void rna_Texture_update(Main *bmain, Scene *UNUSED(scene), PointerRNA *ptr)
 {
-  ID *id = ptr->id.data;
+  ID *id = ptr->owner_id;
 
   if (GS(id->name) == ID_TE) {
-    Tex *tex = ptr->id.data;
+    Tex *tex = (Tex *)ptr->owner_id;
 
     DEG_id_tag_update(&tex->id, 0);
     DEG_id_tag_update(&tex->id, ID_RECALC_EDITORS);
@@ -197,7 +197,7 @@ static void rna_Texture_update(Main *bmain, Scene *UNUSED(scene), PointerRNA *pt
     WM_main_add_notifier(NC_MATERIAL | ND_SHADING_DRAW, NULL);
   }
   else if (GS(id->name) == ID_NT) {
-    bNodeTree *ntree = ptr->id.data;
+    bNodeTree *ntree = (bNodeTree *)ptr->owner_id;
     ED_node_tag_update_nodetree(bmain, ntree, NULL);
   }
 }
@@ -219,7 +219,7 @@ static void rna_Color_mapping_update(Main *UNUSED(bmain),
 /* Used for Texture Properties, used (also) for/in Nodes */
 static void rna_Texture_nodes_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
 {
-  Tex *tex = ptr->id.data;
+  Tex *tex = (Tex *)ptr->owner_id;
 
   DEG_id_tag_update(&tex->id, 0);
   DEG_id_tag_update(&tex->id, ID_RECALC_EDITORS);
@@ -235,7 +235,7 @@ static void rna_Texture_type_set(PointerRNA *ptr, int value)
 
 void rna_TextureSlot_update(bContext *C, PointerRNA *ptr)
 {
-  ID *id = ptr->id.data;
+  ID *id = ptr->owner_id;
 
   DEG_id_tag_update(id, 0);
 
@@ -266,10 +266,12 @@ void rna_TextureSlot_update(bContext *C, PointerRNA *ptr)
       MTex *mtex = ptr->data;
       int recalc = ID_RECALC_GEOMETRY;
 
-      if (mtex->mapto & PAMAP_INIT)
+      if (mtex->mapto & PAMAP_INIT) {
         recalc |= ID_RECALC_PSYS_RESET;
-      if (mtex->mapto & PAMAP_CHILD)
+      }
+      if (mtex->mapto & PAMAP_CHILD) {
         recalc |= ID_RECALC_PSYS_CHILD;
+      }
 
       DEG_id_tag_update(id, recalc);
       WM_main_add_notifier(NC_OBJECT | ND_PARTICLE | NA_EDITED, NULL);
@@ -288,8 +290,8 @@ char *rna_TextureSlot_path(PointerRNA *ptr)
    * since the name used is the name of the texture assigned, but the texture
    * may be used multiple times in the same stack
    */
-  if (ptr->id.data) {
-    if (GS(((ID *)ptr->id.data)->name) == ID_BR) {
+  if (ptr->owner_id) {
+    if (GS(ptr->owner_id->name) == ID_BR) {
       return BLI_strdup("texture_slot");
     }
     else {
@@ -297,7 +299,7 @@ char *rna_TextureSlot_path(PointerRNA *ptr)
       PropertyRNA *prop;
 
       /* find the 'textures' property of the ID-struct */
-      RNA_id_pointer_create(ptr->id.data, &id_ptr);
+      RNA_id_pointer_create(ptr->owner_id, &id_ptr);
       prop = RNA_struct_find_property(&id_ptr, "texture_slots");
 
       /* get an iterator for this property, and try to find the relevant index */
@@ -327,8 +329,9 @@ static int rna_TextureSlot_name_length(PointerRNA *ptr)
 {
   MTex *mtex = ptr->data;
 
-  if (mtex->tex)
+  if (mtex->tex) {
     return strlen(mtex->tex->id.name + 2);
+  }
 
   return 0;
 }
@@ -337,10 +340,12 @@ static void rna_TextureSlot_name_get(PointerRNA *ptr, char *str)
 {
   MTex *mtex = ptr->data;
 
-  if (mtex->tex)
+  if (mtex->tex) {
     strcpy(str, mtex->tex->id.name + 2);
-  else
+  }
+  else {
     str[0] = '\0';
+  }
 }
 
 static int rna_TextureSlot_output_node_get(PointerRNA *ptr)
@@ -355,8 +360,9 @@ static int rna_TextureSlot_output_node_get(PointerRNA *ptr)
     if (ntree) {
       for (node = ntree->nodes.first; node; node = node->next) {
         if (node->type == TEX_NODE_OUTPUT) {
-          if (cur == node->custom1)
+          if (cur == node->custom1) {
             return cur;
+          }
         }
       }
     }
@@ -408,13 +414,16 @@ static void rna_Texture_use_color_ramp_set(PointerRNA *ptr, bool value)
 {
   Tex *tex = (Tex *)ptr->data;
 
-  if (value)
+  if (value) {
     tex->flag |= TEX_COLORBAND;
-  else
+  }
+  else {
     tex->flag &= ~TEX_COLORBAND;
+  }
 
-  if ((tex->flag & TEX_COLORBAND) && tex->coba == NULL)
+  if ((tex->flag & TEX_COLORBAND) && tex->coba == NULL) {
     tex->coba = BKE_colorband_add(false);
+  }
 }
 
 static void rna_Texture_use_nodes_update(bContext *C, PointerRNA *ptr)
@@ -424,8 +433,9 @@ static void rna_Texture_use_nodes_update(bContext *C, PointerRNA *ptr)
   if (tex->use_nodes) {
     tex->type = 0;
 
-    if (tex->nodetree == NULL)
+    if (tex->nodetree == NULL) {
       ED_node_texture_default(C, tex);
+    }
   }
 
   rna_Texture_nodes_update(CTX_data_main(C), CTX_data_scene(C), ptr);
@@ -435,10 +445,12 @@ static void rna_ImageTexture_mipmap_set(PointerRNA *ptr, bool value)
 {
   Tex *tex = (Tex *)ptr->data;
 
-  if (value)
+  if (value) {
     tex->imaflag |= TEX_MIPMAP;
-  else
+  }
+  else {
     tex->imaflag &= ~TEX_MIPMAP;
+  }
 }
 
 #else
@@ -618,6 +630,7 @@ static void rna_def_mtex(BlenderRNA *brna)
   RNA_def_property_pointer_sdna(prop, NULL, "tex");
   RNA_def_property_struct_type(prop, "Texture");
   RNA_def_property_flag(prop, PROP_EDITABLE | PROP_CONTEXT_UPDATE);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_ui_text(prop, "Texture", "Texture data-block used by this texture slot");
   RNA_def_property_update(prop, NC_MATERIAL | ND_SHADING_LINKS, "rna_TextureSlot_update");
 
@@ -1265,6 +1278,7 @@ static void rna_def_texture_image(BlenderRNA *brna)
   RNA_def_property_pointer_sdna(prop, NULL, "ima");
   RNA_def_property_struct_type(prop, "Image");
   RNA_def_property_flag(prop, PROP_EDITABLE);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_ui_text(prop, "Image", "");
   RNA_def_property_update(prop, 0, "rna_Texture_update");
 

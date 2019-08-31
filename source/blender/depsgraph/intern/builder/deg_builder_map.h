@@ -25,7 +25,6 @@
 
 #include "intern/depsgraph_type.h"
 
-struct GSet;
 struct ID;
 
 namespace DEG {
@@ -40,10 +39,11 @@ class BuilderMap {
 
     TAG_SCENE_COMPOSITOR = (1 << 4),
     TAG_SCENE_SEQUENCER = (1 << 5),
+    TAG_SCENE_AUDIO = (1 << 5),
 
     /* All ID components has been built. */
     TAG_COMPLETE = (TAG_ANIMATION | TAG_PARAMETERS | TAG_TRANSFORM | TAG_GEOMETRY |
-                    TAG_SCENE_COMPOSITOR | TAG_SCENE_SEQUENCER),
+                    TAG_SCENE_COMPOSITOR | TAG_SCENE_SEQUENCER | TAG_SCENE_AUDIO),
   };
 
   BuilderMap();

@@ -95,7 +95,7 @@ class MESH_UL_fmaps(UIList):
         fmap = item
         if self.layout_type in {'DEFAULT', 'COMPACT'}:
             layout.prop(fmap, "name", text="", emboss=False, icon='FACE_MAPS')
-        elif self.layout_type in {'GRID'}:
+        elif self.layout_type == 'GRID':
             layout.alignment = 'CENTER'
             layout.label(text="", icon_value=icon)
 
@@ -459,6 +459,22 @@ class DATA_PT_vertex_colors(MeshButtonsPanel, Panel):
         col.operator("mesh.vertex_color_add", icon='ADD', text="")
         col.operator("mesh.vertex_color_remove", icon='REMOVE', text="")
 
+class DATA_PT_remesh(MeshButtonsPanel, Panel):
+    bl_label = "Remesh"
+    bl_options = {'DEFAULT_CLOSED'}
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        col = layout.column()
+
+        mesh = context.mesh
+        col.prop(mesh, "remesh_voxel_size")
+        col.prop(mesh, "remesh_smooth_normals")
+        col.prop(mesh, "remesh_preserve_paint_mask")
+        col.operator("object.voxel_remesh", text="Voxel Remesh")
+
 
 class DATA_PT_customdata(MeshButtonsPanel, Panel):
     bl_label = "Geometry Data"
@@ -483,7 +499,7 @@ class DATA_PT_customdata(MeshButtonsPanel, Panel):
 
         col = layout.column()
 
-        col.enabled = (obj.mode != 'EDIT')
+        col.enabled = obj is not None and obj.mode != 'EDIT'
         col.prop(me, "use_customdata_vertex_bevel")
         col.prop(me, "use_customdata_edge_bevel")
         col.prop(me, "use_customdata_edge_crease")
@@ -512,6 +528,7 @@ classes = (
     DATA_PT_normals,
     DATA_PT_normals_auto_smooth,
     DATA_PT_texture_space,
+    DATA_PT_remesh,
     DATA_PT_customdata,
     DATA_PT_custom_props_mesh,
 )

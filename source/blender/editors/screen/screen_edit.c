@@ -292,33 +292,41 @@ void screen_new_activate_prepare(const wmWindow *win, bScreen *screen_new)
 /* used with join operator */
 int area_getorientation(ScrArea *sa, ScrArea *sb)
 {
-  ScrVert *sav1, *sav2, *sav3, *sav4;
-  ScrVert *sbv1, *sbv2, *sbv3, *sbv4;
-
   if (sa == NULL || sb == NULL) {
     return -1;
   }
 
-  sav1 = sa->v1;
-  sav2 = sa->v2;
-  sav3 = sa->v3;
-  sav4 = sa->v4;
-  sbv1 = sb->v1;
-  sbv2 = sb->v2;
-  sbv3 = sb->v3;
-  sbv4 = sb->v4;
+  ScrVert *saBL = sa->v1;
+  ScrVert *saTL = sa->v2;
+  ScrVert *saTR = sa->v3;
+  ScrVert *saBR = sa->v4;
 
-  if (sav1 == sbv4 && sav2 == sbv3) { /* sa to right of sb = W */
-    return 0;
+  ScrVert *sbBL = sb->v1;
+  ScrVert *sbTL = sb->v2;
+  ScrVert *sbTR = sb->v3;
+  ScrVert *sbBR = sb->v4;
+
+  int tolerance = U.pixelsize * 4;
+
+  if (saBL->vec.x == sbBR->vec.x && saTL->vec.x == sbTR->vec.x) { /* sa to right of sb = W */
+    if (ABS(saBL->vec.y - sbBR->vec.y) <= tolerance) {
+      return 0;
+    }
   }
-  else if (sav2 == sbv1 && sav3 == sbv4) { /* sa to bottom of sb = N */
-    return 1;
+  else if (saTL->vec.y == sbBL->vec.y && saTR->vec.y == sbBR->vec.y) { /* sa to bottom of sb = N */
+    if (ABS(saTL->vec.x - sbBL->vec.x) <= tolerance) {
+      return 1;
+    }
   }
-  else if (sav3 == sbv2 && sav4 == sbv1) { /* sa to left of sb = E */
-    return 2;
+  else if (saTR->vec.x == sbTL->vec.x && saBR->vec.x == sbBL->vec.x) { /* sa to left of sb = E */
+    if (ABS(saTR->vec.y - sbTL->vec.y) <= tolerance) {
+      return 2;
+    }
   }
-  else if (sav1 == sbv2 && sav4 == sbv3) { /* sa on top of sb = S*/
-    return 3;
+  else if (saBL->vec.y == sbTL->vec.y && saBR->vec.y == sbTR->vec.y) { /* sa on top of sb = S*/
+    if (ABS(saBL->vec.x - sbTL->vec.x) <= tolerance) {
+      return 3;
+    }
   }
 
   return -1;
@@ -329,36 +337,50 @@ int area_getorientation(ScrArea *sa, ScrArea *sb)
  */
 int screen_area_join(bContext *C, bScreen *scr, ScrArea *sa1, ScrArea *sa2)
 {
-  int dir;
-
-  dir = area_getorientation(sa1, sa2);
-  /*printf("dir is : %i\n", dir);*/
+  int dir = area_getorientation(sa1, sa2);
 
   if (dir == -1) {
     return 0;
   }
 
-  if (dir == 0) {
-    sa1->v1 = sa2->v1;
-    sa1->v2 = sa2->v2;
+  /* Align areas if they are not. Do sanity checking before getting here. */
+
+  if (dir == 0 || dir == 2) {
+    /* horizontal join, so vertically align source vert to target */
+    sa2->v1->vec.y = sa1->v1->vec.y; /* vertical align sa1 BL */
+    sa2->v2->vec.y = sa1->v2->vec.y; /* vertical align sa1 TL */
+    sa2->v3->vec.y = sa1->v3->vec.y; /* vertical align sa1 TR */
+    sa2->v4->vec.y = sa1->v4->vec.y; /* vertical align sa1 BR */
+  }
+  else {
+    /* vertical join, so horizontally align source verts to target */
+    sa2->v1->vec.x = sa1->v1->vec.x; /* vertical align sa1 BL */
+    sa2->v2->vec.x = sa1->v2->vec.x; /* vertical align sa1 TL */
+    sa2->v3->vec.x = sa1->v3->vec.x; /* vertical align sa1 TR */
+    sa2->v4->vec.x = sa1->v4->vec.x; /* vertical align sa1 BR */
+  }
+
+  if (dir == 0) {      /* sa1 to right of sa2 = W */
+    sa1->v1 = sa2->v1; /* BL */
+    sa1->v2 = sa2->v2; /* TL */
     screen_geom_edge_add(scr, sa1->v2, sa1->v3);
     screen_geom_edge_add(scr, sa1->v1, sa1->v4);
   }
-  else if (dir == 1) {
-    sa1->v2 = sa2->v2;
-    sa1->v3 = sa2->v3;
+  else if (dir == 1) { /* sa1 to bottom of sa2 = N */
+    sa1->v2 = sa2->v2; /* TL */
+    sa1->v3 = sa2->v3; /* TR */
     screen_geom_edge_add(scr, sa1->v1, sa1->v2);
     screen_geom_edge_add(scr, sa1->v3, sa1->v4);
   }
-  else if (dir == 2) {
-    sa1->v3 = sa2->v3;
-    sa1->v4 = sa2->v4;
+  else if (dir == 2) { /* sa1 to left of sa2 = E */
+    sa1->v3 = sa2->v3; /* TR */
+    sa1->v4 = sa2->v4; /* BR */
     screen_geom_edge_add(scr, sa1->v2, sa1->v3);
     screen_geom_edge_add(scr, sa1->v1, sa1->v4);
   }
-  else if (dir == 3) {
-    sa1->v1 = sa2->v1;
-    sa1->v4 = sa2->v4;
+  else if (dir == 3) { /* sa1 on top of sa2 = S */
+    sa1->v1 = sa2->v1; /* BL */
+    sa1->v4 = sa2->v4; /* BR */
     screen_geom_edge_add(scr, sa1->v1, sa1->v2);
     screen_geom_edge_add(scr, sa1->v3, sa1->v4);
   }
@@ -679,6 +701,15 @@ void ED_screen_set_active_region(bContext *C, wmWindow *win, const int xy[2])
           /* call old area's deactivate if assigned */
           if (ar == old_ar && area_iter->type->deactivate) {
             area_iter->type->deactivate(area_iter);
+          }
+
+          if (ar == old_ar && ar != scr->active_region) {
+            wmGizmoMap *gzmap = old_ar->gizmo_map;
+            if (gzmap) {
+              if (WM_gizmo_highlight_set(gzmap, NULL)) {
+                ED_region_tag_redraw_no_rebuild(old_ar);
+              }
+            }
           }
 
           if (ar == old_ar || ar == scr->active_region) {
@@ -1107,7 +1138,7 @@ void ED_screen_full_prevspace(bContext *C, ScrArea *sa)
 
 void ED_screen_restore_temp_type(bContext *C, ScrArea *sa)
 {
-  /* incase nether functions below run */
+  /* In case nether functions below run. */
   ED_area_tag_redraw(sa);
 
   if (sa->flag & AREA_FLAG_TEMP_TYPE) {
@@ -1447,6 +1478,8 @@ void ED_screen_animation_timer_update(bScreen *screen, int redraws, int refresh)
 void ED_update_for_newframe(Main *bmain, Depsgraph *depsgraph)
 {
   Scene *scene = DEG_get_input_scene(depsgraph);
+
+  DEG_id_tag_update_ex(bmain, &scene->id, ID_RECALC_TIME);
 
 #ifdef DURIAN_CAMERA_SWITCH
   void *camera = BKE_scene_camera_switch_find(scene);

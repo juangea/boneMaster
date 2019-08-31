@@ -42,7 +42,6 @@ struct EditBone;
 struct NumInput;
 struct Object;
 struct RNG;
-struct RenderEngineType;
 struct ReportList;
 struct Scene;
 struct ScrArea;
@@ -52,7 +51,6 @@ struct TransDataContainer;
 struct TransInfo;
 struct TransSnap;
 struct TransformOrientation;
-struct View3D;
 struct ViewLayer;
 struct bConstraint;
 struct bContext;
@@ -85,7 +83,9 @@ typedef struct TransSnap {
   bool snap_self;
   bool peel;
   bool snap_spatial_grid;
-  short status;
+  char status;
+  /* Snapped Element Type (currently for objects only). */
+  char snapElem;
   /** snapping from this point (in global-space). */
   float snapPoint[3];
   /** to this point (in global-space). */
@@ -102,7 +102,7 @@ typedef struct TransSnap {
    * Get the transform distance between two points (used by Closest snap)
    *
    * \note Return value can be anything,
-   * where the smallest absolute value defines whats closest.
+   * where the smallest absolute value defines what's closest.
    */
   float (*distance)(struct TransInfo *t, const float p1[3], const float p2[3]);
 
@@ -375,6 +375,7 @@ typedef struct VertSlideParams {
 typedef struct BoneInitData {
   struct EditBone *bone;
   float tail[3];
+  float rad_head;
   float rad_tail;
   float roll;
   float head[3];
@@ -662,10 +663,16 @@ typedef struct TransInfo {
 
   short prop_mode;
 
+  /** Value taken as input, either through mouse coordinates or entered as a parameter. */
   float values[4];
+
   /** Offset applied ontop of modal input. */
   float values_modal_offset[4];
-  float auto_values[4];
+
+  /** Final value of the transformation (displayed in the redo panel).
+   * If the operator is executed directly (not modal), this value is usually the
+   * value of the input parameter, except when a constrain is entered. */
+  float values_final[4];
 
   /* Axis members for modes that use an axis separate from the orientation (rotate & shear). */
 
@@ -764,7 +771,9 @@ enum {
   /** Don't use mirror even if the data-block option is set. */
   T_NO_MIRROR = 1 << 19,
 
-  T_AUTOVALUES = 1 << 20,
+  /** To indicate that the value set in the `value` parameter is the final
+   * value of the transformation, modified only by the constrain. */
+  T_INPUT_IS_VALUES_FINAL = 1 << 20,
 
   /** To specify if we save back settings at the end. */
   T_MODAL = 1 << 21,
@@ -1155,5 +1164,8 @@ bool checkUseAxisMatrix(TransInfo *t);
                           *tc_end = t->data_container + t->data_container_len; \
        th != tc_end; \
        th++, i++)
+
+void trans_obdata_in_obmode_update_all(struct TransInfo *t);
+void trans_obchild_in_obmode_update_all(struct TransInfo *t);
 
 #endif

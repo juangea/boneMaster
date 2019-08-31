@@ -177,7 +177,7 @@ RNANodeIdentifier RNANodeQuery::construct_node_identifier(const PointerRNA *ptr,
     return node_identifier;
   }
   /* Set default values for returns. */
-  node_identifier.id = static_cast<ID *>(ptr->id.data);
+  node_identifier.id = ptr->owner_id;
   node_identifier.component_name = "";
   node_identifier.operation_code = OperationCode::OPERATION;
   node_identifier.operation_name = "";
@@ -228,7 +228,7 @@ RNANodeIdentifier RNANodeQuery::construct_node_identifier(const PointerRNA *ptr,
     /* Armature-level bone mapped to Armature Eval, and thus Pose Init.
      * Drivers have special code elsewhere that links them to the pose
      * bone components, instead of using this generic code. */
-    node_identifier.type = NodeType::PARAMETERS;
+    node_identifier.type = NodeType::ARMATURE;
     node_identifier.operation_code = OperationCode::ARMATURE_EVAL;
     /* If trying to look up via an Object, e.g. due to lookup via
      * obj.pose.bones[].bone in a driver attached to the Object,
@@ -239,7 +239,7 @@ RNANodeIdentifier RNANodeQuery::construct_node_identifier(const PointerRNA *ptr,
     return node_identifier;
   }
   else if (RNA_struct_is_a(ptr->type, &RNA_Constraint)) {
-    const Object *object = static_cast<const Object *>(ptr->id.data);
+    const Object *object = reinterpret_cast<const Object *>(ptr->owner_id);
     const bConstraint *constraint = static_cast<const bConstraint *>(ptr->data);
     RNANodeQueryIDData *id_data = ensure_id_data(&object->id);
     /* Check whether is object or bone constraint. */
@@ -259,7 +259,7 @@ RNANodeIdentifier RNANodeQuery::construct_node_identifier(const PointerRNA *ptr,
     return node_identifier;
   }
   else if (ELEM(ptr->type, &RNA_ConstraintTarget, &RNA_ConstraintTargetBone)) {
-    Object *object = (Object *)ptr->id.data;
+    Object *object = reinterpret_cast<Object *>(ptr->owner_id);
     bConstraintTarget *tgt = (bConstraintTarget *)ptr->data;
     /* Check whether is object or bone constraint. */
     bPoseChannel *pchan = NULL;
@@ -277,7 +277,10 @@ RNANodeIdentifier RNANodeQuery::construct_node_identifier(const PointerRNA *ptr,
       return node_identifier;
     }
   }
-  else if (RNA_struct_is_a(ptr->type, &RNA_Modifier)) {
+  else if (RNA_struct_is_a(ptr->type, &RNA_Mesh) || RNA_struct_is_a(ptr->type, &RNA_Modifier) ||
+           RNA_struct_is_a(ptr->type, &RNA_GpencilModifier) ||
+           RNA_struct_is_a(ptr->type, &RNA_Spline) || RNA_struct_is_a(ptr->type, &RNA_TextBox) ||
+           RNA_struct_is_a(ptr->type, &RNA_GPencilLayer)) {
     /* When modifier is used as FROM operation this is likely referencing to
      * the property (for example, modifier's influence).
      * But when it's used as TO operation, this is geometry component. */
@@ -312,26 +315,28 @@ RNANodeIdentifier RNANodeQuery::construct_node_identifier(const PointerRNA *ptr,
         node_identifier.type = NodeType::OBJECT_FROM_LAYER;
         return node_identifier;
       }
+      else if (STREQ(prop_identifier, "dimensions")) {
+        node_identifier.type = NodeType::GEOMETRY;
+        return node_identifier;
+      }
     }
   }
   else if (ptr->type == &RNA_ShapeKey) {
     KeyBlock *key_block = static_cast<KeyBlock *>(ptr->data);
-    node_identifier.id = static_cast<ID *>(ptr->id.data);
+    node_identifier.id = ptr->owner_id;
     node_identifier.type = NodeType::PARAMETERS;
     node_identifier.operation_code = OperationCode::PARAMETERS_EVAL;
     node_identifier.operation_name = key_block->name;
     return node_identifier;
   }
   else if (ptr->type == &RNA_Key) {
-    node_identifier.id = static_cast<ID *>(ptr->id.data);
+    node_identifier.id = ptr->owner_id;
     node_identifier.type = NodeType::GEOMETRY;
     return node_identifier;
   }
   else if (RNA_struct_is_a(ptr->type, &RNA_Sequence)) {
-    const Sequence *seq = static_cast<Sequence *>(ptr->data);
     /* Sequencer strip */
     node_identifier.type = NodeType::SEQUENCER;
-    node_identifier.component_name = seq->name;
     return node_identifier;
   }
   else if (RNA_struct_is_a(ptr->type, &RNA_NodeSocket)) {
@@ -343,12 +348,12 @@ RNANodeIdentifier RNANodeQuery::construct_node_identifier(const PointerRNA *ptr,
     return node_identifier;
   }
   else if (ELEM(ptr->type, &RNA_Curve, &RNA_TextCurve)) {
-    node_identifier.id = (ID *)ptr->id.data;
+    node_identifier.id = ptr->owner_id;
     node_identifier.type = NodeType::GEOMETRY;
     return node_identifier;
   }
   else if (ELEM(ptr->type, &RNA_BezierSplinePoint, &RNA_SplinePoint)) {
-    node_identifier.id = (ID *)ptr->id.data;
+    node_identifier.id = ptr->owner_id;
     node_identifier.type = NodeType::GEOMETRY;
     return node_identifier;
   }

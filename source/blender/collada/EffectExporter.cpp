@@ -46,8 +46,9 @@ static std::string getActiveUVLayerName(Object *ob)
   Mesh *me = (Mesh *)ob->data;
 
   int num_layers = CustomData_number_of_layers(&me->ldata, CD_MLOOPUV);
-  if (num_layers)
+  if (num_layers) {
     return std::string(bc_CustomData_get_active_layer_name(&me->ldata, CD_MLOOPUV));
+  }
 
   return "";
 }
@@ -67,8 +68,9 @@ bool EffectsExporter::hasEffects(Scene *sce)
       Material *ma = give_current_material(ob, a + 1);
 
       // no material, but check all of the slots
-      if (!ma)
+      if (!ma) {
         continue;
+      }
 
       return true;
     }
@@ -99,15 +101,15 @@ void EffectsExporter::set_shader_type(COLLADASW::EffectProfile &ep, Material *ma
 
 void EffectsExporter::set_transparency(COLLADASW::EffectProfile &ep, Material *ma)
 {
-  COLLADASW::ColorOrTexture cot = bc_get_base_color(ma);
-  float transparency = cot.getColor().getAlpha();
-  if (transparency < 1) {
-    // Tod: because we are in A_ONE mode transparency is calculated like this:
-    COLLADASW::ColorOrTexture cot = getcol(1.0f, 1.0f, 1.0f, transparency);
-    ep.setTransparent(cot);
+  double alpha = bc_get_alpha(ma);
+  if (alpha < 1) {
+    // workaround use <transparent> to avoid wrong handling of <transparency> by other tools
+    COLLADASW::ColorOrTexture cot = bc_get_cot(0, 0, 0, alpha);
+    ep.setTransparent(cot, false, "alpha");
     ep.setOpaque(COLLADASW::EffectProfile::A_ONE);
   }
 }
+
 void EffectsExporter::set_diffuse_color(COLLADASW::EffectProfile &ep, Material *ma)
 {
   // get diffuse color
@@ -115,15 +117,49 @@ void EffectsExporter::set_diffuse_color(COLLADASW::EffectProfile &ep, Material *
   ep.setDiffuse(cot, false, "diffuse");
 }
 
+void EffectsExporter::set_ambient(COLLADASW::EffectProfile &ep, Material *ma)
+{
+  // get diffuse color
+  COLLADASW::ColorOrTexture cot = bc_get_ambient(ma);
+  ep.setAmbient(cot, false, "ambient");
+}
+void EffectsExporter::set_specular(COLLADASW::EffectProfile &ep, Material *ma)
+{
+  // get diffuse color
+  COLLADASW::ColorOrTexture cot = bc_get_specular(ma);
+  ep.setSpecular(cot, false, "specular");
+}
+void EffectsExporter::set_reflective(COLLADASW::EffectProfile &ep, Material *ma)
+{
+  // get diffuse color
+  COLLADASW::ColorOrTexture cot = bc_get_reflective(ma);
+  ep.setReflective(cot, false, "reflective");
+}
+
 void EffectsExporter::set_reflectivity(COLLADASW::EffectProfile &ep, Material *ma)
 {
   double reflectivity = bc_get_reflectivity(ma);
-  ep.setReflectivity(reflectivity, false, "specular");
+  if (reflectivity > 0.0) {
+    ep.setReflectivity(reflectivity, false, "specular");
+  }
 }
 
 void EffectsExporter::set_emission(COLLADASW::EffectProfile &ep, Material *ma)
 {
-  // not yet supported (needs changes in principled shader
+  COLLADASW::ColorOrTexture cot = bc_get_emission(ma);
+  ep.setEmission(cot, false, "emission");
+}
+
+void EffectsExporter::set_ior(COLLADASW::EffectProfile &ep, Material *ma)
+{
+  double alpha = bc_get_ior(ma);
+  ep.setIndexOfRefraction(alpha, false, "ior");
+}
+
+void EffectsExporter::set_shininess(COLLADASW::EffectProfile &ep, Material *ma)
+{
+  double shininess = bc_get_shininess(ma);
+  ep.setShininess(shininess, false, "shininess");
 }
 
 void EffectsExporter::get_images(Material *ma, KeyImageMap &material_image_map)
@@ -179,14 +215,20 @@ void EffectsExporter::operator()(Material *ma, Object *ob)
   COLLADASW::EffectProfile ep(mSW);
   ep.setProfileType(COLLADASW::EffectProfile::COMMON);
   ep.openProfile();
-  set_shader_type(ep, ma);
+  set_shader_type(ep, ma);  // creates a Lambert Shader for now
 
   COLLADASW::ColorOrTexture cot;
 
-  set_transparency(ep, ma);
   set_diffuse_color(ep, ma);
-  set_reflectivity(ep, ma);
   set_emission(ep, ma);
+  set_ior(ep, ma);
+  set_reflectivity(ep, ma);
+  set_transparency(ep, ma);
+
+  /* TODO: */
+  // set_shininess(ep, ma); shininess not supported for lambert
+  // set_ambient(ep, ma);
+  // set_specular(ep, ma);
 
   get_images(ma, material_image_map);
   std::string active_uv(getActiveUVLayerName(ob));
@@ -199,8 +241,9 @@ void EffectsExporter::operator()(Material *ma, Object *ob)
     Image *ima = t->tex->ima;
 
     // Image not set for texture
-    if (!ima)
+    if (!ima) {
       continue;
+    }
 
     std::string key(id_name(ima));
     key = translate_id(key);
@@ -237,7 +280,7 @@ void EffectsExporter::operator()(Material *ma, Object *ob)
     int i = im_samp_map[key];
     std::string uvname = strlen(t->uvname) ? t->uvname : active_uv;
     COLLADASW::Sampler *sampler = (COLLADASW::Sampler *)
-        samp_surf[i];  // possibly uninitialised memory ...
+        samp_surf[i];  // possibly uninitialized memory ...
     writeTextures(ep, key, sampler, t, ima, uvname);
   }
 #endif

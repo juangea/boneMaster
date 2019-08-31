@@ -120,8 +120,8 @@ class TOPBAR_PT_gpencil_layers(Panel):
 
             srow = col.row(align=True)
             srow.prop(gpl, "opacity", text="Opacity", slider=True)
-            srow.prop(gpl, "clamp_layer", text="",
-                      icon='MOD_MASK' if gpl.clamp_layer else 'LAYER_ACTIVE')
+            srow.prop(gpl, "mask_layer", text="",
+                      icon='MOD_MASK' if gpl.mask_layer else 'LAYER_ACTIVE')
 
             srow = col.row(align=True)
             srow.prop(gpl, "use_solo_mode", text="Show Only On Keyframed")
@@ -154,10 +154,13 @@ class TOPBAR_MT_editor_menus(Menu):
     bl_idname = "TOPBAR_MT_editor_menus"
     bl_label = ""
 
-    def draw(self, _context):
+    def draw(self, context):
         layout = self.layout
 
-        layout.menu("TOPBAR_MT_app", text="", icon='BLENDER')
+        if context.area.show_menus:
+            layout.menu("TOPBAR_MT_app", text="", icon='BLENDER')
+        else:
+            layout.menu("TOPBAR_MT_app", text="Blender")
 
         layout.menu("TOPBAR_MT_file")
         layout.menu("TOPBAR_MT_edit")
@@ -171,9 +174,8 @@ class TOPBAR_MT_editor_menus(Menu):
 class TOPBAR_MT_app(Menu):
     bl_label = "Blender"
 
-    def draw(self, context):
+    def draw(self, _context):
         layout = self.layout
-        prefs = context.preferences
 
         layout.operator("wm.splash")
 
@@ -235,9 +237,6 @@ class TOPBAR_MT_file(Menu):
 
         layout.separator()
 
-        layout.operator_context = 'EXEC_AREA'
-        if bpy.data.is_dirty:
-            layout.operator_context = 'INVOKE_SCREEN'  # quit dialog
         layout.operator("wm.quit_blender", text="Quit", icon='QUIT')
 
 
@@ -309,7 +308,7 @@ class TOPBAR_MT_file_new(Menu):
 class TOPBAR_MT_file_recover(Menu):
     bl_label = "Recover"
 
-    def draw(self, context):
+    def draw(self, _context):
         layout = self.layout
 
         layout.operator("wm.recover_last_session", text="Last Session")
@@ -338,34 +337,19 @@ class TOPBAR_MT_file_defaults(Menu):
         if app_template:
             props.app_template = app_template
 
-        if prefs.use_preferences_save:
-            props = layout.operator(
-                "wm.read_factory_settings",
-                text="Load Factory Settings (Temporary)"
-            )
-            if app_template:
-                props.app_template = app_template
-            props.use_temporary_preferences = True
-
 
 class TOPBAR_MT_app_about(Menu):
     bl_label = "About"
 
-    def draw(self, context):
+    def draw(self, _context):
         layout = self.layout
 
-        layout.operator(
-            "wm.url_open", text="Release Notes", icon='URL',
-        ).url = "https://www.blender.org/download/releases/%d-%d/" % bpy.app.version[:2]
+        layout.operator("wm.url_open_preset", text="Release Notes", icon='URL').type = 'RELEASE_NOTES'
 
         layout.separator()
 
-        layout.operator(
-            "wm.url_open", text="Blender Website", icon='URL',
-        ).url = "https://www.blender.org/"
-        layout.operator(
-            "wm.url_open", text="Credits", icon='URL',
-        ).url = "https://www.blender.org/about/credits/"
+        layout.operator("wm.url_open_preset", text="Blender Website", icon='URL').type = 'BLENDER'
+        layout.operator("wm.url_open", text="Credits", icon='URL').type = 'CREDITS'
 
         layout.separator()
 
@@ -377,12 +361,10 @@ class TOPBAR_MT_app_about(Menu):
 class TOPBAR_MT_app_support(Menu):
     bl_label = "Support Blender"
 
-    def draw(self, context):
+    def draw(self, _context):
         layout = self.layout
 
-        layout.operator(
-            "wm.url_open", text="Development Fund", icon='URL',
-        ).url = "https://fund.blender.org"
+        layout.operator("wm.url_open_preset", text="Development Fund", icon='FUND').type = 'FUND'
 
         layout.separator()
 
@@ -575,17 +557,12 @@ class TOPBAR_MT_help(Menu):
     bl_label = "Help"
 
     def draw(self, context):
-        # If 'url_prefill_from_blender' becomes slow it could be made into a separate operator
-        # to avoid constructing the bug report just to show this menu.
-        from bl_ui_utils.bug_report_url import url_prefill_from_blender
-
         layout = self.layout
 
         show_developer = context.preferences.view.show_developer_ui
 
-        layout.operator(
-            "wm.url_open", text="Manual", icon='HELP',
-        ).url = "https://docs.blender.org/manual/en/dev/"
+        layout.operator("wm.url_open_preset", text="Manual", icon='HELP',).type = 'MANUAL'
+
         layout.operator(
             "wm.url_open", text="Tutorials", icon='URL',
         ).url = "https://www.blender.org/tutorials"
@@ -617,9 +594,7 @@ class TOPBAR_MT_help(Menu):
 
         layout.separator()
 
-        layout.operator(
-            "wm.url_open", text="Report a Bug", icon='URL',
-        ).url = url_prefill_from_blender()
+        layout.operator("wm.url_open_preset", text="Report a Bug", icon='URL').type = 'BUG'
 
         layout.separator()
 

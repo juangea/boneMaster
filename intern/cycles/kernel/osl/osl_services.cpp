@@ -81,6 +81,7 @@ ustring OSLRenderServices::u_screen("screen");
 ustring OSLRenderServices::u_raster("raster");
 ustring OSLRenderServices::u_ndc("NDC");
 ustring OSLRenderServices::u_object_location("object:location");
+ustring OSLRenderServices::u_object_color("object:color");
 ustring OSLRenderServices::u_object_index("object:index");
 ustring OSLRenderServices::u_geom_dupli_generated("geom:dupli_generated");
 ustring OSLRenderServices::u_geom_dupli_uv("geom:dupli_uv");
@@ -617,7 +618,7 @@ static bool get_primitive_attribute(KernelGlobals *kg,
     return set_attribute_float3(fval, type, derivatives, val);
   }
   else if (attr.type == TypeFloat2) {
-    float2 fval[2];
+    float2 fval[3];
     fval[0] = primitive_attribute_float2(
         kg, sd, attr.desc, (derivatives) ? &fval[1] : NULL, (derivatives) ? &fval[2] : NULL);
     return set_attribute_float2(fval, type, derivatives, val);
@@ -668,6 +669,10 @@ bool OSLRenderServices::get_object_standard_attribute(
     float3 f = object_location(kg, sd);
     return set_attribute_float3(f, type, derivatives, val);
   }
+  else if (name == u_object_color) {
+    float3 f = object_color(kg, sd->object);
+    return set_attribute_float3(f, type, derivatives, val);
+  }
   else if (name == u_object_index) {
     float f = object_pass_id(kg, sd->object);
     return set_attribute_float(f, type, derivatives, val);
@@ -697,7 +702,7 @@ bool OSLRenderServices::get_object_standard_attribute(
   }
   else if (name == u_particle_random) {
     int particle_id = object_particle_id(kg, sd->object);
-    float f = hash_int_01(particle_index(kg, particle_id));
+    float f = hash_uint2_to_float(particle_index(kg, particle_id), 0);
     return set_attribute_float(f, type, derivatives, val);
   }
 
@@ -1392,9 +1397,16 @@ bool OSLRenderServices::trace(TraceOpt &options,
   tracedata->init = true;
   tracedata->sd.osl_globals = sd->osl_globals;
 
+  KernelGlobals *kg = sd->osl_globals;
+
+  /* Can't raytrace from shaders like displacement, before BVH exists. */
+  if (kernel_data.bvh.bvh_layout == BVH_LAYOUT_NONE) {
+    return false;
+  }
+
   /* Raytrace, leaving out shadow opaque to avoid early exit. */
   uint visibility = PATH_RAY_ALL_VISIBILITY - PATH_RAY_SHADOW_OPAQUE;
-  return scene_intersect(sd->osl_globals, ray, visibility, &tracedata->isect);
+  return scene_intersect(kg, &ray, visibility, &tracedata->isect);
 }
 
 bool OSLRenderServices::getmessage(OSL::ShaderGlobals *sg,

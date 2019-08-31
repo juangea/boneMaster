@@ -205,7 +205,7 @@ static void draw_fcurve_keyframe_vertices(FCurve *fcu, View2D *v2d, bool edit, u
 {
   immBindBuiltinProgram(GPU_SHADER_2D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_AA);
 
-  immUniform1f("size", UI_GetThemeValuef(TH_VERTEX_SIZE) * U.pixelsize);
+  immUniform1f("size", UI_GetThemeValuef(TH_VERTEX_SIZE) * U.dpi_fac);
 
   draw_fcurve_selected_keyframe_vertices(fcu, v2d, edit, false, pos);
   draw_fcurve_selected_keyframe_vertices(fcu, v2d, edit, true, pos);
@@ -269,8 +269,8 @@ static void draw_fcurve_handle_vertices(FCurve *fcu,
   immBindBuiltinProgram(GPU_SHADER_2D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_OUTLINE_AA);
 
   /* set handle size */
-  immUniform1f("size", (1.4f * UI_GetThemeValuef(TH_HANDLE_VERTEX_SIZE)) * U.pixelsize);
-  immUniform1f("outlineWidth", 1.5f * U.pixelsize);
+  immUniform1f("size", (1.4f * UI_GetThemeValuef(TH_HANDLE_VERTEX_SIZE)) * U.dpi_fac);
+  immUniform1f("outlineWidth", 1.5f * U.dpi_fac);
 
   draw_fcurve_selected_handle_vertices(fcu, v2d, false, sel_handle_only, pos);
   draw_fcurve_selected_handle_vertices(fcu, v2d, true, sel_handle_only, pos);
@@ -292,7 +292,7 @@ static void draw_fcurve_vertices(ARegion *ar, FCurve *fcu, bool do_handles, bool
   uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
 
   GPU_blend(true);
-  GPU_enable_program_point_size();
+  GPU_program_point_size(true);
 
   /* draw the two handles first (if they're shown, the curve doesn't
    * have just a single keyframe, and the curve is being edited) */
@@ -303,7 +303,7 @@ static void draw_fcurve_vertices(ARegion *ar, FCurve *fcu, bool do_handles, bool
   /* draw keyframes over the handles */
   draw_fcurve_keyframe_vertices(fcu, v2d, !(fcu->flag & FCURVE_PROTECTED), pos);
 
-  GPU_disable_program_point_size();
+  GPU_program_point_size(false);
   GPU_blend(false);
 }
 
@@ -721,7 +721,7 @@ static void draw_fcurve_curve_bezts(
       v1[1] = prevbezt->vec[1][1];
     }
     else if (prevbezt->ipo == BEZT_IPO_LIN) {
-      /* extrapolate linear dosnt use the handle, use the next points center instead */
+      /* extrapolate linear doesn't use the handle, use the next points center instead */
       fac = (prevbezt->vec[1][0] - bezt->vec[1][0]) / (prevbezt->vec[1][0] - v1[0]);
       if (fac) {
         fac = 1.0f / fac;
@@ -840,7 +840,7 @@ static void draw_fcurve_curve_bezts(
       v1[1] = prevbezt->vec[1][1];
     }
     else if (prevbezt->ipo == BEZT_IPO_LIN) {
-      /* extrapolate linear dosnt use the handle, use the previous points center instead */
+      /* extrapolate linear doesn't use the handle, use the previous points center instead */
       bezt = prevbezt - 1;
       fac = (prevbezt->vec[1][0] - bezt->vec[1][0]) / (prevbezt->vec[1][0] - v1[0]);
       if (fac) {

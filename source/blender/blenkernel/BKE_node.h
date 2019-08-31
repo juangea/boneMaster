@@ -59,7 +59,6 @@ struct RenderData;
 struct Scene;
 struct SpaceNode;
 struct Tex;
-struct ViewRender;
 struct bContext;
 struct bNode;
 struct bNodeExecContext;
@@ -225,12 +224,14 @@ typedef struct bNodeType {
   /// Free the node instance.
   void (*freefunc)(struct bNode *node);
   /// Make a copy of the node instance.
-  void (*copyfunc)(struct bNodeTree *dest_ntree, struct bNode *dest_node, struct bNode *src_node);
+  void (*copyfunc)(struct bNodeTree *dest_ntree,
+                   struct bNode *dest_node,
+                   const struct bNode *src_node);
 
   /* Registerable API callback versions, called in addition to C callbacks */
   void (*initfunc_api)(const struct bContext *C, struct PointerRNA *ptr);
   void (*freefunc_api)(struct PointerRNA *ptr);
-  void (*copyfunc_api)(struct PointerRNA *ptr, struct bNode *src_node);
+  void (*copyfunc_api)(struct PointerRNA *ptr, const struct bNode *src_node);
 
   /* can this node type be added to a node tree */
   bool (*poll)(struct bNodeType *ntype, struct bNodeTree *nodetree);
@@ -308,9 +309,8 @@ typedef struct bNodeTreeType {
   /* callbacks */
   void (*free_cache)(struct bNodeTree *ntree);
   void (*free_node_cache)(struct bNodeTree *ntree, struct bNode *node);
-  void (*foreach_nodeclass)(struct Scene *scene,
-                            void *calldata,
-                            bNodeClassCallback func); /* iteration over all node classes */
+  /* Iteration over all node classes. */
+  void (*foreach_nodeclass)(struct Scene *scene, void *calldata, bNodeClassCallback func);
   /* Check visibility in the node editor */
   bool (*poll)(const struct bContext *C, struct bNodeTreeType *ntreetype);
   /* Select a node tree from the context */
@@ -384,6 +384,7 @@ void ntreeUserIncrefID(struct bNodeTree *ntree);
 void ntreeUserDecrefID(struct bNodeTree *ntree);
 
 struct bNodeTree *ntreeFromID(const struct ID *id);
+struct ID *BKE_node_tree_find_owner_ID(struct Main *bmain, struct bNodeTree *ntree);
 
 void ntreeMakeLocal(struct Main *bmain,
                     struct bNodeTree *ntree,
@@ -538,7 +539,23 @@ void nodeRemoveNode(struct Main *bmain,
                     struct bNode *node,
                     bool do_id_user);
 
-struct bNode *BKE_node_copy_ex(struct bNodeTree *ntree, struct bNode *node_src, const int flag);
+struct bNode *BKE_node_copy_ex(struct bNodeTree *ntree,
+                               const struct bNode *node_src,
+                               const int flag);
+
+/* Same as BKE_node_copy_ex() but stores pointers to a new node and its sockets in the source
+ * node.
+ *
+ * NOTE: DANGER ZONE!
+ *
+ * TODO(sergey): Maybe it's better to make BKE_node_copy_ex() return a mapping from old node and
+ * sockets to new one. */
+struct bNode *BKE_node_copy_store_new_pointers(struct bNodeTree *ntree,
+                                               struct bNode *node_src,
+                                               const int flag);
+struct bNodeTree *ntreeCopyTree_ex_new_pointers(const struct bNodeTree *ntree,
+                                                struct Main *bmain,
+                                                const bool do_id_user);
 
 struct bNodeLink *nodeAddLink(struct bNodeTree *ntree,
                               struct bNode *fromnode,
@@ -598,6 +615,7 @@ void nodeUpdateInternalLinks(struct bNodeTree *ntree, struct bNode *node);
 
 int nodeSocketIsHidden(struct bNodeSocket *sock);
 void ntreeTagUsedSockets(struct bNodeTree *ntree);
+void nodeSetSocketAvailability(struct bNodeSocket *sock, bool is_available);
 
 /* Node Clipboard */
 void BKE_node_clipboard_init(struct bNodeTree *ntree);
@@ -730,7 +748,7 @@ void node_type_storage(struct bNodeType *ntype,
                        void (*freefunc)(struct bNode *node),
                        void (*copyfunc)(struct bNodeTree *dest_ntree,
                                         struct bNode *dest_node,
-                                        struct bNode *src_node));
+                                        const struct bNode *src_node));
 void node_type_label(
     struct bNodeType *ntype,
     void (*labelfunc)(struct bNodeTree *ntree, struct bNode *, char *label, int maxlen));
@@ -877,7 +895,7 @@ void BKE_nodetree_remove_layer_n(struct bNodeTree *ntree,
 #define SH_NODE_CURVE_RGB 111
 #define SH_NODE_CAMERA 114
 #define SH_NODE_MATH 115
-#define SH_NODE_VECT_MATH 116
+#define SH_NODE_VECTOR_MATH 116
 #define SH_NODE_SQUEEZE 117
 //#define SH_NODE_MATERIAL_EXT  118
 #define SH_NODE_INVERT 119
@@ -958,6 +976,10 @@ void BKE_nodetree_remove_layer_n(struct bNodeTree *ntree,
 #define SH_NODE_VOLUME_PRINCIPLED 200
 /* 201..700 occupied by other node types, continue from 701 */
 #define SH_NODE_BSDF_HAIR_PRINCIPLED 701
+#define SH_NODE_MAP_RANGE 702
+#define SH_NODE_CLAMP 703
+#define SH_NODE_TEX_WHITE_NOISE 704
+#define SH_NODE_VOLUME_INFO 705
 
 /* custom defines options for Material node */
 #define SH_NODE_MAT_DIFF 1
@@ -1110,6 +1132,7 @@ void ntreeGPUMaterialNodes(struct bNodeTree *localtree,
 #define CMP_NODE_CORNERPIN 321
 #define CMP_NODE_SWITCH_VIEW 322
 #define CMP_NODE_CRYPTOMATTE 323
+#define CMP_NODE_DENOISE 324
 
 /* channel toggles */
 #define CMP_CHAN_RGB 1

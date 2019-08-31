@@ -960,7 +960,7 @@ void blo_do_versions_250(FileData *fd, Library *lib, Main *bmain)
         bPoseChannel *pchan;
 
         for (pchan = ob->pose->chanbase.first; pchan; pchan = pchan->next) {
-          /* just need to initalise rotation axis properly... */
+          /* just need to initialise rotation axis properly... */
           pchan->rotAxis[1] = 1.0f;
         }
       }
@@ -1555,7 +1555,7 @@ void blo_do_versions_250(FileData *fd, Library *lib, Main *bmain)
         for (sl = sa->spacedata.first; sl; sl = sl->next) {
           if (sl->spacetype == SPACE_IMAGE) {
             SpaceImage *sima = (SpaceImage *)sl;
-            scopes_new(&sima->scopes);
+            BKE_scopes_new(&sima->scopes);
           }
         }
       }
@@ -1659,8 +1659,8 @@ void blo_do_versions_250(FileData *fd, Library *lib, Main *bmain)
     }
 
     for (tex = bmain->textures.first; tex; tex = tex->id.next) {
-      /* if youre picky, this isn't correct until we do a version bump
-       * since you could set saturation to be 0.0*/
+      /* If you're picky, this isn't correct until we do a version bump
+       * since you could set saturation to be 0.0. */
       if (tex->saturation == 0.0f) {
         tex->saturation = 1.0f;
       }
@@ -2030,8 +2030,8 @@ void blo_do_versions_250(FileData *fd, Library *lib, Main *bmain)
         }
       }
 
-      /* Externl group node socket need to adjust their own_index to point at
-       * associated ntree inputs/outputs internal sockets. This happens in
+      /* External group node socket need to adjust their own_index to point at
+       * associated 'ntree' inputs/outputs internal sockets. This happens in
        * do_versions_after_linking_250, after lib linking. */
     }
   }
@@ -2080,11 +2080,12 @@ void blo_do_versions_250(FileData *fd, Library *lib, Main *bmain)
     }
   }
 
-  if (bmain->versionfile < 256 || (bmain->versionfile == 256 && bmain->subversionfile < 6)) {
-    Mesh *me;
-
-    for (me = bmain->meshes.first; me; me = me->id.next) {
-      BKE_mesh_calc_normals_tessface(me->mvert, me->totvert, me->mface, me->totface, NULL);
+  if (0) {
+    if (bmain->versionfile < 256 || (bmain->versionfile == 256 && bmain->subversionfile < 6)) {
+      for (Mesh *me = bmain->meshes.first; me; me = me->id.next) {
+        /* Vertex normal calculation from legacy 'MFace' has been removed.
+         * update after calculating polygons in file reading code instead. */
+      }
     }
   }
 

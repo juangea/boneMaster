@@ -716,7 +716,7 @@ void colormanagement_exit(void)
   }
 
   if (global_glsl_state.curve_mapping) {
-    curvemapping_free(global_glsl_state.curve_mapping);
+    BKE_curvemapping_free(global_glsl_state.curve_mapping);
   }
 
   if (global_glsl_state.curve_mapping_settings.lut) {
@@ -1029,14 +1029,14 @@ void IMB_colormanagement_init_default_view_settings(
 static void curve_mapping_apply_pixel(CurveMapping *curve_mapping, float *pixel, int channels)
 {
   if (channels == 1) {
-    pixel[0] = curvemap_evaluateF(curve_mapping->cm, pixel[0]);
+    pixel[0] = BKE_curvemap_evaluateF(curve_mapping->cm, pixel[0]);
   }
   else if (channels == 2) {
-    pixel[0] = curvemap_evaluateF(curve_mapping->cm, pixel[0]);
-    pixel[1] = curvemap_evaluateF(curve_mapping->cm, pixel[1]);
+    pixel[0] = BKE_curvemap_evaluateF(curve_mapping->cm, pixel[0]);
+    pixel[1] = BKE_curvemap_evaluateF(curve_mapping->cm, pixel[1]);
   }
   else {
-    curvemapping_evaluate_premulRGBF(curve_mapping, pixel, pixel);
+    BKE_curvemapping_evaluate_premulRGBF(curve_mapping, pixel, pixel);
   }
 }
 
@@ -2176,13 +2176,14 @@ void IMB_colormanagement_colorspace_to_scene_linear(float *buffer,
   }
 }
 
-void IMB_colormanagement_imbuf_to_srgb_texture(unsigned char *out_buffer,
+void IMB_colormanagement_imbuf_to_byte_texture(unsigned char *out_buffer,
                                                const int offset_x,
                                                const int offset_y,
                                                const int width,
                                                const int height,
                                                const struct ImBuf *ibuf,
-                                               const bool compress_as_srgb)
+                                               const bool compress_as_srgb,
+                                               const bool store_premultiplied)
 {
   /* Convert byte buffer for texture storage on the GPU. These have builtin
    * support for converting sRGB to linear, which allows us to store textures
@@ -2195,9 +2196,9 @@ void IMB_colormanagement_imbuf_to_srgb_texture(unsigned char *out_buffer,
     processor = colorspace_to_scene_linear_processor(ibuf->rect_colorspace);
   }
 
-  /* TODO(brecht): make this multithreaded, or at least process in batches. */
+  /* TODO(brecht): make this multi-threaded, or at least process in batches. */
   const unsigned char *in_buffer = (unsigned char *)ibuf->rect;
-  const bool use_premultiply = IMB_alpha_affects_rgb(ibuf);
+  const bool use_premultiply = IMB_alpha_affects_rgb(ibuf) && store_premultiplied;
 
   for (int y = 0; y < height; y++) {
     const size_t in_offset = (offset_y + y) * ibuf->x + offset_x;
@@ -2234,6 +2235,58 @@ void IMB_colormanagement_imbuf_to_srgb_texture(unsigned char *out_buffer,
         out[1] = in[1];
         out[2] = in[2];
         out[3] = in[3];
+      }
+    }
+  }
+}
+
+void IMB_colormanagement_imbuf_to_float_texture(float *out_buffer,
+                                                const int offset_x,
+                                                const int offset_y,
+                                                const int width,
+                                                const int height,
+                                                const struct ImBuf *ibuf,
+                                                const bool store_premultiplied)
+{
+  /* Float texture are stored in scene linear color space, with premultiplied
+   * alpha depending on the image alpha mode. */
+  const float *in_buffer = ibuf->rect_float;
+  const int in_channels = ibuf->channels;
+  const bool use_unpremultiply = IMB_alpha_affects_rgb(ibuf) && !store_premultiplied;
+
+  for (int y = 0; y < height; y++) {
+    const size_t in_offset = (offset_y + y) * ibuf->x + offset_x;
+    const size_t out_offset = y * width;
+    const float *in = in_buffer + in_offset * 4;
+    float *out = out_buffer + out_offset * 4;
+
+    if (in_channels == 1) {
+      /* Copy single channel. */
+      for (int x = 0; x < width; x++, in += 1, out += 4) {
+        out[0] = in[0];
+        out[1] = in[0];
+        out[2] = in[0];
+        out[3] = in[0];
+      }
+    }
+    else if (in_channels == 3) {
+      /* Copy RGB. */
+      for (int x = 0; x < width; x++, in += 3, out += 4) {
+        out[0] = in[0];
+        out[1] = in[1];
+        out[2] = in[2];
+        out[3] = 1.0f;
+      }
+    }
+    else if (in_channels == 4) {
+      /* Copy or convert RGBA. */
+      if (use_unpremultiply) {
+        for (int x = 0; x < width; x++, in += 4, out += 4) {
+          premul_to_straight_v4_v4(out, in);
+        }
+      }
+      else {
+        memcpy(out, in, sizeof(float) * 4 * width);
       }
     }
   }
@@ -2614,8 +2667,7 @@ unsigned char *IMB_display_buffer_acquire(ImBuf *ibuf,
                                                  ibuf->invalid_rect.xmin,
                                                  ibuf->invalid_rect.ymin,
                                                  ibuf->invalid_rect.xmax,
-                                                 ibuf->invalid_rect.ymax,
-                                                 false);
+                                                 ibuf->invalid_rect.ymax);
     }
 
     BLI_rcti_init(&ibuf->invalid_rect, 0, 0, 0, 0);
@@ -3473,7 +3525,6 @@ static void imb_partial_display_buffer_update_ex(
     int ymin,
     int xmax,
     int ymax,
-    bool copy_display_to_byte_buffer,
     bool do_threads)
 {
   ColormanageCacheViewSettings cache_view_settings;
@@ -3509,12 +3560,6 @@ static void imb_partial_display_buffer_update_ex(
     ibuf->display_buffer_flags[display_index] |= view_flag;
 
     BLI_thread_unlock(LOCK_COLORMANAGE);
-  }
-
-  if (display_buffer == NULL) {
-    if (copy_display_to_byte_buffer) {
-      display_buffer = (unsigned char *)ibuf->rect;
-    }
   }
 
   if (display_buffer) {
@@ -3575,15 +3620,6 @@ static void imb_partial_display_buffer_update_ex(
 
     IMB_display_buffer_release(cache_handle);
   }
-
-  if (copy_display_to_byte_buffer && (unsigned char *)ibuf->rect != display_buffer) {
-    int y;
-    for (y = ymin; y < ymax; y++) {
-      size_t index = (size_t)y * buffer_width * 4;
-      memcpy(
-          (unsigned char *)ibuf->rect + index, display_buffer + index, (size_t)(xmax - xmin) * 4);
-    }
-  }
 }
 
 void IMB_partial_display_buffer_update(ImBuf *ibuf,
@@ -3597,8 +3633,7 @@ void IMB_partial_display_buffer_update(ImBuf *ibuf,
                                        int xmin,
                                        int ymin,
                                        int xmax,
-                                       int ymax,
-                                       bool copy_display_to_byte_buffer)
+                                       int ymax)
 {
   imb_partial_display_buffer_update_ex(ibuf,
                                        linear_buffer,
@@ -3612,7 +3647,6 @@ void IMB_partial_display_buffer_update(ImBuf *ibuf,
                                        ymin,
                                        xmax,
                                        ymax,
-                                       copy_display_to_byte_buffer,
                                        false);
 }
 
@@ -3628,8 +3662,7 @@ void IMB_partial_display_buffer_update_threaded(
     int xmin,
     int ymin,
     int xmax,
-    int ymax,
-    bool copy_display_to_byte_buffer)
+    int ymax)
 {
   int width = xmax - xmin;
   int height = ymax - ymin;
@@ -3646,7 +3679,6 @@ void IMB_partial_display_buffer_update_threaded(
                                        ymin,
                                        xmax,
                                        ymax,
-                                       copy_display_to_byte_buffer,
                                        do_threads);
 }
 
@@ -3696,8 +3728,8 @@ ColormanageProcessor *IMB_colormanagement_display_processor_new(
                                                             global_role_scene_linear);
 
   if (applied_view_settings->flag & COLORMANAGE_VIEW_USE_CURVES) {
-    cm_processor->curve_mapping = curvemapping_copy(applied_view_settings->curve_mapping);
-    curvemapping_premultiply(cm_processor->curve_mapping, false);
+    cm_processor->curve_mapping = BKE_curvemapping_copy(applied_view_settings->curve_mapping);
+    BKE_curvemapping_premultiply(cm_processor->curve_mapping, false);
   }
 
   return cm_processor;
@@ -3722,7 +3754,7 @@ ColormanageProcessor *IMB_colormanagement_colorspace_processor_new(const char *f
 void IMB_colormanagement_processor_apply_v4(ColormanageProcessor *cm_processor, float pixel[4])
 {
   if (cm_processor->curve_mapping) {
-    curvemapping_evaluate_premulRGBF(cm_processor->curve_mapping, pixel, pixel);
+    BKE_curvemapping_evaluate_premulRGBF(cm_processor->curve_mapping, pixel, pixel);
   }
 
   if (cm_processor->processor) {
@@ -3734,7 +3766,7 @@ void IMB_colormanagement_processor_apply_v4_predivide(ColormanageProcessor *cm_p
                                                       float pixel[4])
 {
   if (cm_processor->curve_mapping) {
-    curvemapping_evaluate_premulRGBF(cm_processor->curve_mapping, pixel, pixel);
+    BKE_curvemapping_evaluate_premulRGBF(cm_processor->curve_mapping, pixel, pixel);
   }
 
   if (cm_processor->processor) {
@@ -3745,7 +3777,7 @@ void IMB_colormanagement_processor_apply_v4_predivide(ColormanageProcessor *cm_p
 void IMB_colormanagement_processor_apply_v3(ColormanageProcessor *cm_processor, float pixel[3])
 {
   if (cm_processor->curve_mapping) {
-    curvemapping_evaluate_premulRGBF(cm_processor->curve_mapping, pixel, pixel);
+    BKE_curvemapping_evaluate_premulRGBF(cm_processor->curve_mapping, pixel, pixel);
   }
 
   if (cm_processor->processor) {
@@ -3838,7 +3870,7 @@ void IMB_colormanagement_processor_apply_byte(
 void IMB_colormanagement_processor_free(ColormanageProcessor *cm_processor)
 {
   if (cm_processor->curve_mapping) {
-    curvemapping_free(cm_processor->curve_mapping);
+    BKE_curvemapping_free(cm_processor->curve_mapping);
   }
   if (cm_processor->processor) {
     OCIO_processorRelease(cm_processor->processor);
@@ -3867,9 +3899,9 @@ static void curve_mapping_to_ocio_settings(CurveMapping *curve_mapping,
 {
   int i;
 
-  curvemapping_initialize(curve_mapping);
-  curvemapping_premultiply(curve_mapping, false);
-  curvemapping_table_RGBA(
+  BKE_curvemapping_initialize(curve_mapping);
+  BKE_curvemapping_premultiply(curve_mapping, false);
+  BKE_curvemapping_table_RGBA(
       curve_mapping, &curve_mapping_settings->lut, &curve_mapping_settings->lut_size);
 
   for (i = 0; i < 4; i++) {
@@ -3932,11 +3964,11 @@ static void update_glsl_display_processor(const ColorManagedViewSettings *view_s
      * We do this by allocating new curve mapping before freeing ol one.
      */
     if (use_curve_mapping) {
-      new_curve_mapping = curvemapping_copy(view_settings->curve_mapping);
+      new_curve_mapping = BKE_curvemapping_copy(view_settings->curve_mapping);
     }
 
     if (global_glsl_state.curve_mapping) {
-      curvemapping_free(global_glsl_state.curve_mapping);
+      BKE_curvemapping_free(global_glsl_state.curve_mapping);
       MEM_freeN(curve_mapping_settings->lut);
       global_glsl_state.curve_mapping = NULL;
       curve_mapping_settings->lut = NULL;

@@ -181,22 +181,22 @@ static void stats_background(void *UNUSED(arg), RenderStats *rs)
   megs_peak_memory = (peak_memory) / (1024.0 * 1024.0);
 
   fprintf(stdout,
-          IFACE_("Fra:%d Mem:%.2fM (%.2fM, Peak %.2fM) "),
+          TIP_("Fra:%d Mem:%.2fM (%.2fM, Peak %.2fM) "),
           rs->cfra,
           megs_used_memory,
           mmap_used_memory,
           megs_peak_memory);
 
   if (rs->curfield) {
-    fprintf(stdout, IFACE_("Field %d "), rs->curfield);
+    fprintf(stdout, TIP_("Field %d "), rs->curfield);
   }
   if (rs->curblur) {
-    fprintf(stdout, IFACE_("Blur %d "), rs->curblur);
+    fprintf(stdout, TIP_("Blur %d "), rs->curblur);
   }
 
   BLI_timecode_string_from_time_simple(
       info_time_str, sizeof(info_time_str), PIL_check_seconds_timer() - rs->starttime);
-  fprintf(stdout, IFACE_("| Time:%s | "), info_time_str);
+  fprintf(stdout, TIP_("| Time:%s | "), info_time_str);
 
   if (rs->infostr) {
     fprintf(stdout, "%s", rs->infostr);
@@ -204,7 +204,7 @@ static void stats_background(void *UNUSED(arg), RenderStats *rs)
   else {
     if (rs->tothalo) {
       fprintf(stdout,
-              IFACE_("Sce: %s Ve:%d Fa:%d Ha:%d La:%d"),
+              TIP_("Sce: %s Ve:%d Fa:%d Ha:%d La:%d"),
               rs->scene_name,
               rs->totvert,
               rs->totface,
@@ -213,7 +213,7 @@ static void stats_background(void *UNUSED(arg), RenderStats *rs)
     }
     else {
       fprintf(stdout,
-              IFACE_("Sce: %s Ve:%d Fa:%d La:%d"),
+              TIP_("Sce: %s Ve:%d Fa:%d La:%d"),
               rs->scene_name,
               rs->totvert,
               rs->totface,
@@ -642,7 +642,7 @@ void RE_FreeRender(Render *re)
   BLI_freelistN(&re->view_layers);
   BLI_freelistN(&re->r.views);
 
-  curvemapping_free_data(&re->r.mblur_shutter_curve);
+  BKE_curvemapping_free_data(&re->r.mblur_shutter_curve);
 
   /* main dbase can already be invalid now, some database-free code checks it */
   re->main = NULL;
@@ -772,12 +772,12 @@ static void re_init_resolution(Render *re, Render *source, int winx, int winy, r
 void render_copy_renderdata(RenderData *to, RenderData *from)
 {
   BLI_freelistN(&to->views);
-  curvemapping_free_data(&to->mblur_shutter_curve);
+  BKE_curvemapping_free_data(&to->mblur_shutter_curve);
 
   *to = *from;
 
   BLI_duplicatelist(&to->views, &from->views);
-  curvemapping_copy_data(&to->mblur_shutter_curve, &from->mblur_shutter_curve);
+  BKE_curvemapping_copy_data(&to->mblur_shutter_curve, &from->mblur_shutter_curve);
 }
 
 /* what doesn't change during entire render sequence */
@@ -1116,7 +1116,7 @@ void *RE_gl_context_get(Render *re)
 void *RE_gpu_context_get(Render *re)
 {
   if (re->gpu_context == NULL) {
-    re->gpu_context = GPU_context_create();
+    re->gpu_context = GPU_context_create(0);
   }
   return re->gpu_context;
 }
@@ -1680,7 +1680,6 @@ static void do_render_all_options(Render *re)
 {
   Object *camera;
   bool render_seq = false;
-  int cfra = re->r.cfra;
 
   re->current_scene_update(re->suh, re->scene);
 
@@ -1691,16 +1690,6 @@ static void do_render_all_options(Render *re)
   /* ensure no images are in memory from previous animated sequences */
   BKE_image_all_free_anim_ibufs(re->main, re->r.cfra);
   BKE_sequencer_all_free_anim_ibufs(re->scene, re->r.cfra);
-
-  /* Update for sequencer and compositing animation.
-   * TODO: ideally we would create a depsgraph with a copy of the scene
-   * like the render engine, but sequencer and compositing do not (yet?)
-   * work with copy-on-write. */
-  BKE_animsys_evaluate_all_animation(re->main, NULL, re->scene, (float)cfra);
-
-  /* Update for masks
-   * (these do not use animsys but own lighter weight structure to define animation). */
-  BKE_mask_evaluate_all_masks(re->main, (float)cfra, true);
 
   if (RE_engine_render(re, 1)) {
     /* in this case external render overrides all */
@@ -2003,8 +1992,8 @@ static int render_initialize_from_main(Render *re,
   winx = (rd->size * rd->xsch) / 100;
   winy = (rd->size * rd->ysch) / 100;
 
-  /* We always render smaller part, inserting it in larger image is compositor bizz,
-   * it uses disprect for it. */
+  /* We always render smaller part, inserting it in larger image is compositor business,
+   * it uses 'disprect' for it. */
   if (scene->r.mode & R_BORDER) {
     disprect.xmin = rd->border.xmin * winx;
     disprect.xmax = rd->border.xmax * winx;
@@ -2071,10 +2060,8 @@ void RE_SetReports(Render *re, ReportList *reports)
 static void render_update_depsgraph(Render *re)
 {
   Scene *scene = re->scene;
-  /* TODO(sergey): This doesn't run any callbacks and doesn't do sound update. But we can not use
-   * BKE_scene_graph_update_for_newframe() because that one builds dependency graph for view layer
-   * and not for the render pipeline. */
   DEG_evaluate_on_framechange(re->main, re->pipeline_depsgraph, CFRA);
+  BKE_scene_update_sound(re->pipeline_depsgraph, re->main);
 }
 
 static void render_init_depsgraph(Render *re)
@@ -2537,8 +2524,14 @@ void RE_RenderAnim(Render *re,
 
       re->movie_ctx_arr[i] = mh->context_create();
 
-      if (!mh->start_movie(
-              re->movie_ctx_arr[i], scene, &re->r, width, height, re->reports, false, suffix)) {
+      if (!mh->start_movie(re->movie_ctx_arr[i],
+                           re->pipeline_scene_eval,
+                           &re->r,
+                           width,
+                           height,
+                           re->reports,
+                           false,
+                           suffix)) {
         is_error = true;
         break;
       }
@@ -2547,6 +2540,7 @@ void RE_RenderAnim(Render *re,
     if (is_error) {
       /* report is handled above */
       re_movie_free_all(re, mh, i + 1);
+      RE_CleanAfterRender(re);
       return;
     }
   }
@@ -2561,7 +2555,7 @@ void RE_RenderAnim(Render *re,
     for (nfra = sfra, scene->r.cfra = sfra; scene->r.cfra <= efra; scene->r.cfra++) {
       char name[FILE_MAX];
 
-      /* Here is a feedback loop exists -- render initialization requires updated
+      /* A feedback loop exists here -- render initialization requires updated
        * render layers settings which could be animated, but scene evaluation for
        * the frame happens later because it depends on what layers are visible to
        * render engine.
@@ -2575,12 +2569,7 @@ void RE_RenderAnim(Render *re,
       {
         float ctime = BKE_scene_frame_get(scene);
         AnimData *adt = BKE_animdata_from_id(&scene->id);
-        /* TODO(sergey): Currently depsgraph is only used to check whether it is an active
-         * edit window or not to deal with unkeyed changes. We don't have depsgraph here yet,
-         * but we also dont' deal with unkeyed changes. But still nice to get proper depsgraph
-         * within tjhe render pipeline, somehow.
-         */
-        BKE_animsys_evaluate_animdata(NULL, scene, &scene->id, adt, ctime, ADT_RECALC_ALL);
+        BKE_animsys_evaluate_animdata(scene, &scene->id, adt, ctime, ADT_RECALC_ALL, false);
       }
 
       render_update_depsgraph(re);
@@ -2744,7 +2733,7 @@ void RE_RenderAnim(Render *re,
 
   BLI_callback_exec(
       re->main, (ID *)scene, G.is_break ? BLI_CB_EVT_RENDER_CANCEL : BLI_CB_EVT_RENDER_COMPLETE);
-  BKE_sound_reset_scene_specs(scene);
+  BKE_sound_reset_scene_specs(re->pipeline_scene_eval);
 
   RE_CleanAfterRender(re);
 

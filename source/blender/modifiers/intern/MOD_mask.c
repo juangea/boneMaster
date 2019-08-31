@@ -138,10 +138,10 @@ static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mes
       return mesh;
     }
 
-    /* Determine whether each vertexgroup is associated with a selected bone or not:
-     * - Each cell is a boolean saying whether bone corresponding to the ith group is selected.
+    /* Determine whether each vertex-group is associated with a selected bone or not:
+     * - Each cell is a boolean saying whether bone corresponding to the i'th group selected.
      * - Groups that don't match a bone are treated as not existing
-     *   (along with the corresponding ungrouped verts).
+     *   (along with the corresponding un-grouped verts).
      */
     bone_select_array = MEM_malloc_arrayN((size_t)defbase_tot, sizeof(char), "mask array");
 
@@ -344,6 +344,20 @@ static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mes
   return result;
 }
 
+static bool isDisabled(const struct Scene *UNUSED(scene),
+                       ModifierData *md,
+                       bool UNUSED(useRenderParams))
+{
+  MaskModifierData *mmd = (MaskModifierData *)md;
+
+  /* The object type check is only needed here in case we have a placeholder
+   * object assigned (because the library containing the armature is missing).
+   *
+   * In other cases it should be impossible to have a type mismatch.
+   */
+  return mmd->ob_arm && mmd->ob_arm->type != OB_ARMATURE;
+}
+
 ModifierTypeInfo modifierType_Mask = {
     /* name */ "Mask",
     /* structName */ "MaskModifierData",
@@ -363,7 +377,7 @@ ModifierTypeInfo modifierType_Mask = {
     /* initData */ NULL,
     /* requiredDataMask */ requiredDataMask,
     /* freeData */ NULL,
-    /* isDisabled */ NULL,
+    /* isDisabled */ isDisabled,
     /* updateDepsgraph */ updateDepsgraph,
     /* dependsOnTime */ NULL,
     /* dependsOnNormals */ NULL,

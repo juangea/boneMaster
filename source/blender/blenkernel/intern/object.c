@@ -361,6 +361,13 @@ static void object_update_from_subsurf_ccg(Object *object)
   if (object->type != OB_MESH) {
     return;
   }
+  /* If object does not own evaluated mesh we can not access it since it might be freed already
+   * (happens on dependency graph free where order of CoW-ed IDs free is undefined).
+   *
+   * Good news is: such mesh does not have modifiers applied, so no need to worry about CCG. */
+  if (!object->runtime.is_mesh_eval_owned) {
+    return;
+  }
   /* Object was never evaluated, so can not have CCG subdivision surface. */
   Mesh *mesh_eval = object->runtime.mesh_eval;
   if (mesh_eval == NULL) {
@@ -422,50 +429,26 @@ static void object_update_from_subsurf_ccg(Object *object)
 /* free data derived from mesh, called when mesh changes or is freed */
 void BKE_object_free_derived_caches(Object *ob)
 {
-  /* Also serves as signal to remake texspace.
-   *
-   * NOTE: This function can be called from threads on different objects
-   * sharing same data datablock. So we need to ensure atomic nature of
-   * data modification here.
-   */
-  if (ob->type == OB_MESH) {
-    Mesh *me = ob->data;
-
-    if (me && me->bb) {
-      atomic_fetch_and_or_int32(&me->bb->flag, BOUNDBOX_DIRTY);
-    }
-  }
-  else if (ELEM(ob->type, OB_SURF, OB_CURVE, OB_FONT)) {
-    Curve *cu = ob->data;
-
-    if (cu && cu->bb) {
-      atomic_fetch_and_or_int32(&cu->bb->flag, BOUNDBOX_DIRTY);
-    }
-  }
-
   MEM_SAFE_FREE(ob->runtime.bb);
 
   object_update_from_subsurf_ccg(ob);
   BKE_object_free_derived_mesh_caches(ob);
 
+  /* Restore initial pointer. */
+  if (ob->runtime.mesh_orig != NULL) {
+    ob->data = ob->runtime.mesh_orig;
+  }
+
   if (ob->runtime.mesh_eval != NULL) {
-    Mesh *mesh_eval = ob->runtime.mesh_eval;
-    /* Restore initial pointer. */
-    if (ob->data == mesh_eval) {
-      ob->data = ob->runtime.mesh_orig;
+    if (ob->runtime.is_mesh_eval_owned) {
+      Mesh *mesh_eval = ob->runtime.mesh_eval;
+      BKE_mesh_eval_delete(mesh_eval);
     }
-    /* Evaluated mesh points to edit mesh, but does not own it. */
-    mesh_eval->edit_mesh = NULL;
-    BKE_mesh_free(mesh_eval);
-    BKE_libblock_free_data(&mesh_eval->id, false);
-    MEM_freeN(mesh_eval);
     ob->runtime.mesh_eval = NULL;
   }
   if (ob->runtime.mesh_deform_eval != NULL) {
     Mesh *mesh_deform_eval = ob->runtime.mesh_deform_eval;
-    BKE_mesh_free(mesh_deform_eval);
-    BKE_libblock_free_data(&mesh_deform_eval->id, false);
-    MEM_freeN(mesh_deform_eval);
+    BKE_mesh_eval_delete(mesh_deform_eval);
     ob->runtime.mesh_deform_eval = NULL;
   }
 
@@ -1428,8 +1411,7 @@ void BKE_object_copy_data(Main *bmain, Object *ob_dst, const Object *ob_src, con
     }
   }
   BKE_object_copy_softbody(ob_dst, ob_src, flag_subdata);
-  ob_dst->rigidbody_object = BKE_rigidbody_copy_object(ob_src, flag_subdata);
-  ob_dst->rigidbody_constraint = BKE_rigidbody_copy_constraint(ob_src, flag_subdata);
+  BKE_rigidbody_object_copy(bmain, ob_dst, ob_src, flag_subdata);
 
   BKE_object_copy_particlesystems(ob_dst, ob_src, flag_subdata);
 
@@ -1512,12 +1494,11 @@ Object *BKE_object_duplicate(Main *bmain, const Object *ob, const int dupflag)
         else
         {
           obn->mat[a] = ID_NEW_SET(obn->mat[a], BKE_material_copy(bmain, obn->mat[a]));
+          if (dupflag & USER_DUP_ACT) {
+            BKE_animdata_copy_id_action(bmain, &obn->mat[a]->id, true);
+          }
         }
         id_us_min(id);
-
-        if (dupflag & USER_DUP_ACT) {
-          BKE_animdata_copy_id_action(bmain, &obn->mat[a]->id, true);
-        }
       }
     }
   }
@@ -1530,12 +1511,10 @@ Object *BKE_object_duplicate(Main *bmain, const Object *ob, const int dupflag)
         else
         {
           psys->part = ID_NEW_SET(psys->part, BKE_particlesettings_copy(bmain, psys->part));
+          if (dupflag & USER_DUP_ACT) {
+            BKE_animdata_copy_id_action(bmain, &psys->part->id, true);
+          }
         }
-
-        if (dupflag & USER_DUP_ACT) {
-          BKE_animdata_copy_id_action(bmain, &psys->part->id, true);
-        }
-
         id_us_min(id);
       }
     }
@@ -1712,6 +1691,9 @@ Object *BKE_object_duplicate(Main *bmain, const Object *ob, const int dupflag)
             else
             {
               (*matarar)[a] = ID_NEW_SET((*matarar)[a], BKE_material_copy(bmain, (*matarar)[a]));
+              if (dupflag & USER_DUP_ACT) {
+                BKE_animdata_copy_id_action(bmain, &(*matarar)[a]->id, true);
+              }
             }
             id_us_min(id);
           }
@@ -1841,7 +1823,7 @@ void BKE_object_copy_proxy_drivers(Object *ob, Object *target)
             else {
               /* only on local objects because this causes indirect links
                * 'a -> b -> c', blend to point directly to a.blend
-               * when a.blend has a proxy thats linked into c.blend  */
+               * when a.blend has a proxy that's linked into c.blend  */
               if (!ID_IS_LINKED(ob)) {
                 id_lib_extern((ID *)dtar->id);
               }
@@ -2244,7 +2226,7 @@ static bool ob_parcurve(Object *ob, Object *par, float mat[4][4])
    * dependency cycles. We can't correct anything from here, since that would
    * cause a threading conflicts.
    *
-   * TODO(sergey): Somce of the legit looking cases like T56619 need to be
+   * TODO(sergey): Some of the legit looking cases like T56619 need to be
    * looked into, and maybe curve cache (and other dependencies) are to be
    * evaluated prior to conversion. */
   if (par->runtime.curve_cache == NULL) {
@@ -2580,7 +2562,8 @@ static void object_where_is_calc_ex(Depsgraph *depsgraph,
 void BKE_object_where_is_calc_time(Depsgraph *depsgraph, Scene *scene, Object *ob, float ctime)
 {
   /* Execute drivers and animation. */
-  BKE_animsys_evaluate_animdata(depsgraph, scene, &ob->id, ob->adt, ctime, ADT_RECALC_ALL);
+  const bool flush_to_original = DEG_is_active(depsgraph);
+  BKE_animsys_evaluate_animdata(scene, &ob->id, ob->adt, ctime, ADT_RECALC_ALL, flush_to_original);
   object_where_is_calc_ex(depsgraph, scene, ob, ctime, NULL, NULL);
 }
 
@@ -3280,40 +3263,6 @@ void BKE_object_sculpt_data_create(Object *ob)
   ob->sculpt->mode_type = ob->mode;
 }
 
-void BKE_object_sculpt_modifiers_changed(Object *ob)
-{
-  SculptSession *ss = ob->sculpt;
-
-  if (ss && ss->building_vp_handle == false) {
-    if (!ss->cache) {
-      /* we free pbvh on changes, except during sculpt since it can't deal with
-       * changing PVBH node organization, we hope topology does not change in
-       * the meantime .. weak */
-      if (ss->pbvh) {
-        BKE_pbvh_free(ss->pbvh);
-        ss->pbvh = NULL;
-      }
-
-      BKE_sculptsession_free_deformMats(ob->sculpt);
-
-      /* In vertex/weight paint, force maps to be rebuilt. */
-      BKE_sculptsession_free_vwpaint_data(ob->sculpt);
-    }
-    else {
-      PBVHNode **nodes;
-      int n, totnode;
-
-      BKE_pbvh_search_gather(ss->pbvh, NULL, NULL, &nodes, &totnode);
-
-      for (n = 0; n < totnode; n++) {
-        BKE_pbvh_node_mark_update(nodes[n]);
-      }
-
-      MEM_freeN(nodes);
-    }
-  }
-}
-
 int BKE_object_obdata_texspace_get(
     Object *ob, short **r_texflag, float **r_loc, float **r_size, float **r_rot)
 {
@@ -3638,7 +3587,7 @@ bool BKE_object_shapekey_free(Main *bmain, Object *ob)
 
   BKE_id_free_us(bmain, key);
 
-  return false;
+  return true;
 }
 
 bool BKE_object_shapekey_remove(Main *bmain, Object *ob, KeyBlock *kb)
@@ -4387,6 +4336,7 @@ bool BKE_object_modifier_update_subframe(Depsgraph *depsgraph,
                                          float frame,
                                          int type)
 {
+  const bool flush_to_original = DEG_is_active(depsgraph);
   ModifierData *md = modifiers_findByType(ob, (ModifierType)type);
   bConstraint *con;
 
@@ -4451,7 +4401,8 @@ bool BKE_object_modifier_update_subframe(Depsgraph *depsgraph,
   /* TODO(sergey): What about animation? */
   ob->id.recalc |= ID_RECALC_ALL;
   if (update_mesh) {
-    BKE_animsys_evaluate_animdata(depsgraph, scene, &ob->id, ob->adt, frame, ADT_RECALC_ANIM);
+    BKE_animsys_evaluate_animdata(
+        scene, &ob->id, ob->adt, frame, ADT_RECALC_ANIM, flush_to_original);
     /* ignore cache clear during subframe updates
      * to not mess up cache validity */
     object_cacheIgnoreClear(ob, 1);
@@ -4465,27 +4416,18 @@ bool BKE_object_modifier_update_subframe(Depsgraph *depsgraph,
   /* for curve following objects, parented curve has to be updated too */
   if (ob->type == OB_CURVE) {
     Curve *cu = ob->data;
-    BKE_animsys_evaluate_animdata(depsgraph, scene, &cu->id, cu->adt, frame, ADT_RECALC_ANIM);
+    BKE_animsys_evaluate_animdata(
+        scene, &cu->id, cu->adt, frame, ADT_RECALC_ANIM, flush_to_original);
   }
   /* and armatures... */
   if (ob->type == OB_ARMATURE) {
     bArmature *arm = ob->data;
-    BKE_animsys_evaluate_animdata(depsgraph, scene, &arm->id, arm->adt, frame, ADT_RECALC_ANIM);
+    BKE_animsys_evaluate_animdata(
+        scene, &arm->id, arm->adt, frame, ADT_RECALC_ANIM, flush_to_original);
     BKE_pose_where_is(depsgraph, scene, ob);
   }
 
   return false;
-}
-
-void BKE_object_type_set_empty_for_versioning(Object *ob)
-{
-  ob->type = OB_EMPTY;
-  ob->data = NULL;
-  if (ob->pose) {
-    BKE_pose_free_ex(ob->pose, false);
-    ob->pose = NULL;
-  }
-  ob->mode = OB_MODE_OBJECT;
 }
 
 /* Updates select_id of all objects in the given bmain. */

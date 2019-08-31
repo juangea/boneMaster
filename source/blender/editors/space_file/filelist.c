@@ -434,7 +434,7 @@ static int compare_name(void *UNUSED(user_data), const void *a1, const void *a2)
   name1 = entry1->name;
   name2 = entry2->name;
 
-  return BLI_natstrcmp(name1, name2);
+  return BLI_strcasecmp_natural(name1, name2);
 }
 
 static int compare_date(void *UNUSED(user_data), const void *a1, const void *a2)
@@ -461,7 +461,7 @@ static int compare_date(void *UNUSED(user_data), const void *a1, const void *a2)
   name1 = entry1->name;
   name2 = entry2->name;
 
-  return BLI_natstrcmp(name1, name2);
+  return BLI_strcasecmp_natural(name1, name2);
 }
 
 static int compare_size(void *UNUSED(user_data), const void *a1, const void *a2)
@@ -488,7 +488,7 @@ static int compare_size(void *UNUSED(user_data), const void *a1, const void *a2)
   name1 = entry1->name;
   name2 = entry2->name;
 
-  return BLI_natstrcmp(name1, name2);
+  return BLI_strcasecmp_natural(name1, name2);
 }
 
 static int compare_extension(void *UNUSED(user_data), const void *a1, const void *a2)
@@ -546,7 +546,7 @@ static int compare_extension(void *UNUSED(user_data), const void *a1, const void
   name1 = entry1->name;
   name2 = entry2->name;
 
-  return BLI_natstrcmp(name1, name2);
+  return BLI_strcasecmp_natural(name1, name2);
 }
 
 void filelist_sort(struct FileList *filelist)
@@ -1317,6 +1317,9 @@ static void filelist_cache_init(FileListEntryCache *cache, size_t cache_size)
 
   cache->size = cache_size;
   cache->flags = FLC_IS_INIT;
+
+  /* We cannot translate from non-main thread, so init translated strings once from here. */
+  IMB_thumb_ensure_translations();
 }
 
 static void filelist_cache_free(FileListEntryCache *cache)
@@ -2094,7 +2097,7 @@ static bool file_is_blend_backup(const char *str)
 }
 
 /* TODO: Maybe we should move this to BLI?
- * On the other hand, it's using defines from spacefile area, so not sure... */
+ * On the other hand, it's using defines from space-file area, so not sure... */
 int ED_path_extension_type(const char *path)
 {
   if (BLO_has_bfile_extension(path)) {
@@ -2471,13 +2474,15 @@ static void filelist_readjob_main_rec(Main *bmain, FileList *filelist)
 
   BLI_assert(filelist->filelist.entries == NULL);
 
-  if (filelist->filelist.root[0] == '/')
+  if (filelist->filelist.root[0] == '/') {
     filelist->filelist.root[0] = '\0';
+  }
 
   if (filelist->filelist.root[0]) {
     idcode = groupname_to_code(filelist->filelist.root);
-    if (idcode == 0)
+    if (idcode == 0) {
       filelist->filelist.root[0] = '\0';
+    }
   }
 
   if (filelist->dir[0] == 0) {
@@ -2525,8 +2530,9 @@ static void filelist_readjob_main_rec(Main *bmain, FileList *filelist)
     idcode = groupname_to_code(filelist->filelist.root);
 
     lb = which_libbase(bmain, idcode);
-    if (lb == NULL)
+    if (lb == NULL) {
       return;
+    }
 
     filelist->filelist.nbr_entries = 0;
     for (id = lb->first; id; id = id->next) {
@@ -2537,8 +2543,9 @@ static void filelist_readjob_main_rec(Main *bmain, FileList *filelist)
 
     /* XXX TODO: if databrowse F4 or append/link
      * filelist->flags & FLF_HIDE_PARENT has to be set */
-    if (!(filelist->filter_data.flags & FLF_HIDE_PARENT))
+    if (!(filelist->filter_data.flags & FLF_HIDE_PARENT)) {
       filelist->filelist.nbr_entries++;
+    }
 
     if (filelist->filelist.nbr_entries > 0) {
       filelist_resize(filelist, filelist->filelist.nbr_entries);
@@ -2604,8 +2611,9 @@ static void filelist_readjob_main_rec(Main *bmain, FileList *filelist)
 #  endif
 
           if (id->lib) {
-            if (totlib == 0)
+            if (totlib == 0) {
               firstlib = files;
+            }
             totlib++;
           }
 
@@ -2909,7 +2917,7 @@ void filelist_readjob_start(FileList *filelist, const bContext *C)
   /* setup job */
   wm_job = WM_jobs_get(CTX_wm_manager(C),
                        CTX_wm_window(C),
-                       CTX_wm_area(C),
+                       CTX_data_scene(C),
                        "Listing Dirs...",
                        WM_JOB_PROGRESS,
                        WM_JOB_TYPE_FILESEL_READDIR);

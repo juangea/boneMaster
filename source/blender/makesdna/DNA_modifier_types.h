@@ -29,8 +29,6 @@
  */
 
 struct Mesh;
-struct Scene;
-struct Subdiv;
 
 typedef enum ModifierType {
   eModifierType_None = 0,
@@ -121,7 +119,7 @@ typedef struct ModifierData {
 
 typedef enum {
   /* This modifier has been inserted in local override, and hence can be fully edited. */
-  eModifierFlag_StaticOverride_Local = (1 << 0),
+  eModifierFlag_OverrideLibrary_Local = (1 << 0),
   /* This modifier does not own its caches, but instead shares them with another modifier. */
   eModifierFlag_SharedCaches = (1 << 1),
 } ModifierFlag;

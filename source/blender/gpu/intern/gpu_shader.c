@@ -139,9 +139,6 @@ extern char datatoc_gpu_shader_2D_edituvs_edges_vert_glsl[];
 extern char datatoc_gpu_shader_2D_edituvs_faces_vert_glsl[];
 extern char datatoc_gpu_shader_2D_edituvs_stretch_vert_glsl[];
 
-extern char datatoc_gpu_shader_3D_selection_id_vert_glsl[];
-extern char datatoc_gpu_shader_selection_id_frag_glsl[];
-
 extern char datatoc_gpu_shader_2D_line_dashed_uniform_color_vert_glsl[];
 extern char datatoc_gpu_shader_2D_line_dashed_frag_glsl[];
 extern char datatoc_gpu_shader_2D_line_dashed_geom_glsl[];
@@ -290,6 +287,36 @@ GPUShader *GPU_shader_create(const char *vertexcode,
 {
   return GPU_shader_create_ex(
       vertexcode, fragcode, geocode, libcode, defines, GPU_SHADER_TFB_NONE, NULL, 0, shname);
+}
+
+GPUShader *GPU_shader_load_from_binary(const char *binary,
+                                       const int binary_format,
+                                       const int binary_len,
+                                       const char *shname)
+{
+  BLI_assert(GL_ARB_get_program_binary);
+  int success;
+  int program = glCreateProgram();
+
+  glProgramBinary(program, binary_format, binary, binary_len);
+  glGetProgramiv(program, GL_LINK_STATUS, &success);
+
+  if (success) {
+    GPUShader *shader = MEM_callocN(sizeof(*shader), __func__);
+    shader->interface = GPU_shaderinterface_create(program);
+    shader->program = program;
+
+#ifndef NDEBUG
+    BLI_snprintf(shader->name, sizeof(shader->name), "%s_%u", shname, g_shaderid++);
+#else
+    UNUSED_VARS(shname);
+#endif
+
+    return shader;
+  }
+
+  glDeleteProgram(program);
+  return NULL;
 }
 
 #define DEBUG_SHADER_NONE ""
@@ -815,6 +842,23 @@ int GPU_shader_get_attribute(GPUShader *shader, const char *name)
   return attr ? attr->location : -1;
 }
 
+char *GPU_shader_get_binary(GPUShader *shader, uint *r_binary_format, int *r_binary_len)
+{
+  BLI_assert(GLEW_ARB_get_program_binary);
+  char *r_binary;
+  int binary_len = 0;
+
+  glGetProgramiv(shader->program, GL_PROGRAM_BINARY_LENGTH, &binary_len);
+  r_binary = MEM_mallocN(binary_len, __func__);
+  glGetProgramBinary(shader->program, binary_len, NULL, r_binary_format, r_binary);
+
+  if (r_binary_len) {
+    *r_binary_len = binary_len;
+  }
+
+  return r_binary;
+}
+
 static const GPUShaderStages builtin_shader_stages[GPU_SHADER_BUILTIN_LEN] = {
     [GPU_SHADER_TEXT] =
         {
@@ -1265,18 +1309,6 @@ static const GPUShaderStages builtin_shader_stages[GPU_SHADER_BUILTIN_LEN] = {
             .defs = "#define STRETCH_ANGLE\n",
         },
 
-    [GPU_SHADER_3D_FLAT_SELECT_ID] =
-        {
-            .vert = datatoc_gpu_shader_3D_selection_id_vert_glsl,
-            .frag = datatoc_gpu_shader_selection_id_frag_glsl,
-        },
-    [GPU_SHADER_3D_UNIFORM_SELECT_ID] =
-        {
-            .vert = datatoc_gpu_shader_3D_selection_id_vert_glsl,
-            .frag = datatoc_gpu_shader_selection_id_frag_glsl,
-            .defs = "#define UNIFORM_ID\n",
-        },
-
     [GPU_SHADER_GPENCIL_STROKE] =
         {
             .vert = datatoc_gpu_shader_gpencil_stroke_vert_glsl,
@@ -1319,13 +1351,15 @@ GPUShader *GPU_shader_get_builtin_shader_with_config(eGPUBuiltinShader shader,
                       GPU_SHADER_3D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_AA,
                       GPU_SHADER_3D_SCREENSPACE_VARIYING_COLOR,
                       GPU_SHADER_3D_INSTANCE_SCREEN_ALIGNED,
+
                       GPU_SHADER_3D_GROUNDLINE,
                       GPU_SHADER_3D_GROUNDPOINT,
                       GPU_SHADER_DISTANCE_LINES,
-                      GPU_SHADER_INSTANCE_EDGES_VARIYING_COLOR,
-                      GPU_SHADER_3D_FLAT_SELECT_ID,
-                      GPU_SHADER_3D_UNIFORM_SELECT_ID) ||
-                 ELEM(shader, GPU_SHADER_3D_FLAT_COLOR, GPU_SHADER_3D_LINE_DASHED_UNIFORM_COLOR));
+                      GPU_SHADER_INSTANCE_EDGES_VARIYING_COLOR) ||
+                 ELEM(shader,
+                      GPU_SHADER_3D_FLAT_COLOR,
+                      GPU_SHADER_3D_LINE_DASHED_UNIFORM_COLOR,
+                      GPU_SHADER_INSTANCE_VARIYING_ID_VARIYING_SIZE));
       const char *world_clip_lib = datatoc_gpu_shader_cfg_world_clip_lib_glsl;
       const char *world_clip_def = "#define USE_WORLD_CLIP_PLANES\n";
       /* In rare cases geometry shaders calculate clipping themselves. */

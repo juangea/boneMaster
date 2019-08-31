@@ -239,6 +239,119 @@ bArmature *BKE_armature_copy(Main *bmain, const bArmature *arm)
   return arm_copy;
 }
 
+static void copy_bone_transform(Bone *bone_dst, const Bone *bone_src)
+{
+  bone_dst->roll = bone_src->roll;
+
+  copy_v3_v3(bone_dst->head, bone_src->head);
+  copy_v3_v3(bone_dst->tail, bone_src->tail);
+
+  copy_m3_m3(bone_dst->bone_mat, bone_src->bone_mat);
+
+  copy_v3_v3(bone_dst->arm_head, bone_src->arm_head);
+  copy_v3_v3(bone_dst->arm_tail, bone_src->arm_tail);
+
+  copy_m4_m4(bone_dst->arm_mat, bone_src->arm_mat);
+
+  bone_dst->arm_roll = bone_src->arm_roll;
+}
+
+void BKE_armature_copy_bone_transforms(bArmature *armature_dst, const bArmature *armature_src)
+{
+  Bone *bone_dst = armature_dst->bonebase.first;
+  const Bone *bone_src = armature_src->bonebase.first;
+  while (bone_dst != NULL) {
+    BLI_assert(bone_src != NULL);
+    copy_bone_transform(bone_dst, bone_src);
+    bone_dst = bone_dst->next;
+    bone_src = bone_src->next;
+  }
+}
+
+/** Helper for #ED_armature_transform */
+static void armature_transform_recurse(ListBase *bonebase,
+                                       const float mat[4][4],
+                                       const bool do_props,
+                                       /* Cached from 'mat'. */
+                                       const float mat3[3][3],
+                                       const float scale,
+                                       /* Child bones. */
+                                       const Bone *bone_parent,
+                                       const float arm_mat_parent_inv[4][4])
+{
+  for (Bone *bone = bonebase->first; bone; bone = bone->next) {
+
+    /* Transform the bone's roll. */
+    if (bone_parent == NULL) {
+
+      float roll_mat[3][3];
+      {
+        float delta[3];
+        sub_v3_v3v3(delta, bone->tail, bone->head);
+        vec_roll_to_mat3(delta, bone->roll, roll_mat);
+      }
+
+      /* Transform the roll matrix. */
+      mul_m3_m3m3(roll_mat, mat3, roll_mat);
+
+      /* Apply the transformed roll back. */
+      mat3_to_vec_roll(roll_mat, NULL, &bone->roll);
+    }
+
+    mul_m4_v3(mat, bone->arm_head);
+    mul_m4_v3(mat, bone->arm_tail);
+
+    /* Get the new head and tail */
+    if (bone_parent) {
+      sub_v3_v3v3(bone->head, bone->arm_head, bone_parent->arm_tail);
+      sub_v3_v3v3(bone->tail, bone->arm_tail, bone_parent->arm_tail);
+
+      mul_mat3_m4_v3(arm_mat_parent_inv, bone->head);
+      mul_mat3_m4_v3(arm_mat_parent_inv, bone->tail);
+    }
+    else {
+      copy_v3_v3(bone->head, bone->arm_head);
+      copy_v3_v3(bone->tail, bone->arm_tail);
+    }
+
+    BKE_armature_where_is_bone(bone, bone_parent, false);
+
+    {
+      float arm_mat3[3][3];
+      copy_m3_m4(arm_mat3, bone->arm_mat);
+      mat3_to_vec_roll(arm_mat3, NULL, &bone->arm_roll);
+    }
+
+    if (do_props) {
+      bone->rad_head *= scale;
+      bone->rad_tail *= scale;
+      bone->dist *= scale;
+
+      /* we could be smarter and scale by the matrix along the x & z axis */
+      bone->xwidth *= scale;
+      bone->zwidth *= scale;
+    }
+
+    if (!BLI_listbase_is_empty(&bone->childbase)) {
+      float arm_mat_inv[4][4];
+      invert_m4_m4(arm_mat_inv, bone->arm_mat);
+      armature_transform_recurse(&bone->childbase, mat, do_props, mat3, scale, bone, arm_mat_inv);
+    }
+  }
+}
+
+void BKE_armature_transform(bArmature *arm, const float mat[4][4], const bool do_props)
+{
+  /* Store the scale of the matrix here to use on envelopes. */
+  float scale = mat4_to_scale(mat);
+  float mat3[3][3];
+
+  copy_m3_m4(mat3, mat);
+  normalize_m3(mat3);
+
+  armature_transform_recurse(&arm->bonebase, mat, do_props, mat3, scale, NULL, NULL);
+}
+
 static Bone *get_named_bone_bonechildren(ListBase *lb, const char *name)
 {
   Bone *curBone, *rbone;
@@ -322,6 +435,24 @@ bool BKE_armature_bone_flag_test_recursive(const Bone *bone, int flag)
   else {
     return false;
   }
+}
+
+static void armature_refresh_layer_used_recursive(bArmature *arm, ListBase *bones)
+{
+  for (Bone *bone = bones->first; bone; bone = bone->next) {
+    arm->layer_used |= bone->layer;
+    armature_refresh_layer_used_recursive(arm, &bone->childbase);
+  }
+}
+
+/* Update the layers_used variable after bones are moved between layer
+ * NOTE: Used to be done in drawing code in 2.7, but that won't work with
+ *       Copy-on-Write, as drawing uses evaluated copies.
+ */
+void BKE_armature_refresh_layer_used(bArmature *arm)
+{
+  arm->layer_used = 0;
+  armature_refresh_layer_used_recursive(arm, &arm->bonebase);
 }
 
 /* Finds the best possible extension to the name on a particular axis. (For renaming, check for
@@ -1332,7 +1463,7 @@ typedef struct ArmatureUserdata {
 
 static void armature_vert_task(void *__restrict userdata,
                                const int i,
-                               const ParallelRangeTLS *__restrict UNUSED(tls))
+                               const TaskParallelTLS *__restrict UNUSED(tls))
 {
   const ArmatureUserdata *data = userdata;
   float(*const vertexCos)[3] = data->vertexCos;
@@ -1370,7 +1501,12 @@ static void armature_vert_task(void *__restrict userdata,
   if (use_dverts || armature_def_nr != -1) {
     if (data->mesh) {
       BLI_assert(i < data->mesh->totvert);
-      dvert = data->mesh->dvert + i;
+      if (data->mesh->dvert != NULL) {
+        dvert = data->mesh->dvert + i;
+      }
+      else {
+        dvert = NULL;
+      }
     }
     else if (data->dverts && i < data->target_totvert) {
       dvert = data->dverts + i;
@@ -1625,7 +1761,7 @@ void armature_deform_verts(Object *armOb,
   mul_m4_m4m4(data.postmat, obinv, armOb->obmat);
   invert_m4_m4(data.premat, data.postmat);
 
-  ParallelRangeSettings settings;
+  TaskParallelSettings settings;
   BLI_parallel_range_settings_defaults(&settings);
   settings.min_iter_per_thread = 32;
   BLI_task_parallel_range(0, numVerts, &data, armature_vert_task, &settings);
@@ -2233,7 +2369,7 @@ void vec_roll_to_mat3(const float vec[3], const float roll, float mat[3][3])
 
 /* recursive part, calculates restposition of entire tree of children */
 /* used by exiting editmode too */
-void BKE_armature_where_is_bone(Bone *bone, Bone *prevbone, const bool use_recursion)
+void BKE_armature_where_is_bone(Bone *bone, const Bone *bone_parent, const bool use_recursion)
 {
   float vec[3];
 
@@ -2249,13 +2385,13 @@ void BKE_armature_where_is_bone(Bone *bone, Bone *prevbone, const bool use_recur
     bone->segments = 1;
   }
 
-  if (prevbone) {
+  if (bone_parent) {
     float offs_bone[4][4];
     /* yoffs(b-1) + root(b) + bonemat(b) */
     BKE_bone_offset_matrix_get(bone, offs_bone);
 
     /* Compose the matrix for this bone  */
-    mul_m4_m4m4(bone->arm_mat, prevbone->arm_mat, offs_bone);
+    mul_m4_m4m4(bone->arm_mat, bone_parent->arm_mat, offs_bone);
   }
   else {
     copy_m4_m3(bone->arm_mat, bone->bone_mat);
@@ -2264,9 +2400,9 @@ void BKE_armature_where_is_bone(Bone *bone, Bone *prevbone, const bool use_recur
 
   /* and the kiddies */
   if (use_recursion) {
-    prevbone = bone;
+    bone_parent = bone;
     for (bone = bone->childbase.first; bone; bone = bone->next) {
-      BKE_armature_where_is_bone(bone, prevbone, use_recursion);
+      BKE_armature_where_is_bone(bone, bone_parent, use_recursion);
     }
   }
 }
@@ -2350,6 +2486,9 @@ static void pose_proxy_synchronize(Object *ob, Object *from, int layer_protected
 
       pchanw.mpath = pchan->mpath;
       pchan->mpath = NULL;
+
+      /* Reset runtime data, we don't want to share that with the proxy. */
+      BKE_pose_channel_runtime_reset(&pchanw.runtime);
 
       /* this is freed so copy a copy, else undo crashes */
       if (pchanw.prop) {
@@ -2652,8 +2791,9 @@ void BKE_pose_where_is_bone(struct Depsgraph *depsgraph,
       cob = BKE_constraints_make_evalob(depsgraph, scene, ob, pchan, CONSTRAINT_OBTYPE_BONE);
 
       /* Solve PoseChannel's Constraints */
-      BKE_constraints_solve(
-          depsgraph, &pchan->constraints, cob, ctime); /* ctime doesn't alter objects */
+
+      /* ctime doesn't alter objects. */
+      BKE_constraints_solve(depsgraph, &pchan->constraints, cob, ctime);
 
       /* cleanup after Constraint Solving
        * - applies matrix back to pchan, and frees temporary struct used

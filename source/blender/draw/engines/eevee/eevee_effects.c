@@ -47,7 +47,7 @@ static struct {
   struct GPUShader *downsample_sh;
   struct GPUShader *downsample_cube_sh;
 
-  /* Theses are just references, not actually allocated */
+  /* These are just references, not actually allocated */
   struct GPUTexture *depth_src;
   struct GPUTexture *color_src;
 
@@ -160,6 +160,12 @@ void EEVEE_effects_init(EEVEE_ViewLayerData *sldata,
   effects->enabled_effects |= EEVEE_temporal_sampling_init(sldata, vedata);
   effects->enabled_effects |= EEVEE_occlusion_init(sldata, vedata);
   effects->enabled_effects |= EEVEE_screen_raytrace_init(sldata, vedata);
+
+  if ((effects->enabled_effects & EFFECT_TAA) && effects->taa_current_sample > 1) {
+    /* Update matrices here because EEVEE_screen_raytrace_init can have reset the
+     * taa_current_sample. (See T66811) */
+    EEVEE_temporal_sampling_update_matrices(vedata);
+  }
 
   EEVEE_volumes_init(sldata, vedata);
   EEVEE_subsurface_init(sldata, vedata);
@@ -292,7 +298,7 @@ void EEVEE_effects_cache_init(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata)
     DRW_shgroup_uniform_texture_ref(grp, "source", &e_data.color_src);
     DRW_shgroup_uniform_float(grp, "texelSize", &e_data.cube_texel_size, 1);
     DRW_shgroup_uniform_int_copy(grp, "Layer", 0);
-    DRW_shgroup_call_instances(grp, quad, NULL, 6);
+    DRW_shgroup_call_instances(grp, NULL, quad, 6);
   }
 
   {
@@ -344,19 +350,23 @@ void EEVEE_effects_cache_init(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata)
     copy_v4_fl4(effects->color_checker_dark, 0.15f, 0.15f, 0.15f, 1.0f);
     copy_v4_fl4(effects->color_checker_light, 0.2f, 0.2f, 0.2f, 1.0f);
 
-    DRW_PASS_CREATE(psl->alpha_checker, DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_PREMUL_UNDER);
+    DRW_PASS_CREATE(psl->alpha_checker,
+                    DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ALPHA_UNDER_PREMUL);
     grp = DRW_shgroup_create(checker_sh, psl->alpha_checker);
     DRW_shgroup_uniform_vec4(grp, "color1", effects->color_checker_dark, 1);
     DRW_shgroup_uniform_vec4(grp, "color2", effects->color_checker_light, 1);
     DRW_shgroup_uniform_int_copy(grp, "size", 8);
     DRW_shgroup_call(grp, quad, NULL);
 
-    float mat[4][4];
-    unit_m4(mat);
+    float viewmat[4][4], winmat[4][4];
+    unit_m4(viewmat);
+    unit_m4(winmat);
+    /* Winmat must be negative. */
+    swap_v3_v3(winmat[0], winmat[1]);
 
     /* Using default view bypasses the culling. */
     const DRWView *default_view = DRW_view_default_get();
-    effects->checker_view = DRW_view_create_sub(default_view, mat, mat);
+    effects->checker_view = DRW_view_create_sub(default_view, viewmat, winmat);
   }
 }
 
@@ -483,7 +493,7 @@ void EEVEE_create_minmax_buffer(EEVEE_Data *vedata, GPUTexture *depth_src, int l
 }
 
 /**
- * Simple downsampling algorithm. Reconstruct mip chain up to mip level.
+ * Simple down-sampling algorithm. Reconstruct mip chain up to mip level.
  */
 void EEVEE_downsample_buffer(EEVEE_Data *vedata, GPUTexture *texture_src, int level)
 {
@@ -499,7 +509,7 @@ void EEVEE_downsample_buffer(EEVEE_Data *vedata, GPUTexture *texture_src, int le
 }
 
 /**
- * Simple downsampling algorithm for cubemap. Reconstruct mip chain up to mip level.
+ * Simple down-sampling algorithm for cubemap. Reconstruct mip chain up to mip level.
  */
 void EEVEE_downsample_cube_buffer(EEVEE_Data *vedata, GPUTexture *texture_src, int level)
 {
@@ -570,7 +580,7 @@ void EEVEE_draw_effects(EEVEE_ViewLayerData *UNUSED(sldata), EEVEE_Data *vedata)
   /* NOTE: Lookdev drawing happens before TAA but after
    * motion blur and dof to avoid distortions.
    * Velocity resolve use a hack to exclude lookdev
-   * spheres from creating shimering reprojection vectors. */
+   * spheres from creating shimmering re-projection vectors. */
   EEVEE_lookdev_draw(vedata);
   EEVEE_velocity_resolve(vedata);
 

@@ -173,7 +173,7 @@ void workbench_dof_engine_init(WORKBENCH_Data *vedata, Object *camera)
   }
 
   const float *full_size = DRW_viewport_size_get();
-  int size[2] = {full_size[0] / 2, full_size[1] / 2};
+  int size[2] = {max_ii(1, (int)full_size[0] / 2), max_ii(1, (int)full_size[1] / 2)};
 #if 0
   /* NOTE: We Ceil here in order to not miss any edge texel if using a NPO2 texture.  */
   int shrink_h_size[2] = {ceilf(size[0] / 8.0f), size[1]};
@@ -298,7 +298,8 @@ void workbench_dof_create_pass(WORKBENCH_Data *vedata,
   psl->dof_dilate_v_ps = DRW_pass_create("DoF Dilate Coc V", DRW_STATE_WRITE_COLOR);
   psl->dof_blur1_ps = DRW_pass_create("DoF Blur 1", DRW_STATE_WRITE_COLOR);
   psl->dof_blur2_ps = DRW_pass_create("DoF Blur 2", DRW_STATE_WRITE_COLOR);
-  psl->dof_resolve_ps = DRW_pass_create("DoF Resolve", DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND);
+  psl->dof_resolve_ps = DRW_pass_create("DoF Resolve",
+                                        DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ALPHA);
 
   {
     DRWShadingGroup *grp = DRW_shgroup_create(e_data.effect_dof_prepare_sh, psl->dof_down_ps);

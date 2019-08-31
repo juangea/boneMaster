@@ -741,10 +741,6 @@ void ui_draw_but_TRACKPREVIEW(ARegion *ar,
                               uiBut *but,
                               const struct uiWidgetColors *wcol,
                               const rcti *rect);
-void ui_draw_but_NODESOCKET(ARegion *ar,
-                            uiBut *but,
-                            const struct uiWidgetColors *wcol,
-                            const rcti *rect);
 
 /* interface_handlers.c */
 PointerRNA *ui_handle_afterfunc_add_operator(struct wmOperatorType *ot,
@@ -941,6 +937,9 @@ uiBut *ui_region_find_first_but_test_flag(struct ARegion *ar, int flag_include, 
 uiBut *ui_region_find_active_but(struct ARegion *ar) ATTR_WARN_UNUSED_RESULT;
 bool ui_region_contains_point_px(const struct ARegion *ar, int x, int y) ATTR_WARN_UNUSED_RESULT;
 bool ui_region_contains_rect_px(const struct ARegion *ar, const rcti *rect_px);
+
+ARegion *ui_screen_region_find_mouse_over_ex(bScreen *screen, int x, int y);
+ARegion *ui_screen_region_find_mouse_over(bScreen *screen, const struct wmEvent *event);
 
 /* interface_context_menu.c */
 bool ui_popup_context_menu_for_button(struct bContext *C, uiBut *but);

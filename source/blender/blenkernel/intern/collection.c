@@ -43,6 +43,7 @@
 #include "DNA_collection_types.h"
 #include "DNA_layer_types.h"
 #include "DNA_object_types.h"
+#include "DNA_rigidbody_types.h"
 #include "DNA_scene_types.h"
 
 #include "DEG_depsgraph.h"
@@ -238,8 +239,9 @@ static Collection *collection_duplicate_recursive(Main *bmain,
 
   if (!do_hierarchy || collection_old->id.newid == NULL) {
     BKE_id_copy(bmain, &collection_old->id, (ID **)&collection_new);
-    id_us_min(
-        &collection_new->id); /* Copying add one user by default, need to get rid of that one. */
+
+    /* Copying add one user by default, need to get rid of that one. */
+    id_us_min(&collection_new->id);
 
     if (do_hierarchy) {
       ID_NEW_SET(collection_old, collection_new);
@@ -432,15 +434,13 @@ static void collection_object_cache_fill(ListBase *lb, Collection *collection, i
       BLI_addtail(lb, base);
     }
 
-    int object_restrict = base->object->restrictflag;
-
-    if (((child_restrict & COLLECTION_RESTRICT_VIEWPORT) == 0) &&
-        ((object_restrict & OB_RESTRICT_VIEWPORT) == 0)) {
+    /* Only collection flags are checked here currently, object restrict flag is checked
+     * in FOREACH_COLLECTION_VISIBLE_OBJECT_RECURSIVE_BEGIN since it can be animated
+     * without updating the cache. */
+    if (((child_restrict & COLLECTION_RESTRICT_VIEWPORT) == 0)) {
       base->flag |= BASE_ENABLED_VIEWPORT;
     }
-
-    if (((child_restrict & COLLECTION_RESTRICT_RENDER) == 0) &&
-        ((object_restrict & OB_RESTRICT_RENDER) == 0)) {
+    if (((child_restrict & COLLECTION_RESTRICT_RENDER) == 0)) {
       base->flag |= BASE_ENABLED_RENDER;
     }
   }
@@ -563,7 +563,7 @@ bool BKE_collection_object_cyclic_check(Main *bmain, Object *object, Collection 
 
 /******************* Collection Object Membership *******************/
 
-bool BKE_collection_has_object(Collection *collection, Object *ob)
+bool BKE_collection_has_object(Collection *collection, const Object *ob)
 {
   if (ELEM(NULL, collection, ob)) {
     return false;
@@ -624,6 +624,26 @@ bool BKE_collection_is_empty(Collection *collection)
 
 /********************** Collection Objects *********************/
 
+static void collection_tag_update_parent_recursive(Main *bmain,
+                                                   Collection *collection,
+                                                   const int flag)
+{
+  if (collection->flag & COLLECTION_IS_MASTER) {
+    return;
+  }
+
+  DEG_id_tag_update_ex(bmain, &collection->id, flag);
+
+  for (CollectionParent *collection_parent = collection->parents.first; collection_parent;
+       collection_parent = collection_parent->next) {
+    if (collection_parent->collection->flag & COLLECTION_IS_MASTER) {
+      /* We don't care about scene/master collection here. */
+      continue;
+    }
+    collection_tag_update_parent_recursive(bmain, collection_parent->collection, flag);
+  }
+}
+
 static bool collection_object_add(
     Main *bmain, Collection *collection, Object *ob, int flag, const bool add_us)
 {
@@ -649,7 +669,7 @@ static bool collection_object_add(
   }
 
   if ((flag & LIB_ID_CREATE_NO_MAIN) == 0) {
-    DEG_id_tag_update_ex(bmain, &collection->id, ID_RECALC_COPY_ON_WRITE);
+    collection_tag_update_parent_recursive(bmain, collection, ID_RECALC_COPY_ON_WRITE);
   }
 
   if ((flag & LIB_ID_CREATE_NO_MAIN) == 0) {
@@ -679,7 +699,7 @@ static bool collection_object_remove(Main *bmain,
     id_us_min(&ob->id);
   }
 
-  DEG_id_tag_update_ex(bmain, &collection->id, ID_RECALC_COPY_ON_WRITE);
+  collection_tag_update_parent_recursive(bmain, collection, ID_RECALC_COPY_ON_WRITE);
 
   return true;
 }
@@ -1081,7 +1101,7 @@ void BKE_collection_parent_relations_rebuild(Collection *collection)
 static void collection_parents_rebuild_recursive(Collection *collection)
 {
   BKE_collection_parent_relations_rebuild(collection);
-  collection->id.tag &= ~LIB_TAG_DOIT;
+  collection->tag &= ~COLLECTION_TAG_RELATION_REBUILD;
 
   for (CollectionChild *child = collection->children.first; child != NULL; child = child->next) {
     collection_parents_rebuild_recursive(child->collection);
@@ -1090,8 +1110,6 @@ static void collection_parents_rebuild_recursive(Collection *collection)
 
 /**
  * Rebuild parent relationships from child ones, for all collections in given \a bmain.
- *
- * \note Uses LIB_TAG_DOIT internally...
  */
 void BKE_main_collections_parent_relations_rebuild(Main *bmain)
 {
@@ -1100,7 +1118,7 @@ void BKE_main_collections_parent_relations_rebuild(Main *bmain)
        collection = collection->id.next) {
     BLI_freelistN(&collection->parents);
 
-    collection->id.tag |= LIB_TAG_DOIT;
+    collection->tag |= COLLECTION_TAG_RELATION_REBUILD;
   }
 
   /* Scene's master collections will be 'root' parent of most of our collections, so start with
@@ -1113,7 +1131,7 @@ void BKE_main_collections_parent_relations_rebuild(Main *bmain)
    * lib_link_collection_data() seems to assume that, so do the same here. */
   for (Collection *collection = bmain->collections.first; collection != NULL;
        collection = collection->id.next) {
-    if (collection->id.tag & LIB_TAG_DOIT) {
+    if (collection->tag & COLLECTION_TAG_RELATION_REBUILD) {
       /* Note: we do not have easy access to 'which collections is root' info in that case, which
        * means test for cycles in collection relationships may fail here. I don't think that is an
        * issue in practice here, but worth keeping in mind... */
@@ -1281,7 +1299,16 @@ bool BKE_collection_move(Main *bmain,
         view_layer, collection);
 
     if (layer_collection) {
-      layer_collection->flag = POINTER_AS_INT(BLI_ghashIterator_getValue(&gh_iter));
+      /* We treat exclude as a special case.
+       *
+       * If in a different view layer the parent collection was disabled (e.g., background)
+       * and now we moved a new collection to be part of the background this collection should
+       * probably be disabled.
+       *
+       * Note: If we were to also keep the exclude flag we would need to re-sync the collections.
+       */
+      layer_collection->flag = POINTER_AS_INT(BLI_ghashIterator_getValue(&gh_iter)) |
+                               (layer_collection->flag & LAYER_COLLECTION_EXCLUDE);
     }
   }
 

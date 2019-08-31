@@ -1927,8 +1927,38 @@ static void sizelike_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *ta
   if (VALID_CONS_TARGET(ct)) {
     float obsize[3], size[3];
 
-    mat4_to_size(size, ct->matrix);
     mat4_to_size(obsize, cob->matrix);
+
+    /* Compute one uniform scale factor to apply to all three axes. */
+    if (data->flag & SIZELIKE_UNIFORM) {
+      const int all_axes = SIZELIKE_X | SIZELIKE_Y | SIZELIKE_Z;
+      float total = 1.0f;
+
+      /* If all axes are selected, use the determinant. */
+      if ((data->flag & all_axes) == all_axes) {
+        total = fabsf(mat4_to_volume_scale(ct->matrix));
+      }
+      /* Otherwise multiply individual values. */
+      else {
+        mat4_to_size(size, ct->matrix);
+
+        if (data->flag & SIZELIKE_X) {
+          total *= size[0];
+        }
+        if (data->flag & SIZELIKE_Y) {
+          total *= size[1];
+        }
+        if (data->flag & SIZELIKE_Z) {
+          total *= size[2];
+        }
+      }
+
+      copy_v3_fl(size, cbrt(total));
+    }
+    /* Regular per-axis scaling. */
+    else {
+      mat4_to_size(size, ct->matrix);
+    }
 
     for (int i = 0; i < 3; i++) {
       size[i] = powf(size[i], data->power);
@@ -1948,13 +1978,13 @@ static void sizelike_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *ta
       }
     }
 
-    if ((data->flag & SIZELIKE_X) && (obsize[0] != 0)) {
+    if ((data->flag & (SIZELIKE_X | SIZELIKE_UNIFORM)) && (obsize[0] != 0)) {
       mul_v3_fl(cob->matrix[0], size[0] / obsize[0]);
     }
-    if ((data->flag & SIZELIKE_Y) && (obsize[1] != 0)) {
+    if ((data->flag & (SIZELIKE_Y | SIZELIKE_UNIFORM)) && (obsize[1] != 0)) {
       mul_v3_fl(cob->matrix[1], size[1] / obsize[1]);
     }
-    if ((data->flag & SIZELIKE_Z) && (obsize[2] != 0)) {
+    if ((data->flag & (SIZELIKE_Z | SIZELIKE_UNIFORM)) && (obsize[2] != 0)) {
       mul_v3_fl(cob->matrix[2], size[2] / obsize[2]);
     }
   }
@@ -2363,7 +2393,7 @@ static void armdef_accumulate_bone(bConstraintTarget *ct,
 
     /* The target is a B-Bone:
      * FIRST: find the segment (see b_bone_deform in armature.c)
-     * Need to transform co back to bonespace, only need y. */
+     * Need to transform co back to bone-space, only need y. */
     float y = iamat[0][1] * co[0] + iamat[1][1] * co[1] + iamat[2][1] * co[2] + iamat[3][1];
 
     /* Blend the matrix. */
@@ -3329,7 +3359,6 @@ static void minmax_new_data(void *cdata)
 
   data->minmaxflag = TRACK_Z;
   data->offset = 0.0f;
-  zero_v3(data->cache);
   data->flag = 0;
 }
 
@@ -3426,15 +3455,6 @@ static void minmax_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *targ
 
     if (val1 > val2) {
       obmat[3][index] = tarmat[3][index] + data->offset;
-      if (data->flag & MINMAX_STICKY) {
-        if (data->flag & MINMAX_STUCK) {
-          copy_v3_v3(obmat[3], data->cache);
-        }
-        else {
-          copy_v3_v3(data->cache, obmat[3]);
-          data->flag |= MINMAX_STUCK;
-        }
-      }
       if (data->flag & MINMAX_USEROT) {
         /* get out of localspace */
         mul_m4_m4m4(tmat, ct->matrix, obmat);
@@ -3443,9 +3463,6 @@ static void minmax_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *targ
       else {
         copy_v3_v3(cob->matrix[3], obmat[3]);
       }
-    }
-    else {
-      data->flag &= ~MINMAX_STUCK;
     }
   }
 }
@@ -5098,9 +5115,9 @@ static bConstraint *add_new_constraint_internal(const char *name, short type)
   const bConstraintTypeInfo *cti = BKE_constraint_typeinfo_from_type(type);
   const char *newName;
 
-  /* Set up a generic constraint datablock */
+  /* Set up a generic constraint data-block. */
   con->type = type;
-  con->flag |= CONSTRAINT_EXPAND | CONSTRAINT_STATICOVERRIDE_LOCAL;
+  con->flag |= CONSTRAINT_EXPAND | CONSTRAINT_OVERRIDE_LIBRARY_LOCAL;
   con->enforce = 1.0f;
 
   /* Determine a basic name, and info */
@@ -5238,14 +5255,16 @@ static void con_extern_cb(bConstraint *UNUSED(con),
   }
 }
 
-/* helper for BKE_constraints_copy(),
- * to be used for making sure that usercounts of copied ID's are fixed up */
+/**
+ * Helper for #BKE_constraints_copy(),
+ * to be used for making sure that user-counts of copied ID's are fixed up.
+ */
 static void con_fix_copied_refs_cb(bConstraint *UNUSED(con),
                                    ID **idpoin,
                                    bool is_reference,
                                    void *UNUSED(userData))
 {
-  /* increment usercount if this is a reference type */
+  /* Increment user-count if this is a reference type. */
   if ((*idpoin) && (is_reference)) {
     id_us_plus(*idpoin);
   }
@@ -5284,7 +5303,7 @@ static void constraint_copy_data_ex(bConstraint *dst,
   }
 }
 
-/** Allocate and duplicate a single constraint, ouside of any object/pose context. */
+/** Allocate and duplicate a single constraint, outside of any object/pose context. */
 bConstraint *BKE_constraint_duplicate_ex(bConstraint *src, const int flag, const bool do_extern)
 {
   bConstraint *dst = MEM_dupallocN(src);

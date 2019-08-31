@@ -52,6 +52,7 @@ static void initData(GpencilModifierData *md)
   gpmd->pass_index = 0;
   gpmd->factor = 1.0f;
   gpmd->layername[0] = '\0';
+  gpmd->materialname[0] = '\0';
   gpmd->vgname[0] = '\0';
   gpmd->flag |= GP_OPACITY_CREATE_COLORS;
   gpmd->modify_color = GP_MODIFY_COLOR_BOTH;
@@ -67,6 +68,7 @@ static void deformStroke(GpencilModifierData *md,
                          Depsgraph *UNUSED(depsgraph),
                          Object *ob,
                          bGPDlayer *gpl,
+                         bGPDframe *UNUSED(gpf),
                          bGPDstroke *gps)
 {
   OpacityGpencilModifierData *mmd = (OpacityGpencilModifierData *)md;
@@ -74,6 +76,7 @@ static void deformStroke(GpencilModifierData *md,
 
   if (!is_stroke_affected_by_modifier(ob,
                                       mmd->layername,
+                                      mmd->materialname,
                                       mmd->pass_index,
                                       mmd->layer_pass,
                                       1,
@@ -81,7 +84,8 @@ static void deformStroke(GpencilModifierData *md,
                                       gps,
                                       mmd->flag & GP_OPACITY_INVERT_LAYER,
                                       mmd->flag & GP_OPACITY_INVERT_PASS,
-                                      mmd->flag & GP_OPACITY_INVERT_LAYERPASS)) {
+                                      mmd->flag & GP_OPACITY_INVERT_LAYERPASS,
+                                      mmd->flag & GP_OPACITY_INVERT_MATERIAL)) {
     return;
   }
 
@@ -146,7 +150,7 @@ static void bakeModifier(Main *bmain, Depsgraph *depsgraph, GpencilModifierData 
         copy_v4_v4(gps->runtime.tmp_stroke_rgba, gp_style->stroke_rgba);
         copy_v4_v4(gps->runtime.tmp_fill_rgba, gp_style->fill_rgba);
 
-        deformStroke(md, depsgraph, ob, gpl, gps);
+        deformStroke(md, depsgraph, ob, gpl, gpf, gps);
 
         gpencil_apply_modifier_material(
             bmain, ob, mat, gh_color, gps, (bool)(mmd->flag & GP_OPACITY_CREATE_COLORS));

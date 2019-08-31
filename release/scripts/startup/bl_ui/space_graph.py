@@ -19,7 +19,7 @@
 # <pep8 compliant>
 
 from bpy.types import Header, Menu, Panel
-from .space_dopesheet import (
+from bl_ui.space_dopesheet import (
     DopesheetFilterPopoverBase,
     dopesheet_filter,
 )
@@ -114,7 +114,6 @@ class GRAPH_MT_view(Menu):
         layout.separator()
 
         layout.prop(st, "use_realtime_update")
-        layout.prop(st, "show_frame_indicator")
         layout.prop(st, "show_cursor")
         layout.prop(st, "show_sliders")
         layout.prop(st, "show_group_colors")
@@ -169,10 +168,10 @@ class GRAPH_MT_select(Menu):
         props = layout.operator("graph.select_box")
         props.axis_range = False
         props.include_handles = False
-        props = layout.operator("graph.select_box", text="Border Axis Range")
+        props = layout.operator("graph.select_box", text="Box Select (Axis Range)")
         props.axis_range = True
         props.include_handles = False
-        props = layout.operator("graph.select_box", text="Border (Include Handles)")
+        props = layout.operator("graph.select_box", text="Box Select (Include Handles)")
         props.axis_range = False
         props.include_handles = True
 
@@ -207,7 +206,7 @@ class GRAPH_MT_marker(Menu):
     def draw(self, context):
         layout = self.layout
 
-        from .space_time import marker_menu_generic
+        from bl_ui.space_time import marker_menu_generic
         marker_menu_generic(layout, context)
 
         # TODO: pose markers for action edit mode only?

@@ -165,6 +165,15 @@ static bool export_object(const ExportSettings *const settings,
     }
   }
 
+  Object *ob_eval = DEG_get_evaluated_object(settings->depsgraph, base->object);
+  if ((ob_eval->id.tag & LIB_TAG_COPIED_ON_WRITE) == 0) {
+    /* XXX fix after 2.80: the object was not part of the depsgraph, and thus we cannot get the
+     * evaluated copy to export. This will be handled more elegantly in the new
+     * AbstractHierarchyIterator that Sybren is working on. This condition is temporary, and avoids
+     * a BLI_assert() failure getting the evaluated mesh of this object. */
+    return false;
+  }
+
   //  if (settings->renderable_only && (ob->restrictflag & OB_RESTRICT_RENDER)) {
   //      return false;
   //  }
@@ -232,9 +241,9 @@ Alembic::Abc::TimeSamplingPtr AbcExporter::createTimeSampling(double step)
 
   getShutterSamples(step, true, samples);
 
-  Alembic::Abc::TimeSamplingType ts(
-      static_cast<uint32_t>(samples.size()),
-      1.0 / m_settings.scene->r.frs_sec); /* TODO(Sybren): shouldn't we use the FPS macro here? */
+  /* TODO(Sybren): shouldn't we use the FPS macro here? */
+  Alembic::Abc::TimeSamplingType ts(static_cast<uint32_t>(samples.size()),
+                                    1.0 / m_settings.scene->r.frs_sec);
 
   return TimeSamplingPtr(new Alembic::Abc::TimeSampling(ts, samples));
 }

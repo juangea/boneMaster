@@ -37,6 +37,7 @@
 #include "BLI_utildefines.h"
 #include "BLI_string.h"
 #include "BLI_string_utils.h"
+#include "BLI_ghash.h"
 
 #include "BKE_main.h"
 #include "BKE_node.h"
@@ -77,25 +78,9 @@ struct GPUMaterial {
   ListBase inputs; /* GPUInput */
   GPUVertAttrLayers attrs;
   int builtins;
-  int alpha, obcolalpha;
-  int dynproperty;
-
-  /* for passing uniforms */
-  int viewmatloc, invviewmatloc;
-  int obmatloc, invobmatloc;
-  int localtoviewmatloc, invlocaltoviewmatloc;
-  int obcolloc, obautobumpscaleloc;
-  int cameratexcofacloc;
-
-  int partscalarpropsloc;
-  int partcoloc;
-  int partvel;
-  int partangvel;
-
-  int objectinfoloc;
 
   /* XXX: Should be in Material. But it depends on the output node
-   * used and since the output selection is difference for GPUMaterial...
+   * used and since the output selection is different for GPUMaterial...
    */
   int domain;
 
@@ -117,6 +102,8 @@ struct GPUMaterial {
 
   GPUTexture *coba_tex; /* 1D Texture array containing all color bands. */
   GPUColorBandBuilder *coba_builder;
+
+  GSet *used_libraries;
 
 #ifndef NDEBUG
   char name[64];
@@ -199,6 +186,8 @@ static void gpu_material_free_single(GPUMaterial *material)
   if (material->coba_tex != NULL) {
     GPU_texture_free(material->coba_tex);
   }
+
+  BLI_gset_free(material->used_libraries, NULL);
 }
 
 void GPU_material_free(ListBase *gpumaterial)
@@ -262,7 +251,10 @@ typedef struct GPUSssKernelData {
   float kernel[SSS_SAMPLES][4];
   float param[3], max_radius;
   int samples;
+  int pad[3];
 } GPUSssKernelData;
+
+BLI_STATIC_ASSERT_ALIGN(GPUSssKernelData, 16)
 
 static void sss_calculate_offsets(GPUSssKernelData *kd, int count, float exponent)
 {
@@ -595,6 +587,11 @@ void gpu_material_add_node(GPUMaterial *material, GPUNode *node)
   BLI_addtail(&material->nodes, node);
 }
 
+GSet *gpu_material_used_libraries(GPUMaterial *material)
+{
+  return material->used_libraries;
+}
+
 /* Return true if the material compilation has not yet begin or begin. */
 eGPUMaterialStatus GPU_material_status(GPUMaterial *mat)
 {
@@ -672,6 +669,9 @@ GPUMaterial *GPU_material_from_nodetree(Scene *scene,
   UNUSED_VARS(name);
 #endif
 
+  mat->used_libraries = BLI_gset_new(
+      BLI_ghashutil_ptrhash, BLI_ghashutil_ptrcmp, "GPUMaterial.used_libraries");
+
   /* localize tree to create links for reroute and mute */
   bNodeTree *localtree = ntreeLocalize(ntree);
   ntreeGPUMaterialNodes(localtree, mat, &has_surface_output, &has_volume_output);
@@ -746,23 +746,25 @@ GPUMaterial *GPU_material_from_nodetree(Scene *scene,
 
 void GPU_material_compile(GPUMaterial *mat)
 {
-  /* Only run once! */
+  bool success;
+
   BLI_assert(mat->status == GPU_MAT_QUEUED);
   BLI_assert(mat->pass);
 
   /* NOTE: The shader may have already been compiled here since we are
    * sharing GPUShader across GPUMaterials. In this case it's a no-op. */
 #ifndef NDEBUG
-  GPU_pass_compile(mat->pass, mat->name);
+  success = GPU_pass_compile(mat->pass, mat->name);
 #else
-  GPU_pass_compile(mat->pass, __func__);
+  success = GPU_pass_compile(mat->pass, __func__);
 #endif
 
-  GPUShader *sh = GPU_pass_shader_get(mat->pass);
-
-  if (sh != NULL) {
-    mat->status = GPU_MAT_SUCCESS;
-    GPU_nodes_extract_dynamic_inputs(sh, &mat->inputs, &mat->nodes);
+  if (success) {
+    GPUShader *sh = GPU_pass_shader_get(mat->pass);
+    if (sh != NULL) {
+      mat->status = GPU_MAT_SUCCESS;
+      GPU_nodes_extract_dynamic_inputs(sh, &mat->inputs, &mat->nodes);
+    }
   }
   else {
     mat->status = GPU_MAT_FAILED;

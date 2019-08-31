@@ -42,6 +42,13 @@ def rgb_to_rgba(rgb):
 def rgba_to_rgb(rgba):
     return Color((rgba[0], rgba[1], rgba[2]))
 
+# All clamping value shall follow Blender's defined min/max (check relevant node definition .c file).
+def values_clamp(val, minv, maxv):
+    if hasattr(val, "__iter__"):
+        return tuple(max(minv, min(maxv, v)) for v in val)
+    else:
+        return max(minv, min(maxv, val))
+
 
 class ShaderWrapper():
     """
@@ -267,6 +274,7 @@ class PrincipledBSDFWrapper(ShaderWrapper):
 
     @_set_check
     def base_color_set(self, color):
+        color = values_clamp(color, 0.0, 1.0)
         color = rgb_to_rgba(color)
         self.material.diffuse_color = color
         if self.use_nodes and self.node_principled_bsdf is not None:
@@ -297,6 +305,7 @@ class PrincipledBSDFWrapper(ShaderWrapper):
 
     @_set_check
     def specular_set(self, value):
+        value = values_clamp(value, 0.0, 1.0)
         self.material.specular_intensity = value
         if self.use_nodes and self.node_principled_bsdf is not None:
             self.node_principled_bsdf.inputs["Specular"].default_value = value
@@ -311,6 +320,7 @@ class PrincipledBSDFWrapper(ShaderWrapper):
 
     @_set_check
     def specular_tint_set(self, value):
+        value = values_clamp(value, 0.0, 1.0)
         if self.use_nodes and self.node_principled_bsdf is not None:
             self.node_principled_bsdf.inputs["Specular Tint"].default_value = value
 
@@ -341,6 +351,7 @@ class PrincipledBSDFWrapper(ShaderWrapper):
 
     @_set_check
     def roughness_set(self, value):
+        value = values_clamp(value, 0.0, 1.0)
         self.material.roughness = value
         if self.use_nodes and self.node_principled_bsdf is not None:
             self.node_principled_bsdf.inputs["Roughness"].default_value = value
@@ -371,6 +382,7 @@ class PrincipledBSDFWrapper(ShaderWrapper):
 
     @_set_check
     def metallic_set(self, value):
+        value = values_clamp(value, 0.0, 1.0)
         self.material.metallic = value
         if self.use_nodes and self.node_principled_bsdf is not None:
             self.node_principled_bsdf.inputs["Metallic"].default_value = value
@@ -401,6 +413,7 @@ class PrincipledBSDFWrapper(ShaderWrapper):
 
     @_set_check
     def ior_set(self, value):
+        value = values_clamp(value, 0.0, 1000.0)
         if self.use_nodes and self.node_principled_bsdf is not None:
             self.node_principled_bsdf.inputs["IOR"].default_value = value
 
@@ -427,6 +440,7 @@ class PrincipledBSDFWrapper(ShaderWrapper):
 
     @_set_check
     def transmission_set(self, value):
+        value = values_clamp(value, 0.0, 1.0)
         if self.use_nodes and self.node_principled_bsdf is not None:
             self.node_principled_bsdf.inputs["Transmission"].default_value = value
 
@@ -453,6 +467,7 @@ class PrincipledBSDFWrapper(ShaderWrapper):
 
     @_set_check
     def alpha_set(self, value):
+        value = values_clamp(value, 0.0, 1.0)
         if self.use_nodes and self.node_principled_bsdf is not None:
             self.node_principled_bsdf.inputs["Alpha"].default_value = value
 
@@ -483,6 +498,7 @@ class PrincipledBSDFWrapper(ShaderWrapper):
 
     @_set_check
     def normalmap_strength_set(self, value):
+        value = values_clamp(value, 0.0, 10.0)
         if self.use_nodes and self.node_normalmap is not None:
             self.node_normalmap.inputs["Strength"].default_value = value
 
@@ -496,6 +512,7 @@ class PrincipledBSDFWrapper(ShaderWrapper):
             self, self.node_normalmap,
             self.node_normalmap.inputs["Color"],
             grid_row_diff=-2,
+            colorspace_is_data=True,
         )
 
     normalmap_texture = property(normalmap_texture_get)
@@ -521,6 +538,7 @@ class ShaderImageTextureWrapper():
         "is_readonly",
         "grid_row_diff",
         "use_alpha",
+        "colorspace_is_data",
         *NODES_LIST,
     )
 
@@ -532,13 +550,15 @@ class ShaderImageTextureWrapper():
         owner_shader._textures[(node_dst, socket_dst)] = instance
         return instance
 
-    def __init__(self, owner_shader: ShaderWrapper, node_dst, socket_dst, grid_row_diff=0, use_alpha=False):
+    def __init__(self, owner_shader: ShaderWrapper, node_dst, socket_dst, grid_row_diff=0,
+                 use_alpha=False, colorspace_is_data=...):
         self.owner_shader = owner_shader
         self.is_readonly = owner_shader.is_readonly
         self.node_dst = node_dst
         self.socket_dst = socket_dst
         self.grid_row_diff = grid_row_diff
         self.use_alpha = use_alpha
+        self.colorspace_is_data = colorspace_is_data
 
         self._node_image = ...
         self._node_mapping = ...
@@ -639,6 +659,8 @@ class ShaderImageTextureWrapper():
 
     @_set_check
     def image_set(self, image):
+        if self.colorspace_is_data is not ...:
+            image.colorspace_settings.is_data = self.colorspace_is_data
         self.node_image.image = image
 
     image = property(image_get, image_set)
@@ -758,7 +780,7 @@ class ShaderImageTextureWrapper():
 
 
     def use_min_get(self):
-        return self.node_mapping.use_min if self_mapping.node is not None else False
+        return self.node_mapping.use_min if self.node_mapping is not None else False
 
     @_set_check
     def use_min_set(self, use_min):
@@ -768,7 +790,7 @@ class ShaderImageTextureWrapper():
 
 
     def use_max_get(self):
-        return self.node_mapping.use_max if self_mapping.node is not None else False
+        return self.node_mapping.use_max if self.node_mapping is not None else False
 
     @_set_check
     def use_max_set(self, use_max):

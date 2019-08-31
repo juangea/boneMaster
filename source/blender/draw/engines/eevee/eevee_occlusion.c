@@ -146,8 +146,8 @@ void EEVEE_occlusion_output_init(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata
     DefaultTextureList *dtxl = DRW_viewport_texture_list_get();
     float clear[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 
-    DRW_texture_ensure_fullscreen_2d(
-        &txl->ao_accum, GPU_R32F, 0); /* Should be enough precision for many samples. */
+    /* Should be enough precision for many samples. */
+    DRW_texture_ensure_fullscreen_2d(&txl->ao_accum, GPU_R32F, 0);
 
     GPU_framebuffer_ensure_config(&fbl->ao_accum_fb,
                                   {GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(txl->ao_accum)});
@@ -157,7 +157,7 @@ void EEVEE_occlusion_output_init(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata
     GPU_framebuffer_clear_color(fbl->ao_accum_fb, clear);
 
     /* Accumulation pass */
-    DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_ADDITIVE;
+    DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD;
     DRW_PASS_CREATE(psl->ao_accum_ps, state);
     DRWShadingGroup *grp = DRW_shgroup_create(e_data.gtao_debug_sh, psl->ao_accum_ps);
     DRW_shgroup_uniform_texture(grp, "utilTex", EEVEE_materials_get_util_tex());

@@ -65,7 +65,7 @@ void MOD_init_texture(MappingInfoModifierData *dmd, const ModifierEvalContext *c
   }
 
   if (tex->ima && BKE_image_is_animated(tex->ima)) {
-    BKE_image_user_frame_calc(&tex->iuser, DEG_get_ctime(ctx->depsgraph));
+    BKE_image_user_frame_calc(tex->ima, &tex->iuser, DEG_get_ctime(ctx->depsgraph));
   }
 }
 
@@ -198,7 +198,7 @@ Mesh *MOD_deform_mesh_eval_get(Object *ob,
     /* TODO(sybren): after modifier conversion of DM to Mesh is done, check whether
      * we really need vertexCos here. */
     if (vertexCos) {
-      BKE_mesh_apply_vert_coords(mesh, vertexCos);
+      BKE_mesh_vert_coords_apply(mesh, vertexCos);
       mesh->runtime.cd_dirty_vert |= CD_MASK_NORMAL;
     }
 

@@ -80,8 +80,8 @@ extern void DRW_opengl_context_disable(void);
 
 extern void DRW_opengl_render_context_enable(void *re_gl_context);
 extern void DRW_opengl_render_context_disable(void *re_gl_context);
-extern void DRW_gawain_render_context_enable(void *re_gpu_context);
-extern void DRW_gawain_render_context_disable(void *re_gpu_context);
+extern void DRW_gpu_render_context_enable(void *re_gpu_context);
+extern void DRW_gpu_render_context_disable(void *re_gpu_context);
 
 typedef struct EEVEE_LightBake {
   Depsgraph *depsgraph;
@@ -138,7 +138,7 @@ typedef struct EEVEE_LightBake {
   float vis_res;
   /** Result of previous light bounce. */
   GPUTexture *grid_prev;
-  /** Pointer to the id.data of the probe object. */
+  /** Pointer to the owner_id of the probe object. */
   LightProbe **grid_prb;
 
   /* Reflection probe */
@@ -148,7 +148,7 @@ typedef struct EEVEE_LightBake {
   int ref_cube_res;
   /** Index of the current cube. */
   int cube_offset;
-  /** Pointer to the id.data of the probe object. */
+  /** Pointer to the owner_id of the probe object. */
   LightProbe **cube_prb;
 
   /* Dummy Textures */
@@ -213,7 +213,7 @@ void EEVEE_lightcache_info_update(SceneEEVEE *eevee)
   if (lcache != NULL) {
     if (lcache->flag & LIGHTCACHE_BAKING) {
       BLI_strncpy(
-          eevee->light_cache_info, IFACE_("Baking light cache"), sizeof(eevee->light_cache_info));
+          eevee->light_cache_info, TIP_("Baking light cache"), sizeof(eevee->light_cache_info));
       return;
     }
 
@@ -224,14 +224,14 @@ void EEVEE_lightcache_info_update(SceneEEVEE *eevee)
 
     BLI_snprintf(eevee->light_cache_info,
                  sizeof(eevee->light_cache_info),
-                 IFACE_("%d Ref. Cubemaps, %d Irr. Samples (%s in memory)"),
+                 TIP_("%d Ref. Cubemaps, %d Irr. Samples (%s in memory)"),
                  lcache->cube_len - 1,
                  irr_samples,
                  formatted_mem);
   }
   else {
     BLI_strncpy(eevee->light_cache_info,
-                IFACE_("No light cache in this scene"),
+                TIP_("No light cache in this scene"),
                 sizeof(eevee->light_cache_info));
   }
 }
@@ -266,7 +266,8 @@ static bool EEVEE_lightcache_validate(const LightCache *light_cache,
         (irr_size[2] == light_cache->grid_tx.tex_size[2]) && (grid_len == light_cache->grid_len)) {
       int mip_len = (int)(floorf(log2f(cube_res)) - MIN_CUBE_LOD_LEVEL);
       if ((cube_res == light_cache->cube_tx.tex_size[0]) &&
-          (cube_len == light_cache->cube_tx.tex_size[2]) && (mip_len == light_cache->mips_len)) {
+          (cube_len == light_cache->cube_tx.tex_size[2]) && (cube_len == light_cache->cube_len) &&
+          (mip_len == light_cache->mips_len)) {
         return true;
       }
     }
@@ -409,9 +410,9 @@ static void eevee_lightbake_context_enable(EEVEE_LightBake *lbake)
   if (lbake->gl_context) {
     DRW_opengl_render_context_enable(lbake->gl_context);
     if (lbake->gpu_context == NULL) {
-      lbake->gpu_context = GPU_context_create();
+      lbake->gpu_context = GPU_context_create(0);
     }
-    DRW_gawain_render_context_enable(lbake->gpu_context);
+    DRW_gpu_render_context_enable(lbake->gpu_context);
   }
   else {
     DRW_opengl_context_enable();
@@ -421,7 +422,7 @@ static void eevee_lightbake_context_enable(EEVEE_LightBake *lbake)
 static void eevee_lightbake_context_disable(EEVEE_LightBake *lbake)
 {
   if (lbake->gl_context) {
-    DRW_gawain_render_context_disable(lbake->gpu_context);
+    DRW_gpu_render_context_disable(lbake->gpu_context);
     DRW_opengl_render_context_disable(lbake->gl_context);
   }
   else {
@@ -653,7 +654,7 @@ static void eevee_lightbake_delete_resources(EEVEE_LightBake *lbake)
 
   if (lbake->gl_context) {
     DRW_opengl_render_context_enable(lbake->gl_context);
-    DRW_gawain_render_context_enable(lbake->gpu_context);
+    DRW_gpu_render_context_enable(lbake->gpu_context);
   }
   else if (!lbake->resource_only) {
     DRW_opengl_context_enable();
@@ -674,8 +675,8 @@ static void eevee_lightbake_delete_resources(EEVEE_LightBake *lbake)
   }
 
   if (lbake->gpu_context) {
-    DRW_gawain_render_context_disable(lbake->gpu_context);
-    DRW_gawain_render_context_enable(lbake->gpu_context);
+    DRW_gpu_render_context_disable(lbake->gpu_context);
+    DRW_gpu_render_context_enable(lbake->gpu_context);
     GPU_context_discard(lbake->gpu_context);
   }
 
@@ -748,6 +749,7 @@ static void eevee_lightbake_cache_create(EEVEE_Data *vedata, EEVEE_LightBake *lb
   EEVEE_effects_cache_init(sldata, vedata);
   EEVEE_materials_cache_init(sldata, vedata);
   EEVEE_subsurface_cache_init(sldata, vedata);
+  EEVEE_volumes_cache_init(sldata, vedata);
   EEVEE_lights_cache_init(sldata, vedata);
   EEVEE_lightprobes_cache_init(sldata, vedata);
 
@@ -766,6 +768,9 @@ static void eevee_lightbake_cache_create(EEVEE_Data *vedata, EEVEE_LightBake *lb
   EEVEE_materials_cache_finish(sldata, vedata);
   EEVEE_lights_cache_finish(sldata, vedata);
   EEVEE_lightprobes_cache_finish(sldata, vedata);
+
+  /* Disable volumetrics when baking. */
+  stl->effects->enabled_effects &= ~EFFECT_VOLUMETRIC;
 
   EEVEE_effects_draw_init(sldata, vedata);
   EEVEE_volumes_draw_init(sldata, vedata);
@@ -1244,7 +1249,7 @@ void EEVEE_lightbake_job(void *custom_data, short *stop, short *do_update, float
 
   /* Assume that if lbake->gl_context is NULL
    * we are not running in this in a job, so update
-   * the scene lightcache pointer before deleting it. */
+   * the scene light-cache pointer before deleting it. */
   if (lbake->gl_context == NULL) {
     BLI_assert(BLI_thread_is_main());
     EEVEE_lightbake_update(lbake);

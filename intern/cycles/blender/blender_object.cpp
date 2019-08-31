@@ -116,14 +116,17 @@ void BlenderSync::sync_light(BL::Object &b_parent,
   /* test if we need to sync */
   Light *light;
   ObjectKey key(b_parent, persistent_id, b_ob_instance);
-
-  if (!light_map.sync(&light, b_ob, b_parent, key)) {
-    if (light->is_portal)
-      *use_portal = true;
-    return;
-  }
-
   BL::Light b_light(b_ob.data());
+
+  /* Update if either object or light data changed. */
+  if (!light_map.sync(&light, b_ob, b_parent, key)) {
+    Shader *shader;
+    if (!shader_map.sync(&shader, b_light)) {
+      if (light->is_portal)
+        *use_portal = true;
+      return;
+    }
+  }
 
   /* type */
   switch (b_light.type()) {
@@ -214,7 +217,7 @@ void BlenderSync::sync_light(BL::Object &b_parent,
     light->random_id = random_id;
   }
   else {
-    light->random_id = hash_int_2d(hash_string(b_ob.name().c_str()), 0);
+    light->random_id = hash_uint2(hash_string(b_ob.name().c_str()), 0);
   }
 
   if (light->type == LIGHT_AREA)
@@ -354,7 +357,8 @@ Object *BlenderSync::sync_object(BL::Depsgraph &b_depsgraph,
 #endif
 
   /* Clear camera visibility for indirect only objects. */
-  bool use_indirect_only = b_parent.indirect_only_get(PointerRNA_NULL, b_view_layer);
+  bool use_indirect_only = !use_holdout &&
+                           b_parent.indirect_only_get(PointerRNA_NULL, b_view_layer);
   if (use_indirect_only) {
     visibility &= ~PATH_RAY_CAMERA;
   }
@@ -440,6 +444,7 @@ Object *BlenderSync::sync_object(BL::Depsgraph &b_depsgraph,
   if (object_updated || (object->mesh && object->mesh->need_update) || tfm != object->tfm) {
     object->name = b_ob.name().c_str();
     object->pass_id = b_ob.pass_index();
+    object->color = get_float3(b_ob.color());
     object->tfm = tfm;
     object->motion.clear();
 
@@ -486,7 +491,7 @@ Object *BlenderSync::sync_object(BL::Depsgraph &b_depsgraph,
     else {
       object->dupli_generated = make_float3(0.0f, 0.0f, 0.0f);
       object->dupli_uv = make_float2(0.0f, 0.0f);
-      object->random_id = hash_int_2d(hash_string(object->name.c_str()), 0);
+      object->random_id = hash_uint2(hash_string(object->name.c_str()), 0);
     }
 
     object->tag_update(scene);

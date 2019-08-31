@@ -24,6 +24,7 @@
 
 #include "BLI_blenlib.h"
 #include "BLI_math.h"
+#include "BLI_system.h"
 
 #include "DNA_node_types.h"
 #include "DNA_object_types.h"
@@ -90,7 +91,7 @@ static void node_buts_value(uiLayout *layout, bContext *UNUSED(C), PointerRNA *p
   /* first output stores value */
   bNodeSocket *output = node->outputs.first;
   PointerRNA sockptr;
-  RNA_pointer_create(ptr->id.data, &RNA_NodeSocket, output, &sockptr);
+  RNA_pointer_create(ptr->owner_id, &RNA_NodeSocket, output, &sockptr);
 
   uiItemR(layout, &sockptr, "default_value", 0, "", ICON_NONE);
 }
@@ -102,7 +103,7 @@ static void node_buts_rgb(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr
   bNodeSocket *output = node->outputs.first;
   PointerRNA sockptr;
   uiLayout *col;
-  RNA_pointer_create(ptr->id.data, &RNA_NodeSocket, output, &sockptr);
+  RNA_pointer_create(ptr->owner_id, &RNA_NodeSocket, output, &sockptr);
 
   col = uiLayoutColumn(layout, false);
   uiTemplateColorPicker(col, &sockptr, "default_value", 1, 0, 0, 0);
@@ -113,7 +114,7 @@ static void node_buts_mix_rgb(uiLayout *layout, bContext *UNUSED(C), PointerRNA 
 {
   uiLayout *row, *col;
 
-  bNodeTree *ntree = (bNodeTree *)ptr->id.data;
+  bNodeTree *ntree = (bNodeTree *)ptr->owner_id;
 
   col = uiLayoutColumn(layout, false);
   row = uiLayoutRow(col, true);
@@ -135,8 +136,9 @@ static void node_buts_time(uiLayout *layout, bContext *UNUSED(C), PointerRNA *pt
 
   if (cumap) {
     cumap->flag |= CUMA_DRAW_CFRA;
-    if (node->custom1 < node->custom2)
+    if (node->custom1 < node->custom2) {
       cumap->sample[0] = (float)(CFRA - node->custom1) / (float)(node->custom2 - node->custom1);
+    }
   }
 #endif
 
@@ -192,7 +194,7 @@ static void node_buts_normal(uiLayout *layout, bContext *UNUSED(C), PointerRNA *
   /* first output stores normal */
   bNodeSocket *output = node->outputs.first;
   PointerRNA sockptr;
-  RNA_pointer_create(ptr->id.data, &RNA_NodeSocket, output, &sockptr);
+  RNA_pointer_create(ptr->owner_id, &RNA_NodeSocket, output, &sockptr);
 
   uiItemR(layout, &sockptr, "default_value", 0, "", ICON_NONE);
 }
@@ -205,8 +207,9 @@ static void node_browse_tex_cb(bContext *C, void *ntree_v, void *node_v)
   bNode *node = node_v;
   Tex *tex;
 
-  if (node->menunr < 1)
+  if (node->menunr < 1) {
     return;
+  }
 
   if (node->id) {
     id_us_min(node->id);
@@ -220,8 +223,9 @@ static void node_browse_tex_cb(bContext *C, void *ntree_v, void *node_v)
 
   nodeSetActive(ntree, node);
 
-  if (ntree->type == NTREE_TEXTURE)
+  if (ntree->type == NTREE_TEXTURE) {
     ntreeTexCheckCyclics(ntree);
+  }
 
   // allqueue(REDRAWBUTSSHADING, 0);
   // allqueue(REDRAWNODE, 0);
@@ -244,6 +248,11 @@ static void node_buts_texture(uiLayout *layout, bContext *UNUSED(C), PointerRNA 
     /* Number Drawing not optimal here, better have a list*/
     uiItemR(layout, ptr, "node_output", 0, "", ICON_NONE);
   }
+}
+
+static void node_buts_map_range(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+{
+  uiItemR(layout, ptr, "clamp", 0, NULL, ICON_NONE);
 }
 
 static void node_buts_math(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
@@ -1143,8 +1152,9 @@ static void node_shader_buts_script_ex(uiLayout *layout, bContext *C, PointerRNA
   node_shader_buts_script(layout, C, ptr);
 
 #if 0 /* not implemented yet */
-  if (RNA_enum_get(ptr, "mode") == NODE_SCRIPT_EXTERNAL)
+  if (RNA_enum_get(ptr, "mode") == NODE_SCRIPT_EXTERNAL) {
     uiItemR(layout, ptr, "use_auto_update", 0, NULL, ICON_NONE);
+  }
 #endif
 }
 
@@ -1177,6 +1187,11 @@ static void node_shader_buts_ambient_occlusion(uiLayout *layout,
   uiItemR(layout, ptr, "only_local", 0, NULL, ICON_NONE);
 }
 
+static void node_shader_buts_white_noise(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+{
+  uiItemR(layout, ptr, "dimensions", 0, "", ICON_NONE);
+}
+
 /* only once called */
 static void node_shader_set_butfunc(bNodeType *ntype)
 {
@@ -1205,10 +1220,13 @@ static void node_shader_set_butfunc(bNodeType *ntype)
     case SH_NODE_VALTORGB:
       ntype->draw_buttons = node_buts_colorramp;
       break;
+    case SH_NODE_MAP_RANGE:
+      ntype->draw_buttons = node_buts_map_range;
+      break;
     case SH_NODE_MATH:
       ntype->draw_buttons = node_buts_math;
       break;
-    case SH_NODE_VECT_MATH:
+    case SH_NODE_VECTOR_MATH:
       ntype->draw_buttons = node_shader_buts_vect_math;
       break;
     case SH_NODE_VECT_TRANSFORM:
@@ -1318,6 +1336,9 @@ static void node_shader_set_butfunc(bNodeType *ntype)
     case SH_NODE_AMBIENT_OCCLUSION:
       ntype->draw_buttons = node_shader_buts_ambient_occlusion;
       break;
+    case SH_NODE_TEX_WHITE_NOISE:
+      ntype->draw_buttons = node_shader_buts_white_noise;
+      break;
   }
 }
 
@@ -1351,7 +1372,7 @@ static void node_composit_buts_image(uiLayout *layout, bContext *C, PointerRNA *
   bNode *node = ptr->data;
   PointerRNA imaptr, iuserptr;
 
-  RNA_pointer_create((ID *)ptr->id.data, &RNA_ImageUser, node->storage, &iuserptr);
+  RNA_pointer_create(ptr->owner_id, &RNA_ImageUser, node->storage, &iuserptr);
   uiLayoutSetContextPointer(layout, "image_user", &iuserptr);
   uiTemplateID(layout,
                C,
@@ -1378,7 +1399,7 @@ static void node_composit_buts_image_ex(uiLayout *layout, bContext *C, PointerRN
   bNode *node = ptr->data;
   PointerRNA iuserptr;
 
-  RNA_pointer_create((ID *)ptr->id.data, &RNA_ImageUser, node->storage, &iuserptr);
+  RNA_pointer_create(ptr->owner_id, &RNA_ImageUser, node->storage, &iuserptr);
   uiLayoutSetContextPointer(layout, "image_user", &iuserptr);
   uiTemplateImage(layout, C, ptr, "image", &iuserptr, 0, 1);
 }
@@ -1939,7 +1960,7 @@ static void node_composit_buts_file_output_ex(uiLayout *layout, bContext *C, Poi
   }
   /* XXX collection lookup does not return the ID part of the pointer,
    * setting this manually here */
-  active_input_ptr.id.data = ptr->id.data;
+  active_input_ptr.owner_id = ptr->owner_id;
 
   col = uiLayoutColumn(row, true);
   ot = WM_operatortype_find("NODE_OT_output_file_move_active_socket", false);
@@ -2679,6 +2700,19 @@ static void node_composit_buts_brightcontrast(uiLayout *layout,
   uiItemR(layout, ptr, "use_premultiply", 0, NULL, ICON_NONE);
 }
 
+static void node_composit_buts_denoise(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+{
+#ifndef WITH_OPENIMAGEDENOISE
+  uiItemL(layout, IFACE_("Disabled, built without OpenImageDenoise"), ICON_ERROR);
+#else
+  if (!BLI_cpu_support_sse41()) {
+    uiItemL(layout, IFACE_("Disabled, CPU with SSE4.1 is required"), ICON_ERROR);
+  }
+#endif
+
+  uiItemR(layout, ptr, "use_hdr", 0, NULL, ICON_NONE);
+}
+
 /* only once called */
 static void node_composit_set_butfunc(bNodeType *ntype)
 {
@@ -2912,6 +2946,10 @@ static void node_composit_set_butfunc(bNodeType *ntype)
       break;
     case CMP_NODE_BRIGHTCONTRAST:
       ntype->draw_buttons = node_composit_buts_brightcontrast;
+      break;
+    case CMP_NODE_DENOISE:
+      ntype->draw_buttons = node_composit_buts_denoise;
+      break;
   }
 }
 
@@ -2934,7 +2972,7 @@ static void node_texture_buts_proc(uiLayout *layout, bContext *UNUSED(C), Pointe
 {
   PointerRNA tex_ptr;
   bNode *node = ptr->data;
-  ID *id = ptr->id.data;
+  ID *id = ptr->owner_id;
   Tex *tex = (Tex *)node->storage;
   uiLayout *col, *row;
 
@@ -3028,7 +3066,7 @@ static void node_texture_buts_image_ex(uiLayout *layout, bContext *C, PointerRNA
   bNode *node = ptr->data;
   PointerRNA iuserptr;
 
-  RNA_pointer_create((ID *)ptr->id.data, &RNA_ImageUser, node->storage, &iuserptr);
+  RNA_pointer_create(ptr->owner_id, &RNA_ImageUser, node->storage, &iuserptr);
   uiTemplateImage(layout, C, ptr, "image", &iuserptr, 0, 0);
 }
 
@@ -3090,7 +3128,7 @@ static void node_texture_set_butfunc(bNodeType *ntype)
 
 static void node_property_update_default(Main *bmain, Scene *UNUSED(scene), PointerRNA *ptr)
 {
-  bNodeTree *ntree = ptr->id.data;
+  bNodeTree *ntree = (bNodeTree *)ptr->owner_id;
   bNode *node = ptr->data;
   ED_node_tag_update_nodetree(bmain, ntree, node);
 }
@@ -3260,7 +3298,7 @@ static void node_file_output_socket_draw(bContext *C,
                                          PointerRNA *ptr,
                                          PointerRNA *node_ptr)
 {
-  bNodeTree *ntree = ptr->id.data;
+  bNodeTree *ntree = (bNodeTree *)ptr->owner_id;
   bNodeSocket *sock = ptr->data;
   uiLayout *row;
   PointerRNA inputptr, imfptr;
@@ -3329,7 +3367,18 @@ static void std_node_socket_draw(
       uiItemR(layout, ptr, "default_value", 0, text, 0);
       break;
     case SOCK_VECTOR:
-      uiTemplateComponentMenu(layout, ptr, "default_value", text);
+      if (sock->flag & SOCK_COMPACT) {
+        uiTemplateComponentMenu(layout, ptr, "default_value", text);
+      }
+      else {
+        if (sock->typeinfo->subtype == PROP_DIRECTION) {
+          uiItemR(layout, ptr, "default_value", 0, "", ICON_NONE);
+        }
+        else {
+          uiLayout *column = uiLayoutColumn(layout, true);
+          uiItemR(column, ptr, "default_value", 0, text, ICON_NONE);
+        }
+      }
       break;
     case SOCK_RGBA:
     case SOCK_STRING: {

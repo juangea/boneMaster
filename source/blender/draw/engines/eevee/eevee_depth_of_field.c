@@ -97,6 +97,9 @@ int EEVEE_depth_of_field_init(EEVEE_ViewLayerData *UNUSED(sldata),
 
     int buffer_size[2] = {(int)viewport_size[0] / 2, (int)viewport_size[1] / 2};
 
+    buffer_size[0] = max_ii(1, buffer_size[0]);
+    buffer_size[1] = max_ii(1, buffer_size[1]);
+
     eGPUTextureFormat down_format = DRW_state_draw_background() ? GPU_R11F_G11F_B10F : GPU_RGBA16F;
 
     effects->dof_down_near = DRW_texture_pool_query_2d(
@@ -185,7 +188,7 @@ void EEVEE_depth_of_field_cache_init(EEVEE_ViewLayerData *UNUSED(sldata), EEVEE_
     /**  Depth of Field algorithm
      *
      * Overview :
-     * - Downsample the color buffer into 2 buffers weighted with
+     * - Down-sample the color buffer into 2 buffers weighted with
      *   CoC values. Also output CoC into a texture.
      * - Shoot quads for every pixel and expand it depending on the CoC.
      *   Do one pass for near Dof and one pass for far Dof.
@@ -204,7 +207,7 @@ void EEVEE_depth_of_field_cache_init(EEVEE_ViewLayerData *UNUSED(sldata), EEVEE_
     DRW_shgroup_uniform_vec2(grp, "dofParams", effects->dof_params, 1);
     DRW_shgroup_call(grp, quad, NULL);
 
-    DRW_PASS_CREATE(psl->dof_scatter, DRW_STATE_WRITE_COLOR | DRW_STATE_ADDITIVE_FULL);
+    DRW_PASS_CREATE(psl->dof_scatter, DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD_FULL);
 
     /* This create an empty batch of N triangles to be positioned
      * by the vertex shader 0.4ms against 6ms with instancing */
@@ -217,7 +220,7 @@ void EEVEE_depth_of_field_cache_init(EEVEE_ViewLayerData *UNUSED(sldata), EEVEE_
     DRW_shgroup_uniform_texture_ref(grp, "cocBuffer", &effects->dof_coc);
     DRW_shgroup_uniform_vec4(grp, "bokehParams", effects->dof_bokeh, 2);
 
-    DRW_shgroup_call_procedural_triangles(grp, sprite_len, NULL);
+    DRW_shgroup_call_procedural_triangles(grp, NULL, sprite_len);
 
     DRW_PASS_CREATE(psl->dof_resolve, DRW_STATE_WRITE_COLOR);
 

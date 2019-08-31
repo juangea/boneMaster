@@ -156,7 +156,7 @@ void DRW_globals_update(void)
   gb->sizeEdgeFix = U.pixelsize * (0.5f + 2.0f * (2.0f * (gb->sizeEdge * (float)M_SQRT1_2)));
 
   /* Color management. */
-  if (DRW_state_is_image_render()) {
+  if (!DRW_state_do_color_management()) {
     float *color = gb->UBO_FIRST_COLOR;
     do {
       /* TODO more accurate transform. */
@@ -243,6 +243,7 @@ extern char datatoc_gpu_shader_point_varying_color_frag_glsl[];
 
 extern char datatoc_object_mball_handles_vert_glsl[];
 extern char datatoc_object_empty_axes_vert_glsl[];
+extern char datatoc_object_color_axes_vert_glsl[];
 
 typedef struct COMMON_Shaders {
   struct GPUShader *shape_outline;
@@ -262,6 +263,7 @@ typedef struct COMMON_Shaders {
   struct GPUShader *volume_velocity_needle_sh;
   struct GPUShader *volume_velocity_sh;
   struct GPUShader *empty_axes_sh;
+  struct GPUShader *color_axes_sh;
 
   struct GPUShader *mball_handles;
 } COMMON_Shaders;
@@ -501,7 +503,7 @@ struct DRWCallBuffer *buffer_instance(DRWPass *pass,
                               });
 
   DRWShadingGroup *grp = DRW_shgroup_create(sh_inst, pass);
-  DRW_shgroup_state_disable(grp, DRW_STATE_BLEND);
+  DRW_shgroup_state_disable(grp, DRW_STATE_BLEND_ALPHA);
   if (sh_cfg == GPU_SHADER_CFG_CLIPPED) {
     DRW_shgroup_state_enable(grp, DRW_STATE_CLIP_PLANES);
   }
@@ -549,10 +551,44 @@ struct DRWCallBuffer *buffer_instance_empty_axes(DRWPass *pass,
   return DRW_shgroup_call_buffer_instance(grp, g_formats.instance_sized, geom);
 }
 
-struct DRWCallBuffer *buffer_instance_outline(DRWPass *pass, struct GPUBatch *geom, int *baseid)
+struct DRWCallBuffer *buffer_instance_color_axes(DRWPass *pass,
+                                                 struct GPUBatch *geom,
+                                                 DRWShadingGroup **r_grp,
+                                                 eGPUShaderConfig sh_cfg)
 {
-  GPUShader *sh_inst = GPU_shader_get_builtin_shader(
-      GPU_SHADER_INSTANCE_VARIYING_ID_VARIYING_SIZE);
+  COMMON_Shaders *sh_data = &g_shaders[sh_cfg];
+  if (sh_data->color_axes_sh == NULL) {
+    const GPUShaderConfigData *sh_cfg_data = &GPU_shader_cfg_data[sh_cfg];
+    sh_data->color_axes_sh = GPU_shader_create_from_arrays({
+        .vert = (const char *[]){sh_cfg_data->lib, datatoc_object_color_axes_vert_glsl, NULL},
+        .frag = (const char *[]){datatoc_gpu_shader_flat_color_frag_glsl, NULL},
+        .defs = (const char *[]){sh_cfg_data->def, NULL},
+    });
+  }
+
+  DRW_shgroup_instance_format(g_formats.instance_sized,
+                              {
+                                  {"color", DRW_ATTR_FLOAT, 3},
+                                  {"size", DRW_ATTR_FLOAT, 1},
+                                  {"InstanceModelMatrix", DRW_ATTR_FLOAT, 16},
+                              });
+
+  DRWShadingGroup *grp = DRW_shgroup_create(sh_data->color_axes_sh, pass);
+  DRW_shgroup_uniform_vec3(grp, "screenVecs[0]", DRW_viewport_screenvecs_get(), 2);
+  if (sh_cfg == GPU_SHADER_CFG_CLIPPED) {
+    DRW_shgroup_state_enable(grp, DRW_STATE_CLIP_PLANES);
+  }
+  *r_grp = grp;
+  return DRW_shgroup_call_buffer_instance(grp, g_formats.instance_sized, geom);
+}
+
+struct DRWCallBuffer *buffer_instance_outline(DRWPass *pass,
+                                              struct GPUBatch *geom,
+                                              const int *baseid,
+                                              eGPUShaderConfig sh_cfg)
+{
+  GPUShader *sh_inst = GPU_shader_get_builtin_shader_with_config(
+      GPU_SHADER_INSTANCE_VARIYING_ID_VARIYING_SIZE, sh_cfg);
 
   DRW_shgroup_instance_format(g_formats.instance_outline,
                               {
@@ -564,6 +600,9 @@ struct DRWCallBuffer *buffer_instance_outline(DRWPass *pass, struct GPUBatch *ge
   DRWShadingGroup *grp = DRW_shgroup_create(sh_inst, pass);
   DRW_shgroup_uniform_int(grp, "baseId", baseid, 1);
 
+  if (sh_cfg == GPU_SHADER_CFG_CLIPPED) {
+    DRW_shgroup_state_enable(grp, DRW_STATE_CLIP_PLANES);
+  }
   return DRW_shgroup_call_buffer_instance(grp, g_formats.instance_outline, geom);
 }
 
@@ -933,7 +972,7 @@ struct DRWCallBuffer *buffer_instance_bone_stick(DRWPass *pass, eGPUShaderConfig
       {
           {"boneStart", DRW_ATTR_FLOAT, 3},
           {"boneEnd", DRW_ATTR_FLOAT, 3},
-          {"wireColor", DRW_ATTR_FLOAT, 4}, /* TODO port theses to uchar color */
+          {"wireColor", DRW_ATTR_FLOAT, 4}, /* TODO port these to uchar color */
           {"boneColor", DRW_ATTR_FLOAT, 4},
           {"headColor", DRW_ATTR_FLOAT, 4},
           {"tailColor", DRW_ATTR_FLOAT, 4},
@@ -969,10 +1008,53 @@ struct DRWCallBuffer *buffer_instance_bone_dof(struct DRWPass *pass,
 
   DRWShadingGroup *grp = DRW_shgroup_create(sh_data->bone_dofs, pass);
   if (blend) {
-    DRW_shgroup_state_enable(grp, DRW_STATE_BLEND);
+    DRW_shgroup_state_enable(grp, DRW_STATE_BLEND_ALPHA);
     DRW_shgroup_state_disable(grp, DRW_STATE_CULL_FRONT);
   }
   return DRW_shgroup_call_buffer_instance(grp, g_formats.instance_bone_dof, geom);
+}
+
+void empties_callbuffers_create(struct DRWPass *pass,
+                                DRWEmptiesBufferList *buffers,
+                                eGPUShaderConfig sh_cfg)
+{
+  struct GPUBatch *geom;
+
+  geom = DRW_cache_plain_axes_get();
+  buffers->plain_axes = buffer_instance(pass, geom, sh_cfg);
+
+  geom = DRW_cache_empty_cube_get();
+  buffers->cube = buffer_instance(pass, geom, sh_cfg);
+
+  geom = DRW_cache_circle_get();
+  buffers->circle = buffer_instance(pass, geom, sh_cfg);
+
+  geom = DRW_cache_empty_sphere_get();
+  buffers->sphere = buffer_instance(pass, geom, sh_cfg);
+
+  geom = DRW_cache_sphere_get();
+  buffers->sphere_solid = buffer_instance_solid(pass, geom);
+
+  geom = DRW_cache_empty_cylinder_get();
+  buffers->cylinder = buffer_instance(pass, geom, sh_cfg);
+
+  geom = DRW_cache_empty_capsule_cap_get();
+  buffers->capsule_cap = buffer_instance(pass, geom, sh_cfg);
+
+  geom = DRW_cache_empty_capsule_body_get();
+  buffers->capsule_body = buffer_instance(pass, geom, sh_cfg);
+
+  geom = DRW_cache_empty_cone_get();
+  buffers->cone = buffer_instance(pass, geom, sh_cfg);
+
+  geom = DRW_cache_single_arrow_get();
+  buffers->single_arrow = buffer_instance(pass, geom, sh_cfg);
+
+  geom = DRW_cache_single_line_get();
+  buffers->single_arrow_line = buffer_instance(pass, geom, sh_cfg);
+
+  geom = DRW_cache_bone_arrows_get();
+  buffers->empty_axes = buffer_instance_empty_axes(pass, geom, sh_cfg);
 }
 
 struct GPUShader *mpath_line_shader_get(void)
@@ -1199,7 +1281,7 @@ float *DRW_color_background_blend_get(int theme_id)
   return ret;
 }
 
-bool DRW_object_is_flat(Object *ob, int *axis)
+bool DRW_object_is_flat(Object *ob, int *r_axis)
 {
   float dim[3];
 
@@ -1210,15 +1292,15 @@ bool DRW_object_is_flat(Object *ob, int *axis)
 
   BKE_object_dimensions_get(ob, dim);
   if (dim[0] == 0.0f) {
-    *axis = 0;
+    *r_axis = 0;
     return true;
   }
   else if (dim[1] == 0.0f) {
-    *axis = 1;
+    *r_axis = 1;
     return true;
   }
   else if (dim[2] == 0.0f) {
-    *axis = 2;
+    *r_axis = 2;
     return true;
   }
   return false;

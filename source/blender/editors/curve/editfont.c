@@ -71,11 +71,15 @@
 
 static int kill_selection(Object *obedit, int ins);
 
-/************************* utilities ******************************/
+/** \} */
 
-static char findaccent(char char1, unsigned int code)
+/* -------------------------------------------------------------------- */
+/** \name Internal Utilities
+ * \{ */
+
+static wchar_t findaccent(wchar_t char1, unsigned int code)
 {
-  char new = 0;
+  wchar_t new = 0;
 
   if (char1 == 'a') {
     if (code == '`') {
@@ -170,7 +174,7 @@ static char findaccent(char char1, unsigned int code)
       new = 186;
     }
     else if (code == 'e') {
-      new = 143;
+      new = 339;
     }
     else if (code == 'c') {
       new = 169;
@@ -191,7 +195,7 @@ static char findaccent(char char1, unsigned int code)
   }
   else if (char1 == 't') {
     if (code == 'm') {
-      new = 153;
+      new = 8482;
     }
   }
   else if (char1 == 'u') {
@@ -342,7 +346,7 @@ static char findaccent(char char1, unsigned int code)
       new = 247;
     }
     if (code == '|') {
-      new = 135;
+      new = 8224;
     }
     if (code == '+') {
       new = 177;
@@ -350,15 +354,15 @@ static char findaccent(char char1, unsigned int code)
   }
   else if (char1 == '|') {
     if (code == '-') {
-      new = 135;
+      new = 8224;
     }
     if (code == '=') {
-      new = 136;
+      new = 8225;
     }
   }
   else if (char1 == '=') {
     if (code == '|') {
-      new = 136;
+      new = 8225;
     }
   }
   else if (char1 == '+') {
@@ -407,7 +411,6 @@ static int insert_into_textbuf(Object *obedit, uintptr_t c)
 
 static void text_update_edited(bContext *C, Object *obedit, int mode)
 {
-  Depsgraph *depsgraph = CTX_data_depsgraph(C);
   Curve *cu = obedit->data;
   EditFont *ef = cu->editfont;
 
@@ -421,6 +424,7 @@ static void text_update_edited(bContext *C, Object *obedit, int mode)
   else {
     /* depsgraph runs above, but since we're not tagging for update, call direct */
     /* We need evaluated data here. */
+    Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
     BKE_vfont_to_curve(DEG_get_evaluated_object(depsgraph, obedit), mode);
   }
 
@@ -440,8 +444,48 @@ static void text_update_edited(bContext *C, Object *obedit, int mode)
   WM_event_add_notifier(C, NC_GEOM | ND_DATA, obedit->data);
 }
 
+static int kill_selection(Object *obedit, int ins) /* 1 == new character */
+{
+  Curve *cu = obedit->data;
+  EditFont *ef = cu->editfont;
+  int selend, selstart, direction;
+  int offset = 0;
+  int getfrom;
+
+  direction = BKE_vfont_select_get(obedit, &selstart, &selend);
+  if (direction) {
+    int size;
+    if (ins) {
+      offset = 1;
+    }
+    if (ef->pos >= selstart) {
+      ef->pos = selstart + offset;
+    }
+    if ((direction == -1) && ins) {
+      selstart++;
+      selend++;
+    }
+    getfrom = selend + offset;
+    if (ins == 0) {
+      getfrom++;
+    }
+    size = (ef->len * sizeof(wchar_t)) - (selstart * sizeof(wchar_t)) + (offset * sizeof(wchar_t));
+    memmove(ef->textbuf + selstart, ef->textbuf + getfrom, size);
+    memmove(ef->textbufinfo + selstart,
+            ef->textbufinfo + getfrom,
+            ((ef->len - selstart) + offset) * sizeof(CharInfo));
+    ef->len -= ((selend - selstart) + 1);
+    ef->selstart = ef->selend = 0;
+  }
+
+  return (direction);
+}
+
+/** \} */
+
 /* -------------------------------------------------------------------- */
-/* Generic Paste Functions */
+/** \name Generic Paste Functions
+ * \{ */
 
 /* text_update_edited(C, scene, obedit, 1, FO_EDIT); */
 static bool font_paste_wchar(Object *obedit,
@@ -506,8 +550,11 @@ static bool font_paste_utf8(bContext *C, const char *str, const size_t str_len)
   return retval;
 }
 
+/** \} */
+
 /* -------------------------------------------------------------------- */
-/* Paste From File*/
+/** \name Paste From File Operator
+ * \{ */
 
 static int paste_from_file(bContext *C, ReportList *reports, const char *filename)
 {
@@ -585,12 +632,16 @@ void FONT_OT_text_paste_from_file(wmOperatorType *ot)
                                  FILE_SORT_ALPHA);
 }
 
-/******************* text to object operator ********************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Text To Object
+ * \{ */
 
 static void txt_add_object(bContext *C, TextLine *firstline, int totline, const float offset[3])
 {
   Main *bmain = CTX_data_main(C);
-  Depsgraph *depsgraph = CTX_data_depsgraph(C);
+  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   Curve *cu;
@@ -606,7 +657,7 @@ static void txt_add_object(bContext *C, TextLine *firstline, int totline, const 
   base = view_layer->basact;
 
   /* seems to assume view align ? TODO - look into this, could be an operator option */
-  ED_object_base_init_transform(C, base, NULL, rot);
+  ED_object_base_init_transform_on_add(base->object, NULL, rot);
 
   BKE_object_where_is_calc(depsgraph, scene, obedit);
 
@@ -703,46 +754,11 @@ void ED_text_to_object(bContext *C, Text *text, const bool split_lines)
   }
 }
 
-/********************** utilities ***************************/
+/** \} */
 
-static int kill_selection(Object *obedit, int ins) /* 1 == new character */
-{
-  Curve *cu = obedit->data;
-  EditFont *ef = cu->editfont;
-  int selend, selstart, direction;
-  int offset = 0;
-  int getfrom;
-
-  direction = BKE_vfont_select_get(obedit, &selstart, &selend);
-  if (direction) {
-    int size;
-    if (ins) {
-      offset = 1;
-    }
-    if (ef->pos >= selstart) {
-      ef->pos = selstart + offset;
-    }
-    if ((direction == -1) && ins) {
-      selstart++;
-      selend++;
-    }
-    getfrom = selend + offset;
-    if (ins == 0) {
-      getfrom++;
-    }
-    size = (ef->len * sizeof(wchar_t)) - (selstart * sizeof(wchar_t)) + (offset * sizeof(wchar_t));
-    memmove(ef->textbuf + selstart, ef->textbuf + getfrom, size);
-    memmove(ef->textbufinfo + selstart,
-            ef->textbufinfo + getfrom,
-            ((ef->len - selstart) + offset) * sizeof(CharInfo));
-    ef->len -= ((selend - selstart) + 1);
-    ef->selstart = ef->selend = 0;
-  }
-
-  return (direction);
-}
-
-/******************* set style operator ********************/
+/* -------------------------------------------------------------------- */
+/** \name Set Style Operator
+ * \{ */
 
 static const EnumPropertyItem style_items[] = {
     {CU_CHINFO_BOLD, "BOLD", 0, "Bold", ""},
@@ -806,7 +822,11 @@ void FONT_OT_style_set(wmOperatorType *ot)
   RNA_def_boolean(ot->srna, "clear", 0, "Clear", "Clear style rather than setting it");
 }
 
-/******************* toggle style operator ********************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Toggle Style Operator
+ * \{ */
 
 static int toggle_style_exec(bContext *C, wmOperator *op)
 {
@@ -845,8 +865,11 @@ void FONT_OT_style_toggle(wmOperatorType *ot)
       ot->srna, "style", style_items, CU_CHINFO_BOLD, "Style", "Style to set selection to");
 }
 
+/** \} */
+
 /* -------------------------------------------------------------------- */
-/* Select All */
+/** \name Select All Operator
+ * \{ */
 
 static int font_select_all_exec(bContext *C, wmOperator *UNUSED(op))
 {
@@ -883,7 +906,11 @@ void FONT_OT_select_all(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
-/******************* copy text operator ********************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Copy Text Operator
+ * \{ */
 
 static void copy_selection(Object *obedit)
 {
@@ -932,7 +959,11 @@ void FONT_OT_text_copy(wmOperatorType *ot)
   ot->poll = ED_operator_editfont;
 }
 
-/******************* cut text operator ********************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Cut Text Operator
+ * \{ */
 
 static int cut_text_exec(bContext *C, wmOperator *UNUSED(op))
 {
@@ -966,7 +997,11 @@ void FONT_OT_text_cut(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
-/******************* paste text operator ********************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Paste Text Operator
+ * \{ */
 
 static bool paste_selection(Object *obedit, ReportList *reports)
 {
@@ -1066,7 +1101,11 @@ void FONT_OT_text_paste(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
-/************************ move operator ************************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Move Operator
+ * \{ */
 
 static const EnumPropertyItem move_type_items[] = {
     {LINE_BEGIN, "LINE_BEGIN", 0, "Line Begin", ""},
@@ -1084,7 +1123,7 @@ static const EnumPropertyItem move_type_items[] = {
 
 static int move_cursor(bContext *C, int type, const bool select)
 {
-  Depsgraph *depsgraph = CTX_data_depsgraph(C);
+  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   Object *obedit = CTX_data_edit_object(C);
   Curve *cu = obedit->data;
   EditFont *ef = cu->editfont;
@@ -1232,7 +1271,11 @@ void FONT_OT_move(wmOperatorType *ot)
   RNA_def_enum(ot->srna, "type", move_type_items, LINE_BEGIN, "Type", "Where to move cursor to");
 }
 
-/******************* move select operator ********************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Move Select Operator
+ * \{ */
 
 static int move_select_exec(bContext *C, wmOperator *op)
 {
@@ -1264,7 +1307,11 @@ void FONT_OT_move_select(wmOperatorType *ot)
                "Where to move cursor to, to make a selection");
 }
 
-/************************* change spacing **********************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Change Spacing
+ * \{ */
 
 static int change_spacing_exec(bContext *C, wmOperator *op)
 {
@@ -1314,7 +1361,11 @@ void FONT_OT_change_spacing(wmOperatorType *ot)
               20);
 }
 
-/************************* change character **********************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Change Character
+ * \{ */
 
 static int change_character_exec(bContext *C, wmOperator *op)
 {
@@ -1368,7 +1419,11 @@ void FONT_OT_change_character(wmOperatorType *ot)
               255);
 }
 
-/******************* line break operator ********************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Line Break Operator
+ * \{ */
 
 static int line_break_exec(bContext *C, wmOperator *UNUSED(op))
 {
@@ -1400,7 +1455,11 @@ void FONT_OT_line_break(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
-/******************* delete operator **********************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Delete Operator
+ * \{ */
 
 static const EnumPropertyItem delete_type_items[] = {
     {DEL_NEXT_CHAR, "NEXT_CHARACTER", 0, "Next Character", ""},
@@ -1549,7 +1608,11 @@ void FONT_OT_delete(wmOperatorType *ot)
                "Which part of the text to delete");
 }
 
-/*********************** insert text operator *************************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Insert Text Operator
+ * \{ */
 
 static int insert_text_exec(bContext *C, wmOperator *op)
 {
@@ -1700,7 +1763,12 @@ void FONT_OT_text_insert(wmOperatorType *ot)
       "Next typed character will strike through previous, for special character input");
 }
 
-/*********************** textbox add operator *************************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Textbox Add Operator
+ * \{ */
+
 static int textbox_add_exec(bContext *C, wmOperator *UNUSED(op))
 {
   Object *obedit = CTX_data_active_object(C);
@@ -1736,7 +1804,11 @@ void FONT_OT_textbox_add(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
-/*********************** textbox remove operator *************************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Textbox Remove Operator
+ * \{ */
 
 static int textbox_remove_exec(bContext *C, wmOperator *op)
 {
@@ -1778,7 +1850,11 @@ void FONT_OT_textbox_remove(wmOperatorType *ot)
   RNA_def_int(ot->srna, "index", 0, 0, INT_MAX, "Index", "The current text box", 0, INT_MAX);
 }
 
-/***************** editmode enter/exit ********************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Editmode Enter/Exit
+ * \{ */
 
 void ED_curve_editfont_make(Object *obedit)
 {
@@ -1851,7 +1927,11 @@ void ED_curve_editfont_free(Object *obedit)
   BKE_curve_editfont_free((Curve *)obedit->data);
 }
 
-/********************** set case operator *********************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Set Case Operator
+ * \{ */
 
 static const EnumPropertyItem case_items[] = {
     {CASE_LOWER, "LOWER", 0, "Lower", ""},
@@ -1920,7 +2000,11 @@ void FONT_OT_case_set(wmOperatorType *ot)
   RNA_def_enum(ot->srna, "case", case_items, CASE_LOWER, "Case", "Lower or upper case");
 }
 
-/********************** toggle case operator *********************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Toggle Case Operator
+ * \{ */
 
 static int toggle_case_exec(bContext *C, wmOperator *UNUSED(op))
 {
@@ -2031,7 +2115,7 @@ static int open_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event)
 
   if (pprop->prop) {
     idptr = RNA_property_pointer_get((PointerRNA *)pprop, pprop->prop);
-    vfont = idptr.id.data;
+    vfont = (VFont *)idptr.owner_id;
   }
 
   path = (vfont && !BKE_vfont_is_builtin(vfont)) ? vfont->name : U.fontdir;
@@ -2071,7 +2155,11 @@ void FONT_OT_open(wmOperatorType *ot)
                                  FILE_SORT_ALPHA);
 }
 
-/******************* delete operator *********************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Delete Operator
+ * \{ */
 
 static int font_unlink_exec(bContext *C, wmOperator *op)
 {
@@ -2190,3 +2278,5 @@ bool ED_curve_editfont_select_pick(
     return false;
   }
 }
+
+/** \} */
