@@ -312,6 +312,33 @@ void BlenderSync::sync_integrator()
     integrator->subsurface_samples = subsurface_samples;
     integrator->volume_samples = volume_samples;
   }
+  
+	int samples = get_int(cscene, "samples");
+  if(get_boolean(cscene, "use_auto_scramble")){
+    if(get_boolean(cscene, "use_square_samples")){
+      samples *= samples;
+    }
+    if (samples < 64 || preview){
+        integrator->scrambling_distance = 1.0f;
+    }
+    else if (samples < 256){
+        integrator->scrambling_distance = 0.5f - (samples-64)*0.3f/192;
+    }
+    else if (samples < 1024){
+        integrator->scrambling_distance = 0.2f - (samples-256)*0.1f/768;
+    }
+    else if (samples < 4096){
+        integrator->scrambling_distance = 0.1f - (samples-1024)*0.08f/3072;
+    }
+    else{
+        integrator->scrambling_distance = 0.02f;
+    }
+  }
+  else
+  {
+    integrator->scrambling_distance = get_float(cscene, "scrambling_distance");
+  }
+
 
   if (b_scene.render().use_simplify()) {
     if (preview) {
@@ -738,6 +765,7 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine &b_engine,
   int aa_samples = get_int(cscene, "aa_samples");
   int preview_samples = get_int(cscene, "preview_samples");
   int preview_aa_samples = get_int(cscene, "preview_aa_samples");
+  bool bpt = (get_enum(cscene,"progressive") == 0);
 
   if (get_boolean(cscene, "use_square_samples")) {
     aa_samples = aa_samples * aa_samples;
@@ -773,6 +801,15 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine &b_engine,
 
   /* tiles */
   const bool is_cpu = (params.device.type == DEVICE_CPU);
+  const bool is_ocl = (params.device.type == DEVICE_OPENCL);
+  bool use_denoising = false;
+  BL::Scene::view_layers_iterator b_view_layer;
+  for(b_scene.view_layers.begin(b_view_layer); b_view_layer != b_scene.view_layers.end(); ++b_view_layer) {
+    PointerRNA crl = RNA_pointer_get(&b_view_layer->ptr, "cycles");
+    if(get_boolean(crl, "use_denoising")) {
+      use_denoising = true;
+    }
+  }
   if (!is_cpu && !background) {
     /* currently GPU could be much slower than CPU when using tiles,
      * still need to be investigated, but meanwhile make it possible
@@ -785,7 +822,53 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine &b_engine,
   else {
     int tile_x = b_engine.tile_x();
     int tile_y = b_engine.tile_y();
-
+    
+		/* auto tile size*/
+		if (get_boolean(cscene, "use_auto_tiles")){
+			/*  rays to shoot per tile = tile_x*tile_y*spp. How many rays should at once are optimal depends on the GPU,
+			 *  so you can adapt this to your own test. Those numbers where found for the 1080Ti and seem to work well on the 980 and 2070
+			 */
+			 
+			if (samples > 999 && !is_ocl) { //split kernel needs bigger tile size do to it's nature to fully feed the GPU with work.
+				tile_x = 16;
+				tile_y = 16;			
+			}
+			else if (samples > 256 && !is_ocl){
+				tile_x = 32;
+				tile_y = 32;
+			}
+			else if (samples > 64 && !is_ocl){
+				tile_x = 64;
+				tile_y = 64;
+			}
+			else if ((samples > 16 && !is_ocl) || (is_ocl && samples > 999)){
+				tile_x = 128;
+				tile_y = 128;
+			}
+			else if ((samples > 8 && !is_ocl) || (is_ocl && samples > 249)){
+				tile_x = 256;
+				tile_y = 256;
+			}
+			else if ((samples > 4 && !is_ocl) || (is_ocl && samples > 128)){
+				tile_x = 512;
+				tile_y = 512;
+			}
+			else {
+				tile_x = 2048;
+				tile_y = 2048;			
+			}
+			if (bpt && is_ocl == true) {
+				tile_x /= 2;
+				tile_y /= 2;
+			}
+			if (use_denoising) {
+				tile_x = 128;
+				tile_y = 128;
+			}
+			if (is_cpu) {
+				tile_x = tile_y = 16;
+			} //cpus like 8x8 or 16x16 tiles, whatever sample number is used. but it only works with CPU only, not GPU+CPU
+		}
     params.tile_size = make_int2(tile_x, tile_y);
   }
 
@@ -793,7 +876,15 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine &b_engine,
     params.tile_order = (TileOrder)get_enum(cscene, "tile_order");
   }
   else {
-    params.tile_order = TILE_BOTTOM_TO_TOP;
+		int width = b_engine.resolution_x();
+		int height = b_engine.resolution_y();
+		
+		if (width>height) {
+			params.tile_order = TILE_LEFT_TO_RIGHT;
+		}
+		else {
+			params.tile_order = TILE_BOTTOM_TO_TOP;
+		}
   }
 
   /* other parameters */
@@ -812,13 +903,8 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine &b_engine,
                               !b_r.use_save_buffers();
 
   if (params.progressive_refine) {
-    BL::Scene::view_layers_iterator b_view_layer;
-    for (b_scene.view_layers.begin(b_view_layer); b_view_layer != b_scene.view_layers.end();
-         ++b_view_layer) {
-      PointerRNA crl = RNA_pointer_get(&b_view_layer->ptr, "cycles");
-      if (get_boolean(crl, "use_denoising")) {
-        params.progressive_refine = false;
-      }
+		if(use_denoising) {
+			params.progressive_refine = false;
     }
   }
 

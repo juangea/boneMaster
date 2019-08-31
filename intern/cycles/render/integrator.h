@@ -84,7 +84,9 @@ class Integrator : public Node {
 
   Method method;
 
-  SamplingPattern sampling_pattern;
+	SamplingPattern sampling_pattern;
+	float scrambling_distance;
+  bool use_auto_scramble;
 
   bool need_update;
 

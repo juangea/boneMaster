@@ -183,6 +183,18 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         description="Square sampling values for easier artist control",
         default=False,
     )
+    
+    use_auto_scramble: BoolProperty(
+        name="Auto Scramble",
+        description="Enable automatic scrambling distance",
+        default=True,
+    )    
+
+    use_auto_tiles: BoolProperty(
+        name="Auto Tiles",
+        description="Automatically manage tile size and draw order for optimal performance and memory usage",
+        default=True,
+    )
 
     samples: IntProperty(
         name="Samples",
@@ -271,6 +283,14 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         items=enum_use_layer_samples,
         default='USE',
     )
+
+    scrambling_distance: FloatProperty(
+        name="Scrambling distance",
+        description="The amount of pixel-dependent scrambling applied to the Sobol sequence,"
+                            "lower values might speed up rendering but can cause visible artifacts",
+        min=0.0, max=1.0,
+        default=1.0,
+        )    
 
     sample_all_lights_direct: BoolProperty(
         name="Sample All Direct Lights",

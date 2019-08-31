@@ -150,7 +150,6 @@ def draw_samples_info(layout, context):
             col.label(text="%s AO, %s Mesh Light, %s Subsurface, %s Volume" %
                       (ao * aa, ml * aa, sss * aa, vol * aa))
 
-
 class CYCLES_RENDER_PT_sampling(CyclesButtonsPanel, Panel):
     bl_label = "Sampling"
 
@@ -231,7 +230,8 @@ class CYCLES_RENDER_PT_sampling_advanced(CyclesButtonsPanel, Panel):
         row.prop(cscene, "use_animated_seed", text="", icon='TIME')
 
         layout.prop(cscene, "sampling_pattern", text="Pattern")
-
+        layout.prop(cscene, "scrambling_distance", text="Scrambling Distance")
+        layout.prop(cscene, "use_auto_scramble")
         layout.prop(cscene, "use_square_samples")
 
         layout.separator()
@@ -623,6 +623,7 @@ class CYCLES_RENDER_PT_performance_tiles(CyclesButtonsPanel, Panel):
         sub.prop(rd, "tile_x", text="Tiles X")
         sub.prop(rd, "tile_y", text="Y")
         col.prop(cscene, "tile_order", text="Order")
+        col.prop(cscene, "use_auto_tiles", text="Auto tiles")
 
         sub = col.column()
         sub.active = not rd.use_save_buffers
