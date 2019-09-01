@@ -1243,6 +1243,9 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
                 layout.prop(md, "filter_bias")
                 if md.filter_type in {"GAUSSIAN", "MEDIAN", "MEAN"}:
                     layout.prop(md, "filter_width")
+                if md.filter_type == "GAUSSIAN":
+                    layout.prop(md, "filter_iterations")
+                    layout.prop(md, "filter_sigma")
                 if md.filter_type in {"DILATE", "ERODE"}:
                     layout.prop(md, "filter_distance")
             row = layout.row()

@@ -94,6 +94,8 @@ static void initData(ModifierData *md)
   rmd->part_scale_factor = 2.0f;
   rmd->part_vel_factor = 0.25f;
 
+  rmd->filter_iterations = 1;
+  rmd->filter_sigma = 1.0f;
 }
 
 #ifdef WITH_MOD_REMESH
@@ -441,17 +443,22 @@ static Mesh *voxel_remesh(RemeshModifierData *rmd, Mesh *mesh, struct OpenVDBLev
     remap[0] = BKE_remesh_remap_loop_vertex_color_layer(mesh);
     for (vcob = rmd->csg_operands.first; vcob; vcob = vcob->next) {
       if (vcob->object && vcob->flag & MOD_REMESH_CSG_OBJECT_ENABLED) {
-        Mesh *me = BKE_object_get_final_mesh(vcob->object);
-        remap[i] = BKE_remesh_remap_loop_vertex_color_layer(me);
+        Mesh *me = BKE_mesh_new_from_object(NULL, vcob->object, true);
+        if (me) {
+          remap[i] = BKE_remesh_remap_loop_vertex_color_layer(me);
+        }
         i++;
       }
     }
   }
 
   OpenVDBLevelSet_filter(
-      level_set, rmd->filter_type, rmd->filter_width, rmd->filter_distance, rmd->filter_bias);
+      level_set, rmd->filter_type, rmd->filter_width,
+                 rmd->filter_iterations, rmd->filter_sigma,
+                 rmd->filter_distance, rmd->filter_bias);
+
   target = BKE_remesh_voxel_ovdb_volume_to_mesh_nomain(
-      level_set, rmd->isovalue, rmd->adaptivity, rmd->flag & MOD_REMESH_RELAX_TRIANGLES);
+      level_set, rmd->isovalue * rmd->voxel_size, rmd->adaptivity, rmd->flag & MOD_REMESH_RELAX_TRIANGLES);
   OpenVDBLevelSet_free(level_set);
 
   if (rmd->flag & MOD_REMESH_REPROJECT_VPAINT) {

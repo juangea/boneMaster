@@ -24,6 +24,7 @@
 #include "openvdb/tools/Composite.h"
 #include "openvdb/tools/ParticlesToLevelSet.h"
 #include "intern/particle_tools.h"
+#include "intern/openvdb_filter.h"
 
 OpenVDBLevelSet::OpenVDBLevelSet()
 {
@@ -107,6 +108,8 @@ void OpenVDBLevelSet::volume_to_mesh(OpenVDBVolumeToMeshData *mesh,
 
 void OpenVDBLevelSet::filter(OpenVDBLevelSet_FilterType filter_type,
                              int width,
+                             int iterations,
+                             float sigma,
                              float distance,
                              OpenVDBLevelSet_FilterBias filter_bias)
 {
@@ -119,11 +122,11 @@ void OpenVDBLevelSet::filter(OpenVDBLevelSet_FilterType filter_type,
     return;
   }
 
-  openvdb::tools::LevelSetFilter<openvdb::FloatGrid> filter(*this->grid);
+  openvdb::tools::ExtendedLevelSetFilter<openvdb::FloatGrid> filter(*this->grid);
   filter.setSpatialScheme((openvdb::math::BiasedGradientScheme)filter_bias);
   switch (filter_type) {
     case OPENVDB_LEVELSET_FILTER_GAUSSIAN:
-      filter.gaussian(width);
+      filter.gaussianI(width, iterations, sigma);
       break;
     case OPENVDB_LEVELSET_FILTER_MEDIAN:
       filter.median(width);

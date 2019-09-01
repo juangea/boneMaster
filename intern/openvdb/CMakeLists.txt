@@ -69,6 +69,7 @@ if(WITH_OPENVDB)
     intern/openvdb_level_set.h
     intern/openvdb_transform.h
     intern/particle_tools.h
+    intern/openvdb_filter.h
     openvdb_util.h
   )
 

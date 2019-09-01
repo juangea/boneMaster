@@ -24,7 +24,6 @@
 #include <openvdb/math/FiniteDifference.h>
 #include <openvdb/tools/MeshToVolume.h>
 #include <openvdb/tools/VolumeToMesh.h>
-#include <openvdb/tools/LevelSetFilter.h>
 #include <openvdb/tools/GridTransformer.h>
 #include "openvdb_capi.h"
 
@@ -50,6 +49,8 @@ struct OpenVDBLevelSet {
                       const bool relax_disoriented_triangles);
   void filter(OpenVDBLevelSet_FilterType filter_type,
               int width,
+              int iterations,
+              float sigma,
               float distance,
               OpenVDBLevelSet_FilterBias filter_bias);
   openvdb::FloatGrid::Ptr CSG_operation_apply(const openvdb::FloatGrid::Ptr &gridA,
@@ -57,9 +58,9 @@ struct OpenVDBLevelSet {
                                               OpenVDBLevelSet_CSGOperation operation);
 
   void particles_to_level_set(ParticleList part_list,
-                                      float min_radius,
-                                      bool trail,
-                                      float trail_size);
+                              float min_radius,
+                              bool trail,
+                              float trail_size);
 };
 
 #endif /* __OPENVDB_LEVEL_SET_H__ */

@@ -315,10 +315,12 @@ void OpenVDBLevelSet_volume_to_mesh(struct OpenVDBLevelSet *level_set,
 void OpenVDBLevelSet_filter(struct OpenVDBLevelSet *level_set,
                             OpenVDBLevelSet_FilterType filter_type,
                             int width,
+                            int iterations,
+                            float sigma,
                             float distance,
                             OpenVDBLevelSet_FilterBias bias)
 {
-  level_set->filter(filter_type, width, distance, bias);
+  level_set->filter(filter_type, width, iterations, sigma, distance, bias);
 }
 
 void OpenVDBLevelSet_CSG_operation(struct OpenVDBLevelSet *out,
