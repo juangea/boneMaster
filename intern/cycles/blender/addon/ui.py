@@ -947,11 +947,11 @@ class CYCLES_RENDER_PT_lightgroups(CyclesButtonsPanel, Panel):
             sub.operator("cycles.lightgroup_move", icon='TRIA_UP', text="").direction = 'UP'
             sub.operator("cycles.lightgroup_move", icon='TRIA_DOWN', text="").direction = 'DOWN'
 
-        lg = cycles_view_layer.lightgroups[cycles_view_layer.active_lightgroup]
-        row = layout.row()
-        col = row.column()
-        col.prop(lg, "collection")
-        col.prop(lg, "include_world")
+            lg = cycles_view_layer.lightgroups[cycles_view_layer.active_lightgroup]
+            row = layout.row()
+            col = row.column()
+            col.prop(lg, "collection")
+            col.prop(lg, "include_world")
 
 
 
