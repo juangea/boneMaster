@@ -286,6 +286,6 @@ def register_passes(engine, scene, srl):
     lightgroup_names = []
     for lightgroup in crl.lightgroups:
         name = lightgroup.name
-        if lightgroup.group and not name in lightgroup_names:
+        if lightgroup.collection and not name in lightgroup_names:
             engine.register_pass(scene, srl, "LG "+name, 3, "RGB", 'COLOR')
             lightgroup_names.append(name)
