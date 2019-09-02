@@ -4802,11 +4802,12 @@ static void rna_def_modifier_remesh(BlenderRNA *brna)
        0,
        "Sharp",
        "Output a surface that reproduces sharp edges and corners from the input mesh"},
-      {MOD_REMESH_METABALL, 
-        "METABALL", 
-        0, 
-        "Metaball",
-	    "Output a surface that consists of metaballs based from the vertices or particles of the input mesh"},
+      {MOD_REMESH_METABALL,
+       "METABALL",
+       0,
+       "Metaball",
+       "Output a surface that consists of metaballs based from the vertices or particles of the "
+       "input mesh"},
       {MOD_REMESH_VOXEL,
        "VOXEL",
        0,
@@ -4879,48 +4880,38 @@ static void rna_def_modifier_remesh(BlenderRNA *brna)
       {0, NULL, 0, NULL, NULL},
   };
 
-  static const EnumPropertyItem mesh_items[] =  {
-      {MOD_REMESH_VERTICES, 
-       "MESH", 
-       0, 
-       "Mesh", 
+  static const EnumPropertyItem mesh_items[] = {
+      {MOD_REMESH_VERTICES,
+       "MESH",
+       0,
+       "Mesh",
        "Output a metaball or voxel mesh using mesh input data"},
-      {MOD_REMESH_PARTICLES, 
-       "PARTICLES", 
-       0, 
-       "Particles", 
+      {MOD_REMESH_PARTICLES,
+       "PARTICLES",
+       0,
+       "Particles",
        "Output a metaball or voxel mesh using particle input data"},
-	  {0, NULL, 0, NULL, NULL}
-  };
-	
-  static const EnumPropertyItem filter_items[] =  {
-	  {eRemeshFlag_Alive, 
-       "ALIVE", 
-       0, 
-       "Alive", 
+      {0, NULL, 0, NULL, NULL}};
+
+  static const EnumPropertyItem filter_items[] = {
+      {eRemeshFlag_Alive,
+       "ALIVE",
+       0,
+       "Alive",
        "Output a metaball surface using alive particle input data"},
-	  {eRemeshFlag_Dead, 
-       "DEAD", 
-        0, 
-       "Dead", 
+      {eRemeshFlag_Dead,
+       "DEAD",
+       0,
+       "Dead",
        "Output a metaball surface using dead particle input data"},
-      {eRemeshFlag_Unborn, 
-       "UNBORN", 
-       0, 
-       "Unborn", 
+      {eRemeshFlag_Unborn,
+       "UNBORN",
+       0,
+       "Unborn",
        "Output a metaball surface using unborn particle input data"},
-      {eRemeshFlag_Size, 
-       "SIZE", 
-       0, 
-       "Size", 
-       "Override metaball size by individual particle size"},
-      {eRemeshFlag_Verts, 
-       "VERTS", 
-       0, 
-       "Verts", 
-       "Only output a vertex per particle"},
-	  {0, NULL, 0, NULL, NULL}
-  };
+      {eRemeshFlag_Size, "SIZE", 0, "Size", "Override metaball size by individual particle size"},
+      {eRemeshFlag_Verts, "VERTS", 0, "Verts", "Only output a vertex per particle"},
+      {0, NULL, 0, NULL, NULL}};
 
   StructRNA *srna;
   PropertyRNA *prop;
@@ -4991,7 +4982,7 @@ static void rna_def_modifier_remesh(BlenderRNA *brna)
   RNA_def_property_ui_range(prop, 0.05f, 1000.0f, 2.5f, 3);
   RNA_def_property_ui_text(prop, "Wire Size", "Polygonization resolution in the 3D viewport");
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
-	
+
   prop = RNA_def_property(srna, "mball_render_resolution", PROP_FLOAT, PROP_DISTANCE);
   RNA_def_property_float_sdna(prop, NULL, "rendersize");
   RNA_def_property_range(prop, 0.0001f, 10000.0f);
@@ -5010,8 +5001,7 @@ static void rna_def_modifier_remesh(BlenderRNA *brna)
   RNA_def_property_ui_range(prop, 0.0001f, 10.0f, 0.1f, 3);
   RNA_def_property_range(prop, 0.001f, 100.0f);
   RNA_def_property_array(prop, 3);
-  RNA_def_property_ui_text(prop, "Size",
-                             "The base size of each metaball element");
+  RNA_def_property_ui_text(prop, "Size", "The base size of each metaball element");
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
   prop = RNA_def_property(srna, "input", PROP_ENUM, PROP_NONE);
@@ -5023,7 +5013,8 @@ static void rna_def_modifier_remesh(BlenderRNA *brna)
   prop = RNA_def_property(srna, "psys", PROP_INT, PROP_NONE);
   RNA_def_property_int_sdna(prop, NULL, "psys");
   RNA_def_property_range(prop, 1, INT_MAX);
-  RNA_def_property_ui_text(prop, "Particle System Index", "Index of the input particle system to use");
+  RNA_def_property_ui_text(
+      prop, "Particle System Index", "Index of the input particle system to use");
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
   prop = RNA_def_property(srna, "filter", PROP_ENUM, PROP_NONE);
@@ -5035,7 +5026,8 @@ static void rna_def_modifier_remesh(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "size_vertex_group", PROP_STRING, PROP_NONE);
   RNA_def_property_string_sdna(prop, NULL, "size_defgrp_name");
-  RNA_def_property_ui_text(prop, "Size Vertex Group", "Vertex group name which optionally defines metaball size");
+  RNA_def_property_ui_text(
+      prop, "Size Vertex Group", "Vertex group name which optionally defines metaball size");
   RNA_def_property_string_funcs(prop, NULL, NULL, "rna_RemeshModifier_size_defgrp_name_set");
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
@@ -5108,6 +5100,18 @@ static void rna_def_modifier_remesh(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Filter Sigma", "OpenVDB Levelset Filter Sigma");
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
+  prop = RNA_def_property(srna, "sharpen_features", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", MOD_REMESH_SHARPEN_FEATURES);
+  RNA_def_property_ui_text(
+      prop, "Sharpen Features", "Try to enhance the quality of the remeshed result to match the original better");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "edge_tolerance", PROP_FLOAT, PROP_UNSIGNED);
+  RNA_def_property_float_sdna(prop, NULL, "edge_tolerance");
+  RNA_def_property_range(prop, 0, FLT_MAX);
+  RNA_def_property_ui_text(prop, "Edge Tolerance", "OpenVDB sharpen features edge tolerance");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
   prop = RNA_def_property(srna, "reproject_vertex_paint", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "flag", MOD_REMESH_REPROJECT_VPAINT);
   RNA_def_property_ui_text(
@@ -5124,8 +5128,10 @@ static void rna_def_modifier_remesh(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "accumulate", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "flag", MOD_REMESH_ACCUMULATE);
-  RNA_def_property_ui_text(prop, "Accumulate",
-    "Accumulate the mesh changes over time by re-using and updating the cached mesh");
+  RNA_def_property_ui_text(
+      prop,
+      "Accumulate",
+      "Accumulate the mesh changes over time by re-using and updating the cached mesh");
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
   /* voxel remesh, particle mode parameters*/

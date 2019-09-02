@@ -1254,7 +1254,11 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
             row = layout.row()
             row.prop(md, "relax_triangles")
             row.prop(md, "reproject_vertex_paint")
-            layout.prop(md, "accumulate")
+            row = layout.row()
+            row.prop(md, "accumulate")
+            row.prop(md, "sharpen_features")
+            if md.sharpen_features:
+                layout.prop(md, "edge_tolerance")
             layout.label(text="CSG Operands")
             layout.operator("remesh.csg_add", text="", icon="ADD")
             for i,csg in enumerate(md.csg_operands):

@@ -79,6 +79,7 @@ struct OpenVDBVolumeToMeshData {
   unsigned int *triangles;
 };
 
+#if 0
 struct OpenVDBRemeshData {
   float *verts;
   unsigned int *faces;
@@ -100,6 +101,7 @@ struct OpenVDBRemeshData {
   float adaptivity;
   int relax_disoriented_triangles;
 };
+#endif
 
 int OpenVDB_getVersionHex(void);
 
@@ -192,12 +194,14 @@ struct OpenVDBLevelSet *OpenVDBLevelSet_create(bool initGrid, float voxel_size, 
 void OpenVDBLevelSet_free(struct OpenVDBLevelSet *level_set);
 void OpenVDBLevelSet_mesh_to_level_set(struct OpenVDBLevelSet *level_set,
                                        const float *vertices,
+                                       const float *vert_normals,
                                        const unsigned int *faces,
                                        const unsigned int totvertices,
                                        const unsigned int totfaces,
                                        struct OpenVDBTransform *xform);
 void OpenVDBLevelSet_mesh_to_level_set_transform(struct OpenVDBLevelSet *level_set,
                                                  const float *vertices,
+                                                 const float *vert_normals,
                                                  const unsigned int *faces,
                                                  const unsigned int totvertices,
                                                  const unsigned int totfaces,
@@ -206,7 +210,9 @@ void OpenVDBLevelSet_volume_to_mesh(struct OpenVDBLevelSet *level_set,
                                     struct OpenVDBVolumeToMeshData *mesh,
                                     const double isovalue,
                                     const double adaptivity,
-                                    const bool relax_disoriented_triangles);
+                                    const bool relax_disoriented_triangles,
+                                    const bool sharpen_features,
+                                    const float edge_tolerance);
 void OpenVDBLevelSet_filter(struct OpenVDBLevelSet *level_set,
                             OpenVDBLevelSet_FilterType filter_type,
                             int width,

@@ -1493,6 +1493,7 @@ typedef enum eRemeshModifierFlags {
   MOD_REMESH_REPROJECT_VPAINT = (1 << 4),
   MOD_REMESH_LIVE_REMESH = (1 << 5),
   MOD_REMESH_ACCUMULATE = (1 << 6),
+  MOD_REMESH_SHARPEN_FEATURES = (1 << 7),
 } RemeshModifierFlags;
 
 typedef enum eRemeshModifierMode {
@@ -1589,12 +1590,14 @@ typedef struct RemeshModifierData {
   float voxel_size;
   float isovalue;
   float adaptivity;
+  float edge_tolerance;
   float filter_distance;
   float filter_sigma;
   int filter_type;
   int filter_bias;
   int filter_width;
-  int filter_iterations; 
+  int filter_iterations;
+  float _pad3;
  
   /*voxel, particle mode*/
   float part_scale_factor;

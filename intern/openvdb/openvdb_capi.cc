@@ -285,31 +285,35 @@ void OpenVDBLevelSet_free(OpenVDBLevelSet *level_set)
 
 void OpenVDBLevelSet_mesh_to_level_set(struct OpenVDBLevelSet *level_set,
                                        const float *vertices,
+                                       const float *vert_normals,
                                        const unsigned int *faces,
                                        const unsigned int totvertices,
                                        const unsigned int totfaces,
                                        OpenVDBTransform *xform)
 {
-  level_set->mesh_to_level_set(vertices, faces, totvertices, totfaces, xform->get_transform());
+  level_set->mesh_to_level_set(vertices, vert_normals, faces, totvertices, totfaces, xform->get_transform());
 }
 
 void OpenVDBLevelSet_mesh_to_level_set_transform(struct OpenVDBLevelSet *level_set,
                                                  const float *vertices,
+                                                 const float *vert_normals,
                                                  const unsigned int *faces,
                                                  const unsigned int totvertices,
                                                  const unsigned int totfaces,
                                                  OpenVDBTransform *transform)
 {
-  level_set->mesh_to_level_set(vertices, faces, totvertices, totfaces, transform->get_transform());
+  level_set->mesh_to_level_set(vertices, vert_normals, faces, totvertices, totfaces, transform->get_transform());
 }
 
 void OpenVDBLevelSet_volume_to_mesh(struct OpenVDBLevelSet *level_set,
                                     struct OpenVDBVolumeToMeshData *mesh,
                                     const double isovalue,
                                     const double adaptivity,
-                                    const bool relax_disoriented_triangles)
+                                    const bool relax_disoriented_triangles,
+                                    const bool sharpen_features,
+                                    const float edge_tolerance)
 {
-  level_set->volume_to_mesh(mesh, isovalue, adaptivity, relax_disoriented_triangles);
+  level_set->volume_to_mesh(mesh, isovalue, adaptivity, relax_disoriented_triangles, sharpen_features, edge_tolerance);
 }
 
 void OpenVDBLevelSet_filter(struct OpenVDBLevelSet *level_set,

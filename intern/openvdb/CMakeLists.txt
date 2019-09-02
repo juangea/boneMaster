@@ -70,6 +70,7 @@ if(WITH_OPENVDB)
     intern/openvdb_transform.h
     intern/particle_tools.h
     intern/openvdb_filter.h
+    intern/openvdb_mesher.h
     openvdb_util.h
   )
 

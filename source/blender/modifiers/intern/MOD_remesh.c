@@ -96,6 +96,7 @@ static void initData(ModifierData *md)
 
   rmd->filter_iterations = 1;
   rmd->filter_sigma = 1.0f;
+  rmd->edge_tolerance = 0.1f;
 }
 
 #ifdef WITH_MOD_REMESH
@@ -458,7 +459,8 @@ static Mesh *voxel_remesh(RemeshModifierData *rmd, Mesh *mesh, struct OpenVDBLev
                  rmd->filter_distance, rmd->filter_bias);
 
   target = BKE_remesh_voxel_ovdb_volume_to_mesh_nomain(
-      level_set, rmd->isovalue * rmd->voxel_size, rmd->adaptivity, rmd->flag & MOD_REMESH_RELAX_TRIANGLES);
+      level_set, rmd->isovalue * rmd->voxel_size, rmd->adaptivity,
+      rmd->flag & MOD_REMESH_RELAX_TRIANGLES, rmd->flag & MOD_REMESH_SHARPEN_FEATURES, rmd->edge_tolerance);
   OpenVDBLevelSet_free(level_set);
 
   if (rmd->flag & MOD_REMESH_REPROJECT_VPAINT) {

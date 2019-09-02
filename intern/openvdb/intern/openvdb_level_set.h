@@ -23,21 +23,48 @@
 #include <openvdb/openvdb.h>
 #include <openvdb/math/FiniteDifference.h>
 #include <openvdb/tools/MeshToVolume.h>
-#include <openvdb/tools/VolumeToMesh.h>
 #include <openvdb/tools/GridTransformer.h>
 #include "openvdb_capi.h"
+
+using BoolTreeType = openvdb::FloatGrid::TreeType::template ValueConverter<bool>::Type;
 
 struct OpenVDBLevelSet {
  private:
   openvdb::FloatGrid::Ptr grid;
 
+  //save input data as reference geometry for sharpenfeatures
+  std::vector<openvdb::Vec3s> points;
+  std::vector<openvdb::Vec3s> out_points;
+  std::vector<openvdb::Vec3I> triangles;
+  std::vector<openvdb::Vec3s> vert_normals;
+  std::vector<uint32_t> vert_tri;
+
+ void OpenVDBLevelSet::sharpenFeaturesPre(float edge_tolerance,
+                                           BoolTreeType::Ptr maskTree,
+                                           openvdb::tools::MeshToVoxelEdgeData &edgeData,
+                                           openvdb::math::Transform::Ptr transform,
+                                           openvdb::FloatGrid::Ptr refGrid);
+
  public:
   OpenVDBLevelSet();
   ~OpenVDBLevelSet();
   const openvdb::FloatGrid::Ptr &get_grid();
-  void set_grid(const openvdb::FloatGrid::Ptr &grid);
+  const std::vector<openvdb::Vec3s> &get_points();
+  const std::vector<openvdb::Vec3s> &get_out_points();
+  const std::vector<openvdb::Vec3I> &get_triangles();
+  const std::vector<openvdb::Vec3s> &get_vert_normals();
+  const std::vector<uint32_t> &get_vert_tri();
 
+  void set_grid(const openvdb::FloatGrid::Ptr &grid);
+  void set_points(const std::vector<openvdb::Vec3s> &points);
+  void set_out_points(const std::vector<openvdb::Vec3s> &out_points);
+  void set_triangles(const std::vector<openvdb::Vec3I> &triangles);
+  void set_vert_normals(const std::vector<openvdb::Vec3s> &vert_normals);
+  void set_vert_tri(const std::vector<uint32_t> &vert_tri);
+  openvdb::Vec3s face_normal(uint32_t faceOffset);
+  
   void mesh_to_level_set(const float *vertices,
+                         const float *vert_normals,
                          const unsigned int *faces,
                          const unsigned int totvertices,
                          const unsigned int totfaces,
@@ -46,7 +73,10 @@ struct OpenVDBLevelSet {
   void volume_to_mesh(struct OpenVDBVolumeToMeshData *mesh,
                       const double isovalue,
                       const double adaptivity,
-                      const bool relax_disoriented_triangles);
+                      const bool relax_disoriented_triangles,
+                      const bool sharpen_features,
+                      const float edge_tolerance);
+
   void filter(OpenVDBLevelSet_FilterType filter_type,
               int width,
               int iterations,

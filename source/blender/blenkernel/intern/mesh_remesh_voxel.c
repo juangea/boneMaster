@@ -81,7 +81,7 @@ struct OpenVDBLevelSet *BKE_mesh_remesh_voxel_ovdb_mesh_to_level_set_create(
   }
 
   struct OpenVDBLevelSet *level_set = OpenVDBLevelSet_create(false, 0.0f, 0.0f);
-  OpenVDBLevelSet_mesh_to_level_set(level_set, verts, faces, totverts, totfaces, transform);
+  OpenVDBLevelSet_mesh_to_level_set(level_set, verts, NULL, faces, totverts, totfaces, transform);
 
   MEM_freeN(verts);
   MEM_freeN(faces);
@@ -98,7 +98,7 @@ Mesh *BKE_mesh_remesh_voxel_ovdb_volume_to_mesh_nomain(struct OpenVDBLevelSet *l
 #  ifdef WITH_OPENVDB
   struct OpenVDBVolumeToMeshData output_mesh;
   OpenVDBLevelSet_volume_to_mesh(
-      level_set, &output_mesh, isovalue, adaptivity, relax_disoriented_triangles);
+      level_set, &output_mesh, isovalue, adaptivity, relax_disoriented_triangles, false, 0.0f);
 #  endif
 
   Mesh *mesh = BKE_mesh_new_nomain(output_mesh.totvertices,
