@@ -37,7 +37,7 @@ struct OpenVDBLevelSet {
   std::vector<openvdb::Vec3s> out_points;
   std::vector<openvdb::Vec3I> triangles;
   std::vector<openvdb::Vec3s> vert_normals;
-  std::vector<uint32_t> vert_tri;
+  std::vector<std::vector<uint32_t>> vert_tri;
 
  void OpenVDBLevelSet::sharpenFeaturesPre(float edge_tolerance,
                                            BoolTreeType::Ptr maskTree,
@@ -53,14 +53,14 @@ struct OpenVDBLevelSet {
   const std::vector<openvdb::Vec3s> &get_out_points();
   const std::vector<openvdb::Vec3I> &get_triangles();
   const std::vector<openvdb::Vec3s> &get_vert_normals();
-  const std::vector<uint32_t> &get_vert_tri();
+  const std::vector<std::vector<uint32_t>> &get_vert_tri();
 
   void set_grid(const openvdb::FloatGrid::Ptr &grid);
   void set_points(const std::vector<openvdb::Vec3s> &points);
   void set_out_points(const std::vector<openvdb::Vec3s> &out_points);
   void set_triangles(const std::vector<openvdb::Vec3I> &triangles);
   void set_vert_normals(const std::vector<openvdb::Vec3s> &vert_normals);
-  void set_vert_tri(const std::vector<uint32_t> &vert_tri);
+  void set_vert_tri(const std::vector<std::vector<uint32_t>> &vert_tri);
   openvdb::Vec3s face_normal(uint32_t faceOffset);
   
   void mesh_to_level_set(const float *vertices,

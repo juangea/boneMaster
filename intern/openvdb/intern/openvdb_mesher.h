@@ -206,8 +206,6 @@ template<typename IndexTreeType, typename BoolTreeType> class GenAdaptivityMaskO
 
   void operator()(const tbb::blocked_range<size_t> &) const;
 
-  openvdb::Vec3s face_normal(uint32_t tri) const;
-
  private:
   OpenVDBLevelSet &mLvl;
   const IndexTreeType &mIndexTree;
@@ -251,8 +249,7 @@ void GenAdaptivityMaskOp<IndexTreeType, BoolTreeType>::operator()(
 
   openvdb::Coord ijk, nijk;
   typename BoolTreeType::LeafNodeType::ValueOnIter iter;
-  std::vector<uint32_t> vert_tri = mLvl.get_vert_tri();
-
+ 
   for (size_t n = range.begin(); n < range.end(); ++n) {
     iter = mLeafs.leaf(n).beginValueOn();
     for (; iter; ++iter) {
@@ -261,16 +258,15 @@ void GenAdaptivityMaskOp<IndexTreeType, BoolTreeType>::operator()(
       bool edgeVoxel = false;
 
       int idx = idxAcc.getValue(ijk);
-      uint32_t primOffset = vert_tri[idx];
       // calculate face normal...
       // normal = mRefGeo.getGEOPrimitive(primOffset)->computeNormal();
-      openvdb::Vec3s normal = mLvl.face_normal(primOffset);
+      openvdb::Vec3s normal = mLvl.face_normal(idx);
 
       for (size_t i = 0; i < 18; ++i) {
         nijk = ijk + openvdb::util::COORD_OFFSETS[i];
         if (idxAcc.probeValue(nijk, tmpIdx) && tmpIdx != idx) {
-          primOffset = vert_tri[tmpIdx];
-          openvdb::Vec3s tmpN = mLvl.face_normal(primOffset);
+
+          openvdb::Vec3s tmpN = mLvl.face_normal(tmpIdx);
 
           if (normal.dot(tmpN) < mEdgeTolerance) {
             edgeVoxel = true;

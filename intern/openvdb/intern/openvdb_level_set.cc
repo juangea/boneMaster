@@ -61,11 +61,11 @@ void OpenVDBLevelSet::mesh_to_level_set(const float *vertices,
     vert_tri[triangles[i][2]].push_back(triangles[i][2]);
   }
 
+#if 0
   for (unsigned int i = 0; i < vert_tri.size(); i++) {
     for (unsigned int j = 0; j < vert_tri[i].size(); j++) {
       vert_tri_flat.push_back(vert_tri[i][j]);
     }
-  }
 
   if (vnormals != NULL) {
     for (unsigned int i = 0; i < totvertices; i++) {
@@ -73,10 +73,11 @@ void OpenVDBLevelSet::mesh_to_level_set(const float *vertices,
     }
     this->set_vert_normals(vert_normals);
   }
+#endif
 
   this->set_points(points);
   this->set_triangles(triangles);
-  this->set_vert_tri(vert_tri_flat);
+  this->set_vert_tri(vert_tri);
 
   this->grid = openvdb::tools::meshToLevelSet<openvdb::FloatGrid>(
       *xform, points, triangles, quads, 1);
@@ -114,11 +115,11 @@ void OpenVDBLevelSet::sharpenFeaturesPre(float edge_tolerance,
 
   float bandWidth = 3.0;
 
-#if 0
+#  if 0
   if (this->grid->getGridClass() != openvdb::GRID_LEVEL_SET) {
     bandWidth = float(backgroundValue) / float(transform->voxelSize()[0]);
   }
-#endif
+#  endif
 
   indexGrid.reset(new IntGridT(0));
 
@@ -239,12 +240,42 @@ static const openvdb::Vec3s normal_tri_v3(const openvdb::Vec3s v1, const openvdb
   return n;
 }
 
-openvdb::Vec3s OpenVDBLevelSet::face_normal(uint32_t faceOffset)
+openvdb::Vec3s OpenVDBLevelSet::face_normal(uint32_t pntOffset)
 {
   std::vector<openvdb::Vec3I> tris = this->get_triangles();
   std::vector<openvdb::Vec3s> verts = this->get_points();
-  openvdb::Vec3s tri = tris[faceOffset];
+  std::vector<std::vector<uint32_t >> vert_tri = this->get_vert_tri();
+  int k = 0, l = 0;
+
+  while (k <= pntOffset)
+  {
+    k += vert_tri[l].size();
+    l++;
+  }
+
+  uint32_t tr = vert_tri[l - 1][vert_tri[l-1].size() - 1];
+  openvdb::Vec3s tri = tris[tr];
   openvdb::Vec3s normal = normal_tri_v3(verts[tri[0]], verts[tri[1]], verts[tri[2]]);
+
+  int total = 0, flipped = 0;
+  //check all direct neighbors of this face, means use all 3 shared verts
+  for (int i = 0; i < 3; i++) {
+    for (int j = 0; j < vert_tri[i].size(); j++) {
+      total++;
+      uint32_t t = vert_tri[i][j];
+      openvdb::Vec3s norm = normal_tri_v3(verts[tris[t][0]], verts[tris[t][1]], verts[tri[2]]);
+      if (normal.dot(norm) < -0.5f) {
+        flipped++;
+      }
+    }
+  }
+
+  if ((float)flipped / (float)total > 0.95f) {
+    //most neighbors seem flipped, so probably this normal needs flipping ?
+    printf("FLIP !\n");
+    normal = -normal;
+  }
+
   return normal;
 }
 
@@ -337,7 +368,7 @@ const std::vector<openvdb::Vec3s> &OpenVDBLevelSet::get_vert_normals()
   return this->vert_normals;
 }
 
-const std::vector<uint32_t> &OpenVDBLevelSet::get_vert_tri()
+const std::vector<std::vector<uint32_t>> &OpenVDBLevelSet::get_vert_tri()
 {
   return this->vert_tri;
 }
@@ -367,7 +398,7 @@ void OpenVDBLevelSet::set_vert_normals(const std::vector<openvdb::Vec3s> &vert_n
   this->vert_normals = vert_normals;
 }
 
-void OpenVDBLevelSet::set_vert_tri(const std::vector<uint32_t> &vert_tri)
+void OpenVDBLevelSet::set_vert_tri(const std::vector<std::vector<uint32_t>> &vert_tri)
 {
   this->vert_tri = vert_tri;
 }
