@@ -249,7 +249,7 @@ void GenAdaptivityMaskOp<IndexTreeType, BoolTreeType>::operator()(
 
   openvdb::Coord ijk, nijk;
   typename BoolTreeType::LeafNodeType::ValueOnIter iter;
- 
+
   for (size_t n = range.begin(); n < range.end(); ++n) {
     iter = mLeafs.leaf(n).beginValueOn();
     for (; iter; ++iter) {
@@ -260,15 +260,17 @@ void GenAdaptivityMaskOp<IndexTreeType, BoolTreeType>::operator()(
       int idx = idxAcc.getValue(ijk);
       // calculate face normal...
       // normal = mRefGeo.getGEOPrimitive(primOffset)->computeNormal();
-      openvdb::Vec3s normal = mLvl.face_normal(idx);
+      openvdb::Vec3s normal = mLvl.face_normal(idx * 4);
 
       for (size_t i = 0; i < 18; ++i) {
         nijk = ijk + openvdb::util::COORD_OFFSETS[i];
         if (idxAcc.probeValue(nijk, tmpIdx) && tmpIdx != idx) {
 
-          openvdb::Vec3s tmpN = mLvl.face_normal(tmpIdx);
+          openvdb::Vec3s tmpN = mLvl.face_normal(tmpIdx * 4);
 
-          if (normal.dot(tmpN) < mEdgeTolerance) {
+          // dot can be negative too !
+          float dot = normal.dot(tmpN);
+          if (dot < mEdgeTolerance) {
             edgeVoxel = true;
             break;
           }
@@ -455,7 +457,7 @@ void SharpenFeaturesOp::operator()(const RangeT &r) const
 
   for (i = r.begin(); i < r.end(); i++) {
 
-    pos = result[i];
+    pos = openvdb::Vec3s(result[i][0], result[i][1], result[i][2]);
     pos = mXForm.worldToIndex(pos);
 
     ijk[0] = int(std::floor(pos[0]));
@@ -478,7 +480,7 @@ void SharpenFeaturesOp::operator()(const RangeT &r) const
     for (size_t n = 0, N = points.size(); n < N; ++n) {
 
       avgP += points[n];
-      normal = mRefGeo.face_normal(n);
+      normal = mRefGeo.face_normal(primitives[n] * 4);
       normals.push_back(normal);
     }
 
@@ -493,7 +495,8 @@ void SharpenFeaturesOp::operator()(const RangeT &r) const
           openvdb::Vec3d(double(ijk[0]), double(ijk[1]), double(ijk[2])),
           openvdb::Vec3d(double(ijk[0] + 1), double(ijk[1] + 1), double(ijk[2] + 1)));
 
-      cell.expand(openvdb::Vec3d(0.3, 0.3, 0.3));
+      // cell.expand(openvdb::Vec3d(0.3, 0.3, 0.3));
+      cell.expand(0.6);
 
       if (!cell.isInside(openvdb::Vec3d(pos[0], pos[1], pos[2]))) {
 
@@ -509,7 +512,7 @@ void SharpenFeaturesOp::operator()(const RangeT &r) const
         Ray ray(org, dir);
         AABBox box(cell.min(), cell.max());
         if (box.intersect(ray, distance)) {
-          pos = org + dir * distance;
+            pos = org + dir * distance;
         }
       }
 

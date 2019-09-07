@@ -176,13 +176,11 @@ void BKE_remesh_voxel_ovdb_particles_to_level_set(struct OpenVDBLevelSet *level_
 Mesh *BKE_remesh_voxel_ovdb_volume_to_mesh_nomain(struct OpenVDBLevelSet *level_set,
                                                   double isovalue,
                                                   double adaptivity,
-                                                  bool relax_disoriented_triangles,
-                                                  bool sharpen_features,
-                                                  float edge_tolerance)
+                                                  bool relax_disoriented_triangles)
 {
   struct OpenVDBVolumeToMeshData output_mesh;
   OpenVDBLevelSet_volume_to_mesh(
-      level_set, &output_mesh, isovalue, adaptivity, relax_disoriented_triangles, sharpen_features, edge_tolerance);
+      level_set, &output_mesh, isovalue, adaptivity, relax_disoriented_triangles);
 
   Mesh *mesh = BKE_mesh_new_nomain(
       output_mesh.totvertices, 0, output_mesh.totquads + output_mesh.tottriangles, 0, 0);

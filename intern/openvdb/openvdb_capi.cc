@@ -309,11 +309,9 @@ void OpenVDBLevelSet_volume_to_mesh(struct OpenVDBLevelSet *level_set,
                                     struct OpenVDBVolumeToMeshData *mesh,
                                     const double isovalue,
                                     const double adaptivity,
-                                    const bool relax_disoriented_triangles,
-                                    const bool sharpen_features,
-                                    const float edge_tolerance)
+                                    const bool relax_disoriented_triangles)
 {
-  level_set->volume_to_mesh(mesh, isovalue, adaptivity, relax_disoriented_triangles, sharpen_features, edge_tolerance);
+  level_set->volume_to_mesh(mesh, isovalue, adaptivity, relax_disoriented_triangles);
 }
 
 void OpenVDBLevelSet_filter(struct OpenVDBLevelSet *level_set,
@@ -322,9 +320,11 @@ void OpenVDBLevelSet_filter(struct OpenVDBLevelSet *level_set,
                             int iterations,
                             float sigma,
                             float distance,
-                            OpenVDBLevelSet_FilterBias bias)
+                            OpenVDBLevelSet_FilterBias bias,
+                            const bool sharpen_features,
+                            const float edge_tolerance)
 {
-  level_set->filter(filter_type, width, iterations, sigma, distance, bias);
+  level_set->filter(filter_type, width, iterations, sigma, distance, bias, sharpen_features, edge_tolerance);
 }
 
 void OpenVDBLevelSet_CSG_operation(struct OpenVDBLevelSet *out,

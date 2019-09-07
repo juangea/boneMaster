@@ -45,10 +45,10 @@ void OpenVDBLevelSet::mesh_to_level_set(const float *vertices,
 {
   std::vector<openvdb::Vec3s> points(totvertices);
   std::vector<openvdb::Vec3s> vert_normals(totvertices);
-  std::vector<std::vector<uint32_t>> vert_tri(totvertices);
+  // maximum if all primitives are split, mark 4th vertex as invalid since we have tris only
+  std::vector<uint32_t> vert_tri(totfaces * 4); 
   std::vector<openvdb::Vec3I> triangles(totfaces);
   std::vector<openvdb::Vec4I> quads;
-  std::vector<uint32_t> vert_tri_flat;
 
   for (unsigned int i = 0; i < totvertices; i++) {
     points[i] = openvdb::Vec3s(vertices[i * 3], vertices[i * 3 + 1], vertices[i * 3 + 2]);
@@ -56,24 +56,11 @@ void OpenVDBLevelSet::mesh_to_level_set(const float *vertices,
 
   for (unsigned int i = 0; i < totfaces; i++) {
     triangles[i] = openvdb::Vec3I(faces[i * 3], faces[i * 3 + 1], faces[i * 3 + 2]);
-    vert_tri[triangles[i][0]].push_back(triangles[i][0]);
-    vert_tri[triangles[i][1]].push_back(triangles[i][1]);
-    vert_tri[triangles[i][2]].push_back(triangles[i][2]);
+    vert_tri[i * 4] = triangles[i][0];
+    vert_tri[i * 4 + 1] = triangles[i][1];
+    vert_tri[i * 4 + 2] = triangles[i][2];
+    vert_tri[i * 4 + 3] = openvdb::util::INVALID_IDX;
   }
-
-#if 0
-  for (unsigned int i = 0; i < vert_tri.size(); i++) {
-    for (unsigned int j = 0; j < vert_tri[i].size(); j++) {
-      vert_tri_flat.push_back(vert_tri[i][j]);
-    }
-
-  if (vnormals != NULL) {
-    for (unsigned int i = 0; i < totvertices; i++) {
-      vert_normals[i] = openvdb::Vec3s(vnormals[i * 3], vnormals[i * 3 + 1], vnormals[i * 3 + 2]);
-    }
-    this->set_vert_normals(vert_normals);
-  }
-#endif
 
   this->set_points(points);
   this->set_triangles(triangles);
@@ -84,11 +71,7 @@ void OpenVDBLevelSet::mesh_to_level_set(const float *vertices,
 }
 
 using BoolTreeType = openvdb::FloatGrid::TreeType::template ValueConverter<bool>::Type;
-void OpenVDBLevelSet::sharpenFeaturesPre(float edge_tolerance,
-                                         BoolTreeType::Ptr maskTree,
-                                         openvdb::tools::MeshToVoxelEdgeData &edgeData,
-                                         openvdb::math::Transform::Ptr transform,
-                                         openvdb::FloatGrid::Ptr refGrid)
+void OpenVDBLevelSet::sharpenFeaturesPre(float edge_tolerance)
 {
   using IntGridT = typename openvdb::FloatGrid::template ValueConverter<openvdb::Int32>::Type;
   typename IntGridT::Ptr indexGrid;  // replace
@@ -100,13 +83,19 @@ void OpenVDBLevelSet::sharpenFeaturesPre(float edge_tolerance,
   primList.resize(this->get_triangles().size());
 
   // Check for reference mesh
-  tbb::parallel_for(tbb::blocked_range<size_t>(0, this->get_points().size()),
-                    openvdb::tools::TransformOp(*this, *transform, pointList));
+  //tbb::parallel_for(tbb::blocked_range<size_t>(0, this->get_points().size()),
+  //                  openvdb::tools::TransformOp(*this, *transform, pointList));
+  openvdb::tools::TransformOp op = openvdb::tools::TransformOp(*this, this->grid->transform(), pointList);
+  op(tbb::blocked_range<size_t>(0, this->get_points().size()));
+
   // UTparallelFor(GA_SplittableRange(refGeo->getPointRange()),
   //               hvdb::TransformOp(refGeo, *transform, pointList));
 
-  tbb::parallel_for(tbb::blocked_range<size_t>(0, this->get_triangles().size()),
-                    openvdb::tools::PrimCpyOp(*this, primList));
+  //tbb::parallel_for(tbb::blocked_range<size_t>(0, this->get_triangles().size()),
+  //                  openvdb::tools::PrimCpyOp(*this, primList));
+  openvdb::tools::PrimCpyOp op2 = openvdb::tools::PrimCpyOp(*this, primList);
+  op2(tbb::blocked_range<size_t>(0, this->get_triangles().size()));
+
   // UTparallelFor(GA_SplittableRange(refGeo->getPrimitiveRange()),
   //              hvdb::PrimCpyOp(refGeo, primList));
 
@@ -115,52 +104,40 @@ void OpenVDBLevelSet::sharpenFeaturesPre(float edge_tolerance,
 
   float bandWidth = 3.0;
 
-#  if 0
+#if 0
   if (this->grid->getGridClass() != openvdb::GRID_LEVEL_SET) {
     bandWidth = float(backgroundValue) / float(transform->voxelSize()[0]);
   }
-#  endif
+#endif
 
   indexGrid.reset(new IntGridT(0));
 
-  refGrid = openvdb::tools::meshToVolume<openvdb::FloatGrid>(
-      mesh, *transform, bandWidth, bandWidth, 0, indexGrid.get());
+  this->refGrid = openvdb::tools::meshToVolume<openvdb::FloatGrid>(
+      mesh, this->grid->transform(), bandWidth, bandWidth, 0, indexGrid.get());
 
   edgeData.convert(pointList, primList);
 
-  maskTree = typename BoolTreeType::Ptr(new BoolTreeType(false));
-  maskTree->topologyUnion(indexGrid->tree());
-  openvdb::tree::LeafManager<BoolTreeType> maskLeafs(*maskTree);
+  this->maskTree = typename BoolTreeType::Ptr(new BoolTreeType(false));
+  this->maskTree->topologyUnion(indexGrid->tree());
+  openvdb::tree::LeafManager<BoolTreeType> maskLeafs(*(this->maskTree));
 
-  openvdb::tools::GenAdaptivityMaskOp<IntGridT::TreeType, BoolTreeType> op(
+  openvdb::tools::GenAdaptivityMaskOp<IntGridT::TreeType, BoolTreeType> op3(
       *this, indexGrid->tree(), maskLeafs, edge_tolerance);
-  op.run();
+  op3.run();
 
-  openvdb::tools::pruneInactive(*maskTree);
+  openvdb::tools::pruneInactive(*(this->maskTree));
 
-  openvdb::tools::dilateVoxels(*maskTree, 2);
+  openvdb::tools::dilateVoxels(*this->maskTree, 2);
 }
 
 void OpenVDBLevelSet::volume_to_mesh(OpenVDBVolumeToMeshData *mesh,
                                      const double isovalue,
                                      const double adaptivity,
-                                     const bool relax_disoriented_triangles,
-                                     const bool sharpen_features,
-                                     const float edge_tolerance)
+                                     const bool relax_disoriented_triangles)
 {
   std::vector<openvdb::Vec3s> out_points_tmp, out_points;
   std::vector<openvdb::Vec4I> out_quads;
   std::vector<openvdb::Vec3I> out_tris;
-
-  BoolTreeType::Ptr maskTree = nullptr;
-  openvdb::tools::MeshToVoxelEdgeData edgeData;
-  openvdb::math::Transform::Ptr transform = this->grid->transform().copy();
-  openvdb::FloatGrid::Ptr refGrid;
-
-  // sharpen features, before meshing
-  if (sharpen_features) {
-    this->sharpenFeaturesPre(edge_tolerance, maskTree, edgeData, transform, refGrid);
-  }
 
   openvdb::tools::volumeToMesh<openvdb::FloatGrid>(*this->grid,
                                                    out_points_tmp,
@@ -169,17 +146,18 @@ void OpenVDBLevelSet::volume_to_mesh(OpenVDBVolumeToMeshData *mesh,
                                                    isovalue,
                                                    adaptivity,
                                                    relax_disoriented_triangles,
-                                                   maskTree,
-                                                   refGrid);
+                                                   this->maskTree,
+                                                   this->refGrid);
 
   // sharpen Features, after meshing
   this->set_out_points(out_points_tmp);
 
-  if (sharpen_features) {
+  if (this->sharpen_features) {
 
-    tbb::parallel_for(
-        tbb::blocked_range<size_t>(0, this->get_out_points().size()),
-        openvdb::tools::SharpenFeaturesOp(*this, edgeData, *transform, maskTree.get()));
+   // tbb::parallel_for(
+   //     tbb::blocked_range<size_t>(0, this->get_out_points().size()),
+          openvdb::tools::SharpenFeaturesOp op = openvdb::tools::SharpenFeaturesOp(*this, this->edgeData, this->grid->transform(), this->maskTree.get());
+          op(tbb::blocked_range<size_t>(0, this->get_out_points().size()));
     // UTparallelFor(GA_SplittableRange(gdp->getPointRange()),
     //              hvdb::SharpenFeaturesOp(
     //                  *gdp, ref_mesh, edgeData, *transform, surfaceGroup, maskTree.get()));
@@ -221,7 +199,9 @@ void OpenVDBLevelSet::volume_to_mesh(OpenVDBVolumeToMeshData *mesh,
   }
 }
 
-static const openvdb::Vec3s normal_tri_v3(const openvdb::Vec3s v1, const openvdb::Vec3s v2, const openvdb::Vec3s v3)
+static const openvdb::Vec3s normal_tri_v3(const openvdb::Vec3s v1,
+                                          const openvdb::Vec3s v2,
+                                          const openvdb::Vec3s v3)
 {
   openvdb::Vec3s n, n1, n2;
 
@@ -242,40 +222,15 @@ static const openvdb::Vec3s normal_tri_v3(const openvdb::Vec3s v1, const openvdb
 
 openvdb::Vec3s OpenVDBLevelSet::face_normal(uint32_t pntOffset)
 {
-  std::vector<openvdb::Vec3I> tris = this->get_triangles();
+  //std::vector<openvdb::Vec3s> vnormals = this->get_vert_normals();
   std::vector<openvdb::Vec3s> verts = this->get_points();
-  std::vector<std::vector<uint32_t >> vert_tri = this->get_vert_tri();
-  int k = 0, l = 0;
+  std::vector<uint32_t> vert_tri = this->get_vert_tri();
+  int x = (pntOffset / 4); 
+  int v1 = vert_tri[x * 4];
+  int v2 = vert_tri[x * 4 + 1];
+  int v3 = vert_tri[x * 4 + 2];
 
-  while (k <= pntOffset)
-  {
-    k += vert_tri[l].size();
-    l++;
-  }
-
-  uint32_t tr = vert_tri[l - 1][vert_tri[l-1].size() - 1];
-  openvdb::Vec3s tri = tris[tr];
-  openvdb::Vec3s normal = normal_tri_v3(verts[tri[0]], verts[tri[1]], verts[tri[2]]);
-
-  int total = 0, flipped = 0;
-  //check all direct neighbors of this face, means use all 3 shared verts
-  for (int i = 0; i < 3; i++) {
-    for (int j = 0; j < vert_tri[i].size(); j++) {
-      total++;
-      uint32_t t = vert_tri[i][j];
-      openvdb::Vec3s norm = normal_tri_v3(verts[tris[t][0]], verts[tris[t][1]], verts[tri[2]]);
-      if (normal.dot(norm) < -0.5f) {
-        flipped++;
-      }
-    }
-  }
-
-  if ((float)flipped / (float)total > 0.95f) {
-    //most neighbors seem flipped, so probably this normal needs flipping ?
-    printf("FLIP !\n");
-    normal = -normal;
-  }
-
+  openvdb::Vec3s normal = normal_tri_v3(verts[v1], verts[v2], verts[v3]);
   return normal;
 }
 
@@ -284,7 +239,9 @@ void OpenVDBLevelSet::filter(OpenVDBLevelSet_FilterType filter_type,
                              int iterations,
                              float sigma,
                              float distance,
-                             OpenVDBLevelSet_FilterBias filter_bias)
+                             OpenVDBLevelSet_FilterBias filter_bias,
+                             bool sharpen_features,
+                             float edge_tolerance)
 {
 
   if (!this->grid) {
@@ -321,6 +278,11 @@ void OpenVDBLevelSet::filter(OpenVDBLevelSet_FilterType filter_type,
       break;
     case OPENVDB_LEVELSET_FILTER_NONE:
       break;
+  }
+
+  this->sharpen_features = sharpen_features;
+  if (sharpen_features) {
+    this->sharpenFeaturesPre(edge_tolerance);
   }
 }
 openvdb::FloatGrid::Ptr OpenVDBLevelSet::CSG_operation_apply(
@@ -363,12 +325,7 @@ const std::vector<openvdb::Vec3I> &OpenVDBLevelSet::get_triangles()
   return this->triangles;
 }
 
-const std::vector<openvdb::Vec3s> &OpenVDBLevelSet::get_vert_normals()
-{
-  return this->vert_normals;
-}
-
-const std::vector<std::vector<uint32_t>> &OpenVDBLevelSet::get_vert_tri()
+const std::vector<uint32_t> &OpenVDBLevelSet::get_vert_tri()
 {
   return this->vert_tri;
 }
@@ -393,12 +350,7 @@ void OpenVDBLevelSet::set_triangles(const std::vector<openvdb::Vec3I> &triangles
   this->triangles = triangles;
 }
 
-void OpenVDBLevelSet::set_vert_normals(const std::vector<openvdb::Vec3s> &vert_normals)
-{
-  this->vert_normals = vert_normals;
-}
-
-void OpenVDBLevelSet::set_vert_tri(const std::vector<std::vector<uint32_t>> &vert_tri)
+void OpenVDBLevelSet::set_vert_tri(const std::vector<uint32_t> &vert_tri)
 {
   this->vert_tri = vert_tri;
 }

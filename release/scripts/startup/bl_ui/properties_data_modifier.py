@@ -1303,15 +1303,8 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
             layout.prop_search(md, "size_vertex_group", ob, "vertex_groups", text = "Size Vertex Group")
             layout.prop(md, "use_smooth_shade")
         else:
-            layout.prop(md, "use_smooth_shade")
-            layout.prop(md, "use_remove_disconnected")
-            row = layout.row()
-            row.active = md.use_remove_disconnected
-            row.prop(md, "threshold")
-
             if md.mode == 'SHARP':
                 layout.prop(md, "sharpness")
-
             layout.prop(md, "use_smooth_shade")
             layout.prop(md, "use_remove_disconnected")
             row = layout.row()

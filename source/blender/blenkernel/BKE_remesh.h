@@ -46,9 +46,7 @@ void BKE_remesh_voxel_ovdb_particles_to_level_set(struct OpenVDBLevelSet *level_
 Mesh *BKE_remesh_voxel_ovdb_volume_to_mesh_nomain(struct OpenVDBLevelSet *level_set,
                                                   double isovalue,
                                                   double adaptivity,
-                                                  bool relax_disoriented_triangles,
-                                                  bool sharpen_features,
-                                                  float edge_tolerance);
+                                                  bool relax_disoriented_triangles);
 
 /* MLoopCol remapping based Reprojection for remesh modifier */
 MLoopCol *BKE_remesh_remap_loop_vertex_color_layer(Mesh *mesh);

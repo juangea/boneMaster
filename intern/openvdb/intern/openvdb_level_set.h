@@ -36,14 +36,16 @@ struct OpenVDBLevelSet {
   std::vector<openvdb::Vec3s> points;
   std::vector<openvdb::Vec3s> out_points;
   std::vector<openvdb::Vec3I> triangles;
-  std::vector<openvdb::Vec3s> vert_normals;
-  std::vector<std::vector<uint32_t>> vert_tri;
+  std::vector<uint32_t> vert_tri;
 
- void OpenVDBLevelSet::sharpenFeaturesPre(float edge_tolerance,
-                                           BoolTreeType::Ptr maskTree,
-                                           openvdb::tools::MeshToVoxelEdgeData &edgeData,
-                                           openvdb::math::Transform::Ptr transform,
-                                           openvdb::FloatGrid::Ptr refGrid);
+  //for sharpen features
+  bool sharpen_features;
+  float edge_tolerance;
+  BoolTreeType::Ptr maskTree;
+  openvdb::tools::MeshToVoxelEdgeData edgeData;
+  openvdb::FloatGrid::Ptr refGrid;
+
+  void OpenVDBLevelSet::sharpenFeaturesPre(float edge_tolerance);
 
  public:
   OpenVDBLevelSet();
@@ -52,15 +54,13 @@ struct OpenVDBLevelSet {
   const std::vector<openvdb::Vec3s> &get_points();
   const std::vector<openvdb::Vec3s> &get_out_points();
   const std::vector<openvdb::Vec3I> &get_triangles();
-  const std::vector<openvdb::Vec3s> &get_vert_normals();
-  const std::vector<std::vector<uint32_t>> &get_vert_tri();
+  const std::vector<uint32_t> &get_vert_tri();
 
   void set_grid(const openvdb::FloatGrid::Ptr &grid);
   void set_points(const std::vector<openvdb::Vec3s> &points);
   void set_out_points(const std::vector<openvdb::Vec3s> &out_points);
   void set_triangles(const std::vector<openvdb::Vec3I> &triangles);
-  void set_vert_normals(const std::vector<openvdb::Vec3s> &vert_normals);
-  void set_vert_tri(const std::vector<std::vector<uint32_t>> &vert_tri);
+  void set_vert_tri(const std::vector<uint32_t> &vert_tri);
   openvdb::Vec3s face_normal(uint32_t faceOffset);
   
   void mesh_to_level_set(const float *vertices,
@@ -73,16 +73,17 @@ struct OpenVDBLevelSet {
   void volume_to_mesh(struct OpenVDBVolumeToMeshData *mesh,
                       const double isovalue,
                       const double adaptivity,
-                      const bool relax_disoriented_triangles,
-                      const bool sharpen_features,
-                      const float edge_tolerance);
+                      const bool relax_disoriented_triangles);
 
   void filter(OpenVDBLevelSet_FilterType filter_type,
               int width,
               int iterations,
               float sigma,
               float distance,
-              OpenVDBLevelSet_FilterBias filter_bias);
+              OpenVDBLevelSet_FilterBias filter_bias,
+              bool sharpen_features,
+              float edge_tolerance);
+
   openvdb::FloatGrid::Ptr CSG_operation_apply(const openvdb::FloatGrid::Ptr &gridA,
                                               const openvdb::FloatGrid::Ptr &gridB,
                                               OpenVDBLevelSet_CSGOperation operation);

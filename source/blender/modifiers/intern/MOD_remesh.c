@@ -85,7 +85,7 @@ static void initData(ModifierData *md)
   rmd->wiresize = 0.4f;
   rmd->rendersize = 0.2f;
 	
-  rmd->input = 0;
+  rmd->input = MOD_REMESH_VERTICES;
   rmd->pflag = 1;
   rmd->psys = 1;
 
@@ -454,13 +454,18 @@ static Mesh *voxel_remesh(RemeshModifierData *rmd, Mesh *mesh, struct OpenVDBLev
   }
 
   OpenVDBLevelSet_filter(
-      level_set, rmd->filter_type, rmd->filter_width,
-                 rmd->filter_iterations, rmd->filter_sigma,
-                 rmd->filter_distance, rmd->filter_bias);
+      level_set, rmd->filter_type,
+                 rmd->filter_width,
+                 rmd->filter_iterations,
+                 rmd->filter_sigma,
+                 rmd->filter_distance,
+                 rmd->filter_bias,
+                 rmd->flag & MOD_REMESH_SHARPEN_FEATURES,
+                 rmd->edge_tolerance);
 
   target = BKE_remesh_voxel_ovdb_volume_to_mesh_nomain(
       level_set, rmd->isovalue * rmd->voxel_size, rmd->adaptivity,
-      rmd->flag & MOD_REMESH_RELAX_TRIANGLES, rmd->flag & MOD_REMESH_SHARPEN_FEATURES, rmd->edge_tolerance);
+      rmd->flag & MOD_REMESH_RELAX_TRIANGLES);
   OpenVDBLevelSet_free(level_set);
 
   if (rmd->flag & MOD_REMESH_REPROJECT_VPAINT) {
