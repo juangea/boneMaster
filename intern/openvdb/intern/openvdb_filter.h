@@ -152,8 +152,8 @@ class ExtendedLevelSetFilter : public LevelSetFilter<GridT, MaskT, InterruptT> {
           sum = sum + (multiplier * acc.getValue(xyz));
         }
 
-        // return static_cast<ValueType>(sum / error);
-        return static_cast<ValueType>(sum);
+        return static_cast<ValueType>(sum / error);
+        //return static_cast<ValueType>(sum);
       }
       typename GridT::ConstAccessor acc;
       const Int32 width;
