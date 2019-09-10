@@ -98,7 +98,7 @@ Mesh *BKE_mesh_remesh_voxel_ovdb_volume_to_mesh_nomain(struct OpenVDBLevelSet *l
 #  ifdef WITH_OPENVDB
   struct OpenVDBVolumeToMeshData output_mesh;
   OpenVDBLevelSet_volume_to_mesh(
-      level_set, &output_mesh, isovalue, adaptivity, relax_disoriented_triangles, false, 0.0f);
+      level_set, &output_mesh, isovalue, adaptivity, relax_disoriented_triangles);
 #  endif
 
   Mesh *mesh = BKE_mesh_new_nomain(output_mesh.totvertices,
