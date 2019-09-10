@@ -362,6 +362,7 @@ typedef enum eDriverTarget_TransformChannels {
   DTAR_TRANSCHAN_SCALEY,
   DTAR_TRANSCHAN_SCALEZ,
   DTAR_TRANSCHAN_SCALE_AVG,
+  DTAR_TRANSCHAN_ROTW,
 
   MAX_DTAR_TRANSCHAN_TYPES,
 } eDriverTarget_TransformChannels;
@@ -378,6 +379,14 @@ typedef enum eDriverTarget_RotationMode {
   DTAR_ROTMODE_EULER_YZX,
   DTAR_ROTMODE_EULER_ZXY,
   DTAR_ROTMODE_EULER_ZYX,
+
+  DTAR_ROTMODE_QUATERNION,
+
+  /** Implements the very common Damped Track + child trick to decompose
+   *  rotation into bending followed by twist around the remaining axis. */
+  DTAR_ROTMODE_SWING_TWIST_X,
+  DTAR_ROTMODE_SWING_TWIST_Y,
+  DTAR_ROTMODE_SWING_TWIST_Z,
 
   DTAR_ROTMODE_EULER_MIN = DTAR_ROTMODE_EULER_XYZ,
   DTAR_ROTMODE_EULER_MAX = DTAR_ROTMODE_EULER_ZYX,

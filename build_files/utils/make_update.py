@@ -12,41 +12,29 @@ import shutil
 import sys
 
 import make_utils
-from make_utils import call
-
-# Parse arguments
-
-def parse_arguments():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--only-code", action="store_true")
-    parser.add_argument("--svn-command", default="svn")
-    parser.add_argument("--git-command", default="git")
-    return parser.parse_args()
-
-args = parse_arguments()
-only_code = args.only_code
-git_command = args.git_command
-svn_command = args.svn_command
-svn_non_interactive = [args.svn_command, '--non-interactive']
-
-if shutil.which(git_command) is None:
-    sys.stderr.write("git not found, can't update code\n")
-    sys.exit(1)
-
-if shutil.which(svn_command) is None:
-    sys.stderr.write("svn not found, can't update libraries\n")
-    sys.exit(1)
+from make_utils import call, check_output
 
 def print_stage(text):
     print("")
     print(text)
     print("")
 
-# Test if we are building a specific release version.
-release_version = make_utils.git_branch_release_version(git_command)
+# Parse arguments
+def parse_arguments():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--no-libraries", action="store_true")
+    parser.add_argument("--no-blender", action="store_true")
+    parser.add_argument("--no-submodules", action="store_true")
+    parser.add_argument("--use-tests", action="store_true")
+    parser.add_argument("--svn-command", default="svn")
+    parser.add_argument("--git-command", default="git")
+    return parser.parse_args()
+
 
 # Setup for precompiled libraries and tests from svn.
-if not only_code:
+def svn_update(args, release_version):
+    svn_non_interactive = [args.svn_command, '--non-interactive']
+
     lib_dirpath = os.path.join('..', 'lib')
     svn_url = make_utils.svn_libraries_base_url(release_version)
 
@@ -68,8 +56,26 @@ if not only_code:
         if not os.path.exists(lib_platform_dirpath):
             print_stage("Checking out Precompiled Libraries")
 
+            if shutil.which(args.svn_command) is None:
+                sys.stderr.write("svn not found, can't checkout libraries\n")
+                sys.exit(1)
+
             svn_url_platform = svn_url + lib_platform
             call(svn_non_interactive + ["checkout", svn_url_platform, lib_platform_dirpath])
+
+    if args.use_tests:
+        lib_tests = "tests"
+        lib_tests_dirpath = os.path.join(lib_dirpath, lib_tests)
+
+        if not os.path.exists(lib_tests_dirpath):
+            print_stage("Checking out Tests")
+
+            if shutil.which(args.svn_command) is None:
+                sys.stderr.write("svn not found, can't checkout tests\n")
+                sys.exit(1)
+
+            svn_url_tests = svn_url + lib_tests
+            call(svn_non_interactive + ["checkout", svn_url_tests, lib_tests_dirpath])
 
     # Update precompiled libraries and tests
     print_stage("Updating Precompiled Libraries and Tests")
@@ -85,19 +91,79 @@ if not only_code:
 
         if os.path.isdir(dirpath) and \
            (os.path.exists(svn_dirpath) or os.path.exists(svn_root_dirpath)):
+            if shutil.which(args.svn_command) is None:
+                sys.stderr.write("svn not found, can't update libraries\n")
+                sys.exit(1)
+
             call(svn_non_interactive + ["cleanup", dirpath])
             call(svn_non_interactive + ["switch", svn_url + dirname, dirpath])
             call(svn_non_interactive + ["update", dirpath])
 
-# Update blender repository and submodules.
-print_stage("Updating Blender Git Repository and Submodules")
 
-call([git_command, "pull", "--rebase"])
-call([git_command, "submodule", "update", "--init", "--recursive"])
+# Update blender repository.
+def blender_update_skip(args):
+    if shutil.which(args.git_command) is None:
+        sys.stderr.write("git not found, can't update code\n")
+        sys.exit(1)
 
-if not release_version:
-    # Update submodules to latest master if not building a specific release.
-    # In that case submodules are set to a specific revision, which is checked
-    # out by running "git submodule update".
-    call([git_command, "submodule", "foreach", "git", "checkout", "master"])
-    call([git_command, "submodule", "foreach", "git", "pull", "--rebase", "origin", "master"])
+    # Abort if a rebase is still progress.
+    rebase_merge = check_output([args.git_command, 'rev-parse', '--git-path', 'rebase-merge'])
+    rebase_apply = check_output([args.git_command, 'rev-parse', '--git-path', 'rebase-apply'])
+    merge_head = check_output([args.git_command, 'rev-parse', '--git-path', 'MERGE_HEAD'])
+    if os.path.exists(rebase_merge) or \
+       os.path.exists(rebase_apply) or \
+       os.path.exists(merge_head):
+        return "rebase or merge in progress, complete it first"
+
+    # Abort if uncommitted changes.
+    changes = check_output([args.git_command, 'status', '--porcelain', '--untracked-files=no'])
+    if len(changes) != 0:
+        return "you have unstaged changes"
+
+    # Test if there is an upstream branch configured
+    branch = check_output([args.git_command, "rev-parse", "--abbrev-ref", "HEAD"])
+    remote = check_output([args.git_command, "config", "branch." + branch + ".remote"], exit_on_error=False)
+    if len(remote) == 0:
+        return "no remote branch to pull from"
+
+    return None
+
+def blender_update(args):
+    print_stage("Updating Blender Git Repository")
+    call([args.git_command, "pull", "--rebase"])
+
+
+# Update submodules.
+def submodules_update(args, release_version):
+    print_stage("Updating Submodules")
+    if shutil.which(args.git_command) is None:
+        sys.stderr.write("git not found, can't update code\n")
+        sys.exit(1)
+
+    call([args.git_command, "submodule", "update", "--init", "--recursive"])
+    if not release_version:
+        # Update submodules to latest master if not building a specific release.
+        # In that case submodules are set to a specific revision, which is checked
+        # out by running "git submodule update".
+        call([args.git_command, "submodule", "foreach", "git", "checkout", "master"])
+        call([args.git_command, "submodule", "foreach", "git", "pull", "--rebase", "origin", "master"])
+
+
+if __name__ == "__main__":
+    args = parse_arguments()
+    blender_skipped = None
+
+    # Test if we are building a specific release version.
+    release_version = make_utils.git_branch_release_version(args.git_command)
+
+    if not args.no_libraries:
+        svn_update(args, release_version)
+    if not args.no_blender:
+        blender_skipped = blender_update_skip(args)
+        if not blender_skipped:
+            blender_update(args)
+    if not args.no_submodules:
+        submodules_update(args, release_version)
+
+    if blender_skipped:
+        print_stage("Blender repository skipped: " + blender_skipped)

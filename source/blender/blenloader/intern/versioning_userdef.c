@@ -150,6 +150,7 @@ static void do_versions_theme(const UserDef *userdef, bTheme *btheme)
    * Include next version bump.
    */
   {
+    FROM_DEFAULT_V4_UCHAR(space_file.execution_buts);
   }
 
 #undef FROM_DEFAULT_V4_UCHAR
@@ -607,6 +608,11 @@ void BLO_version_defaults_userpref_blend(Main *bmain, UserDef *userdef)
     userdef->drag_threshold = 30;
     userdef->drag_threshold_mouse = 3;
     userdef->drag_threshold_tablet = 10;
+  }
+
+  if (!USER_VERSION_ATLEAST(281, 9)) {
+    /* X3D is no longer enabled by default. */
+    BKE_addon_remove_safe(&userdef->addons, "io_scene_x3d");
   }
 
   /**

@@ -149,6 +149,7 @@ bool BKE_gpencil_layer_delframe(struct bGPDlayer *gpl, struct bGPDframe *gpf);
 struct bGPDlayer *BKE_gpencil_layer_getactive(struct bGPdata *gpd);
 void BKE_gpencil_layer_setactive(struct bGPdata *gpd, struct bGPDlayer *active);
 void BKE_gpencil_layer_delete(struct bGPdata *gpd, struct bGPDlayer *gpl);
+void BKE_gpencil_layer_autolock_set(struct bGPdata *gpd, const bool unlock);
 
 /* Brush */
 struct Material *BKE_gpencil_brush_material_get(struct Brush *brush);
@@ -236,6 +237,14 @@ void BKE_gpencil_dissolve_points(struct bGPDframe *gpf, struct bGPDstroke *gps, 
 void BKE_gpencil_get_range_selected(struct bGPDlayer *gpl, int *r_initframe, int *r_endframe);
 float BKE_gpencil_multiframe_falloff_calc(
     struct bGPDframe *gpf, int actnum, int f_init, int f_end, struct CurveMapping *cur_falloff);
+
+void BKE_gpencil_convert_curve(struct Main *bmain,
+                               struct Scene *scene,
+                               struct Object *ob_gp,
+                               struct Object *ob_cu,
+                               const bool gpencil_lines,
+                               const bool use_collections,
+                               const bool only_stroke);
 
 extern void (*BKE_gpencil_batch_cache_dirty_tag_cb)(struct bGPdata *gpd);
 extern void (*BKE_gpencil_batch_cache_free_cb)(struct bGPdata *gpd);

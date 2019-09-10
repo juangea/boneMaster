@@ -1386,8 +1386,12 @@ void BKE_mball_polygonize(Depsgraph *depsgraph, Scene *scene, Object *ob, ListBa
 	else if (process.thresh < 0.1f)   process.converge_res = 4;
 	else                              process.converge_res = 2;
 
-	if (is_render && (mb->flag == MB_UPDATE_NEVER)) return;
-	if ((G.moving & (G_TRANSFORM_OBJ | G_TRANSFORM_EDIT)) && mb->flag == MB_UPDATE_FAST) return;
+  if (!is_render && (mb->flag == MB_UPDATE_NEVER)) {
+    return;
+  }
+  if ((G.moving & (G_TRANSFORM_OBJ | G_TRANSFORM_EDIT)) && mb->flag == MB_UPDATE_FAST) {
+    return;
+  }
 
 	if (is_render) {
 		process.size = mb->rendersize;
