@@ -44,8 +44,7 @@ struct OpenVDBLevelSet {
   BoolTreeType::Ptr maskTree;
   openvdb::tools::MeshToVoxelEdgeData edgeData;
   openvdb::FloatGrid::Ptr refGrid;
-
-  void OpenVDBLevelSet::sharpenFeaturesPre(float edge_tolerance);
+  void sharpenFeaturesPre(float edge_tolerance);
 
  public:
   OpenVDBLevelSet();

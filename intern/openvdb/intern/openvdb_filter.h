@@ -119,7 +119,7 @@ class ExtendedLevelSetFilter : public LevelSetFilter<GridT, MaskT, InterruptT> {
 
     template<size_t Axis> struct Avg {
       Avg(const GridT &grid, Int32 w, float s)
-          : acc(grid.tree()), width(w), frac(1 / ValueType(2 * w + 1)), sigma(s)
+          : acc(grid.tree()), width(w), sigma(s)
       {
       }
       inline ValueType operator()(Coord xyz)
@@ -158,7 +158,6 @@ class ExtendedLevelSetFilter : public LevelSetFilter<GridT, MaskT, InterruptT> {
       typename GridT::ConstAccessor acc;
       const Int32 width;
       const Real sigma;
-      const ValueType frac;
     };
 
     template<typename AvgT> void boxImpl(const LeafRange &r, Int32 w, float q);
@@ -176,7 +175,7 @@ class ExtendedLevelSetFilter : public LevelSetFilter<GridT, MaskT, InterruptT> {
       this->boxImpl<Avg<2>>(r, w, q);
     }
 
-    LevelSetFilter *mParent;
+    LevelSetFilter<GridT, MaskT, InterruptT> *mParent;
     const MaskType *mMask;
     typename std::function<void(ExtendedFilter *, const LeafRange &)> mTask;
   };  // end of ExtendedFilter struct
