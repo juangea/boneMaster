@@ -194,7 +194,6 @@ struct OpenVDBLevelSet *OpenVDBLevelSet_create(bool initGrid, float voxel_size, 
 void OpenVDBLevelSet_free(struct OpenVDBLevelSet *level_set);
 void OpenVDBLevelSet_mesh_to_level_set(struct OpenVDBLevelSet *level_set,
                                        const float *vertices,
-                                       const float *vert_normals,
                                        const unsigned int *faces,
                                        const unsigned int totvertices,
                                        const unsigned int totfaces,

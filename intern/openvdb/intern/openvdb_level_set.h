@@ -64,7 +64,6 @@ struct OpenVDBLevelSet {
   openvdb::Vec3s face_normal(uint32_t faceOffset);
   
   void mesh_to_level_set(const float *vertices,
-                         const float *vert_normals,
                          const unsigned int *faces,
                          const unsigned int totvertices,
                          const unsigned int totfaces,

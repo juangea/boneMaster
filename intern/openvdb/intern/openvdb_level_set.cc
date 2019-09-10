@@ -37,14 +37,12 @@ OpenVDBLevelSet::~OpenVDBLevelSet()
 }
 
 void OpenVDBLevelSet::mesh_to_level_set(const float *vertices,
-                                        const float *vnormals,
                                         const unsigned int *faces,
                                         const unsigned int totvertices,
                                         const unsigned int totfaces,
                                         const openvdb::math::Transform::Ptr &xform)
 {
   std::vector<openvdb::Vec3s> points(totvertices);
-  std::vector<openvdb::Vec3s> vert_normals(totvertices);
   // maximum if all primitives are split, mark 4th vertex as invalid since we have tris only
   std::vector<uint32_t> vert_tri(totfaces * 4); 
   std::vector<openvdb::Vec3I> triangles(totfaces);
