@@ -324,10 +324,10 @@ class _defs_view3d_select:
             pass
         return dict(
             idname="builtin.select",
-            label="Select",
+            label="Tweak",
             icon="ops.generic.select",
             widget=None,
-            keymap="3D View Tool: Select",
+            keymap="3D View Tool: Tweak",
             draw_settings=draw_settings,
         )
 
@@ -724,8 +724,6 @@ class _defs_edit_mesh:
     def shear():
         def draw_settings(context, layout, tool):
             props = tool.operator_properties("transform.shear")
-            layout.label(text="View Axis:")
-            layout.prop(props, "shear_axis", expand=True)
             _template_widget.VIEW3D_GGT_xform_gizmo.draw_settings_with_index(context, layout, 2)
         return dict(
             idname="builtin.shear",
@@ -987,6 +985,23 @@ class _defs_sculpt:
             keymap=(),
         )
 
+    @ToolDef.from_fn
+    def mesh_filter():
+        def draw_settings(context, layout, tool):
+            props = tool.operator_properties("sculpt.mesh_filter")
+            layout.prop(props, "type", expand=False)
+            layout.prop(props, "strength")
+            layout.prop(props, "deform_axis")
+
+        return dict(
+            idname="builtin.mesh_filter",
+            label="Mesh Filter",
+            icon="ops.sculpt.mesh_filter",
+            widget=None,
+            keymap=(),
+            draw_settings=draw_settings,
+        )
+
 
 class _defs_vertex_paint:
 
@@ -1194,7 +1209,7 @@ class _defs_image_uv_select:
             pass
         return dict(
             idname="builtin.select",
-            label="Select",
+            label="Tweak",
             icon="ops.generic.select",
             widget=None,
             keymap=(),
@@ -1392,7 +1407,7 @@ class _defs_gpencil_edit:
             layout.prop(context.tool_settings.gpencil_sculpt, "intersection_threshold")
         return dict(
             idname="builtin.select",
-            label="Select",
+            label="Tweak",
             icon="ops.generic.select",
             widget=None,
             keymap=(),
@@ -1557,10 +1572,10 @@ class _defs_node_select:
             pass
         return dict(
             idname="builtin.select",
-            label="Select",
+            label="Tweak",
             icon="ops.generic.select",
             widget=None,
-            keymap="Node Tool: Select",
+            keymap="Node Tool: Tweak",
             draw_settings=draw_settings,
         )
 
@@ -1968,6 +1983,8 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
                 _defs_sculpt.mask_lasso,
             ),
             _defs_sculpt.hide_border,
+            None,
+            _defs_sculpt.mesh_filter,
             None,
             *_tools_annotate,
         ],

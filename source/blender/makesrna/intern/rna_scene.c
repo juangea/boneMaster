@@ -143,7 +143,7 @@ const EnumPropertyItem rna_enum_proportional_falloff_curve_only_items[] = {
 
 /* keep for operators, not used here */
 const EnumPropertyItem rna_enum_mesh_select_mode_items[] = {
-    {SCE_SELECT_VERTEX, "VERTEX", ICON_VERTEXSEL, "Vertex", "Vertex selection mode"},
+    {SCE_SELECT_VERTEX, "VERT", ICON_VERTEXSEL, "Vertex", "Vertex selection mode"},
     {SCE_SELECT_EDGE, "EDGE", ICON_EDGESEL, "Edge", "Edge selection mode"},
     {SCE_SELECT_FACE, "FACE", ICON_FACESEL, "Face", "Face selection mode"},
     {0, NULL, 0, NULL, NULL},
@@ -712,20 +712,7 @@ static void rna_ToolSettings_snap_mode_set(struct PointerRNA *ptr, int value)
 /* Grease Pencil update cache */
 static void rna_GPencil_update(Main *UNUSED(bmain), Scene *scene, PointerRNA *UNUSED(ptr))
 {
-  /* mark all grease pencil datablocks of the scene */
-  FOREACH_SCENE_COLLECTION_BEGIN (scene, collection) {
-    FOREACH_COLLECTION_OBJECT_RECURSIVE_BEGIN (collection, ob) {
-      if (ob->type == OB_GPENCIL) {
-        bGPdata *gpd = (bGPdata *)ob->data;
-        gpd->flag |= GP_DATA_CACHE_IS_DIRTY;
-        DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
-      }
-    }
-    FOREACH_COLLECTION_OBJECT_RECURSIVE_END;
-  }
-  FOREACH_SCENE_COLLECTION_END;
-
-  WM_main_add_notifier(NC_GPENCIL | NA_EDITED, NULL);
+  ED_gpencil_tag_scene_gpencil(scene);
 }
 
 /* Grease Pencil Interpolation settings */
@@ -6341,6 +6328,11 @@ static void rna_def_scene_render_data(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Layers Blending", "Do not display blend layers");
   RNA_def_property_update(prop, NC_GPENCIL | ND_DATA, "rna_GPencil_update");
 
+  prop = RNA_def_property(srna, "simplify_gpencil_tint", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "simplify_gpencil", SIMPLIFY_GPENCIL_TINT);
+  RNA_def_property_ui_text(prop, "Layers Tinting", "Do not display layer tint");
+  RNA_def_property_update(prop, NC_GPENCIL | ND_DATA, "rna_GPencil_update");
+
   /* persistent data */
   prop = RNA_def_property(srna, "use_persistent_data", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "mode", R_PERSISTENT_DATA);
@@ -6662,12 +6654,6 @@ static void rna_def_scene_eevee(BlenderRNA *brna)
   StructRNA *srna;
   PropertyRNA *prop;
 
-  static const EnumPropertyItem eevee_shadow_method_items[] = {
-      {SHADOW_ESM, "ESM", 0, "ESM", "Exponential Shadow Mapping"},
-      {SHADOW_VSM, "VSM", 0, "VSM", "Variance Shadow Mapping"},
-      {0, NULL, 0, NULL, NULL},
-  };
-
   static const EnumPropertyItem eevee_shadow_size_items[] = {
       {64, "64", 0, "64px", ""},
       {128, "128", 0, "128px", ""},
@@ -6834,16 +6820,6 @@ static void rna_def_scene_eevee(BlenderRNA *brna)
   RNA_def_property_ui_text(
       prop, "Jitter Threshold", "Rotate samples that are below this threshold");
   RNA_def_property_range(prop, 0.0f, 1.0f);
-  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
-  RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
-
-  prop = RNA_def_property(srna, "use_sss_separate_albedo", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, NULL, "flag", SCE_EEVEE_SSS_SEPARATE_ALBEDO);
-  RNA_def_property_boolean_default(prop, 0);
-  RNA_def_property_ui_text(prop,
-                           "Separate Albedo",
-                           "Avoid albedo being blurred by the subsurface scattering "
-                           "but uses more video memory");
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 
@@ -7127,13 +7103,6 @@ static void rna_def_scene_eevee(BlenderRNA *brna)
   RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 
   /* Shadows */
-  prop = RNA_def_property(srna, "shadow_method", PROP_ENUM, PROP_NONE);
-  RNA_def_property_enum_default(prop, SHADOW_ESM);
-  RNA_def_property_enum_items(prop, eevee_shadow_method_items);
-  RNA_def_property_ui_text(prop, "Method", "Technique use to compute the shadows");
-  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
-  RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
-
   prop = RNA_def_property(srna, "shadow_cube_size", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_default(prop, 512);
   RNA_def_property_enum_items(prop, eevee_shadow_size_items);

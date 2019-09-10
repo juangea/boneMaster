@@ -32,6 +32,7 @@
 
 struct ARegion;
 struct AutoComplete;
+struct FileSelectParams;
 struct ID;
 struct IDProperty;
 struct ImBuf;
@@ -520,6 +521,7 @@ typedef bool (*uiMenuStepFunc)(struct bContext *C, int direction, void *arg1);
 /* interface_query.c */
 bool UI_but_has_tooltip_label(const uiBut *but);
 bool UI_but_is_tool(const uiBut *but);
+bool UI_but_is_utf8(const uiBut *but);
 #define UI_but_is_decorator(but) ((but)->func == ui_but_anim_decorate_cb)
 
 bool UI_block_is_empty(const uiBlock *block);
@@ -1596,6 +1598,11 @@ void UI_but_func_hold_set(uiBut *but, uiButHandleHoldFunc func, void *argN);
 
 void UI_but_func_pushed_state_set(uiBut *but, uiButPushedStateFunc func, void *arg);
 
+PointerRNA *UI_but_extra_operator_icon_add(uiBut *but,
+                                           const char *opname,
+                                           short opcontext,
+                                           int icon);
+
 /* Autocomplete
  *
  * Tab complete helper functions, for use in uiButCompleteFunc callbacks.
@@ -2081,6 +2088,9 @@ void uiTemplateColormanagedViewSettings(struct uiLayout *layout,
                                         const char *propname);
 
 int uiTemplateRecentFiles(struct uiLayout *layout, int rows);
+void uiTemplateFileSelectPath(uiLayout *layout,
+                              struct bContext *C,
+                              struct FileSelectParams *params);
 
 /* items */
 void uiItemO(uiLayout *layout, const char *name, int icon, const char *opname);

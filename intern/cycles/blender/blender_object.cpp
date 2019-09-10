@@ -252,7 +252,7 @@ void BlenderSync::sync_light(BL::Object &b_parent,
   light->tag_update(scene);
 }
 
-void BlenderSync::sync_background_light(bool use_portal)
+void BlenderSync::sync_background_light(BL::SpaceView3D &b_v3d, bool use_portal)
 {
   BL::World b_world = b_scene.world();
 
@@ -306,6 +306,7 @@ void BlenderSync::sync_background_light(bool use_portal)
 
   world_map = b_world.ptr.data;
   world_recalc = false;
+  viewport_parameters = BlenderViewportParameters(b_v3d);
 }
 
 /* Object */
@@ -316,6 +317,7 @@ Object *BlenderSync::sync_object(BL::Depsgraph &b_depsgraph,
                                  float motion_time,
                                  bool show_self,
                                  bool show_particles,
+                                 bool show_lights,
                                  BlenderObjectCulling &culling,
                                  bool *use_portal)
 {
@@ -334,6 +336,10 @@ Object *BlenderSync::sync_object(BL::Depsgraph &b_depsgraph,
 
   /* light is handled separately */
   if (!motion && object_is_light(b_ob)) {
+    if (!show_lights) {
+      return NULL;
+    }
+
     /* TODO: don't use lights for excluded layers used as mask layer,
      * when dynamic overrides are back. */
 #if 0
@@ -530,7 +536,9 @@ Object *BlenderSync::sync_object(BL::Depsgraph &b_depsgraph,
 
 /* Object Loop */
 
-void BlenderSync::sync_objects(BL::Depsgraph &b_depsgraph, float motion_time)
+void BlenderSync::sync_objects(BL::Depsgraph &b_depsgraph,
+                               BL::SpaceView3D &b_v3d,
+                               float motion_time)
 {
   /* layer data */
   bool motion = motion_time != 0.0f;
@@ -553,6 +561,7 @@ void BlenderSync::sync_objects(BL::Depsgraph &b_depsgraph, float motion_time)
   /* object loop */
   bool cancel = false;
   bool use_portal = false;
+  const bool show_lights = BlenderViewportParameters(b_v3d).use_scene_lights;
 
   BL::ViewLayer b_view_layer = b_depsgraph.view_layer_eval();
 
@@ -578,6 +587,7 @@ void BlenderSync::sync_objects(BL::Depsgraph &b_depsgraph, float motion_time)
                   motion_time,
                   show_self,
                   show_particles,
+                  show_lights,
                   culling,
                   &use_portal);
     }
@@ -588,7 +598,7 @@ void BlenderSync::sync_objects(BL::Depsgraph &b_depsgraph, float motion_time)
   progress.set_sync_status("");
 
   if (!cancel && !motion) {
-    sync_background_light(use_portal);
+    sync_background_light(b_v3d, use_portal);
 
     /* handle removed data and modified pointers */
     if (light_map.post_sync())
@@ -607,6 +617,7 @@ void BlenderSync::sync_objects(BL::Depsgraph &b_depsgraph, float motion_time)
 
 void BlenderSync::sync_motion(BL::RenderSettings &b_render,
                               BL::Depsgraph &b_depsgraph,
+                              BL::SpaceView3D &b_v3d,
                               BL::Object &b_override,
                               int width,
                               int height,
@@ -644,7 +655,7 @@ void BlenderSync::sync_motion(BL::RenderSettings &b_render,
     b_engine.frame_set(frame, subframe);
     python_thread_state_save(python_thread_state);
     sync_camera_motion(b_render, b_cam, width, height, 0.0f);
-    sync_objects(b_depsgraph, 0.0f);
+    sync_objects(b_depsgraph, b_v3d, 0.0f);
   }
 
   /* always sample these times for camera motion */
@@ -680,7 +691,7 @@ void BlenderSync::sync_motion(BL::RenderSettings &b_render,
     }
 
     /* sync object */
-    sync_objects(b_depsgraph, relative_time);
+    sync_objects(b_depsgraph, b_v3d, relative_time);
   }
 
   /* we need to set the python thread state again because this

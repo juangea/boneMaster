@@ -35,7 +35,6 @@
 #ifdef WIN32
 #  include <io.h>
 #  include "BLI_winstuff.h"
-#  include "BLI_callbacks.h"
 #  include "BLI_fileops_types.h"
 #  include "utf_winfunc.h"
 #  include "utfconv.h"
@@ -343,7 +342,7 @@ static bool delete_recursive(const char *dir)
         err = true;
       }
     }
-    ++fl;
+    fl++;
   }
 
   if (!err && delete_unique(dir, true)) {

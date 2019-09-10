@@ -58,6 +58,9 @@ struct MDeformVert;
 #define GPENCIL_SIMPLIFY_BLEND(scene, playing) \
   ((GPENCIL_SIMPLIFY_ONPLAY(playing) && (GPENCIL_SIMPLIFY(scene)) && \
     (scene->r.simplify_gpencil & SIMPLIFY_GPENCIL_BLEND)))
+#define GPENCIL_SIMPLIFY_TINT(scene, playing) \
+  ((GPENCIL_SIMPLIFY_ONPLAY(playing) && (GPENCIL_SIMPLIFY(scene)) && \
+    (scene->r.simplify_gpencil & SIMPLIFY_GPENCIL_TINT)))
 
 /* ------------ Grease-Pencil API ------------------ */
 
@@ -149,6 +152,7 @@ bool BKE_gpencil_layer_delframe(struct bGPDlayer *gpl, struct bGPDframe *gpf);
 struct bGPDlayer *BKE_gpencil_layer_getactive(struct bGPdata *gpd);
 void BKE_gpencil_layer_setactive(struct bGPdata *gpd, struct bGPDlayer *active);
 void BKE_gpencil_layer_delete(struct bGPdata *gpd, struct bGPDlayer *gpl);
+void BKE_gpencil_layer_autolock_set(struct bGPdata *gpd, const bool unlock);
 
 /* Brush */
 struct Material *BKE_gpencil_brush_material_get(struct Brush *brush);

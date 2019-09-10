@@ -61,6 +61,74 @@
 #define TEXTURE 4
 #define PATTERN 5
 
+/* Verify if must fade object or not. */
+static bool gpencil_fade_object_check(GPENCIL_StorageList *stl, Object *ob)
+{
+  const DRWContextState *draw_ctx = DRW_context_state_get();
+  View3D *v3d = draw_ctx->v3d;
+  const bool is_overlay = (bool)((v3d) && ((v3d->flag2 & V3D_HIDE_OVERLAYS) == 0) &&
+                                 (v3d->gp_flag & V3D_GP_SHOW_PAPER));
+
+  if ((!is_overlay) || (ob == draw_ctx->obact) ||
+      ((v3d->gp_flag & V3D_GP_FADE_NOACTIVE_GPENCIL) == 0) ||
+      (v3d->overlay.gpencil_paper_opacity == 1.0f)) {
+    return false;
+  }
+
+  const bool playing = stl->storage->is_playing;
+  const bool is_render = (bool)stl->storage->is_render;
+  const bool is_mat_preview = (bool)stl->storage->is_mat_preview;
+  const bool is_select = (bool)(DRW_state_is_select() || DRW_state_is_depth());
+
+  return (bool)((!is_render) && (!playing) && (!is_mat_preview) && (!is_select));
+}
+
+/* Define Fade layer uniforms. */
+static void gpencil_set_fade_layer_uniforms(
+    GPENCIL_StorageList *stl, DRWShadingGroup *grp, Object *ob, bGPDlayer *gpl, const bool skip)
+{
+  const DRWContextState *draw_ctx = DRW_context_state_get();
+  View3D *v3d = draw_ctx->v3d;
+  const bool overlay = v3d != NULL ? (bool)((v3d->flag2 & V3D_HIDE_OVERLAYS) == 0) : true;
+  const bool is_fade = (v3d) && (v3d->gp_flag & V3D_GP_FADE_NOACTIVE_LAYERS) &&
+                       (draw_ctx->obact) && (draw_ctx->obact == ob) &&
+                       ((gpl->flag & GP_LAYER_ACTIVE) == 0);
+
+  const bool playing = stl->storage->is_playing;
+  const bool is_render = (bool)stl->storage->is_render;
+  const bool is_mat_preview = (bool)stl->storage->is_mat_preview;
+  const bool is_select = (bool)(DRW_state_is_select() || DRW_state_is_depth());
+
+  /* If drawing or not fading layer, skip. */
+  if ((!overlay) || (skip) || (!is_fade) || (is_render) || (playing) || (is_mat_preview) ||
+      (is_select)) {
+    DRW_shgroup_uniform_int_copy(grp, "fade_layer", 0);
+    return;
+  }
+
+  /* If layer is above active, use alpha (2) if below use mix with background (1). */
+  if (stl->storage->is_ontop) {
+    DRW_shgroup_uniform_int_copy(grp, "fade_layer", 2);
+  }
+  else {
+    DRW_shgroup_uniform_int_copy(grp, "fade_layer", 1);
+  }
+  if (v3d) {
+    DRW_shgroup_uniform_vec3(grp, "fade_color", v3d->shading.background_color, 1);
+    DRW_shgroup_uniform_float(grp, "fade_layer_factor", &v3d->overlay.gpencil_fade_layer, 1);
+  }
+}
+
+/* Define Fade object uniforms. */
+static void gpencil_set_fade_ob_uniforms(View3D *v3d, DRWShadingGroup *grp, bool status)
+{
+  DRW_shgroup_uniform_bool_copy(grp, "fade_ob", status);
+  if (v3d) {
+    DRW_shgroup_uniform_vec3(grp, "fade_color", v3d->shading.background_color, 1);
+    DRW_shgroup_uniform_float(grp, "fade_ob_factor", &v3d->overlay.gpencil_paper_opacity, 1);
+  }
+}
+
 /* Get number of vertex for using in GPU VBOs */
 static void gpencil_calc_vertex(GPENCIL_StorageList *stl,
                                 tGPencilObjectCache *cache_ob,
@@ -81,7 +149,7 @@ static void gpencil_calc_vertex(GPENCIL_StorageList *stl,
                            (bool)((draw_ctx->v3d->flag2 & V3D_HIDE_OVERLAYS) == 0) :
                            true;
   const bool do_onion = (bool)((gpd->flag & GP_DATA_STROKE_WEIGHTMODE) == 0) && overlay &&
-                        main_onion && gpencil_onion_active(gpd) && !playing;
+                        main_onion && !playing && gpencil_onion_active(gpd);
 
   const bool is_multiedit = (bool)GPENCIL_MULTIEDIT_SESSIONS_ON(gpd);
 
@@ -264,7 +332,6 @@ static void set_wireframe_color(Object *ob,
   else {
     copy_v4_v4(color, gp_style->stroke_rgba);
   }
-  float alpha = color[3];
 
   /* wire color */
   if ((v3d) && (id > -1)) {
@@ -301,13 +368,13 @@ static void set_wireframe_color(Object *ob,
         else {
           copy_v3_v3(color, v3d->shading.single_color);
         }
-        color[3] = alpha;
+        color[3] = 1.0f;
         linearrgb_to_srgb_v4(stl->shgroups[id].wire_color, color);
         break;
       }
       case V3D_SHADING_OBJECT_COLOR: {
         copy_v4_v4(color, ob->color);
-        color[3] = alpha;
+        color[3] = 1.0f;
         linearrgb_to_srgb_v4(stl->shgroups[id].wire_color, color);
         break;
       }
@@ -324,7 +391,7 @@ static void set_wireframe_color(Object *ob,
         hsv_to_rgb_v(hsv, &wire_col[0]);
 
         copy_v3_v3(stl->shgroups[id].wire_color, wire_col);
-        stl->shgroups[id].wire_color[3] = alpha;
+        stl->shgroups[id].wire_color[3] = 1.0f;
         break;
       }
       default: {
@@ -337,7 +404,7 @@ static void set_wireframe_color(Object *ob,
     copy_v4_v4(stl->shgroups[id].wire_color, color);
   }
 
-  /* if solid, the alpha must be set to 1.0 */
+  /* if solid, the alpha must be set to alpha */
   if (stl->shgroups[id].shading_type[0] == OB_SOLID) {
     stl->shgroups[id].wire_color[3] = 1.0f;
   }
@@ -430,6 +497,12 @@ static DRWShadingGroup *gpencil_shgroup_fill_create(GPENCIL_Data *vedata,
   }
 
   DRW_shgroup_uniform_int(grp, "shading_type", &stl->shgroups[id].shading_type[0], 2);
+
+  /* Fade layer uniforms. */
+  gpencil_set_fade_layer_uniforms(stl, grp, ob, gpl, false);
+
+  /* Fade object uniforms. */
+  gpencil_set_fade_ob_uniforms(v3d, grp, gpencil_fade_object_check(stl, ob));
 
   /* wire color */
   set_wireframe_color(ob, gpl, v3d, stl, gp_style, id, true);
@@ -553,6 +626,12 @@ DRWShadingGroup *gpencil_shgroup_stroke_create(GPENCIL_Data *vedata,
     }
     DRW_shgroup_uniform_int(grp, "shading_type", &stl->shgroups[id].shading_type[0], 2);
 
+    /* Fade layer uniforms. */
+    gpencil_set_fade_layer_uniforms(stl, grp, ob, gpl, false);
+
+    /* Fade object uniforms. */
+    gpencil_set_fade_ob_uniforms(v3d, grp, gpencil_fade_object_check(stl, ob));
+
     /* wire color */
     set_wireframe_color(ob, gpl, v3d, stl, gp_style, id, false);
     DRW_shgroup_uniform_vec4(grp, "wire_color", stl->shgroups[id].wire_color, 1);
@@ -602,6 +681,12 @@ DRWShadingGroup *gpencil_shgroup_stroke_create(GPENCIL_Data *vedata,
     /* for drawing always on predefined z-depth */
     DRW_shgroup_uniform_int(grp, "xraymode", &stl->storage->xray, 1);
   }
+
+  /* Fade layer uniforms. */
+  gpencil_set_fade_layer_uniforms(stl, grp, ob, gpl, true);
+
+  /* Fade object uniforms. */
+  gpencil_set_fade_ob_uniforms(v3d, grp, false);
 
   /* image texture for pattern */
   if ((gp_style) && (gp_style->stroke_style == GP_STYLE_STROKE_STYLE_TEXTURE) && (!onion)) {
@@ -702,6 +787,12 @@ static DRWShadingGroup *gpencil_shgroup_point_create(GPENCIL_Data *vedata,
     }
     DRW_shgroup_uniform_int(grp, "shading_type", &stl->shgroups[id].shading_type[0], 2);
 
+    /* Fade layer uniforms. */
+    gpencil_set_fade_layer_uniforms(stl, grp, ob, gpl, false);
+
+    /* Fade object uniforms. */
+    gpencil_set_fade_ob_uniforms(v3d, grp, gpencil_fade_object_check(stl, ob));
+
     /* wire color */
     set_wireframe_color(ob, gpl, v3d, stl, gp_style, id, false);
     DRW_shgroup_uniform_vec4(grp, "wire_color", stl->shgroups[id].wire_color, 1);
@@ -759,6 +850,12 @@ static DRWShadingGroup *gpencil_shgroup_point_create(GPENCIL_Data *vedata,
     /* for drawing always on predefined z-depth */
     DRW_shgroup_uniform_int(grp, "xraymode", &stl->storage->xray, 1);
   }
+
+  /* Fade layer uniforms. */
+  gpencil_set_fade_layer_uniforms(stl, grp, ob, gpl, true);
+
+  /* Fade object uniforms. */
+  gpencil_set_fade_ob_uniforms(v3d, grp, false);
 
   /* image texture */
   if ((gp_style) && (gp_style->stroke_style == GP_STYLE_STROKE_STYLE_TEXTURE) && (!onion)) {
@@ -1624,7 +1721,7 @@ static void gpencil_shgroups_create(GPENCIL_e_data *e_data,
                            true;
   const bool main_onion = v3d != NULL ? (v3d->gp_flag & V3D_GP_SHOW_ONION_SKIN) : true;
   const bool do_onion = (bool)((gpd->flag & GP_DATA_STROKE_WEIGHTMODE) == 0) && main_onion &&
-                        gpencil_onion_active(gpd) && overlay;
+                        overlay && gpencil_onion_active(gpd);
 
   int start_stroke = 0;
   int start_point = 0;
@@ -1633,6 +1730,8 @@ static void gpencil_shgroups_create(GPENCIL_e_data *e_data,
   int start_edlin = 0;
 
   uint stencil_id = 1;
+  /* Flag to determine if the layer is above active layer. */
+  stl->storage->is_ontop = false;
   for (int i = 0; i < cache->grp_used; i++) {
     elm = &cache->grp_cache[i];
     array_elm = &cache_ob->shgrp_array[idx];
@@ -1660,6 +1759,10 @@ static void gpencil_shgroups_create(GPENCIL_e_data *e_data,
     }
 
     gpl = elm->gpl;
+    if ((!stl->storage->is_ontop) && (gpl->flag & GP_LAYER_ACTIVE)) {
+      stl->storage->is_ontop = true;
+    }
+
     bGPDframe *gpf = elm->gpf;
     bGPDstroke *gps = elm->gps;
     MaterialGPencilStyle *gp_style = BKE_material_gpencil_settings_get(ob, gps->mat_nr + 1);
@@ -1819,6 +1922,7 @@ void gpencil_populate_multiedit(GPENCIL_e_data *e_data,
 
   GPENCIL_StorageList *stl = ((GPENCIL_Data *)vedata)->stl;
   const DRWContextState *draw_ctx = DRW_context_state_get();
+  Scene *scene = draw_ctx->scene;
   int cfra_eval = (int)DEG_get_ctime(draw_ctx->depsgraph);
   GpencilBatchCache *cache = gpencil_batch_cache_get(ob, cfra_eval);
 
@@ -1834,39 +1938,23 @@ void gpencil_populate_multiedit(GPENCIL_e_data *e_data,
     if (gpl->flag & GP_LAYER_HIDE) {
       continue;
     }
+    const float alpha = GPENCIL_SIMPLIFY_TINT(scene, playing) ? 0.0f : gpl->tintcolor[3];
+    const float tintcolor[4] = {gpl->tintcolor[0], gpl->tintcolor[1], gpl->tintcolor[2], alpha};
 
     /* list of frames to draw */
     if (!playing) {
       for (gpf = gpl->frames.first; gpf; gpf = gpf->next) {
         if ((gpf == gpl->actframe) || (gpf->flag & GP_FRAME_SELECT)) {
-          gpencil_draw_strokes(cache,
-                               e_data,
-                               vedata,
-                               ob,
-                               gpd,
-                               gpl,
-                               gpf,
-                               gpl->opacity,
-                               gpl->tintcolor,
-                               false,
-                               cache_ob);
+          gpencil_draw_strokes(
+              cache, e_data, vedata, ob, gpd, gpl, gpf, gpl->opacity, tintcolor, false, cache_ob);
         }
       }
     }
     else {
       gpf = BKE_gpencil_layer_getframe(gpl, cfra_eval, GP_GETFRAME_USE_PREV);
       if (gpf) {
-        gpencil_draw_strokes(cache,
-                             e_data,
-                             vedata,
-                             ob,
-                             gpd,
-                             gpl,
-                             gpf,
-                             gpl->opacity,
-                             gpl->tintcolor,
-                             false,
-                             cache_ob);
+        gpencil_draw_strokes(
+            cache, e_data, vedata, ob, gpd, gpl, gpf, gpl->opacity, tintcolor, false, cache_ob);
       }
     }
   }
@@ -1901,19 +1989,24 @@ void gpencil_populate_datablock(GPENCIL_e_data *e_data,
   bGPdata *gpd_eval = (bGPdata *)ob->data;
   bGPdata *gpd = (bGPdata *)DEG_get_original_id(&gpd_eval->id);
 
+  const bool main_onion = draw_ctx->v3d != NULL ?
+                              (draw_ctx->v3d->gp_flag & V3D_GP_SHOW_ONION_SKIN) :
+                              true;
+  const bool playing = stl->storage->is_playing;
+  const bool overlay = draw_ctx->v3d != NULL ?
+                           (bool)((draw_ctx->v3d->flag2 & V3D_HIDE_OVERLAYS) == 0) :
+                           true;
+  const bool do_onion = (bool)((gpd->flag & GP_DATA_STROKE_WEIGHTMODE) == 0) && overlay &&
+                        main_onion && !playing && gpencil_onion_active(gpd);
+
   View3D *v3d = draw_ctx->v3d;
   int cfra_eval = (int)DEG_get_ctime(draw_ctx->depsgraph);
 
   bGPDframe *gpf_eval = NULL;
-  const bool overlay = v3d != NULL ? (bool)((v3d->flag2 & V3D_HIDE_OVERLAYS) == 0) : true;
   const bool time_remap = BKE_gpencil_has_time_modifiers(ob);
 
   float opacity;
   bGPDframe *gpf = NULL;
-  bGPDlayer *gpl_active = BKE_gpencil_layer_getactive(gpd);
-
-  /* check if playing animation */
-  const bool playing = stl->storage->is_playing;
 
   GpencilBatchCache *cache = gpencil_batch_cache_get(ob, cfra_eval);
 
@@ -1966,12 +2059,6 @@ void gpencil_populate_datablock(GPENCIL_e_data *e_data,
         (v3d->overlay.flag & V3D_OVERLAY_BONE_SELECT)) {
       opacity = opacity * v3d->overlay.xray_alpha_bone;
     }
-    /* fade no active layers */
-    if ((overlay) && (draw_ctx->object_mode == OB_MODE_PAINT_GPENCIL) &&
-        (v3d->gp_flag & V3D_GP_FADE_NOACTIVE_LAYERS) && (draw_ctx->obact) &&
-        (draw_ctx->obact == ob) && (gpl != gpl_active)) {
-      opacity = opacity * v3d->overlay.gpencil_fade_layer;
-    }
 
     /* Get evaluated frames array data */
     int idx_eval = BLI_findindex(&gpd->layers, gpl);
@@ -1979,7 +2066,7 @@ void gpencil_populate_datablock(GPENCIL_e_data *e_data,
 
     /* draw onion skins */
     if (!ID_IS_LINKED(&gpd->id)) {
-      if ((gpl->onion_flag & GP_LAYER_ONIONSKIN) &&
+      if ((do_onion) && (gpl->onion_flag & GP_LAYER_ONIONSKIN) &&
           ((!playing) || (gpd->onion_flag & GP_ONION_GHOST_ALWAYS)) && (!cache_ob->is_dup_ob) &&
           (gpd->id.us <= 1)) {
         if ((!stl->storage->is_render) ||
@@ -1989,8 +2076,10 @@ void gpencil_populate_datablock(GPENCIL_e_data *e_data,
       }
     }
     /* draw normal strokes */
+    const float alpha = GPENCIL_SIMPLIFY_TINT(scene, playing) ? 0.0f : gpl->tintcolor[3];
+    const float tintcolor[4] = {gpl->tintcolor[0], gpl->tintcolor[1], gpl->tintcolor[2], alpha};
     gpencil_draw_strokes(
-        cache, e_data, vedata, ob, gpd, gpl, gpf_eval, opacity, gpl->tintcolor, false, cache_ob);
+        cache, e_data, vedata, ob, gpd, gpl, gpf_eval, opacity, tintcolor, false, cache_ob);
   }
 
   /* create batchs and shading groups */

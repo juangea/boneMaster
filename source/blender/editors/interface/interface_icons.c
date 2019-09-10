@@ -169,6 +169,7 @@ static const IconType icontypes[] = {
 #  define DEF_ICON_OBJECT_DATA(name) {ICON_TYPE_MONO_TEXTURE, TH_ICON_OBJECT_DATA},
 #  define DEF_ICON_MODIFIER(name) {ICON_TYPE_MONO_TEXTURE, TH_ICON_MODIFIER},
 #  define DEF_ICON_SHADING(name) {ICON_TYPE_MONO_TEXTURE, TH_ICON_SHADING},
+#  define DEF_ICON_FOLDER(name) {ICON_TYPE_MONO_TEXTURE, TH_ICON_FOLDER},
 #  define DEF_ICON_FUND(name) {ICON_TYPE_MONO_TEXTURE, TH_ICON_FUND},
 #  define DEF_ICON_VECTOR(name) {ICON_TYPE_VECTOR, 0},
 #  define DEF_ICON_COLOR(name) {ICON_TYPE_COLOR_TEXTURE, 0},
@@ -2244,6 +2245,8 @@ int UI_idcode_icon_get(const int idcode)
       return ICON_FONT_DATA;
     case ID_WO:
       return ICON_WORLD_DATA;
+    case ID_WS:
+      return ICON_WORKSPACE;
     default:
       return ICON_NONE;
   }

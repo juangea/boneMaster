@@ -256,6 +256,7 @@ typedef struct SculptSession {
   float (*layer_co)[3]; /* Copy of the mesh vertices' locations */
 
   struct StrokeCache *cache;
+  struct FilterCache *filter_cache;
 
   /* Cursor data and active vertex for tools */
   int active_vertex_index;
@@ -265,6 +266,12 @@ typedef struct SculptSession {
   float cursor_normal[3];
   float cursor_view_normal[3];
   struct RegionView3D *rv3d;
+
+  float pivot_pos[3];
+
+  /* Dynamic mesh preview */
+  int *preview_vert_index_list;
+  int preview_vert_index_count;
 
   union {
     struct {

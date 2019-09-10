@@ -1060,6 +1060,10 @@ void BKE_sculptsession_free(Object *ob)
       MEM_freeN(ss->deform_imats);
     }
 
+    if (ss->preview_vert_index_list) {
+      MEM_freeN(ss->preview_vert_index_list);
+    }
+
     BKE_sculptsession_free_vwpaint_data(ob->sculpt);
 
     MEM_freeN(ss);
@@ -1227,7 +1231,7 @@ static void sculpt_update_object(
       BKE_crazyspace_build_sculpt(depsgraph, scene, ob, &ss->deform_imats, &ss->deform_cos);
       BKE_pbvh_vert_coords_apply(ss->pbvh, ss->deform_cos, me->totvert);
 
-      for (a = 0; a < me->totvert; ++a) {
+      for (a = 0; a < me->totvert; a++) {
         invert_m3(ss->deform_imats[a]);
       }
     }
@@ -1268,7 +1272,7 @@ void BKE_sculpt_update_object_before_eval(Object *ob)
   SculptSession *ss = ob->sculpt;
 
   if (ss && ss->building_vp_handle == false) {
-    if (!ss->cache) {
+    if (!ss->cache && !ss->filter_cache) {
       /* We free pbvh on changes, except in the middle of drawing a stroke
        * since it can't deal with changing PVBH node organization, we hope
        * topology does not change in the meantime .. weak. */

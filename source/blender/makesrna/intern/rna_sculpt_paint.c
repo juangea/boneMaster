@@ -162,24 +162,13 @@ const EnumPropertyItem rna_enum_symmetrize_direction_items[] = {
 
 #  include "DEG_depsgraph.h"
 
+#  include "ED_gpencil.h"
 #  include "ED_particle.h"
 
 static void rna_GPencil_update(Main *UNUSED(bmain), Scene *scene, PointerRNA *UNUSED(ptr))
 {
   /* mark all grease pencil datablocks of the scene */
-  FOREACH_SCENE_COLLECTION_BEGIN (scene, collection) {
-    FOREACH_COLLECTION_OBJECT_RECURSIVE_BEGIN (collection, ob) {
-      if (ob->type == OB_GPENCIL) {
-        bGPdata *gpd = (bGPdata *)ob->data;
-        gpd->flag |= GP_DATA_CACHE_IS_DIRTY;
-        DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
-      }
-    }
-    FOREACH_COLLECTION_OBJECT_RECURSIVE_END;
-  }
-  FOREACH_SCENE_COLLECTION_END;
-
-  WM_main_add_notifier(NC_GPENCIL | NA_EDITED, NULL);
+  ED_gpencil_tag_scene_gpencil(scene);
 }
 
 const EnumPropertyItem rna_enum_particle_edit_disconnected_hair_brush_items[] = {
@@ -1299,6 +1288,7 @@ static void rna_def_gpencil_guides(BlenderRNA *brna)
       {GP_GUIDE_RADIAL, "RADIAL", 0, "Radial", "Use single point as direction"},
       {GP_GUIDE_PARALLEL, "PARALLEL", 0, "Parallel", "Parallel lines"},
       {GP_GUIDE_GRID, "GRID", 0, "Grid", "Grid allows horizontal and vertical lines"},
+      {GP_GUIDE_ISO, "ISO", 0, "Isometric", "Grid allows isometric and vertical lines"},
       {0, NULL, 0, NULL, NULL},
   };
 

@@ -1116,20 +1116,23 @@ static void cursor_draw_tiling_preview(const uint gpuattr,
   const float *step = sd->paint.tile_offset;
 
   copy_v3_v3(orgLoc, true_location);
-  for (dim = 0; dim < 3; ++dim) {
+  for (dim = 0; dim < 3; dim++) {
     if ((sd->paint.symmetry_flags & (PAINT_TILE_X << dim)) && step[dim] > 0) {
       start[dim] = (bbMin[dim] - orgLoc[dim] - radius) / step[dim];
       end[dim] = (bbMax[dim] - orgLoc[dim] + radius) / step[dim];
     }
-    else
+    else {
       start[dim] = end[dim] = 0;
+    }
   }
   copy_v3_v3_int(cur, start);
   for (cur[0] = start[0]; cur[0] <= end[0]; cur[0]++) {
     for (cur[1] = start[1]; cur[1] <= end[1]; cur[1]++) {
       for (cur[2] = start[2]; cur[2] <= end[2]; cur[2]++) {
-        if (!cur[0] && !cur[1] && !cur[2])
-          continue; /* skip tile at orgLoc, this was already handled before all others */
+        if (!cur[0] && !cur[1] && !cur[2]) {
+          /* skip tile at orgLoc, this was already handled before all others */
+          continue;
+        }
         tile_pass++;
         for (dim = 0; dim < 3; dim++) {
           location[dim] = cur[dim] * step[dim] + orgLoc[dim];
@@ -1150,7 +1153,7 @@ static void cursor_draw_point_with_symmetry(const uint gpuattr,
   const char symm = sd->paint.symmetry_flags & PAINT_SYMM_AXIS_ALL;
   float location[3], symm_rot_mat[4][4];
 
-  for (int i = 0; i <= symm; ++i) {
+  for (int i = 0; i <= symm; i++) {
     if (i == 0 || (symm & i && (symm != 5 || i != 3) && (symm != 6 || (i != 3 && i != 5)))) {
 
       /* Axis Symmetry */
@@ -1174,6 +1177,20 @@ static void cursor_draw_point_with_symmetry(const uint gpuattr,
         }
       }
     }
+  }
+}
+
+static void sculpt_geometry_preview_lines_draw(const uint gpuattr, SculptSession *ss)
+{
+  immUniformColor4f(1.0f, 1.0f, 1.0f, 0.6f);
+  GPU_depth_test(true);
+  GPU_line_width(1.0f);
+  if (ss->preview_vert_index_count > 0) {
+    immBegin(GPU_PRIM_LINES, ss->preview_vert_index_count);
+    for (int i = 0; i < ss->preview_vert_index_count; i++) {
+      immVertex3fv(gpuattr, sculpt_vertex_co_get(ss, ss->preview_vert_index_list[i]));
+    }
+    immEnd();
   }
 }
 
@@ -1345,6 +1362,17 @@ static void paint_draw_cursor(bContext *C, int x, int y, void *UNUSED(unused))
         imm_draw_circle_wire_3d(pos, 0, 0, rds, 40);
         GPU_matrix_pop();
 
+        /* Update and draw dynamic mesh preview lines */
+        GPU_matrix_push();
+        GPU_matrix_mul(vc.obact->obmat);
+        if (brush->sculpt_tool == SCULPT_TOOL_GRAB && brush->flag & BRUSH_GRAB_ACTIVE_VERTEX) {
+          if (BKE_pbvh_type(ss->pbvh) == PBVH_FACES && ss->modifiers_active) {
+            sculpt_geometry_preview_lines_update(C, ss, rds);
+            sculpt_geometry_preview_lines_draw(pos, ss);
+          }
+        }
+        GPU_matrix_pop();
+
         GPU_matrix_pop_projection();
 
         wmWindowViewport(win);
@@ -1367,6 +1395,27 @@ static void paint_draw_cursor(bContext *C, int x, int y, void *UNUSED(unused))
           add_v3_v3(cursor_location, ss->cache->grab_delta);
         }
         cursor_draw_point_with_symmetry(pos, ar, cursor_location, sd, vc.obact, ss->cache->radius);
+
+        /* Draw cached dynamic mesh preview lines */
+        if (brush->sculpt_tool == SCULPT_TOOL_GRAB && brush->flag & BRUSH_GRAB_ACTIVE_VERTEX) {
+          if (BKE_pbvh_type(ss->pbvh) == PBVH_FACES && ss->modifiers_active) {
+            GPU_matrix_push_projection();
+            ED_view3d_draw_setup_view(CTX_wm_window(C),
+                                      CTX_data_depsgraph_pointer(C),
+                                      CTX_data_scene(C),
+                                      ar,
+                                      CTX_wm_view3d(C),
+                                      NULL,
+                                      NULL,
+                                      NULL);
+            GPU_matrix_push();
+            GPU_matrix_mul(vc.obact->obmat);
+            sculpt_geometry_preview_lines_draw(pos, ss);
+            GPU_matrix_pop();
+            GPU_matrix_pop_projection();
+          }
+        }
+
         wmWindowViewport(win);
       }
     }

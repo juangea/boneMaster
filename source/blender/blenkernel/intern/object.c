@@ -55,6 +55,7 @@
 #include "DNA_object_types.h"
 #include "DNA_lightprobe_types.h"
 #include "DNA_rigidbody_types.h"
+#include "DNA_defaults.h"
 
 #include "BLI_blenlib.h"
 #include "BLI_math.h"
@@ -803,38 +804,16 @@ void *BKE_object_obdata_add_from_type(Main *bmain, int type, const char *name)
   }
 }
 
-void BKE_object_init(Object *ob)
+void BKE_object_init(Object *ob, const short ob_type)
 {
-  /* BLI_assert(MEMCMP_STRUCT_AFTER_IS_ZERO(ob, id)); */ /* ob->type is already initialized... */
+  BLI_assert(MEMCMP_STRUCT_AFTER_IS_ZERO(ob, id));
 
-  copy_v4_fl(ob->color, 1.0f);
+  MEMCPY_STRUCT_AFTER(ob, DNA_struct_default_get(Object), id);
 
-  ob->scale[0] = ob->scale[1] = ob->scale[2] = 1.0;
-  ob->dscale[0] = ob->dscale[1] = ob->dscale[2] = 1.0;
+  ob->type = ob_type;
 
-  /* objects should default to having Euler XYZ rotations,
-   * but rotations default to quaternions
-   */
-  ob->rotmode = ROT_MODE_EUL;
-
-  unit_axis_angle(ob->rotAxis, &ob->rotAngle);
-  unit_axis_angle(ob->drotAxis, &ob->drotAngle);
-
-  unit_qt(ob->quat);
-  unit_qt(ob->dquat);
-
-  /* rotation locks should be 4D for 4 component rotations by default... */
-  ob->protectflag = OB_LOCK_ROT4D;
-
-  unit_m4(ob->constinv);
-  unit_m4(ob->parentinv);
-  unit_m4(ob->obmat);
-  ob->dt = OB_TEXTURE;
-  ob->empty_drawtype = OB_PLAINAXES;
-  ob->empty_drawsize = 1.0;
-  ob->empty_image_depth = OB_EMPTY_IMAGE_DEPTH_DEFAULT;
-  if (ob->type == OB_EMPTY) {
-    copy_v2_fl(ob->ima_ofs, -0.5f);
+  if (ob->type != OB_EMPTY) {
+    zero_v2(ob->ima_ofs);
   }
 
   if (ELEM(ob->type, OB_LAMP, OB_CAMERA, OB_SPEAKER)) {
@@ -845,18 +824,6 @@ void BKE_object_init(Object *ob)
     ob->trackflag = OB_POSY;
     ob->upflag = OB_POSZ;
   }
-
-  ob->instance_faces_scale = 1.0;
-
-  ob->col_group = 0x01;
-  ob->col_mask = 0xffff;
-  ob->preview = NULL;
-  ob->duplicator_visibility_flag = OB_DUPLI_FLAG_VIEWPORT | OB_DUPLI_FLAG_RENDER;
-
-  /* NT fluid sim defaults */
-  ob->fluidsimSettings = NULL;
-
-  BLI_listbase_clear(&ob->pc_ids);
 
   /* Animation Visualization defaults */
   animviz_settings_init(&ob->avs);
@@ -877,9 +844,7 @@ Object *BKE_object_add_only_object(Main *bmain, int type, const char *name)
   id_us_min(&ob->id);
 
   /* default object vars */
-  ob->type = type;
-
-  BKE_object_init(ob);
+  BKE_object_init(ob, type);
 
   return ob;
 }
@@ -2799,6 +2764,12 @@ void BKE_object_boundbox_calc_from_mesh(struct Object *ob, struct Mesh *me_eval)
   ob->runtime.bb->flag &= ~BOUNDBOX_DIRTY;
 }
 
+/* -------------------------------------------------------------------- */
+/** \name Object Dimension Get/Set
+ *
+ * \warning Setting dimensions is prone to feedback loops in evaluation.
+ * \{ */
+
 void BKE_object_dimensions_get(Object *ob, float vec[3])
 {
   BoundBox *bb = NULL;
@@ -2818,7 +2789,19 @@ void BKE_object_dimensions_get(Object *ob, float vec[3])
   }
 }
 
-void BKE_object_dimensions_set(Object *ob, const float value[3], int axis_mask)
+/**
+ * The original scale and object matrix can be passed in so any difference
+ * of the objects matrix and the final matrix can be accounted for,
+ * typically this caused by parenting, constraints or delta-scale.
+ *
+ * Re-using these values from the object causes a feedback loop
+ * when multiple values are modified at once in some situations. see: T69536.
+ */
+void BKE_object_dimensions_set_ex(Object *ob,
+                                  const float value[3],
+                                  int axis_mask,
+                                  const float ob_scale_orig[3],
+                                  const float ob_obmat_orig[4][4])
 {
   BoundBox *bb = NULL;
 
@@ -2832,12 +2815,26 @@ void BKE_object_dimensions_set(Object *ob, const float value[3], int axis_mask)
 
     for (int i = 0; i < 3; i++) {
       if (((1 << i) & axis_mask) == 0) {
+
+        if (ob_scale_orig != NULL) {
+          const float scale_delta = len_v3(ob_obmat_orig[i]) / ob_scale_orig[i];
+          if (isfinite(scale_delta)) {
+            len[i] *= scale_delta;
+          }
+        }
+
         if (len[i] > 0.0f) {
+
           ob->scale[i] = copysignf(value[i] / len[i], ob->scale[i]);
         }
       }
     }
   }
+}
+
+void BKE_object_dimensions_set(Object *ob, const float value[3], int axis_mask)
+{
+  BKE_object_dimensions_set_ex(ob, value, axis_mask, NULL, NULL);
 }
 
 void BKE_object_minmax(Object *ob, float min_r[3], float max_r[3], const bool use_hidden)
@@ -2982,6 +2979,15 @@ bool BKE_object_empty_image_data_is_visible_in_view3d(const Object *ob, const Re
       if (dot > -eps) {
         return false;
       }
+    }
+  }
+
+  if (visibility_flag & OB_EMPTY_IMAGE_HIDE_NON_AXIS_ALIGNED) {
+    float proj[3];
+    project_plane_v3_v3v3(proj, ob->obmat[2], rv3d->viewinv[2]);
+    const float proj_length_sq = len_squared_v3(proj);
+    if (proj_length_sq > 1e-5f) {
+      return false;
     }
   }
 
@@ -3871,7 +3877,7 @@ int BKE_object_scenes_users_get(Main *bmain, Object *ob)
 {
   int num_scenes = 0;
   for (Scene *scene = bmain->scenes.first; scene != NULL; scene = scene->id.next) {
-    if (BKE_collection_has_object_recursive(BKE_collection_master(scene), ob)) {
+    if (BKE_collection_has_object_recursive(scene->master_collection, ob)) {
       num_scenes++;
     }
   }
