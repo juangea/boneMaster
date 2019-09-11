@@ -174,7 +174,9 @@ void OpenVDBLevelSet_mesh_to_level_set(struct OpenVDBLevelSet *level_set,
                                        const unsigned int totvertices,
                                        const unsigned int totfaces,
                                        struct OpenVDBTransform *xform,
-                                       bool do_convert);
+                                       bool do_convert,
+                                       bool do_add,
+                                       int op);
 void OpenVDBLevelSet_volume_to_mesh(struct OpenVDBLevelSet *level_set,
                                     struct OpenVDBVolumeToMeshData *mesh,
                                     const double isovalue,

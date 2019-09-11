@@ -41,24 +41,55 @@ void OpenVDBLevelSet::mesh_to_level_set(const float *vertices,
                                         const unsigned int totvertices,
                                         const unsigned int totfaces,
                                         const openvdb::math::Transform::Ptr &xform,
-                                        bool do_convert)
+                                        bool do_convert,
+                                        bool do_add,
+                                        int op)
 {
-  std::vector<openvdb::Vec3s> points(totvertices);
-  // maximum if all primitives are split, mark 4th vertex as invalid since we have tris only
-  std::vector<uint32_t> vert_tri(totfaces * 4);
-  std::vector<openvdb::Vec3I> triangles(totfaces);
+  unsigned int v = 0;
+  unsigned int f = 0;
+  std::vector<openvdb::Vec3s> points;
+  std::vector<uint32_t> vert_tri;
+  std::vector<openvdb::Vec3I> triangles;
+
+  if (do_add) {
+    points = this->get_points();
+    vert_tri = this->get_vert_tri();
+    triangles = this->get_triangles();
+    v = points.size();
+    f = triangles.size();
+
+    points.resize(points.size() + totvertices);
+    vert_tri.resize(vert_tri.size() + 4 * totfaces);
+    triangles.resize(triangles.size() + totfaces);
+  }
+  else {
+    points = std::vector<openvdb::Vec3s>(totvertices);
+    // maximum if all primitives are split, mark 4th vertex as invalid since we have tris only
+    vert_tri = std::vector<uint32_t>(totfaces * 4);
+    triangles = std::vector<openvdb::Vec3I>(totfaces);
+  }
+
   std::vector<openvdb::Vec4I> quads;
+  
 
   for (unsigned int i = 0; i < totvertices; i++) {
-    points[i] = openvdb::Vec3s(vertices[i * 3], vertices[i * 3 + 1], vertices[i * 3 + 2]);
+    points[i+v] = openvdb::Vec3s(vertices[i * 3], vertices[i * 3 + 1], vertices[i * 3 + 2]);
   }
 
   for (unsigned int i = 0; i < totfaces; i++) {
-    triangles[i] = openvdb::Vec3I(faces[i * 3], faces[i * 3 + 1], faces[i * 3 + 2]);
-    vert_tri[i * 4] = triangles[i][0];
-    vert_tri[i * 4 + 1] = triangles[i][1];
-    vert_tri[i * 4 + 2] = triangles[i][2];
-    vert_tri[i * 4 + 3] = openvdb::util::INVALID_IDX;
+    if (op == 0) {
+        //union, keep normals as is
+        triangles[i+f] = openvdb::Vec3I(faces[i * 3] + v, faces[i * 3 + 1] + v, faces[i * 3 + 2] + v);
+    }
+    else {
+       //difference or intersect, try to flip "normals" here by changing vert order in triangle
+        triangles[i + f] = openvdb::Vec3I(faces[i * 3 + 2] + v, faces[i * 3 + 1] + v, faces[i * 3] + v);
+    }
+
+    vert_tri[(i+f) * 4] = triangles[i+f][0];
+    vert_tri[(i+f) * 4 + 1] = triangles[i+f][1];
+    vert_tri[(i+f) * 4 + 2] = triangles[i+f][2];
+    vert_tri[(i+f) * 4 + 3] = openvdb::util::INVALID_IDX;
   }
 
   this->set_points(points);

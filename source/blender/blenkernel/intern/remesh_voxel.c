@@ -38,6 +38,7 @@
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
 #include "DNA_particle_types.h"
+#include "DNA_modifier_types.h"
 
 #include "BKE_mesh.h"
 #include "BKE_mesh_runtime.h"
@@ -58,7 +59,12 @@ struct ParticleList;
 
 void BKE_remesh_voxel_ovdb_mesh_to_level_set(struct OpenVDBLevelSet *level_set,
                                              Mesh *mesh,
-                                             struct OpenVDBTransform *transform, bool do_convert)
+                                             struct OpenVDBTransform *transform,
+                                             bool do_convert,
+                                             bool do_add,
+                                             Object *ob_mod,
+                                             Object *ob_op,
+                                             RemeshModifierOp op)                                       
 {
   BKE_mesh_runtime_looptri_recalc(mesh);
   const MLoopTri *looptri = BKE_mesh_runtime_looptri_ensure(mesh);
@@ -67,18 +73,30 @@ void BKE_remesh_voxel_ovdb_mesh_to_level_set(struct OpenVDBLevelSet *level_set,
   BKE_mesh_runtime_verttri_from_looptri(
       verttri, mesh->mloop, looptri, BKE_mesh_runtime_looptri_len(mesh));
 
+  float imat[4][4], omat[4][4];
+
   int totfaces = BKE_mesh_runtime_looptri_len(mesh);
   unsigned int totverts = mesh->totvert;
   float *verts = (float *)MEM_calloc_arrayN(totverts * 3, sizeof(float), "remesh_input_verts");
   unsigned int *faces = (unsigned int *)MEM_calloc_arrayN(
       totfaces * 3, sizeof(unsigned int), "remesh_intput_faces");
 
+  if (ob_mod && ob_op) {
+    invert_m4_m4(imat, ob_mod->obmat);
+    mul_m4_m4m4(omat, imat, ob_op->obmat);
+  }
+
   for (int i = 0; i < totverts; i++) {
     MVert mvert = mesh->mvert[i];
+    float co[3];
+    copy_v3_v3(co, mvert.co);
+    if (do_add && ob_mod && ob_op) {
+      mul_m4_v3(omat, co);
+    }
 
-    verts[i * 3] = mvert.co[0];
-    verts[i * 3 + 1] = mvert.co[1];
-    verts[i * 3 + 2] = mvert.co[2];
+    verts[i * 3] = co[0];
+    verts[i * 3 + 1] = co[1];
+    verts[i * 3 + 2] = co[2];
   }
 
   for (int i = 0; i < totfaces; i++) {
@@ -88,66 +106,67 @@ void BKE_remesh_voxel_ovdb_mesh_to_level_set(struct OpenVDBLevelSet *level_set,
     faces[i * 3 + 2] = vt.tri[2];
   }
 
-  OpenVDBLevelSet_mesh_to_level_set(level_set, verts, faces, totverts, totfaces, transform, do_convert);
+  OpenVDBLevelSet_mesh_to_level_set(
+      level_set, verts, faces, totverts, totfaces, transform, do_convert, do_add, op);
 
   MEM_freeN(verts);
   MEM_freeN(faces);
   MEM_freeN(verttri);
 }
 
-static void populate_particle_list(ParticleSystem* psys,
-                                   struct ParticleList* part_list,
+static void populate_particle_list(ParticleSystem *psys,
+                                   struct ParticleList *part_list,
                                    struct Scene *scene,
                                    Object *ob,
                                    struct Depsgraph *depsgraph)
 {
-    ParticleSimulationData sim = {0};
-    ParticleKey state;
-    int p;
-    float ob_iquat[4];
+  ParticleSimulationData sim = {0};
+  ParticleKey state;
+  int p;
+  float ob_iquat[4];
 
-    sim.depsgraph = depsgraph;
-    sim.scene = scene;
-    sim.ob = ob;
-    sim.psys = psys;
-    mat4_to_quat(ob_iquat, ob->imat);
+  sim.depsgraph = depsgraph;
+  sim.scene = scene;
+  sim.ob = ob;
+  sim.psys = psys;
+  mat4_to_quat(ob_iquat, ob->imat);
 
-    psys->lattice_deform_data = psys_create_lattice_deform_data(&sim);
+  psys->lattice_deform_data = psys_create_lattice_deform_data(&sim);
 
-    for (p = 0; p < psys->totpart; p++) {
-      float pos[3], vel[3];
+  for (p = 0; p < psys->totpart; p++) {
+    float pos[3], vel[3];
 
-      if (psys->particles[p].flag & (PARS_NO_DISP | PARS_UNEXIST)) {
-        continue;
-      }
-
-      state.time = DEG_get_ctime(depsgraph);
-
-      if (psys_get_particle_state(&sim, p, &state, 0) == 0) {
-        continue;
-      }
-
-      /* location */
-      mul_v3_m4v3(pos, ob->imat, state.co);
-
-      /* velocity */
-      copy_v3_v3(vel, state.vel);
-      mul_qt_v3(ob_iquat, vel);
-      mul_v3_fl(vel, psys->part->normfac);
-
-      OpenVDB_add_particle(part_list, pos, psys->particles[p].size, vel);
+    if (psys->particles[p].flag & (PARS_NO_DISP | PARS_UNEXIST)) {
+      continue;
     }
 
-    if (psys->lattice_deform_data) {
-      end_latt_deform(psys->lattice_deform_data);
-      psys->lattice_deform_data = NULL;
+    state.time = DEG_get_ctime(depsgraph);
+
+    if (psys_get_particle_state(&sim, p, &state, 0) == 0) {
+      continue;
     }
+
+    /* location */
+    mul_v3_m4v3(pos, ob->imat, state.co);
+
+    /* velocity */
+    copy_v3_v3(vel, state.vel);
+    mul_qt_v3(ob_iquat, vel);
+    mul_v3_fl(vel, psys->part->normfac);
+
+    OpenVDB_add_particle(part_list, pos, psys->particles[p].size, vel);
+  }
+
+  if (psys->lattice_deform_data) {
+    end_latt_deform(psys->lattice_deform_data);
+    psys->lattice_deform_data = NULL;
+  }
 }
 
 void BKE_remesh_voxel_ovdb_particles_to_level_set(struct OpenVDBLevelSet *level_set,
                                                   ParticleSystem *psys,
-                                                  struct Scene* scene,
-                                                  Object* ob,
+                                                  struct Scene *scene,
+                                                  Object *ob,
                                                   struct Depsgraph *depsgraph,
                                                   float scale_factor,
                                                   float vel_factor,
@@ -156,7 +175,7 @@ void BKE_remesh_voxel_ovdb_particles_to_level_set(struct OpenVDBLevelSet *level_
                                                   float trail_size)
 {
   /* Generate a particle list and a level set from it */
-  struct ParticleList* part_list;
+  struct ParticleList *part_list;
 
   part_list = OpenVDB_create_part_list(psys->totpart, scale_factor, vel_factor);
   populate_particle_list(psys, part_list, scene, ob, depsgraph);

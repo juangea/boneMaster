@@ -507,7 +507,8 @@ static Mesh *voxel_remesh(RemeshModifierData *rmd, Mesh *mesh, struct OpenVDBLev
 static struct OpenVDBLevelSet *csgOperation(struct OpenVDBLevelSet *level_set,
                                             CSGVolume_Object *vcob,
                                             Object *ob,
-                                            RemeshModifierData *rmd)
+                                            RemeshModifierData *rmd,
+                                            Depsgraph *depsgraph)
 {
   short type = vcob->object->type;
   Mesh *me_orig = NULL;
@@ -516,20 +517,28 @@ static struct OpenVDBLevelSet *csgOperation(struct OpenVDBLevelSet *level_set,
   float omat[4][4];
   float size;
 
-  switch (type)
-  {
+  switch (type) {
     case OB_MESH:
-      me_orig = BKE_object_get_final_mesh(vcob->object);
+      me_orig = BKE_object_get_evaluated_mesh(depsgraph, vcob->object);
       me = BKE_mesh_new_nomain(
           me_orig->totvert, me_orig->totedge, me_orig->totface, me_orig->totloop, me_orig->totpoly);
 
       BKE_mesh_nomain_to_mesh(me_orig, me, vcob->object, &CD_MASK_MESH, false);
+
+      BKE_remesh_voxel_ovdb_mesh_to_level_set(
+          level_set, me, NULL, false, true, ob, vcob->object, vcob->operation);
       break;
     case OB_FONT:
     case OB_CURVE:
     case OB_SURF:
       me = BKE_mesh_new_from_object(NULL, vcob->object, true);
-      if (!me) return level_set;
+      if (!me) {
+        return level_set;
+      }
+      else {
+        BKE_remesh_voxel_ovdb_mesh_to_level_set(
+            level_set, me, NULL, false, true, ob, vcob->object, vcob->operation);
+      }
       break;
 
     default:
@@ -551,7 +560,7 @@ static struct OpenVDBLevelSet *csgOperation(struct OpenVDBLevelSet *level_set,
   OpenVDBTransform_create_linear_transform(xform, size);
 
   struct OpenVDBLevelSet *level_setB = OpenVDBLevelSet_create(false, 0.0f, 0.0f);
-  BKE_remesh_voxel_ovdb_mesh_to_level_set(level_setB, me, xform, true);
+  BKE_remesh_voxel_ovdb_mesh_to_level_set(level_setB, me, xform, true, false, NULL, NULL, 0);
 
   if (vcob->sampler != OPENVDB_LEVELSET_GRIDSAMPLER_NONE) {
     level_set = OpenVDBLevelSet_transform_and_resample(
@@ -623,7 +632,7 @@ static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mes
         }
 
         if (do_convert || (!do_convert && (rmd->flag & MOD_REMESH_SHARPEN_FEATURES))) {
-          BKE_remesh_voxel_ovdb_mesh_to_level_set(level_set, mesh, xform, do_convert);
+          BKE_remesh_voxel_ovdb_mesh_to_level_set(level_set, mesh, xform, do_convert, false, NULL, NULL, 0);
         }
       }
 
@@ -656,7 +665,7 @@ static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mes
       if (level_set) {
         for (vcob = rmd->csg_operands.first; vcob; vcob = vcob->next) {
           if (vcob->object && (vcob->flag & MOD_REMESH_CSG_OBJECT_ENABLED)) {
-            level_set = csgOperation(level_set, vcob, ctx->object, rmd);
+            level_set = csgOperation(level_set, vcob, ctx->object, rmd, ctx->depsgraph);
           }
         }
 

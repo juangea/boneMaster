@@ -289,9 +289,11 @@ void OpenVDBLevelSet_mesh_to_level_set(struct OpenVDBLevelSet *level_set,
                                        const unsigned int totvertices,
                                        const unsigned int totfaces,
                                        OpenVDBTransform *xform,
-                                       bool do_convert)
+                                       bool do_convert,
+                                       bool do_add,
+                                       int op)
 {
-  level_set->mesh_to_level_set(vertices, faces, totvertices, totfaces, xform->get_transform(), do_convert);
+  level_set->mesh_to_level_set(vertices, faces, totvertices, totfaces, xform ? xform->get_transform() : nullptr, do_convert, do_add, op);
 }
 
 void OpenVDBLevelSet_volume_to_mesh(struct OpenVDBLevelSet *level_set,
@@ -401,4 +403,8 @@ struct OpenVDBLevelSet *OpenVDBLevelSet_copy(struct OpenVDBLevelSet *level_set)
   lvl_copy->set_grid(grid_copy);
 
   return lvl_copy;
+}
+
+void OpenVDBLevelSet_guidemesh_add(struct OpenVDBLevelSet *level_set, struct Mesh *me)
+{
 }

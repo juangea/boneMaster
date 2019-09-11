@@ -68,7 +68,9 @@ struct OpenVDBLevelSet {
                          const unsigned int totvertices,
                          const unsigned int totfaces,
                          const openvdb::math::Transform::Ptr &transform,
-                         bool do_convert);
+                         bool do_convert,
+                         bool do_add,
+                         int op);
 
   void volume_to_mesh(struct OpenVDBVolumeToMeshData *mesh,
                       const double isovalue,
