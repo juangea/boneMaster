@@ -44,6 +44,7 @@ struct OpenVDBLevelSet {
   BoolTreeType::Ptr maskTree;
   openvdb::tools::MeshToVoxelEdgeData edgeData;
   openvdb::FloatGrid::Ptr refGrid;
+
   void sharpenFeaturesPre(float edge_tolerance);
      
  public:
@@ -72,7 +73,8 @@ struct OpenVDBLevelSet {
   void volume_to_mesh(struct OpenVDBVolumeToMeshData *mesh,
                       const double isovalue,
                       const double adaptivity,
-                      const bool relax_disoriented_triangles);
+                      const bool relax_disoriented_triangles,
+                      struct OpenVDBLevelSet *mask);
 
   void filter(OpenVDBLevelSet_FilterType filter_type,
               int width,

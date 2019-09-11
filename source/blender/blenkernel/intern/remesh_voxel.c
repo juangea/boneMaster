@@ -75,7 +75,6 @@ void BKE_remesh_voxel_ovdb_mesh_to_level_set(struct OpenVDBLevelSet *level_set,
 
   for (int i = 0; i < totverts; i++) {
     MVert mvert = mesh->mvert[i];
-    float no[3];
 
     verts[i * 3] = mvert.co[0];
     verts[i * 3 + 1] = mvert.co[1];
@@ -168,11 +167,12 @@ void BKE_remesh_voxel_ovdb_particles_to_level_set(struct OpenVDBLevelSet *level_
 Mesh *BKE_remesh_voxel_ovdb_volume_to_mesh_nomain(struct OpenVDBLevelSet *level_set,
                                                   double isovalue,
                                                   double adaptivity,
-                                                  bool relax_disoriented_triangles)
+                                                  bool relax_disoriented_triangles,
+                                                  struct OpenVDBLevelSet *mask)
 {
   struct OpenVDBVolumeToMeshData output_mesh;
   OpenVDBLevelSet_volume_to_mesh(
-      level_set, &output_mesh, isovalue, adaptivity, relax_disoriented_triangles);
+      level_set, &output_mesh, isovalue, adaptivity, relax_disoriented_triangles, mask);
 
   Mesh *mesh = BKE_mesh_new_nomain(
       output_mesh.totvertices, 0, output_mesh.totquads + output_mesh.tottriangles, 0, 0);

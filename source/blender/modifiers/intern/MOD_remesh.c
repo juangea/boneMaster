@@ -465,7 +465,7 @@ static Mesh *voxel_remesh(RemeshModifierData *rmd, Mesh *mesh, struct OpenVDBLev
 
   target = BKE_remesh_voxel_ovdb_volume_to_mesh_nomain(
       level_set, rmd->isovalue * rmd->voxel_size, rmd->adaptivity,
-      rmd->flag & MOD_REMESH_RELAX_TRIANGLES);
+      rmd->flag & MOD_REMESH_RELAX_TRIANGLES, rmd->levelset_cached);
   OpenVDBLevelSet_free(level_set);
 
   if (rmd->flag & MOD_REMESH_REPROJECT_VPAINT) {

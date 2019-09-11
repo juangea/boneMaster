@@ -135,7 +135,8 @@ void OpenVDBLevelSet::sharpenFeaturesPre(float edge_tolerance)
 void OpenVDBLevelSet::volume_to_mesh(OpenVDBVolumeToMeshData *mesh,
                                      const double isovalue,
                                      const double adaptivity,
-                                     const bool relax_disoriented_triangles)
+                                     const bool relax_disoriented_triangles,
+                                     OpenVDBLevelSet *mask)
 {
   std::vector<openvdb::Vec3s> out_points_tmp, out_points;
   std::vector<openvdb::Vec4I> out_quads;
@@ -149,7 +150,8 @@ void OpenVDBLevelSet::volume_to_mesh(OpenVDBVolumeToMeshData *mesh,
                                                    adaptivity,
                                                    relax_disoriented_triangles,
                                                    this->maskTree,
-                                                   this->refGrid);
+                                                   this->refGrid,
+                                                   mask ? mask->grid : nullptr);
 
   // sharpen Features, after meshing
   this->set_out_points(out_points_tmp);

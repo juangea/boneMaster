@@ -179,7 +179,8 @@ void OpenVDBLevelSet_volume_to_mesh(struct OpenVDBLevelSet *level_set,
                                     struct OpenVDBVolumeToMeshData *mesh,
                                     const double isovalue,
                                     const double adaptivity,
-                                    const bool relax_disoriented_triangles);
+                                    const bool relax_disoriented_triangles,
+                                    struct OpenVDBLevelSet *mask);
 void OpenVDBLevelSet_filter(struct OpenVDBLevelSet *level_set,
                             OpenVDBLevelSet_FilterType filter_type,
                             int width,

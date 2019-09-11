@@ -39,13 +39,15 @@ doVolumeToMesh(const GridType &grid,
                double adaptivity,
                bool relaxDisorientedTriangles,
                BoolTreeType::Ptr adaptivityMask,
-               FloatGrid::Ptr refGrid)
+               FloatGrid::Ptr refGrid,
+               FloatGrid::Ptr surfaceMask)
 {
 
   VolumeToMesh mesher(isovalue, adaptivity, relaxDisorientedTriangles);
 
   mesher.setAdaptivityMask(adaptivityMask);
   mesher.setRefGrid(refGrid, adaptivity);
+  mesher.setSurfaceMask(surfaceMask, true);
   mesher(grid);
 
   // Preallocate the point list
@@ -89,24 +91,6 @@ doVolumeToMesh(const GridType &grid,
   }
 }
 
-/// @internal This overload is enabled only for grids that do not have a scalar ValueType.
-template<typename GridType>
-inline typename std::enable_if<!std::is_scalar<typename GridType::ValueType>::value, void>::type
-doVolumeToMesh(const GridType &,
-               std::vector<Vec3s> &,
-               std::vector<Vec3I> &,
-               std::vector<Vec4I> &,
-               double,
-               double,
-               bool,
-               BoolTreeType::Ptr)
-{
-  OPENVDB_THROW(TypeError, "volume to mesh conversion is supported only for scalar grids");
-}
-
-/// @endcond
-//}
-
 template<typename GridType>
 inline void volumeToMesh(const GridType &grid,
                          std::vector<Vec3s> &points,
@@ -116,7 +100,8 @@ inline void volumeToMesh(const GridType &grid,
                          double adaptivity,
                          bool relaxDisorientedTriangles,
                          BoolTreeType::Ptr adaptivityMask,
-                         FloatGrid::Ptr refGrid)
+                         FloatGrid::Ptr refGrid,
+                         FloatGrid::Ptr surfaceMask)
 {
   doVolumeToMesh(grid,
                  points,
@@ -126,7 +111,8 @@ inline void volumeToMesh(const GridType &grid,
                  adaptivity,
                  relaxDisorientedTriangles,
                  adaptivityMask,
-                 refGrid);
+                 refGrid,
+                 surfaceMask);
 }
 
 // ray bbox helper code, since houdini function aint useable here
