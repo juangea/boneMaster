@@ -1329,6 +1329,7 @@ typedef struct KernelIntegrator {
 
   /* mis */
   int use_lamp_mis;
+  int use_lamp_direct;
 
   /* sampler */
   int sampling_pattern;
@@ -1349,6 +1350,8 @@ typedef struct KernelIntegrator {
   int max_closures;
 
   uint background_lightgroups;
+
+  int pad1, pad2, pad3;
 } KernelIntegrator;
 static_assert_align(KernelIntegrator, 16);
 

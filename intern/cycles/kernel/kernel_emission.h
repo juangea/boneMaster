@@ -258,6 +258,7 @@ ccl_device_noinline_cpu void indirect_lamp_emission(KernelGlobals *kg,
            ((state->flag & (PATH_RAY_GLOSSY | PATH_RAY_REFLECT)) ==
             (PATH_RAY_GLOSSY | PATH_RAY_REFLECT))) ||
           ((ls.shader & SHADER_EXCLUDE_TRANSMIT) && (state->flag & PATH_RAY_TRANSMIT)) ||
+          ((ls.shader & SHADER_EXCLUDE_CAMERA) && (state->flag & PATH_RAY_CAMERA)) ||
           ((ls.shader & SHADER_EXCLUDE_SCATTER) && (state->flag & PATH_RAY_VOLUME_SCATTER)))
         continue;
     }
