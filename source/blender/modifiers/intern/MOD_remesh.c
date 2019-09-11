@@ -551,7 +551,7 @@ static struct OpenVDBLevelSet *csgOperation(struct OpenVDBLevelSet *level_set,
   OpenVDBTransform_create_linear_transform(xform, size);
 
   struct OpenVDBLevelSet *level_setB = OpenVDBLevelSet_create(false, 0.0f, 0.0f);
-  BKE_remesh_voxel_ovdb_mesh_to_level_set(level_setB, me, xform);
+  BKE_remesh_voxel_ovdb_mesh_to_level_set(level_setB, me, xform, true);
 
   if (vcob->sampler != OPENVDB_LEVELSET_GRIDSAMPLER_NONE) {
     level_set = OpenVDBLevelSet_transform_and_resample(
@@ -616,9 +616,14 @@ static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mes
       OpenVDBTransform_create_linear_transform(xform, rmd->voxel_size);
 
       if (rmd->input & MOD_REMESH_VERTICES) {
+        bool do_convert = false;
         if (!level_set) {
           level_set = OpenVDBLevelSet_create(false, 0.0f, 0.0f);
-          BKE_remesh_voxel_ovdb_mesh_to_level_set(level_set, mesh, xform);
+          do_convert = true;
+        }
+
+        if (do_convert || (!do_convert && (rmd->flag & MOD_REMESH_SHARPEN_FEATURES))) {
+          BKE_remesh_voxel_ovdb_mesh_to_level_set(level_set, mesh, xform, do_convert);
         }
       }
 

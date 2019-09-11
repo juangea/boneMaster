@@ -288,19 +288,10 @@ void OpenVDBLevelSet_mesh_to_level_set(struct OpenVDBLevelSet *level_set,
                                        const unsigned int *faces,
                                        const unsigned int totvertices,
                                        const unsigned int totfaces,
-                                       OpenVDBTransform *xform)
+                                       OpenVDBTransform *xform,
+                                       bool do_convert)
 {
-  level_set->mesh_to_level_set(vertices, faces, totvertices, totfaces, xform->get_transform());
-}
-
-void OpenVDBLevelSet_mesh_to_level_set_transform(struct OpenVDBLevelSet *level_set,
-                                                 const float *vertices,
-                                                 const unsigned int *faces,
-                                                 const unsigned int totvertices,
-                                                 const unsigned int totfaces,
-                                                 OpenVDBTransform *transform)
-{
-  level_set->mesh_to_level_set(vertices, faces, totvertices, totfaces, transform->get_transform());
+  level_set->mesh_to_level_set(vertices, faces, totvertices, totfaces, xform->get_transform(), do_convert);
 }
 
 void OpenVDBLevelSet_volume_to_mesh(struct OpenVDBLevelSet *level_set,

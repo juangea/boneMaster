@@ -45,7 +45,7 @@ struct OpenVDBLevelSet {
   openvdb::tools::MeshToVoxelEdgeData edgeData;
   openvdb::FloatGrid::Ptr refGrid;
   void sharpenFeaturesPre(float edge_tolerance);
-
+     
  public:
   OpenVDBLevelSet();
   ~OpenVDBLevelSet();
@@ -66,7 +66,8 @@ struct OpenVDBLevelSet {
                          const unsigned int *faces,
                          const unsigned int totvertices,
                          const unsigned int totfaces,
-                         const openvdb::math::Transform::Ptr &transform);
+                         const openvdb::math::Transform::Ptr &transform,
+                         bool do_convert);
 
   void volume_to_mesh(struct OpenVDBVolumeToMeshData *mesh,
                       const double isovalue,

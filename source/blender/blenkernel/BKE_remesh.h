@@ -30,7 +30,7 @@
 /* OpenVDB Voxel Remesher */
 void BKE_remesh_voxel_ovdb_mesh_to_level_set(struct OpenVDBLevelSet *level_set,
                                                     Mesh *mesh,
-                                                    struct OpenVDBTransform *transform);
+                                                    struct OpenVDBTransform *transform, bool do_convert);
 
 void BKE_remesh_voxel_ovdb_particles_to_level_set(struct OpenVDBLevelSet *level_set,
                                                   ParticleSystem *psys,

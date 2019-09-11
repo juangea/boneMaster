@@ -40,11 +40,12 @@ void OpenVDBLevelSet::mesh_to_level_set(const float *vertices,
                                         const unsigned int *faces,
                                         const unsigned int totvertices,
                                         const unsigned int totfaces,
-                                        const openvdb::math::Transform::Ptr &xform)
+                                        const openvdb::math::Transform::Ptr &xform,
+                                        bool do_convert)
 {
   std::vector<openvdb::Vec3s> points(totvertices);
   // maximum if all primitives are split, mark 4th vertex as invalid since we have tris only
-  std::vector<uint32_t> vert_tri(totfaces * 4); 
+  std::vector<uint32_t> vert_tri(totfaces * 4);
   std::vector<openvdb::Vec3I> triangles(totfaces);
   std::vector<openvdb::Vec4I> quads;
 
@@ -64,8 +65,10 @@ void OpenVDBLevelSet::mesh_to_level_set(const float *vertices,
   this->set_triangles(triangles);
   this->set_vert_tri(vert_tri);
 
-  this->grid = openvdb::tools::meshToLevelSet<openvdb::FloatGrid>(
-      *xform, points, triangles, quads, 1);
+  if (do_convert) {
+    this->grid = openvdb::tools::meshToLevelSet<openvdb::FloatGrid>(
+        *xform, points, triangles, quads, 1);
+  }
 }
 
 using BoolTreeType = openvdb::FloatGrid::TreeType::template ValueConverter<bool>::Type;
@@ -81,15 +84,16 @@ void OpenVDBLevelSet::sharpenFeaturesPre(float edge_tolerance)
   primList.resize(this->get_triangles().size());
 
   // Check for reference mesh
-  //tbb::parallel_for(tbb::blocked_range<size_t>(0, this->get_points().size()),
+  // tbb::parallel_for(tbb::blocked_range<size_t>(0, this->get_points().size()),
   //                  openvdb::tools::TransformOp(*this, *transform, pointList));
-  openvdb::tools::TransformOp op = openvdb::tools::TransformOp(*this, this->grid->transform(), pointList);
+  openvdb::tools::TransformOp op = openvdb::tools::TransformOp(
+      *this, this->grid->transform(), pointList);
   op(tbb::blocked_range<size_t>(0, this->get_points().size()));
 
   // UTparallelFor(GA_SplittableRange(refGeo->getPointRange()),
   //               hvdb::TransformOp(refGeo, *transform, pointList));
 
-  //tbb::parallel_for(tbb::blocked_range<size_t>(0, this->get_triangles().size()),
+  // tbb::parallel_for(tbb::blocked_range<size_t>(0, this->get_triangles().size()),
   //                  openvdb::tools::PrimCpyOp(*this, primList));
   openvdb::tools::PrimCpyOp op2 = openvdb::tools::PrimCpyOp(*this, primList);
   op2(tbb::blocked_range<size_t>(0, this->get_triangles().size()));
@@ -152,10 +156,11 @@ void OpenVDBLevelSet::volume_to_mesh(OpenVDBVolumeToMeshData *mesh,
 
   if (this->sharpen_features) {
 
-   // tbb::parallel_for(
-   //     tbb::blocked_range<size_t>(0, this->get_out_points().size()),
-          openvdb::tools::SharpenFeaturesOp op = openvdb::tools::SharpenFeaturesOp(*this, this->edgeData, this->grid->transform(), this->maskTree.get());
-          op(tbb::blocked_range<size_t>(0, this->get_out_points().size()));
+    // tbb::parallel_for(
+    //     tbb::blocked_range<size_t>(0, this->get_out_points().size()),
+    openvdb::tools::SharpenFeaturesOp op = openvdb::tools::SharpenFeaturesOp(
+        *this, this->edgeData, this->grid->transform(), this->maskTree.get());
+    op(tbb::blocked_range<size_t>(0, this->get_out_points().size()));
     // UTparallelFor(GA_SplittableRange(gdp->getPointRange()),
     //              hvdb::SharpenFeaturesOp(
     //                  *gdp, ref_mesh, edgeData, *transform, surfaceGroup, maskTree.get()));
@@ -220,10 +225,10 @@ static const openvdb::Vec3s normal_tri_v3(const openvdb::Vec3s v1,
 
 openvdb::Vec3s OpenVDBLevelSet::face_normal(uint32_t pntOffset)
 {
-  //std::vector<openvdb::Vec3s> vnormals = this->get_vert_normals();
+  // std::vector<openvdb::Vec3s> vnormals = this->get_vert_normals();
   std::vector<openvdb::Vec3s> verts = this->get_points();
   std::vector<uint32_t> vert_tri = this->get_vert_tri();
-  int x = (pntOffset / 4); 
+  int x = (pntOffset / 4);
   int v1 = vert_tri[x * 4];
   int v2 = vert_tri[x * 4 + 1];
   int v3 = vert_tri[x * 4 + 2];

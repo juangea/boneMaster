@@ -79,30 +79,6 @@ struct OpenVDBVolumeToMeshData {
   unsigned int *triangles;
 };
 
-#if 0
-struct OpenVDBRemeshData {
-  float *verts;
-  unsigned int *faces;
-  int totfaces;
-  int totverts;
-
-  float *out_verts;
-  unsigned int *out_faces;
-  unsigned int *out_tris;
-  int out_totverts;
-  int out_totfaces;
-  int out_tottris;
-  enum OpenVDBLevelSet_FilterType filter_type;
-  enum OpenVDBLevelSet_FilterBias filter_bias; /* Parameter for gaussian, median, mean*/
-  float filter_distance;
-
-  float voxel_size;
-  float isovalue;
-  float adaptivity;
-  int relax_disoriented_triangles;
-};
-#endif
-
 int OpenVDB_getVersionHex(void);
 
 enum {
@@ -197,14 +173,8 @@ void OpenVDBLevelSet_mesh_to_level_set(struct OpenVDBLevelSet *level_set,
                                        const unsigned int *faces,
                                        const unsigned int totvertices,
                                        const unsigned int totfaces,
-                                       struct OpenVDBTransform *xform);
-void OpenVDBLevelSet_mesh_to_level_set_transform(struct OpenVDBLevelSet *level_set,
-                                                 const float *vertices,
-                                                 const float *vert_normals,
-                                                 const unsigned int *faces,
-                                                 const unsigned int totvertices,
-                                                 const unsigned int totfaces,
-                                                 struct OpenVDBTransform *transform);
+                                       struct OpenVDBTransform *xform,
+                                       bool do_convert);
 void OpenVDBLevelSet_volume_to_mesh(struct OpenVDBLevelSet *level_set,
                                     struct OpenVDBVolumeToMeshData *mesh,
                                     const double isovalue,

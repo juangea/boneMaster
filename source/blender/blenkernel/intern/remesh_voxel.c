@@ -58,7 +58,7 @@ struct ParticleList;
 
 void BKE_remesh_voxel_ovdb_mesh_to_level_set(struct OpenVDBLevelSet *level_set,
                                              Mesh *mesh,
-                                             struct OpenVDBTransform *transform)
+                                             struct OpenVDBTransform *transform, bool do_convert)
 {
   BKE_mesh_runtime_looptri_recalc(mesh);
   const MLoopTri *looptri = BKE_mesh_runtime_looptri_ensure(mesh);
@@ -73,8 +73,6 @@ void BKE_remesh_voxel_ovdb_mesh_to_level_set(struct OpenVDBLevelSet *level_set,
   unsigned int *faces = (unsigned int *)MEM_calloc_arrayN(
       totfaces * 3, sizeof(unsigned int), "remesh_intput_faces");
 
-  float *vert_normals = (float *)MEM_calloc_arrayN(totverts * 3, sizeof(float), "remesh_input_vert_normals");
-
   for (int i = 0; i < totverts; i++) {
     MVert mvert = mesh->mvert[i];
     float no[3];
@@ -82,12 +80,6 @@ void BKE_remesh_voxel_ovdb_mesh_to_level_set(struct OpenVDBLevelSet *level_set,
     verts[i * 3] = mvert.co[0];
     verts[i * 3 + 1] = mvert.co[1];
     verts[i * 3 + 2] = mvert.co[2];
-
-    normal_short_to_float_v3(no, mvert.no);
-
-    vert_normals[i * 3] = no[0];
-    vert_normals[i * 3 + 1] = no[1];
-    vert_normals[i * 3 + 2] = no[2];
   }
 
   for (int i = 0; i < totfaces; i++) {
@@ -97,7 +89,7 @@ void BKE_remesh_voxel_ovdb_mesh_to_level_set(struct OpenVDBLevelSet *level_set,
     faces[i * 3 + 2] = vt.tri[2];
   }
 
-  OpenVDBLevelSet_mesh_to_level_set(level_set, verts, faces, totverts, totfaces, transform);
+  OpenVDBLevelSet_mesh_to_level_set(level_set, verts, faces, totverts, totfaces, transform, do_convert);
 
   MEM_freeN(verts);
   MEM_freeN(faces);
