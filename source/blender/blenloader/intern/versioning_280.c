@@ -3777,6 +3777,7 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
             ARegion *ar_header = do_versions_find_region(regionbase, RGN_TYPE_HEADER);
             ARegion *ar_toolprops = do_versions_find_region_or_null(regionbase,
                                                                     RGN_TYPE_TOOL_PROPS);
+            ARegion *ar_execute = do_versions_find_region_or_null(regionbase, RGN_TYPE_EXECUTE);
 
             /* Reinsert UI region so that it spawns entire area width */
             BLI_remlink(regionbase, ar_ui);
@@ -3791,6 +3792,15 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
               BLI_assert(sfile->op == NULL);
               BKE_area_region_free(stype, ar_toolprops);
               BLI_freelinkN(regionbase, ar_toolprops);
+            }
+
+            if (!ar_execute) {
+              ARegion *ar_main = do_versions_find_region(regionbase, RGN_TYPE_WINDOW);
+              ar_execute = MEM_callocN(sizeof(ARegion), "versioning execute region for file");
+              BLI_insertlinkbefore(regionbase, ar_main, ar_execute);
+              ar_execute->regiontype = RGN_TYPE_EXECUTE;
+              ar_execute->alignment = RGN_ALIGN_BOTTOM;
+              ar_execute->flag |= RGN_FLAG_DYNAMIC_SIZE;
             }
 
             if (sfile->params) {
@@ -3836,8 +3846,8 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
 
     /* Elatic deform brush */
     for (Brush *br = bmain->brushes.first; br; br = br->id.next) {
-      if (br->ob_mode & OB_MODE_SCULPT && br->elastic_deform_compressibility == 0.0f) {
-        br->elastic_deform_compressibility = 0.5f;
+      if (br->ob_mode & OB_MODE_SCULPT && br->elastic_deform_volume_preservation == 0.0f) {
+        br->elastic_deform_volume_preservation = 0.5f;
       }
     }
   }
