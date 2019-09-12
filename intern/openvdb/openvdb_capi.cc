@@ -291,7 +291,7 @@ void OpenVDBLevelSet_mesh_to_level_set(struct OpenVDBLevelSet *level_set,
                                        OpenVDBTransform *xform,
                                        bool do_convert,
                                        bool do_add,
-                                       int op)
+                                       OpenVDBLevelSet_CSGOperation op)
 {
   level_set->mesh_to_level_set(vertices, faces, totvertices, totfaces, xform ? xform->get_transform() : nullptr, do_convert, do_add, op);
 }

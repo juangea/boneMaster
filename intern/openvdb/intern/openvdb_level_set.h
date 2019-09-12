@@ -28,6 +28,16 @@
 
 using BoolTreeType = openvdb::FloatGrid::TreeType::template ValueConverter<bool>::Type;
 
+struct CSGOperand {
+  unsigned int vert_start;
+  unsigned int vert_count;
+
+  unsigned int face_start;
+  unsigned int face_count;
+
+  OpenVDBLevelSet_CSGOperation operation;
+};
+
 struct OpenVDBLevelSet {
  private:
   openvdb::FloatGrid::Ptr grid;
@@ -50,6 +60,9 @@ struct OpenVDBLevelSet {
  public:
   OpenVDBLevelSet();
   ~OpenVDBLevelSet();
+
+  std::vector<CSGOperand> csg_operands;
+
   const openvdb::FloatGrid::Ptr &get_grid();
   const std::vector<openvdb::Vec3s> &get_points();
   const std::vector<openvdb::Vec3s> &get_out_points();
@@ -70,7 +83,7 @@ struct OpenVDBLevelSet {
                          const openvdb::math::Transform::Ptr &transform,
                          bool do_convert,
                          bool do_add,
-                         int op);
+                         OpenVDBLevelSet_CSGOperation op);
 
   void volume_to_mesh(struct OpenVDBVolumeToMeshData *mesh,
                       const double isovalue,

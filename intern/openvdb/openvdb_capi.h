@@ -176,7 +176,7 @@ void OpenVDBLevelSet_mesh_to_level_set(struct OpenVDBLevelSet *level_set,
                                        struct OpenVDBTransform *xform,
                                        bool do_convert,
                                        bool do_add,
-                                       int op);
+                                       OpenVDBLevelSet_CSGOperation op);
 void OpenVDBLevelSet_volume_to_mesh(struct OpenVDBLevelSet *level_set,
                                     struct OpenVDBVolumeToMeshData *mesh,
                                     const double isovalue,

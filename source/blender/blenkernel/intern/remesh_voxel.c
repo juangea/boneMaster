@@ -106,8 +106,15 @@ void BKE_remesh_voxel_ovdb_mesh_to_level_set(struct OpenVDBLevelSet *level_set,
     faces[i * 3 + 2] = vt.tri[2];
   }
 
-  OpenVDBLevelSet_mesh_to_level_set(
-      level_set, verts, faces, totverts, totfaces, transform, do_convert, do_add, op);
+  OpenVDBLevelSet_mesh_to_level_set(level_set,
+                                    verts,
+                                    faces,
+                                    totverts,
+                                    totfaces,
+                                    transform,
+                                    do_convert,
+                                    do_add,
+                                    (OpenVDBLevelSet_CSGOperation)op);
 
   MEM_freeN(verts);
   MEM_freeN(faces);
