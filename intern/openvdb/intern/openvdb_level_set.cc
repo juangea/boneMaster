@@ -122,6 +122,11 @@ void OpenVDBLevelSet::sharpenFeaturesPre(float edge_tolerance)
   std::vector<openvdb::Vec4I> primList_total;
 
   for (int i = 0; i < this->csg_operands.size(); i++) {
+    pointList_total.resize(pointList_total.size() + this->csg_operands[i].vert_count);
+    primList_total.resize(primList_total.size() + this->csg_operands[i].face_count);
+  }
+
+  for (int i = 0; i < this->csg_operands.size(); i++) {
 
     CSGOperand &operand = this->csg_operands[i];
     std::vector<openvdb::Vec3s> pointList;
@@ -131,20 +136,19 @@ void OpenVDBLevelSet::sharpenFeaturesPre(float edge_tolerance)
 
     // Check for reference mesh
     openvdb::tools::TransformOp op = openvdb::tools::TransformOp(
-        *this, this->grid->transform(), pointList, pointList_total);
-    op(tbb::blocked_range<size_t>(operand.vert_start, operand.vert_start + operand.vert_count));
-    //tbb::parallel_for(
-    //    tbb::blocked_range<size_t>(operand.vert_start, operand.vert_start + operand.vert_count), op);
- 
-    openvdb::tools::PrimCpyOp op2 = openvdb::tools::PrimCpyOp(*this, primList, primList_total, operand.vert_start);
-    op2(tbb::blocked_range<size_t>(operand.face_start, operand.face_start + operand.face_count));
+        *this, this->grid->transform(), pointList, pointList_total, operand.vert_start);
+    tbb::blocked_range<size_t> range = tbb::blocked_range<size_t>(0, operand.vert_count);
+    tbb::parallel_for(range, op);
+    //op(range);
 
-    // tbb::parallel_for(
-    //     tbb::blocked_range<size_t>(operand.face_start, operand.face_start + operand.face_count),
-    //     op2);
+    openvdb::tools::PrimCpyOp op2 = openvdb::tools::PrimCpyOp(
+        *this, primList, primList_total, operand.vert_start, operand.face_start);
+    tbb::blocked_range<size_t> range2 = tbb::blocked_range<size_t>(0, operand.face_count);
+    tbb::parallel_for(range2, op2);
+    //op2(range2);
+
     openvdb::tools::QuadAndTriangleDataAdapter<openvdb::Vec3s, openvdb::Vec4I> mesh(pointList,
                                                                                     primList);
-
 
     float bandWidth = 3.0;
 
@@ -159,7 +163,7 @@ void OpenVDBLevelSet::sharpenFeaturesPre(float edge_tolerance)
       openvdb::FloatGrid::Ptr tmpGrid = openvdb::tools::meshToVolume<openvdb::FloatGrid>(
           mesh, this->grid->transform(), bandWidth, bandWidth, 0, tmpIndexGrid.get());
 
-      //compSum, compMax, compMul ?
+      // compSum, compMax, compMul ?
       openvdb::tools::compMax(this->refGrid->tree(), tmpGrid->tree());
       openvdb::tools::compMax(indexGrid->tree(), tmpIndexGrid->tree());
     }
@@ -205,13 +209,16 @@ void OpenVDBLevelSet::volume_to_mesh(OpenVDBVolumeToMeshData *mesh,
   this->set_out_points(out_points_tmp);
 
   if (this->sharpen_features) {
+    out_points.resize(out_points_tmp.size());
     openvdb::tools::SharpenFeaturesOp op = openvdb::tools::SharpenFeaturesOp(
-        *this, this->edgeData, this->grid->transform(), this->maskTree.get());
-    op(tbb::blocked_range<size_t>(0, this->get_out_points().size()));
-    //tbb::parallel_for(tbb::blocked_range<size_t>(0, this->get_out_points().size()), op);
+        *this, this->edgeData, this->grid->transform(), this->maskTree.get(), out_points);
+    tbb::blocked_range<size_t> range = tbb::blocked_range<size_t>(0, out_points.size());
+    tbb::parallel_for(range, op);
+    //op(range);
   }
-
-  out_points = this->get_out_points();
+  else {
+     out_points = this->get_out_points();
+  }
 
   mesh->vertices = (float *)MEM_malloc_arrayN(
       out_points.size(), 3 * sizeof(float), "openvdb remesher out verts");

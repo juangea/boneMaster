@@ -207,7 +207,7 @@ GenAdaptivityMaskOp<IndexTreeType, BoolTreeType>::GenAdaptivityMaskOp(
     float edgetolerance)
     : mLvl(lvl), mIndexTree(indexTree), mLeafs(leafMgr), mEdgeTolerance(edgetolerance)
 {
-  mEdgeTolerance = std::max(0.0f, mEdgeTolerance);
+  mEdgeTolerance = std::max(0.0001f, mEdgeTolerance);
   mEdgeTolerance = std::min(1.0f, mEdgeTolerance);
 }
 
@@ -245,7 +245,7 @@ void GenAdaptivityMaskOp<IndexTreeType, BoolTreeType>::operator()(
 
       int idx = idxAcc.getValue(ijk);
       if (idx < 0) {
-        //iter.setValueOff();
+        // iter.setValueOff();
         edgeVoxel = true;
         break;
       }
@@ -259,7 +259,7 @@ void GenAdaptivityMaskOp<IndexTreeType, BoolTreeType>::operator()(
           if (tmpIdx < 0) {
             edgeVoxel = true;
             break;
-            //continue;
+            // continue;
           }
 
           openvdb::Vec3s tmpN = mLvl.face_normal(tmpIdx * 4);
@@ -290,7 +290,8 @@ class TransformOp {
   TransformOp(OpenVDBLevelSet &lvl,
               const openvdb::math::Transform &transform,
               std::vector<openvdb::Vec3s> &pointList,
-              std::vector<openvdb::Vec3s> &pointListTotal);
+              std::vector<openvdb::Vec3s> &pointListTotal,
+              unsigned int vert_start);
 
   void operator()(const RangeT &) const;
 
@@ -299,6 +300,7 @@ class TransformOp {
   const openvdb::math::Transform &mTransform;
   std::vector<openvdb::Vec3s> *const mPointList;
   std::vector<openvdb::Vec3s> *const mPointListTotal;
+  unsigned int mVertStart;
 };
 
 ////////////////////////////////////////
@@ -306,8 +308,13 @@ class TransformOp {
 TransformOp::TransformOp(OpenVDBLevelSet &lvl,
                          const openvdb::math::Transform &transform,
                          std::vector<openvdb::Vec3s> &pointList,
-                         std::vector<openvdb::Vec3s> &pointListTotal)
-    : mLvl(lvl), mTransform(transform), mPointList(&pointList), mPointListTotal(&pointListTotal)
+                         std::vector<openvdb::Vec3s> &pointListTotal,
+                         unsigned int vert_start)
+    : mLvl(lvl),
+      mTransform(transform),
+      mPointList(&pointList),
+      mPointListTotal(&pointListTotal),
+      mVertStart(vert_start)
 {
 }
 
@@ -315,15 +322,12 @@ void TransformOp::operator()(const RangeT &r) const
 {
   openvdb::Vec3s pos;
   openvdb::Vec3d ipos;
-  int i;
-  int b = r.begin();
-  mPointListTotal->resize(mPointListTotal->size() + r.end() - b);
 
-  for (i = b; i < r.end(); i++) {
-    pos = mLvl.get_points()[i];
+  for (int i = r.begin(); i < r.end(); i++) {
+    pos = mLvl.get_points()[i + mVertStart];
     ipos = mTransform.worldToIndex(openvdb::Vec3d(pos.x(), pos.y(), pos.z()));
-    (*mPointList)[i - b] = openvdb::Vec3s(ipos);
-    (*mPointListTotal)[i] = openvdb::Vec3s(ipos);
+    (*mPointList)[i] = openvdb::Vec3s(ipos);
+    (*mPointListTotal)[i + mVertStart] = openvdb::Vec3s(ipos);
   }
 }
 
@@ -334,7 +338,8 @@ class PrimCpyOp {
   PrimCpyOp(OpenVDBLevelSet &mLvl,
             std::vector<openvdb::Vec4I> &primList,
             std::vector<openvdb::Vec4I> &primListTotal,
-            unsigned int vert_start);
+            unsigned int vert_start,
+            unsigned int face_start);
   void operator()(const RangeT &) const;
 
  private:
@@ -342,6 +347,7 @@ class PrimCpyOp {
   std::vector<openvdb::Vec4I> *const mPrimList;
   std::vector<openvdb::Vec4I> *const mPrimListTotal;
   unsigned int mVertStart;
+  unsigned int mFaceStart;
 };
 
 ////////////////////////////////////////
@@ -349,8 +355,13 @@ class PrimCpyOp {
 PrimCpyOp::PrimCpyOp(OpenVDBLevelSet &lvl,
                      std::vector<openvdb::Vec4I> &primList,
                      std::vector<openvdb::Vec4I> &primListTotal,
-                     unsigned int vert_start)
-    : mLvl(lvl), mPrimList(&primList), mPrimListTotal(&primListTotal), mVertStart(vert_start)
+                     unsigned int vert_start,
+                     unsigned int face_start)
+    : mLvl(lvl),
+      mPrimList(&primList),
+      mPrimListTotal(&primListTotal),
+      mVertStart(vert_start),
+      mFaceStart(face_start)
 {
 }
 
@@ -359,24 +370,43 @@ void PrimCpyOp::operator()(const RangeT &r) const
   openvdb::Vec4I prim;
   openvdb::Vec4I primT;
 
-  int i;
-  int b = r.begin();
-
-  mPrimListTotal->resize(mPrimListTotal->size() + r.end() - b);
-
-  for (i = b; i < r.end(); i++) {
+  for (int i = r.begin(); i < r.end(); i++) {
     for (int vtx = 0; vtx < 3; ++vtx) {
-      prim[vtx] = mLvl.get_triangles()[i][vtx] - mVertStart;
-      primT[vtx] = prim[vtx] + mVertStart;
+      prim[vtx] = mLvl.get_triangles()[i + mFaceStart][vtx] - mVertStart;
+      primT[vtx] = mLvl.get_triangles()[i + mFaceStart][vtx];
     }
     prim[3] = openvdb::util::INVALID_IDX;
-    primT[3] = prim[3];
-    (*mPrimList)[i - b] = prim;
-    (*mPrimListTotal)[i] = primT;
+    primT[3] = openvdb::util::INVALID_IDX;
+    (*mPrimList)[i] = prim;
+    (*mPrimListTotal)[i + mFaceStart] = primT;
   }
 }
 
 #if 0
+class PointCpyOp {
+ public:
+  PointCpyOp(OpenVDBLevelSet &mLvl, std::vector<openvdb::Vec3s> &pointList);
+  void operator()(const RangeT &) const;
+
+ private:
+  OpenVDBLevelSet &mLvl;
+  std::vector<openvdb::Vec3s> *const mPointList;
+};
+
+PointCpyOp::PointCpyOp(OpenVDBLevelSet &lvl, std::vector<openvdb::Vec3s> &pointList)
+    : mLvl(lvl), mPointList(&pointList)
+{
+}
+
+void PointCpyOp::operator()(const RangeT &r) const
+{
+  openvdb::Vec3s pos;
+  for (int i = r.begin(); i < r.end(); i++) {
+    pos = mLvl.get_out_points[i];
+    (*mPointList)[i] = openvdb::Vec3s(pos.x(), pos.y(), pos.z());
+  }
+}
+
 /// @brief   TBB body object for threaded vertex normal generation
 /// @details Averages face normals from all similarly oriented primitives,
 ///          that share the same vertex-point, to maintain sharp features.
@@ -421,127 +451,131 @@ void VertexNormalOp::operator()(const RangeT &r)
 }
 #endif
 
-  using RangeT = tbb::blocked_range<size_t>;
-  /// TBB body object for threaded sharp feature construction
-  class SharpenFeaturesOp {
-   public:
-    using EdgeData = openvdb::tools::MeshToVoxelEdgeData;
+using RangeT = tbb::blocked_range<size_t>;
+/// TBB body object for threaded sharp feature construction
+class SharpenFeaturesOp {
+ public:
+  using EdgeData = openvdb::tools::MeshToVoxelEdgeData;
 
-    SharpenFeaturesOp(OpenVDBLevelSet &refGeo,
-                      EdgeData &edgeData,
-                      const openvdb::math::Transform &xform,
-                      const openvdb::BoolTree *mask = nullptr);
+  SharpenFeaturesOp(OpenVDBLevelSet &refGeo,
+                    EdgeData &edgeData,
+                    const openvdb::math::Transform &xform,
+                    const openvdb::BoolTree *mask,
+                    std::vector<openvdb::Vec3s> &pointList);
 
-    void operator()(const RangeT &) const;
+  void operator()(const RangeT &) const;
 
-   private:
-    OpenVDBLevelSet &mRefGeo;
-    EdgeData &mEdgeData;
-    const openvdb::math::Transform &mXForm;
-    const openvdb::BoolTree *mMaskTree;
-  };
+ private:
+  OpenVDBLevelSet &mRefGeo;
+  EdgeData &mEdgeData;
+  const openvdb::math::Transform &mXForm;
+  const openvdb::BoolTree *mMaskTree;
+  std::vector<openvdb::Vec3s> *const mPointList;
+};
 
-  ////////////////////////////////////////
+////////////////////////////////////////
 
-  SharpenFeaturesOp::SharpenFeaturesOp(OpenVDBLevelSet & refGeo,
-                                       EdgeData & edgeData,
-                                       const openvdb::math::Transform &xform,
-                                       const openvdb::BoolTree *mask)
-      : mRefGeo(refGeo), mEdgeData(edgeData), mXForm(xform), mMaskTree(mask)
-  {
+SharpenFeaturesOp::SharpenFeaturesOp(OpenVDBLevelSet &refGeo,
+                                     EdgeData &edgeData,
+                                     const openvdb::math::Transform &xform,
+                                     const openvdb::BoolTree *mask,
+                                     std::vector<openvdb::Vec3s> &pointList)
+    : mRefGeo(refGeo), mEdgeData(edgeData), mXForm(xform), mMaskTree(mask), mPointList(&pointList)
+{
+}
+
+void SharpenFeaturesOp::operator()(const RangeT &r) const
+{
+  int i;
+  openvdb::tools::MeshToVoxelEdgeData::Accessor acc = mEdgeData.getAccessor();
+  std::vector<openvdb::Vec3s> input(mRefGeo.get_out_points());
+
+  using BoolAccessor = openvdb::tree::ValueAccessor<const openvdb::BoolTree>;
+  std::unique_ptr<BoolAccessor> maskAcc;
+
+  if (mMaskTree) {
+    maskAcc.reset(new BoolAccessor(*mMaskTree));
   }
 
-  void SharpenFeaturesOp::operator()(const RangeT &r) const
-  {
-    int i;
-    openvdb::tools::MeshToVoxelEdgeData::Accessor acc = mEdgeData.getAccessor();
-    std::vector<openvdb::Vec3s> result(mRefGeo.get_out_points());
+  openvdb::Vec3s avgP;
+  openvdb::BBoxd cell;
 
-    using BoolAccessor = openvdb::tree::ValueAccessor<const openvdb::BoolTree>;
-    std::unique_ptr<BoolAccessor> maskAcc;
+  openvdb::Vec3d pos, normal;
+  openvdb::Coord ijk;
 
-    if (mMaskTree) {
-      maskAcc.reset(new BoolAccessor(*mMaskTree));
+  std::vector<openvdb::Vec3d> points(12), normals(12);
+  std::vector<openvdb::Index32> primitives(12);
+
+  for (i = r.begin(); i < r.end(); i++) {
+    pos = openvdb::Vec3s(input[i][0], input[i][1], input[i][2]);
+    pos = mXForm.worldToIndex(pos);
+
+    ijk[0] = int(std::floor(pos[0]));
+    ijk[1] = int(std::floor(pos[1]));
+    ijk[2] = int(std::floor(pos[2]));
+
+    if (maskAcc && !maskAcc->isValueOn(ijk)) {
+      pos = mXForm.indexToWorld(pos);
+      (*mPointList)[i] = pos;
+      continue;
     }
 
-    openvdb::Vec3s avgP;
-    openvdb::BBoxd cell;
+    points.clear();
+    normals.clear();
+    primitives.clear();
 
-    openvdb::Vec3d pos, normal;
-    openvdb::Coord ijk;
+    // get voxel-edge intersections
+    mEdgeData.getEdgeData(acc, ijk, points, primitives);
 
-    std::vector<openvdb::Vec3d> points(12), normals(12);
-    std::vector<openvdb::Index32> primitives(12);
+    avgP = openvdb::Vec3s(0.0, 0.0, 0.0);
 
-    for (i = r.begin(); i < r.end(); i++) {
+    // get normal list
+    for (size_t n = 0, N = points.size(); n < N; ++n) {
 
-      pos = openvdb::Vec3s(result[i][0], result[i][1], result[i][2]);
-      pos = mXForm.worldToIndex(pos);
+      avgP += points[n];
+      normal = mRefGeo.face_normal(primitives[n] * 4);
+      normals.push_back(normal);
+    }
 
-      ijk[0] = int(std::floor(pos[0]));
-      ijk[1] = int(std::floor(pos[1]));
-      ijk[2] = int(std::floor(pos[2]));
+    // Calculate feature point position
+    if (points.size() > 1) {
 
-      if (maskAcc && !maskAcc->isValueOn(ijk))
-        continue;
+      pos = openvdb::tools::findFeaturePoint(points, normals);
 
-      points.clear();
-      normals.clear();
-      primitives.clear();
+      // Constrain points to stay inside their initial
+      // coordinate cell.
+      cell = openvdb::BBoxd(
+          openvdb::Vec3d(double(ijk[0]), double(ijk[1]), double(ijk[2])),
+          openvdb::Vec3d(double(ijk[0] + 1), double(ijk[1] + 1), double(ijk[2] + 1)));
 
-      // get voxel-edge intersections
-      mEdgeData.getEdgeData(acc, ijk, points, primitives);
+      // cell.expand(openvdb::Vec3d(0.3, 0.3, 0.3));
+      cell.expand(0.6);
 
-      avgP = openvdb::Vec3s(0.0, 0.0, 0.0);
+      if (!cell.isInside(openvdb::Vec3d(pos[0], pos[1], pos[2]))) {
 
-      // get normal list
-      for (size_t n = 0, N = points.size(); n < N; ++n) {
+        openvdb::Vec3s org(pos[0], pos[1], pos[2]);
 
-        avgP += points[n];
-        normal = mRefGeo.face_normal(primitives[n] * 4);
-        normals.push_back(normal);
-      }
+        avgP *= 1.f / float(points.size());
+        openvdb::Vec3s dir = avgP - org;
+        dir.normalize();
 
-      // Calculate feature point position
-      if (points.size() > 1) {
-
-        pos = openvdb::tools::findFeaturePoint(points, normals);
-
-        // Constrain points to stay inside their initial
-        // coordinate cell.
-        cell = openvdb::BBoxd(
-            openvdb::Vec3d(double(ijk[0]), double(ijk[1]), double(ijk[2])),
-            openvdb::Vec3d(double(ijk[0] + 1), double(ijk[1] + 1), double(ijk[2] + 1)));
-
-        // cell.expand(openvdb::Vec3d(0.3, 0.3, 0.3));
-        cell.expand(0.6);
-
-        if (!cell.isInside(openvdb::Vec3d(pos[0], pos[1], pos[2]))) {
-
-          openvdb::Vec3s org(pos[0], pos[1], pos[2]);
-
-          avgP *= 1.f / float(points.size());
-          openvdb::Vec3s dir = avgP - org;
-          dir.normalize();
-
-          // double distance;
-          // if (cell.intersectRay(org, dir, 1E17F, &distance) > 0)
-          float distance;
-          Ray ray(org, dir);
-          AABBox box(cell.min(), cell.max());
-          if (box.intersect(ray, distance)) {
-            pos = org + dir * distance;
-          }
+        // double distance;
+        // if (cell.intersectRay(org, dir, 1E17F, &distance) > 0)
+        float distance;
+        Ray ray(org, dir);
+        AABBox box(cell.min(), cell.max());
+        if (box.intersect(ray, distance)) {
+          pos = org + dir * distance;
         }
-
-        pos = mXForm.indexToWorld(pos);
-        result[i] = pos;
       }
     }
-    mRefGeo.set_out_points(result);
+
+    pos = mXForm.indexToWorld(pos);
+    (*mPointList)[i] = pos;
   }
-}  // namespace tools
+}
 }  // namespace tools
 }  // namespace OPENVDB_VERSION_NAME
+}  // namespace openvdb
 
 #endif /* __OPENVDB_MESHER_H__ */
