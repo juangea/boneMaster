@@ -65,7 +65,6 @@
 #include "DEG_depsgraph.h"
 
 #include "GPU_immediate.h"
-#include "GPU_immediate_util.h"
 #include "GPU_matrix.h"
 #include "GPU_state.h"
 
@@ -1795,7 +1794,7 @@ static void drawHelpline(bContext *UNUSED(C), int x, int y, void *customdata)
 
   if (t->helpline != HLP_NONE) {
     float cent[2];
-    float mval[3] = {
+    const float mval[3] = {
         x,
         y,
         0.0f,
@@ -3870,7 +3869,7 @@ static void ElementResize(TransInfo *t, TransDataContainer *tc, TransData *td, f
   if (td->ext && td->ext->size) {
     float fsize[3];
 
-    if (t->flag & (T_OBJECT | T_TEXTURE | T_POSE)) {
+    if ((t->options & CTX_SCULPT) || t->flag & (T_OBJECT | T_TEXTURE | T_POSE)) {
       float obsizemat[3][3];
       /* Reorient the size mat to fit the oriented object. */
       mul_m3_m3m3(obsizemat, tmat, td->axismtx);
@@ -4323,8 +4322,11 @@ static void headerRotation(TransInfo *t, char str[UI_MAX_DRAW_STR], float final)
  *
  * Protected axis and other transform settings are taken into account.
  */
-static void ElementRotation_ex(
-    TransInfo *t, TransDataContainer *tc, TransData *td, float mat[3][3], const float *center)
+static void ElementRotation_ex(TransInfo *t,
+                               TransDataContainer *tc,
+                               TransData *td,
+                               const float mat[3][3],
+                               const float *center)
 {
   float vec[3], totmat[3][3], smat[3][3];
   float eul[3], fmat[3][3], quat[4];
@@ -4728,7 +4730,7 @@ static void initTrackball(TransInfo *t)
 static void applyTrackballValue(TransInfo *t,
                                 const float axis1[3],
                                 const float axis2[3],
-                                float angles[2])
+                                const float angles[2])
 {
   float mat[3][3];
   float axis[3];

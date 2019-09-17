@@ -73,7 +73,6 @@
 #include "BKE_autoexec.h"
 #include "BKE_blender.h"
 #include "BKE_blendfile.h"
-#include "BKE_blender_undo.h"
 #include "BKE_callbacks.h"
 #include "BKE_context.h"
 #include "BKE_global.h"
@@ -114,8 +113,6 @@
 #include "UI_interface.h"
 #include "UI_resources.h"
 #include "UI_view2d.h"
-
-#include "GPU_draw.h"
 
 /* only to report a missing engine */
 #include "RE_engine.h"
@@ -2247,6 +2244,7 @@ static int wm_open_mainfile__open(bContext *C, wmOperator *op)
     if (G.fileflags & G_FILE_NO_UI) {
       ED_outliner_select_sync_from_all_tag(C);
     }
+    ED_view3d_local_collections_reset(C, (G.fileflags & G_FILE_NO_UI) != 0);
     return OPERATOR_FINISHED;
   }
   else {

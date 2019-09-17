@@ -53,7 +53,6 @@
 
 #include "BKE_blendfile.h"
 #include "BKE_blender.h"
-#include "BKE_blender_undo.h"
 #include "BKE_callbacks.h"
 #include "BKE_context.h"
 #include "BKE_font.h"
@@ -120,7 +119,6 @@
 
 #include "GPU_material.h"
 #include "GPU_draw.h"
-#include "GPU_immediate.h"
 #include "GPU_init_exit.h"
 
 #include "BKE_sound.h"

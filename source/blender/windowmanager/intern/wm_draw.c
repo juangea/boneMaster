@@ -46,7 +46,6 @@
 #include "BKE_main.h"
 #include "BKE_screen.h"
 #include "BKE_scene.h"
-#include "BKE_workspace.h"
 
 #include "GHOST_C-api.h"
 
@@ -55,10 +54,8 @@
 #include "ED_screen.h"
 
 #include "GPU_draw.h"
-#include "GPU_extensions.h"
 #include "GPU_framebuffer.h"
 #include "GPU_immediate.h"
-#include "GPU_matrix.h"
 #include "GPU_state.h"
 #include "GPU_texture.h"
 #include "GPU_viewport.h"

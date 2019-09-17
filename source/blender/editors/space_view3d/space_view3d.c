@@ -54,9 +54,6 @@
 #include "ED_screen.h"
 #include "ED_transform.h"
 
-#include "GPU_framebuffer.h"
-#include "GPU_material.h"
-#include "GPU_viewport.h"
 #include "GPU_matrix.h"
 
 #include "DRW_engine.h"
@@ -346,6 +343,10 @@ static SpaceLink *view3d_duplicate(SpaceLink *sl)
 
   if (v3dn->shading.type == OB_RENDER) {
     v3dn->shading.type = OB_SOLID;
+  }
+
+  if (v3dn->shading.prop) {
+    v3dn->shading.prop = IDP_CopyProperty(v3do->shading.prop);
   }
 
   /* copy or clear inside new stuff */
