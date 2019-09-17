@@ -649,8 +649,8 @@ typedef void (*ForHitPointFunc)(PEData *data, int point_index, float mouse_dista
 typedef void (*ForKeyFunc)(PEData *data, int point_index, int key_index, bool is_inside);
 
 typedef void (*ForKeyMatFunc)(PEData *data,
-                              float mat[4][4],
-                              float imat[4][4],
+                              const float mat[4][4],
+                              const float imat[4][4],
                               int point_index,
                               int key_index,
                               PTCacheEditKey *key);
@@ -1377,7 +1377,7 @@ static void pe_iterate_lengths(Scene *scene, PTCacheEdit *edit)
   BLI_task_parallel_range(0, edit->totpoint, &iter_data, iterate_lengths_iter, &settings);
 }
 
-/* set current distances to be kept between neighbouting keys */
+/* set current distances to be kept between neighboring keys */
 void recalc_lengths(PTCacheEdit *edit)
 {
   POINT_P;

@@ -1271,7 +1271,7 @@ void BKE_libblock_init_empty(ID *id)
       BKE_mesh_init((Mesh *)id);
       break;
     case ID_CU:
-      BKE_curve_init((Curve *)id);
+      BKE_curve_init((Curve *)id, 0);
       break;
     case ID_MB:
       BKE_mball_init((MetaBall *)id);
@@ -1407,23 +1407,31 @@ void *BKE_id_new_nomain(const short type, const char *name)
   return id;
 }
 
-void BKE_libblock_copy_ex(Main *bmain, const ID *id, ID **r_newid, int flag)
+void BKE_libblock_copy_ex(Main *bmain, const ID *id, ID **r_newid, const int orig_flag)
 {
   ID *new_id = *r_newid;
+  int flag = orig_flag;
+
+  const bool is_private_id_data = (id->flag & LIB_PRIVATE_DATA) != 0;
 
   BLI_assert((flag & LIB_ID_CREATE_NO_MAIN) != 0 || bmain != NULL);
   BLI_assert((flag & LIB_ID_CREATE_NO_MAIN) != 0 || (flag & LIB_ID_CREATE_NO_ALLOCATE) == 0);
-  BLI_assert((flag & LIB_ID_CREATE_NO_MAIN) == 0 || (flag & LIB_ID_CREATE_NO_USER_REFCOUNT) != 0);
+  if (!is_private_id_data) {
+    /* When we are handling private ID data, we might still want to manage usercounts, even though
+     * that ID data-block is actually outside of Main... */
+    BLI_assert((flag & LIB_ID_CREATE_NO_MAIN) == 0 ||
+               (flag & LIB_ID_CREATE_NO_USER_REFCOUNT) != 0);
+  }
   /* Never implicitly copy shapekeys when generating temp data outside of Main database. */
   BLI_assert((flag & LIB_ID_CREATE_NO_MAIN) == 0 || (flag & LIB_ID_COPY_SHAPEKEY) == 0);
 
   /* 'Private ID' data handling. */
-  if ((bmain != NULL) && (id->flag & LIB_PRIVATE_DATA) != 0) {
+  if ((bmain != NULL) && is_private_id_data) {
     flag |= LIB_ID_CREATE_NO_MAIN;
   }
 
   /* The id->flag bits to copy over. */
-  const int copy_flag_mask = LIB_PRIVATE_DATA;
+  const int copy_idflag_mask = LIB_PRIVATE_DATA;
 
   if ((flag & LIB_ID_CREATE_NO_ALLOCATE) != 0) {
     /* r_newid already contains pointer to allocated memory. */
@@ -1447,7 +1455,7 @@ void BKE_libblock_copy_ex(Main *bmain, const ID *id, ID **r_newid, int flag)
     memcpy(cpn + id_offset, cp + id_offset, id_len - id_offset);
   }
 
-  new_id->flag = (new_id->flag & ~copy_flag_mask) | (id->flag & copy_flag_mask);
+  new_id->flag = (new_id->flag & ~copy_idflag_mask) | (id->flag & copy_idflag_mask);
 
   if (id->properties) {
     new_id->properties = IDP_CopyProperty_ex(id->properties, flag);
@@ -1467,8 +1475,12 @@ void BKE_libblock_copy_ex(Main *bmain, const ID *id, ID **r_newid, int flag)
 
     /* the duplicate should get a copy of the animdata */
     if ((flag & LIB_ID_COPY_NO_ANIMDATA) == 0) {
-      BLI_assert((flag & LIB_ID_COPY_ACTIONS) == 0 || (flag & LIB_ID_CREATE_NO_MAIN) == 0);
-      iat->adt = BKE_animdata_copy(bmain, iat->adt, flag);
+      /* Note that even though horrors like root nodetrees are not in bmain, the actions they use
+       * in their anim data *are* in bmain... super-mega-hurra. */
+      int animdata_flag = orig_flag;
+      BLI_assert((animdata_flag & LIB_ID_COPY_ACTIONS) == 0 ||
+                 (animdata_flag & LIB_ID_CREATE_NO_MAIN) == 0);
+      iat->adt = BKE_animdata_copy(bmain, iat->adt, animdata_flag);
     }
     else {
       iat->adt = NULL;

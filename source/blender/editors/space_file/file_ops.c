@@ -489,6 +489,7 @@ static int file_select_invoke(bContext *C, wmOperator *op, const wmEvent *event)
   const bool extend = RNA_boolean_get(op->ptr, "extend");
   const bool fill = RNA_boolean_get(op->ptr, "fill");
   const bool do_diropen = RNA_boolean_get(op->ptr, "open");
+  const bool deselect_all = RNA_boolean_get(op->ptr, "deselect_all");
 
   if (ar->regiontype != RGN_TYPE_WINDOW) {
     return OPERATOR_CANCELLED;
@@ -521,10 +522,15 @@ static int file_select_invoke(bContext *C, wmOperator *op, const wmEvent *event)
     filelist_entry_parent_select_set(sfile->files, FILE_SEL_REMOVE, FILE_SEL_SELECTED, CHECK_ALL);
   }
 
-  if (FILE_SELECT_DIR == ret) {
+  if (ret == FILE_SELECT_NOTHING) {
+    if (deselect_all) {
+      file_deselect_all(sfile, FILE_SEL_SELECTED);
+    }
+  }
+  else if (ret == FILE_SELECT_DIR) {
     WM_event_add_notifier(C, NC_SPACE | ND_SPACE_FILE_LIST, NULL);
   }
-  else if (FILE_SELECT_FILE == ret) {
+  else if (ret == FILE_SELECT_FILE) {
     WM_event_add_notifier(C, NC_SPACE | ND_SPACE_FILE_PARAMS, NULL);
   }
 
@@ -540,8 +546,8 @@ void FILE_OT_select(wmOperatorType *ot)
 
   /* identifiers */
   ot->name = "Select";
-  ot->description = "Activate/select file";
   ot->idname = "FILE_OT_select";
+  ot->description = "Handle mouse clicks to select and activate items";
 
   /* api callbacks */
   ot->invoke = file_select_invoke;
@@ -558,6 +564,12 @@ void FILE_OT_select(wmOperatorType *ot)
       ot->srna, "fill", false, "Fill", "Select everything beginning with the last selection");
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
   prop = RNA_def_boolean(ot->srna, "open", true, "Open", "Open a directory when selecting it");
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+  prop = RNA_def_boolean(ot->srna,
+                         "deselect_all",
+                         false,
+                         "Deselect On Nothing",
+                         "Deselect all when nothing under the cursor");
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 
@@ -1494,14 +1506,11 @@ void file_draw_check_cb(bContext *C, void *UNUSED(arg1), void *UNUSED(arg2))
 bool file_draw_check_exists(SpaceFile *sfile)
 {
   if (sfile->op) { /* fails on reload */
-    PropertyRNA *prop;
-    if ((prop = RNA_struct_find_property(sfile->op->ptr, "check_existing"))) {
-      if (RNA_property_boolean_get(sfile->op->ptr, prop)) {
-        char filepath[FILE_MAX];
-        BLI_join_dirfile(filepath, sizeof(filepath), sfile->params->dir, sfile->params->file);
-        if (BLI_is_file(filepath)) {
-          return true;
-        }
+    if (sfile->params && (sfile->params->flag & FILE_CHECK_EXISTING)) {
+      char filepath[FILE_MAX];
+      BLI_join_dirfile(filepath, sizeof(filepath), sfile->params->dir, sfile->params->file);
+      if (BLI_is_file(filepath)) {
+        return true;
       }
     }
   }
@@ -2386,7 +2395,7 @@ static bool file_filenum_poll(bContext *C)
     return false;
   }
 
-  return sfile->params && (sfile->params->action_type == FILE_SAVE);
+  return sfile->params && (sfile->params->flag & FILE_CHECK_EXISTING);
 }
 
 /**

@@ -113,7 +113,8 @@ typedef struct BrushGpencilSettings {
   float gradient_f;
   /** factor xy of shape for dots gradients */
   float gradient_s[2];
-  char _pad_2[4];
+  /** Simplify adaptive factor */
+  float simplify_f;
 
   struct CurveMapping *curve_sensitivity;
   struct CurveMapping *curve_strength;
@@ -184,6 +185,8 @@ typedef enum eGP_BrushIcons {
   GP_BRUSH_ICON_ERASE_SOFT = 8,
   GP_BRUSH_ICON_ERASE_HARD = 9,
   GP_BRUSH_ICON_ERASE_STROKE = 10,
+  GP_BRUSH_ICON_AIRBRUSH = 11,
+  GP_BRUSH_ICON_CHISEL = 12,
 } eGP_BrushIcons;
 
 typedef enum eBrushCurvePreset {
@@ -321,7 +324,7 @@ typedef struct Brush {
   char _pad1[4];
 
   int elastic_deform_type;
-  float elastic_deform_compressibility;
+  float elastic_deform_volume_preservation;
 
   /* overlay */
   int texture_overlay_alpha;
@@ -511,7 +514,7 @@ typedef enum eBrushUVSculptTool {
         SCULPT_TOOL_ELASTIC_DEFORM, \
         SCULPT_TOOL_POSE, \
 \
-        /* These brushes could handle dynamic topology, \
+        /* These brushes could handle dynamic topology, \ \
          * but user feedback indicates it's better not to */ \
         SCULPT_TOOL_SMOOTH, \
         SCULPT_TOOL_MASK) == 0)

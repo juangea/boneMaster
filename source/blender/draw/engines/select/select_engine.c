@@ -163,13 +163,6 @@ static void select_cache_init(void *vedata)
   if (e_data.context.select_mode == -1) {
     e_data.context.select_mode = select_id_get_object_select_mode(draw_ctx->scene,
                                                                   draw_ctx->obact);
-    if (e_data.context.select_mode == 0) {
-      /* Need for sampling weights. */
-      if (draw_ctx->object_mode & OB_MODE_WEIGHT_PAINT) {
-        e_data.context.select_mode = SCE_SELECT_FACE;
-      }
-    }
-
     BLI_assert(e_data.context.select_mode != 0);
   }
 
@@ -259,7 +252,11 @@ static void select_cache_populate(void *vedata, Object *ob)
       DRW_shgroup_call_obmat(stl->g_data->shgrp_depth_only, geom_faces, ob->obmat);
     }
     else if (ob->dt >= OB_SOLID) {
+#ifdef USE_CAGE_OCCLUSION
+      struct GPUBatch *geom_faces = DRW_mesh_batch_cache_get_triangles_with_select_id(me);
+#else
       struct GPUBatch *geom_faces = DRW_mesh_batch_cache_get_surface(me);
+#endif
       DRW_shgroup_call_obmat(stl->g_data->shgrp_depth_only, geom_faces, ob->obmat);
     }
 

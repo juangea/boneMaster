@@ -1059,9 +1059,10 @@ def km_view3d(params):
         ("view3d.view_axis", {"type": 'NDOF_BUTTON_TOP', "value": 'PRESS', "shift": True},
          {"properties": [("type", 'TOP'), ("align_active", True)]}),
         # Selection.
-        *(("view3d.select",
-           {"type": params.select_mouse, "value": params.select_mouse_value, **{m: True for m in mods}},
-           {"properties": [(c, True) for c in props]},
+        *((
+            "view3d.select",
+            {"type": params.select_mouse, "value": params.select_mouse_value, **{m: True for m in mods}},
+            {"properties": [(c, True) for c in props]},
         ) for props, mods in (
             (("deselect_all",) if not params.legacy else (), ()),
             (("toggle",), ("shift",)),
@@ -1819,7 +1820,7 @@ def km_file_browser_main(params):
          {"properties": [("need_active", True)]}),
         ("file.refresh", {"type": 'NUMPAD_PERIOD', "value": 'PRESS'}, None),
         ("file.select", {"type": 'LEFTMOUSE', "value": 'CLICK'},
-         {"properties": [("open", False)]}),
+         {"properties": [("open", False), ("deselect_all", not params.legacy)]}),
         ("file.select", {"type": 'LEFTMOUSE', "value": 'DOUBLE_CLICK'}, None),
         ("file.select", {"type": 'LEFTMOUSE', "value": 'CLICK', "ctrl": True},
          {"properties": [("extend", True)]}),
@@ -2432,10 +2433,10 @@ def km_sequencer(params):
          {"properties": [("mode", 'TIME_EXTEND')]}),
         ("marker.add", {"type": 'M', "value": 'PRESS'}, None),
         ("marker.rename", {"type": 'M', "value": 'PRESS', "ctrl": True}, None),
-        ("sequencer.select",{"type": 'LEFT_BRACKET', "value": 'PRESS'},
-        {"properties": [("left_right", 'LEFT'), ("linked_time", True)]}),
-        ("sequencer.select",{"type": 'RIGHT_BRACKET', "value": 'PRESS'},
-        {"properties": [("left_right", 'RIGHT'), ("linked_time", True)]}),
+        ("sequencer.select", {"type": 'LEFT_BRACKET', "value": 'PRESS'},
+         {"properties": [("left_right", 'LEFT'), ("linked_time", True)]}),
+        ("sequencer.select", {"type": 'RIGHT_BRACKET', "value": 'PRESS'},
+         {"properties": [("left_right", 'RIGHT'), ("linked_time", True)]}),
     ])
 
     return keymap
@@ -2661,8 +2662,7 @@ def km_clip_editor(params):
         ("clip.keyframe_delete", {"type": 'I', "value": 'PRESS', "alt": True}, None),
         ("clip.join_tracks", {"type": 'J', "value": 'PRESS', "ctrl": True}, None),
         op_menu("CLIP_MT_tracking_context_menu", params.context_menu_event),
-        ("wm.context_toggle", {"type": 'L', "value": 'PRESS'},
-         {"properties": [("data_path", 'space_data.lock_selection')]}),
+        ("clip.lock_selection_toggle", {"type": 'L', "value": 'PRESS'}, None),
         ("wm.context_toggle", {"type": 'D', "value": 'PRESS', "alt": True},
          {"properties": [("data_path", 'space_data.show_disabled')]}),
         ("wm.context_toggle", {"type": 'S', "value": 'PRESS', "alt": True},
@@ -3278,7 +3278,7 @@ def km_grease_pencil_stroke_sculpt_mode(params):
     return keymap
 
 
-def km_grease_pencil_stroke_weight_mode(params):
+def km_grease_pencil_stroke_weight_mode(_params):
     items = []
     keymap = (
         "Grease Pencil Stroke Weight Mode",

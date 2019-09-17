@@ -148,6 +148,13 @@ CCL_NAMESPACE_BEGIN
 #  endif
 #endif /* __KERNEL_CUDA__ */
 
+#ifdef __KERNEL_OPTIX__
+#  undef __BAKING__
+#  undef __BRANCHED_PATH__
+/* TODO(pmours): Cannot use optixTrace in non-inlined functions */
+#  undef __SHADER_RAYTRACE__
+#endif /* __KERNEL_OPTIX__ */
+
 #ifdef __KERNEL_OPENCL__
 #endif /* __KERNEL_OPENCL__ */
 
@@ -1067,6 +1074,15 @@ typedef struct PathState {
 #endif
 } PathState;
 
+#ifdef __VOLUME__
+typedef struct VolumeState {
+#  ifdef __SPLIT_KERNEL__
+#  else
+  PathState ps;
+#  endif
+} VolumeState;
+#endif
+
 /* Struct to gather multiple nearby intersections. */
 typedef struct LocalIntersection {
   Ray ray;
@@ -1251,7 +1267,12 @@ typedef struct KernelFilm {
   int pass_ray_bounces;
 #endif
 
-  int pad1, pad2;
+  /* viewport rendering options */
+  int display_pass_stride;
+  int display_pass_components;
+  int display_divide_pass_stride;
+  int use_display_exposure;
+  int use_display_pass_alpha;
 } KernelFilm;
 static_assert_align(KernelFilm, 16);
 
@@ -1362,8 +1383,10 @@ typedef enum KernelBVHLayout {
   BVH_LAYOUT_BVH4 = (1 << 1),
   BVH_LAYOUT_BVH8 = (1 << 2),
   BVH_LAYOUT_EMBREE = (1 << 3),
+  BVH_LAYOUT_OPTIX = (1 << 4),
+
   BVH_LAYOUT_DEFAULT = BVH_LAYOUT_BVH8,
-  BVH_LAYOUT_ALL = (unsigned int)(-1),
+  BVH_LAYOUT_ALL = (unsigned int)(~0u),
 } KernelBVHLayout;
 
 typedef struct KernelBVH {
@@ -1375,14 +1398,18 @@ typedef struct KernelBVH {
   int bvh_layout;
   int use_bvh_steps;
 
-  /* Embree */
-#ifdef __EMBREE__
-  RTCScene scene;
-#  ifndef __KERNEL_64_BIT__
-  int pad1;
-#  endif
+  /* Custom BVH */
+#ifdef __KERNEL_OPTIX__
+  OptixTraversableHandle scene;
 #else
-  int pad1, pad2;
+#  ifdef __EMBREE__
+  RTCScene scene;
+#    ifndef __KERNEL_64_BIT__
+  int pad2;
+#    endif
+#  else
+  int scene, pad2;
+#  endif
 #endif
 } KernelBVH;
 static_assert_align(KernelBVH, 16);
@@ -1658,7 +1685,7 @@ typedef struct WorkTile {
   uint start_sample;
   uint num_samples;
 
-  int offset;
+  uint offset;
   uint stride;
 
   ccl_global float *buffer;

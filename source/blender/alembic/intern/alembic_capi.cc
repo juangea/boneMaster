@@ -261,7 +261,7 @@ static void export_startjob(void *customdata, short *stop, short *do_update, flo
     const int orig_frame = CFRA;
 
     data->was_canceled = false;
-    exporter(*data->progress, data->was_canceled);
+    exporter(do_update, progress, &data->was_canceled);
 
     if (CFRA != orig_frame) {
       CFRA = orig_frame;
@@ -330,7 +330,7 @@ bool ABC_export(Scene *scene,
    * hardcore refactoring. */
   new (&job->settings) ExportSettings();
   job->settings.scene = scene;
-  job->settings.depsgraph = DEG_graph_new(scene, job->view_layer, DAG_EVAL_RENDER);
+  job->settings.depsgraph = DEG_graph_new(job->bmain, scene, job->view_layer, DAG_EVAL_RENDER);
 
   /* TODO(Sybren): for now we only export the active scene layer.
    * Later in the 2.8 development process this may be replaced by using

@@ -51,6 +51,7 @@ set(INC
   ../../../extern/curve_fit_nd
   ../../../intern/smoke/extern
 
+  # dna_type_offsets.h
   ${CMAKE_CURRENT_BINARY_DIR}/../makesdna/intern
 )
 
@@ -187,6 +188,7 @@ set(SRC
   intern/scene.c
   intern/screen.c
   intern/seqcache.c
+  intern/seqprefetch.c
   intern/seqeffects.c
   intern/seqmodifier.c
   intern/sequencer.c
@@ -617,6 +619,16 @@ if(WITH_OPENVDB)
       -DWITH_OPENVDB_BLOSC
     )
   endif()
+endif()
+
+if(WITH_QUADRIFLOW)
+  list(APPEND INC
+     ../../../intern/quadriflow
+  )
+  list(APPEND LIB
+     bf_intern_quadriflow
+  )
+  add_definitions(-DWITH_QUADRIFLOW)
 endif()
 
 ## Warnings as errors, this is too strict!

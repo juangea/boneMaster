@@ -242,7 +242,7 @@ void BKE_scene_copy_data(Main *bmain, Scene *sce_dst, const Scene *sce_src, cons
   /* We never handle usercount here for own data. */
   const int flag_subdata = flag | LIB_ID_CREATE_NO_USER_REFCOUNT;
   /* We always need allocation of our private ID data. */
-  const int flag_private_id_data = flag_subdata & ~LIB_ID_CREATE_NO_ALLOCATE;
+  const int flag_private_id_data = flag & ~LIB_ID_CREATE_NO_ALLOCATE;
 
   sce_dst->ed = NULL;
   sce_dst->depsgraph_hash = NULL;
@@ -316,6 +316,10 @@ void BKE_scene_copy_data(Main *bmain, Scene *sce_dst, const Scene *sce_src, cons
     /* intentionally check sce_dst not sce_src. */ /* XXX ??? comment outdated... */
     sce_dst->r.ffcodecdata.properties = IDP_CopyProperty_ex(sce_src->r.ffcodecdata.properties,
                                                             flag_subdata);
+  }
+
+  if (sce_src->display.shading.prop) {
+    sce_dst->display.shading.prop = IDP_CopyProperty(sce_src->display.shading.prop);
   }
 
   BKE_sound_reset_scene_runtime(sce_dst);
@@ -548,6 +552,11 @@ void BKE_scene_free_ex(Scene *sce, const bool do_id_user)
   if (sce->eevee.light_cache) {
     EEVEE_lightcache_free(sce->eevee.light_cache);
     sce->eevee.light_cache = NULL;
+  }
+
+  if (sce->display.shading.prop) {
+    IDP_FreeProperty(sce->display.shading.prop);
+    sce->display.shading.prop = NULL;
   }
 
   /* These are freed on doversion. */
@@ -1309,7 +1318,7 @@ static void scene_graph_update_tagged(Depsgraph *depsgraph, Main *bmain, bool on
 
   bool run_callbacks = DEG_id_type_any_updated(depsgraph);
   if (run_callbacks) {
-    BKE_callback_exec(bmain, &scene->id, BKE_CB_EVT_DEPSGRAPH_UPDATE_PRE);
+    BKE_callback_exec_id(bmain, &scene->id, BKE_CB_EVT_DEPSGRAPH_UPDATE_PRE);
   }
 
   for (int pass = 0; pass < 2; pass++) {
@@ -1327,7 +1336,8 @@ static void scene_graph_update_tagged(Depsgraph *depsgraph, Main *bmain, bool on
     BKE_scene_update_sound(depsgraph, bmain);
     /* Notify python about depsgraph update. */
     if (run_callbacks) {
-      BKE_callback_exec(bmain, &scene->id, BKE_CB_EVT_DEPSGRAPH_UPDATE_POST);
+      BKE_callback_exec_id_depsgraph(
+          bmain, &scene->id, depsgraph, BKE_CB_EVT_DEPSGRAPH_UPDATE_POST);
     }
     /* Inform editors about possible changes. */
     DEG_ids_check_recalc(bmain, depsgraph, scene, view_layer, false);
@@ -1362,7 +1372,7 @@ void BKE_scene_graph_update_for_newframe(Depsgraph *depsgraph, Main *bmain)
   ViewLayer *view_layer = DEG_get_input_view_layer(depsgraph);
 
   /* Keep this first. */
-  BKE_callback_exec(bmain, &scene->id, BKE_CB_EVT_FRAME_CHANGE_PRE);
+  BKE_callback_exec_id(bmain, &scene->id, BKE_CB_EVT_FRAME_CHANGE_PRE);
 
   for (int pass = 0; pass < 2; pass++) {
     /* Update animated image textures for particles, modifiers, gpu, etc,
@@ -1376,15 +1386,23 @@ void BKE_scene_graph_update_for_newframe(Depsgraph *depsgraph, Main *bmain)
 #endif
     /* Update all objects: drivers, matrices, displists, etc. flags set
      * by depgraph or manual, no layer check here, gets correct flushed.
-     */
-    const float ctime = BKE_scene_frame_get(scene);
-    DEG_evaluate_on_framechange(bmain, depsgraph, ctime);
+     *
+     * NOTE: Only update for new frame on first iteration. Second iteration is for ensuring user
+     * edits from callback are properly taken into account. Doing a time update on those would
+     * loose any possible unkeyed changes made by the handler. */
+    if (pass == 0) {
+      const float ctime = BKE_scene_frame_get(scene);
+      DEG_evaluate_on_framechange(bmain, depsgraph, ctime);
+    }
+    else {
+      DEG_evaluate_on_refresh(bmain, depsgraph);
+    }
     /* Update sound system animation. */
     BKE_scene_update_sound(depsgraph, bmain);
 
     /* Notify editors and python about recalc. */
     if (pass == 0) {
-      BKE_callback_exec(bmain, &scene->id, BKE_CB_EVT_FRAME_CHANGE_POST);
+      BKE_callback_exec_id_depsgraph(bmain, &scene->id, depsgraph, BKE_CB_EVT_FRAME_CHANGE_POST);
     }
 
     /* Inform editors about possible changes. */
@@ -1408,7 +1426,7 @@ void BKE_scene_graph_update_for_newframe(Depsgraph *depsgraph, Main *bmain)
  */
 void BKE_scene_view_layer_graph_evaluated_ensure(Main *bmain, Scene *scene, ViewLayer *view_layer)
 {
-  Depsgraph *depsgraph = BKE_scene_get_depsgraph(scene, view_layer, true);
+  Depsgraph *depsgraph = BKE_scene_get_depsgraph(bmain, scene, view_layer, true);
   DEG_make_active(depsgraph);
   BKE_scene_graph_update_tagged(depsgraph, bmain);
 }
@@ -1656,6 +1674,8 @@ double BKE_scene_unit_scale(const UnitSettings *unit, const int unit_type, doubl
 
   switch (unit_type) {
     case B_UNIT_LENGTH:
+    case B_UNIT_VELOCITY:
+    case B_UNIT_ACCELERATION:
       return value * (double)unit->scale_length;
     case B_UNIT_AREA:
     case B_UNIT_POWER:
@@ -2040,7 +2060,7 @@ void BKE_scene_free_depsgraph_hash(Scene *scene)
 
 /* Query depsgraph for a specific contexts. */
 
-Depsgraph *BKE_scene_get_depsgraph(Scene *scene, ViewLayer *view_layer, bool allocate)
+Depsgraph *BKE_scene_get_depsgraph(Main *bmain, Scene *scene, ViewLayer *view_layer, bool allocate)
 {
   BLI_assert(scene != NULL);
   BLI_assert(view_layer != NULL);
@@ -2064,7 +2084,7 @@ Depsgraph *BKE_scene_get_depsgraph(Scene *scene, ViewLayer *view_layer, bool all
             scene->depsgraph_hash, &key, (void ***)&key_ptr, (void ***)&depsgraph_ptr)) {
       *key_ptr = MEM_mallocN(sizeof(DepsgraphKey), __func__);
       **key_ptr = key;
-      *depsgraph_ptr = DEG_graph_new(scene, view_layer, DAG_EVAL_VIEWPORT);
+      *depsgraph_ptr = DEG_graph_new(bmain, scene, view_layer, DAG_EVAL_VIEWPORT);
       /* TODO(sergey): Would be cool to avoid string format print,
        * but is a bit tricky because we can't know in advance  whether
        * we will ever enable debug messages for this depsgraph.

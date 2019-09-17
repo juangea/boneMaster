@@ -80,6 +80,10 @@ rna_module_prop = StringProperty(
 
 
 def context_path_validate(context, data_path):
+    # Silently ignore invalid data paths created by T65397.
+    if "(null)" in data_path:
+        return Ellipsis
+
     try:
         value = eval("context.%s" % data_path) if data_path else Ellipsis
     except AttributeError as ex:
@@ -1844,7 +1848,7 @@ class WM_OT_batch_rename(Operator):
     bl_idname = "wm.batch_rename"
     bl_label = "Batch Rename"
 
-    bl_options = {'UNDO', 'INTERNAL'}
+    bl_options = {'UNDO'}
 
     data_type: EnumProperty(
         name="Type",

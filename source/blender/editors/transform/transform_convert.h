@@ -69,6 +69,8 @@ void flushTransGraphData(TransInfo *t);
 void flushTransMasking(TransInfo *t);
 /* transform_convert_mesh.c */
 void flushTransUVs(TransInfo *t);
+void trans_mesh_customdata_correction_init(TransInfo *t);
+void trans_mesh_customdata_correction_apply(struct TransDataContainer *tc, bool is_final);
 /* transform_convert_node.c */
 void flushTransNodes(TransInfo *t);
 /* transform_convert_object.c */
@@ -129,6 +131,8 @@ void createTransTexspace(TransInfo *t);
 void createTransPaintCurveVerts(bContext *C, TransInfo *t);
 /* transform_convert_particle.c */
 void createTransParticleVerts(bContext *C, TransInfo *t);
+/* transform_convert_sculpt.c */
+void createTransSculpt(TransInfo *t);
 /* transform_convert_sequence.c */
 void createTransSeqData(bContext *C, TransInfo *t);
 /* transform_convert_tracking.c */

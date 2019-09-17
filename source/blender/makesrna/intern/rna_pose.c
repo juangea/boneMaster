@@ -274,6 +274,12 @@ static void rna_PoseChannel_rotation_mode_set(PointerRNA *ptr, int value)
   pchan->rotmode = value;
 }
 
+static float rna_PoseChannel_length_get(PointerRNA *ptr)
+{
+  bPoseChannel *pchan = ptr->data;
+  return len_v3v3(pchan->pose_head, pchan->pose_tail);
+}
+
 static void rna_PoseChannel_name_set(PointerRNA *ptr, const char *value)
 {
   Object *ob = (Object *)ptr->owner_id;
@@ -1135,6 +1141,11 @@ static void rna_def_pose_channel(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Pose Tail Position", "Location of tail of the channel's bone");
   RNA_def_property_ui_range(prop, -FLT_MAX, FLT_MAX, 1, RNA_TRANSLATION_PREC_DEFAULT);
 
+  prop = RNA_def_property(srna, "length", PROP_FLOAT, PROP_DISTANCE);
+  RNA_def_property_float_funcs(prop, "rna_PoseChannel_length_get", NULL, NULL);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Length", "Length of the bone");
+
   /* IK Settings */
   prop = RNA_def_property(srna, "is_in_ik_chain", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_funcs(prop, "rna_PoseChannel_has_ik_get", NULL);
@@ -1288,7 +1299,7 @@ static void rna_def_pose_channel(BlenderRNA *brna)
   RNA_def_property_ui_text(
       prop, "Custom Object", "Object that defines custom draw type for this bone");
   RNA_def_property_editable_func(prop, "rna_PoseChannel_proxy_editable");
-  RNA_def_property_update(prop, NC_OBJECT | ND_POSE, "rna_Pose_update");
+  RNA_def_property_update(prop, NC_OBJECT | ND_POSE, "rna_Pose_dependency_update");
 
   prop = RNA_def_property(srna, "custom_shape_scale", PROP_FLOAT, PROP_NONE);
   RNA_def_property_float_sdna(prop, NULL, "custom_scale");
