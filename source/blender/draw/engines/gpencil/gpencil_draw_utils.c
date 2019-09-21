@@ -135,7 +135,7 @@ static void gpencil_calc_vertex(GPENCIL_StorageList *stl,
                                 GpencilBatchCache *cache,
                                 bGPdata *gpd)
 {
-  if (!cache->is_dirty) {
+  if ((!cache->is_dirty) || (gpd == NULL)) {
     return;
   }
 
@@ -153,6 +153,11 @@ static void gpencil_calc_vertex(GPENCIL_StorageList *stl,
 
   const bool is_multiedit = (bool)GPENCIL_MULTIEDIT_SESSIONS_ON(gpd);
 
+  /* Onion skining. */
+  const int step = gpd->gstep;
+  const int mode = gpd->onion_mode;
+  const short onion_keytype = gpd->onion_keytype;
+
   cache_ob->tot_vertex = 0;
   cache_ob->tot_triangles = 0;
   int idx_eval = 0;
@@ -165,7 +170,7 @@ static void gpencil_calc_vertex(GPENCIL_StorageList *stl,
       continue;
     }
 
-    /* if multiedit or onion skin need to count all frames of the layer */
+    /* If multiedit or onion skin need to count all frames of the layer. */
     if ((is_multiedit) || (is_onion)) {
       init_gpf = gpl->frames.first;
     }
@@ -179,9 +184,35 @@ static void gpencil_calc_vertex(GPENCIL_StorageList *stl,
 
     for (bGPDframe *gpf = init_gpf; gpf; gpf = gpf->next) {
       for (bGPDstroke *gps = gpf->strokes.first; gps; gps = gps->next) {
-        cache_ob->tot_vertex += gps->totpoints + 3;
-        cache_ob->tot_triangles += gps->totpoints - 1;
+        if (!is_onion) {
+          if ((!is_multiedit) ||
+              ((is_multiedit) && ((gpf == gpl->actframe) || (gpf->flag & GP_FRAME_SELECT)))) {
+            cache_ob->tot_vertex += gps->totpoints + 3;
+            cache_ob->tot_triangles += gps->totpoints - 1;
+          }
+        }
+        else {
+          /* Only selected frames. */
+          if ((mode == GP_ONION_MODE_SELECTED) && ((gpf->flag & GP_FRAME_SELECT) == 0)) {
+            continue;
+          }
+          /* Verify keyframe type. */
+          if ((onion_keytype > -1) && (gpf->key_type != onion_keytype)) {
+            continue;
+          }
+          /* Absolute range. */
+          if (mode == GP_ONION_MODE_ABSOLUTE) {
+            if ((gpl->actframe) && (abs(gpl->actframe->framenum - gpf->framenum) > step)) {
+              continue;
+            }
+          }
+          /* For relative range it takes too much time compute, so use all frames. */
+          cache_ob->tot_vertex += gps->totpoints + 3;
+          cache_ob->tot_triangles += gps->totpoints - 1;
+        }
       }
+
+      /* If not multiframe nor Onion skin, don't need follow counting. */
       if ((!is_multiedit) && (!is_onion)) {
         break;
       }
@@ -414,7 +445,8 @@ static void set_wireframe_color(Object *ob,
 }
 
 /* create shading group for filling */
-static DRWShadingGroup *gpencil_shgroup_fill_create(GPENCIL_Data *vedata,
+static DRWShadingGroup *gpencil_shgroup_fill_create(GPENCIL_e_data *e_data,
+                                                    GPENCIL_Data *vedata,
                                                     DRWPass *pass,
                                                     GPUShader *shader,
                                                     Object *ob,
@@ -543,7 +575,7 @@ static DRWShadingGroup *gpencil_shgroup_fill_create(GPENCIL_Data *vedata,
   }
   else {
     /* if no texture defined, need a blank texture to avoid errors in draw manager */
-    DRW_shgroup_uniform_texture(grp, "myTexture", stl->g_data->gpencil_blank_texture);
+    DRW_shgroup_uniform_texture(grp, "myTexture", e_data->gpencil_blank_texture);
     stl->shgroups[id].texture_clamp = 0;
     DRW_shgroup_uniform_int(grp, "texture_clamp", &stl->shgroups[id].texture_clamp, 1);
   }
@@ -563,7 +595,8 @@ bool gpencil_onion_active(bGPdata *gpd)
 }
 
 /* create shading group for strokes */
-DRWShadingGroup *gpencil_shgroup_stroke_create(GPENCIL_Data *vedata,
+DRWShadingGroup *gpencil_shgroup_stroke_create(GPENCIL_e_data *e_data,
+                                               GPENCIL_Data *vedata,
                                                DRWPass *pass,
                                                GPUShader *shader,
                                                Object *ob,
@@ -722,14 +755,15 @@ DRWShadingGroup *gpencil_shgroup_stroke_create(GPENCIL_Data *vedata,
   }
   else {
     /* if no texture defined, need a blank texture to avoid errors in draw manager */
-    DRW_shgroup_uniform_texture(grp, "myTexture", stl->g_data->gpencil_blank_texture);
+    DRW_shgroup_uniform_texture(grp, "myTexture", e_data->gpencil_blank_texture);
   }
 
   return grp;
 }
 
 /* create shading group for points */
-static DRWShadingGroup *gpencil_shgroup_point_create(GPENCIL_Data *vedata,
+static DRWShadingGroup *gpencil_shgroup_point_create(GPENCIL_e_data *e_data,
+                                                     GPENCIL_Data *vedata,
                                                      DRWPass *pass,
                                                      GPUShader *shader,
                                                      Object *ob,
@@ -894,7 +928,7 @@ static DRWShadingGroup *gpencil_shgroup_point_create(GPENCIL_Data *vedata,
   }
   else {
     /* if no texture defined, need a blank texture to avoid errors in draw manager */
-    DRW_shgroup_uniform_texture(grp, "myTexture", stl->g_data->gpencil_blank_texture);
+    DRW_shgroup_uniform_texture(grp, "myTexture", e_data->gpencil_blank_texture);
   }
 
   return grp;
@@ -1153,7 +1187,8 @@ static void gpencil_draw_strokes(GpencilBatchCache *cache,
   const bool playing = stl->storage->is_playing;
   const bool is_render = (bool)stl->storage->is_render;
   const bool is_mat_preview = (bool)stl->storage->is_mat_preview;
-  const bool overlay_multiedit = v3d != NULL ? (v3d->gp_flag & V3D_GP_SHOW_MULTIEDIT_LINES) : true;
+  const bool overlay_multiedit = v3d != NULL ? !(v3d->gp_flag & V3D_GP_SHOW_MULTIEDIT_LINES) :
+                                               true;
 
   /* Get evaluation context */
   /* NOTE: We must check if C is valid, otherwise we get crashes when trying to save files
@@ -1175,6 +1210,12 @@ static void gpencil_draw_strokes(GpencilBatchCache *cache,
     /* check if stroke can be drawn */
     if (gpencil_can_draw_stroke(gp_style, gps, false, is_mat_preview) == false) {
       continue;
+    }
+
+    /* Copy color to temp fields. */
+    if ((is_multiedit) && (gp_style)) {
+      copy_v4_v4(gps->runtime.tmp_stroke_rgba, gp_style->stroke_rgba);
+      copy_v4_v4(gps->runtime.tmp_fill_rgba, gp_style->fill_rgba);
     }
 
     /* be sure recalc all cache in source stroke to avoid recalculation when frame change
@@ -1565,6 +1606,9 @@ void gpencil_populate_buffer_strokes(GPENCIL_e_data *e_data,
     gp_style = BKE_material_gpencil_settings_get(ob, ob->actcol);
   }
 
+  static float unit_mat[4][4] = {
+      {1.0, 0.0, 0.0, 0.0}, {0.0, 1.0, 0.0, 0.0}, {0.0, 0.0, 1.0, 0.0}, {0.0, 0.0, 0.0, 1.0}};
+
   /* drawing strokes */
   /* Check if may need to draw the active stroke cache, only if this layer is the active layer
    * that is being edited. (Stroke buffer is currently stored in gp-data)
@@ -1581,13 +1625,11 @@ void gpencil_populate_buffer_strokes(GPENCIL_e_data *e_data,
       copy_v2_v2(stl->storage->gradient_s, brush->gpencil_settings->gradient_s);
       stl->storage->alignment_mode = (gp_style) ? gp_style->alignment_mode : GP_STYLE_FOLLOW_PATH;
 
-      static float unit_mat[4][4] = {
-          {1.0, 0.0, 0.0, 0.0}, {0.0, 1.0, 0.0, 0.0}, {0.0, 0.0, 1.0, 0.0}, {0.0, 0.0, 0.0, 1.0}};
-
       /* if only one point, don't need to draw buffer because the user has no time to see it */
       if (gpd->runtime.sbuffer_used > 1) {
         if ((gp_style) && (gp_style->mode == GP_STYLE_MODE_LINE)) {
           stl->g_data->shgrps_drawing_stroke = gpencil_shgroup_stroke_create(
+              e_data,
               vedata,
               psl->drawing_pass,
               e_data->gpencil_stroke_sh,
@@ -1613,6 +1655,7 @@ void gpencil_populate_buffer_strokes(GPENCIL_e_data *e_data,
         }
         else {
           stl->g_data->shgrps_drawing_stroke = gpencil_shgroup_point_create(
+              e_data,
               vedata,
               psl->drawing_pass,
               e_data->gpencil_point_sh,
@@ -1677,6 +1720,8 @@ void gpencil_populate_buffer_strokes(GPENCIL_e_data *e_data,
     DRWShadingGroup *shgrp = DRW_shgroup_create(e_data->gpencil_edit_point_sh, psl->drawing_pass);
     const float *viewport_size = DRW_viewport_size_get();
     DRW_shgroup_uniform_vec2(shgrp, "Viewport", viewport_size, 1);
+    DRW_shgroup_uniform_mat4(shgrp, "gpModelMatrix", unit_mat);
+
     /* Disable stencil for this type */
     DRW_shgroup_state_disable(shgrp, DRW_STATE_WRITE_STENCIL | DRW_STATE_STENCIL_NEQUAL);
     stl->g_data->batch_buffer_ctrlpoint = gpencil_get_buffer_ctrlpoint_geom(gpd);
@@ -1686,7 +1731,7 @@ void gpencil_populate_buffer_strokes(GPENCIL_e_data *e_data,
 }
 
 /* create all missing batches */
-static void gpencil_create_batches(GpencilBatchCache *cache)
+static void gpencil_batches_ensure(GpencilBatchCache *cache)
 {
   if ((cache->b_point.vbo) && (cache->b_point.batch == NULL)) {
     cache->b_point.batch = GPU_batch_create_ex(
@@ -1800,7 +1845,8 @@ static void gpencil_shgroups_create(GPENCIL_e_data *e_data,
       case eGpencilBatchGroupType_Stroke: {
         const int len = elm->vertex_idx - start_stroke;
 
-        shgrp = gpencil_shgroup_stroke_create(vedata,
+        shgrp = gpencil_shgroup_stroke_create(e_data,
+                                              vedata,
                                               stroke_pass,
                                               e_data->gpencil_stroke_sh,
                                               ob,
@@ -1838,7 +1884,8 @@ static void gpencil_shgroups_create(GPENCIL_e_data *e_data,
       case eGpencilBatchGroupType_Point: {
         const int len = elm->vertex_idx - start_point;
 
-        shgrp = gpencil_shgroup_point_create(vedata,
+        shgrp = gpencil_shgroup_point_create(e_data,
+                                             vedata,
                                              stroke_pass,
                                              e_data->gpencil_point_sh,
                                              ob,
@@ -1865,7 +1912,8 @@ static void gpencil_shgroups_create(GPENCIL_e_data *e_data,
       case eGpencilBatchGroupType_Fill: {
         const int len = elm->vertex_idx - start_fill;
 
-        shgrp = gpencil_shgroup_fill_create(vedata,
+        shgrp = gpencil_shgroup_fill_create(e_data,
+                                            vedata,
                                             stroke_pass,
                                             e_data->gpencil_fill_sh,
                                             ob,
@@ -1986,7 +2034,7 @@ void gpencil_populate_multiedit(GPENCIL_e_data *e_data,
   }
 
   /* create batchs and shading groups */
-  gpencil_create_batches(cache);
+  gpencil_batches_ensure(cache);
   gpencil_shgroups_create(e_data, vedata, ob, cache, cache_ob);
 
   cache->is_dirty = false;
@@ -2109,7 +2157,7 @@ void gpencil_populate_datablock(GPENCIL_e_data *e_data,
   }
 
   /* create batchs and shading groups */
-  gpencil_create_batches(cache);
+  gpencil_batches_ensure(cache);
   gpencil_shgroups_create(e_data, vedata, ob, cache, cache_ob);
 
   cache->is_dirty = false;

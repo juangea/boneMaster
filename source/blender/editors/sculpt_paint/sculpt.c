@@ -69,7 +69,6 @@
 #include "BKE_subsurf.h"
 
 #include "DEG_depsgraph.h"
-#include "DEG_depsgraph_query.h"
 
 #include "WM_api.h"
 #include "WM_types.h"
@@ -1099,7 +1098,7 @@ static bool sculpt_brush_test_cyl(SculptBrushTest *test,
 static bool sculpt_automasking_enabled(SculptSession *ss, const Brush *br)
 {
   // REMOVE WITH PBVH_GRIDS
-  if (BKE_pbvh_type(ss->pbvh) == PBVH_GRIDS) {
+  if (ss->pbvh && BKE_pbvh_type(ss->pbvh) == PBVH_GRIDS) {
     return false;
   }
 
@@ -4247,7 +4246,8 @@ static void calc_sculpt_plane(
 
   if (ss->cache->mirror_symmetry_pass == 0 && ss->cache->radial_symmetry_pass == 0 &&
       ss->cache->tile_pass == 0 &&
-      (ss->cache->first_time || !(brush->flag & BRUSH_ORIGINAL_NORMAL))) {
+      (ss->cache->first_time || !(brush->flag & BRUSH_ORIGINAL_PLANE) ||
+       !(brush->flag & BRUSH_ORIGINAL_NORMAL))) {
     switch (brush->sculpt_plane) {
       case SCULPT_DISP_DIR_VIEW:
         copy_v3_v3(r_area_no, ss->cache->true_view_normal);
@@ -4284,10 +4284,20 @@ static void calc_sculpt_plane(
     }
 
     /* for area normal */
-    copy_v3_v3(ss->cache->sculpt_normal, r_area_no);
+    if ((!ss->cache->first_time) && (brush->flag & BRUSH_ORIGINAL_NORMAL)) {
+      copy_v3_v3(r_area_no, ss->cache->sculpt_normal);
+    }
+    else {
+      copy_v3_v3(ss->cache->sculpt_normal, r_area_no);
+    }
 
     /* for flatten center */
-    copy_v3_v3(ss->cache->last_center, r_area_co);
+    if ((!ss->cache->first_time) && (brush->flag & BRUSH_ORIGINAL_PLANE)) {
+      copy_v3_v3(r_area_co, ss->cache->last_center);
+    }
+    else {
+      copy_v3_v3(ss->cache->last_center, r_area_co);
+    }
   }
   else {
     /* for area normal */
@@ -6299,6 +6309,7 @@ bool sculpt_cursor_geometry_info_update(bContext *C,
                                         const float mouse[2],
                                         bool use_sampled_normal)
 {
+  Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
   Scene *scene = CTX_data_scene(C);
   Sculpt *sd = scene->toolsettings->sculpt;
   Object *ob;
@@ -6311,7 +6322,7 @@ bool sculpt_cursor_geometry_info_update(bContext *C,
   int totnode;
   bool original = false, hit = false;
 
-  ED_view3d_viewcontext_init(C, &vc);
+  ED_view3d_viewcontext_init(C, &vc, depsgraph);
 
   ob = vc.obact;
   ss = ob->sculpt;
@@ -6411,6 +6422,7 @@ bool sculpt_cursor_geometry_info_update(bContext *C,
  */
 bool sculpt_stroke_get_location(bContext *C, float out[3], const float mouse[2])
 {
+  Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
   Object *ob;
   SculptSession *ss;
   StrokeCache *cache;
@@ -6418,7 +6430,7 @@ bool sculpt_stroke_get_location(bContext *C, float out[3], const float mouse[2])
   bool original;
   ViewContext vc;
 
-  ED_view3d_viewcontext_init(C, &vc);
+  ED_view3d_viewcontext_init(C, &vc, depsgraph);
 
   ob = vc.obact;
 
@@ -6958,8 +6970,19 @@ void sculpt_pbvh_clear(Object *ob)
   /* Clear out any existing DM and PBVH */
   if (ss->pbvh) {
     BKE_pbvh_free(ss->pbvh);
+    ss->pbvh = NULL;
   }
-  ss->pbvh = NULL;
+
+  if (ss->pmap) {
+    MEM_freeN(ss->pmap);
+    ss->pmap = NULL;
+  }
+
+  if (ss->pmap_mem) {
+    MEM_freeN(ss->pmap_mem);
+    ss->pmap_mem = NULL;
+  }
+
   BKE_object_free_derived_caches(ob);
 
   /* Tag to rebuild PBVH in depsgraph. */
@@ -7529,13 +7552,11 @@ void ED_object_sculptmode_exit_ex(Main *bmain, Depsgraph *depsgraph, Scene *scen
   const int mode_flag = OB_MODE_SCULPT;
   Mesh *me = BKE_mesh_from_object(ob);
 
-  MultiresModifierData *mmd = BKE_sculpt_multires_active(scene, ob);
-  if (mmd) {
-    multires_force_update(ob);
-  }
+  multires_flush_sculpt_updates(ob);
 
   /* Not needed for now. */
 #if 0
+  MultiresModifierData *mmd = BKE_sculpt_multires_active(scene, ob);
   const int flush_recalc = ed_object_sculptmode_flush_recalc_flag(scene, ob, mmd);
 #endif
 
@@ -7721,8 +7742,9 @@ static void sample_detail(bContext *C, int mx, int my)
   CTX_wm_area_set(C, sa);
   CTX_wm_region_set(C, ar);
 
+  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   ViewContext vc;
-  ED_view3d_viewcontext_init(C, &vc);
+  ED_view3d_viewcontext_init(C, &vc, depsgraph);
 
   /* Pick sample detail. */
   Sculpt *sd = CTX_data_tool_settings(C)->sculpt;
@@ -8407,9 +8429,9 @@ static int sculpt_mask_filter_exec(bContext *C, wmOperator *op)
   int iterations = RNA_int_get(op->ptr, "iterations");
 
   /* Auto iteration count calculates the number of iteration based on the vertices of the mesh to
-   * avoid adding an unnecesary ammount of undo steps when using the operator from a shortcut. One
-   * iteration per 50000 vertices in the mesh should be fine in most cases. Maybe we want this to
-   * be configurable */
+   * avoid adding an unnecessary amount of undo steps when using the operator from a shortcut.
+   * One iteration per 50000 vertices in the mesh should be fine in most cases.
+   * Maybe we want this to be configurable. */
   if (RNA_boolean_get(op->ptr, "auto_iteration_count")) {
     iterations = (int)(num_verts / 50000.0f) + 1;
   }

@@ -43,7 +43,6 @@
 #include "BKE_curve.h"
 #include "BKE_colortools.h"
 #include "BKE_image.h"
-#include "BKE_mesh.h"
 
 #include "WM_api.h"
 #include "WM_types.h"
@@ -857,6 +856,7 @@ PaintStroke *paint_stroke_new(bContext *C,
                               StrokeDone done,
                               int event_type)
 {
+  struct Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   PaintStroke *stroke = MEM_callocN(sizeof(PaintStroke), "PaintStroke");
   ToolSettings *toolsettings = CTX_data_tool_settings(C);
   UnifiedPaintSettings *ups = &toolsettings->unified_paint_settings;
@@ -864,7 +864,7 @@ PaintStroke *paint_stroke_new(bContext *C,
   Brush *br = stroke->brush = BKE_paint_brush(p);
   float zoomx, zoomy;
 
-  ED_view3d_viewcontext_init(C, &stroke->vc);
+  ED_view3d_viewcontext_init(C, &stroke->vc, depsgraph);
 
   stroke->get_location = get_location;
   stroke->test_start = test_start;
