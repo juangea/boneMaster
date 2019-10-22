@@ -122,8 +122,9 @@ typedef struct OBJECT_PassList {
   struct DRWPass *bone_axes[2];
   struct DRWPass *particle;
   struct DRWPass *lightprobes;
-  struct DRWPass *camera_images_back;
-  struct DRWPass *camera_images_front;
+  struct DRWPass *camera_images_back_alpha_under;
+  struct DRWPass *camera_images_back_alpha_over;
+  struct DRWPass *camera_images_front_alpha_over;
 } OBJECT_PassList;
 
 typedef struct OBJECT_FramebufferList {
@@ -991,13 +992,19 @@ static void DRW_shgroup_empty_image(OBJECT_Shaders *sh_data,
   }
 }
 
-/* Draw Camera Background Images */
+/* -------------------------------------------------------------------- */
+/** \name Camera Background Images
+ * \{ */
 typedef struct CameraEngineData {
   DrawData dd;
   ListBase bg_data;
 } CameraEngineData;
+
 typedef struct CameraEngineBGData {
+  CameraBGImage *camera_image;
+  GPUTexture *texture;
   float transform_mat[4][4];
+  bool premultiplied;
 } CameraEngineBGData;
 
 static void camera_engine_data_free(DrawData *dd)
@@ -1031,6 +1038,26 @@ static void camera_background_images_stereo_setup(Scene *scene,
   else {
     iuser->flag &= ~IMA_SHOW_STEREO;
   }
+}
+static void camera_background_images_add_shgroup(DRWPass *pass,
+                                                 CameraEngineBGData *bg_data,
+                                                 GPUShader *shader,
+                                                 GPUBatch *batch)
+{
+  CameraBGImage *camera_image = bg_data->camera_image;
+  DRWShadingGroup *grp = DRW_shgroup_create(shader, pass);
+
+  DRW_shgroup_uniform_float_copy(
+      grp, "depth", camera_image->flag & CAM_BGIMG_FLAG_FOREGROUND ? 0.000001f : 0.999999f);
+  DRW_shgroup_uniform_float_copy(grp, "alpha", camera_image->alpha);
+  DRW_shgroup_uniform_texture(grp, "image", bg_data->texture);
+  DRW_shgroup_uniform_bool_copy(grp, "imagePremultiplied", bg_data->premultiplied);
+  DRW_shgroup_uniform_float_copy(
+      grp, "flipX", (camera_image->flag & CAM_BGIMG_FLAG_FLIP_X) ? -1.0 : 1.0);
+  DRW_shgroup_uniform_float_copy(
+      grp, "flipY", (camera_image->flag & CAM_BGIMG_FLAG_FLIP_Y) ? -1.0 : 1.0);
+  DRW_shgroup_uniform_mat4(grp, "TransformMat", bg_data->transform_mat);
+  DRW_shgroup_call(grp, batch, NULL);
 }
 
 static void DRW_shgroup_camera_background_images(OBJECT_Shaders *sh_data,
@@ -1255,25 +1282,46 @@ static void DRW_shgroup_camera_background_images(OBJECT_Shaders *sh_data,
                     scale_m4,
                     uv2img_space);
 
-      DRWPass *pass = (bgpic->flag & CAM_BGIMG_FLAG_FOREGROUND) ? psl->camera_images_front :
-                                                                  psl->camera_images_back;
-      GPUShader *shader = DRW_state_do_color_management() ? sh_data->object_camera_image_cm :
-                                                            sh_data->object_camera_image;
-      DRWShadingGroup *grp = DRW_shgroup_create(shader, pass);
+      /* Keep the references so we can reverse the loop */
+      bg_data->camera_image = bgpic;
+      bg_data->texture = tex;
+      bg_data->premultiplied = premultiplied;
+    }
 
-      DRW_shgroup_uniform_float_copy(
-          grp, "depth", (bgpic->flag & CAM_BGIMG_FLAG_FOREGROUND) ? 0.000001 : 0.999999);
-      DRW_shgroup_uniform_float_copy(grp, "alpha", bgpic->alpha);
-      DRW_shgroup_uniform_texture(grp, "image", tex);
-      DRW_shgroup_uniform_bool_copy(grp, "imagePremultiplied", premultiplied);
+    /* Mark the rest bg_data's to be reused in the next drawing call */
+    LinkData *last_node = list_node ? list_node->prev : camera_engine_data->bg_data.last;
+    while (list_node != NULL) {
+      CameraEngineBGData *bg_data = (CameraEngineBGData *)list_node->data;
+      bg_data->texture = NULL;
+      bg_data->camera_image = NULL;
+      list_node = list_node->next;
+    }
 
-      DRW_shgroup_uniform_float_copy(
-          grp, "flipX", (bgpic->flag & CAM_BGIMG_FLAG_FLIP_X) ? -1.0 : 1.0);
-      DRW_shgroup_uniform_float_copy(
-          grp, "flipY", (bgpic->flag & CAM_BGIMG_FLAG_FLIP_Y) ? -1.0 : 1.0);
-      DRW_shgroup_uniform_mat4(grp, "TransformMat", bg_data->transform_mat);
+    GPUShader *shader = DRW_state_do_color_management() ? sh_data->object_camera_image_cm :
+                                                          sh_data->object_camera_image;
+    /* loop 1: camera images alpha under */
+    for (list_node = last_node; list_node; list_node = list_node->prev) {
+      CameraEngineBGData *bg_data = (CameraEngineBGData *)list_node->data;
+      CameraBGImage *camera_image = bg_data->camera_image;
+      if ((camera_image->flag & CAM_BGIMG_FLAG_FOREGROUND) == 0) {
+        camera_background_images_add_shgroup(
+            psl->camera_images_back_alpha_under, bg_data, shader, batch);
+      }
+    }
 
-      DRW_shgroup_call(grp, batch, NULL);
+    /* loop 2: camera images alpha over */
+    for (list_node = camera_engine_data->bg_data.first; list_node; list_node = list_node->next) {
+      CameraEngineBGData *bg_data = (CameraEngineBGData *)list_node->data;
+      CameraBGImage *camera_image = bg_data->camera_image;
+      if (camera_image == NULL) {
+        break;
+      }
+      camera_background_images_add_shgroup((camera_image->flag & CAM_BGIMG_FLAG_FOREGROUND) ?
+                                               psl->camera_images_front_alpha_over :
+                                               psl->camera_images_back_alpha_over,
+                                           bg_data,
+                                           shader,
+                                           batch);
     }
   }
 }
@@ -1286,6 +1334,7 @@ static void camera_background_images_free_textures(void)
   }
   BLI_freelistN(&e_data.movie_clips);
 }
+/* \} */
 
 static void OBJECT_cache_init(void *vedata)
 {
@@ -1427,9 +1476,15 @@ static void OBJECT_cache_init(void *vedata)
 
   /* Camera background images */
   {
-    DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_BLEND_ALPHA;
-    psl->camera_images_back = DRW_pass_create("Camera Images Back", state);
-    psl->camera_images_front = DRW_pass_create("Camera Images Front", state);
+    psl->camera_images_back_alpha_over = DRW_pass_create(
+        "Camera Images Back Over",
+        DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_BLEND_ALPHA_PREMUL);
+    psl->camera_images_back_alpha_under = DRW_pass_create(
+        "Camera Images Back Under",
+        DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_GREATER | DRW_STATE_BLEND_ALPHA_UNDER_PREMUL);
+    psl->camera_images_front_alpha_over = DRW_pass_create(
+        "Camera Images Front Over",
+        DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_BLEND_ALPHA_PREMUL);
   }
 
   for (int i = 0; i < 2; i++) {
@@ -2613,12 +2668,21 @@ static void DRW_shgroup_volume_extra(OBJECT_ShadingGroupList *sgl,
   DRW_object_wire_theme_get(ob, view_layer, &color);
 
   /* Small cube showing voxel size. */
+  float min[3];
+  madd_v3fl_v3fl_v3fl_v3i(min, sds->p0, sds->cell_size, sds->res_min);
   float voxel_cubemat[4][4] = {{0.0f}};
-  voxel_cubemat[0][0] = 1.0f / (float)sds->res[0];
-  voxel_cubemat[1][1] = 1.0f / (float)sds->res[1];
-  voxel_cubemat[2][2] = 1.0f / (float)sds->res[2];
+  /* scale small cube to voxel size */
+  voxel_cubemat[0][0] = 1.0f / (float)sds->base_res[0];
+  voxel_cubemat[1][1] = 1.0f / (float)sds->base_res[1];
+  voxel_cubemat[2][2] = 1.0f / (float)sds->base_res[2];
   voxel_cubemat[3][0] = voxel_cubemat[3][1] = voxel_cubemat[3][2] = -1.0f;
   voxel_cubemat[3][3] = 1.0f;
+  /* translate small cube to corner */
+  voxel_cubemat[3][0] = min[0];
+  voxel_cubemat[3][1] = min[1];
+  voxel_cubemat[3][2] = min[2];
+  voxel_cubemat[3][3] = 1.0f;
+  /* move small cube into the domain (otherwise its centered on vertex of domain object) */
   translate_m4(voxel_cubemat, 1.0f, 1.0f, 1.0f);
   mul_m4_m4m4(voxel_cubemat, ob->obmat, voxel_cubemat);
 
@@ -2654,6 +2718,9 @@ static void DRW_shgroup_volume_extra(OBJECT_ShadingGroupList *sgl,
   DRW_shgroup_uniform_texture(grp, "velocityZ", sds->tex_velocity_z);
   DRW_shgroup_uniform_float_copy(grp, "displaySize", sds->vector_scale);
   DRW_shgroup_uniform_float_copy(grp, "slicePosition", sds->slice_depth);
+  DRW_shgroup_uniform_vec3_copy(grp, "cellSize", sds->cell_size);
+  DRW_shgroup_uniform_vec3_copy(grp, "domainOriginOffset", sds->p0);
+  DRW_shgroup_uniform_ivec3_copy(grp, "adaptiveCellOffset", sds->res_min);
   DRW_shgroup_uniform_int_copy(grp, "sliceAxis", slice_axis);
   DRW_shgroup_call_procedural_lines(grp, ob, line_count);
 
@@ -2732,6 +2799,7 @@ static void DRW_shgroup_lightprobe(OBJECT_Shaders *sh_data,
       int outline_id = shgroup_theme_id_to_outline_id(theme_id, ob->base_flag);
       uint cell_count = prb->grid_resolution_x * prb->grid_resolution_y * prb->grid_resolution_z;
       DRWShadingGroup *grp = DRW_shgroup_create(sh_data->lightprobe_grid, psl->lightprobes);
+      DRW_shgroup_uniform_block(grp, "globalsBlock", G_draw.block_ubo);
       DRW_shgroup_uniform_int_copy(grp, "outlineId", outline_id);
       DRW_shgroup_uniform_vec3_copy(grp, "corner", corner);
       DRW_shgroup_uniform_vec3_copy(grp, "increment_x", increment[0]);
@@ -3019,13 +3087,11 @@ static void DRW_shgroup_texture_space(OBJECT_ShadingGroupList *sgl, Object *ob, 
 
   switch (GS(ob_data->name)) {
     case ID_ME:
-      BKE_mesh_texspace_get_reference((Mesh *)ob_data, NULL, &texcoloc, NULL, &texcosize);
+      BKE_mesh_texspace_get_reference((Mesh *)ob_data, NULL, &texcoloc, &texcosize);
       break;
     case ID_CU: {
       Curve *cu = (Curve *)ob_data;
-      if (cu->bb == NULL || (cu->bb->flag & BOUNDBOX_DIRTY)) {
-        BKE_curve_texspace_calc(cu);
-      }
+      BKE_curve_texspace_ensure(cu);
       texcoloc = cu->loc;
       texcosize = cu->size;
       break;
@@ -3057,7 +3123,8 @@ static void DRW_shgroup_texture_space(OBJECT_ShadingGroupList *sgl, Object *ob, 
   DRW_buffer_add_entry(sgl->texspace, color, &one, tmp);
 }
 
-static void DRW_shgroup_bounds(OBJECT_ShadingGroupList *sgl, Object *ob, int theme_id)
+static void DRW_shgroup_bounds(
+    OBJECT_ShadingGroupList *sgl, Object *ob, int theme_id, char boundtype, bool around_origin)
 {
   float color[4], center[3], size[3], tmp[4][4], final_mat[4][4], one = 1.0f;
   BoundBox bb_local;
@@ -3083,10 +3150,16 @@ static void DRW_shgroup_bounds(OBJECT_ShadingGroupList *sgl, Object *ob, int the
   }
 
   UI_GetThemeColor4fv(theme_id, color);
-  BKE_boundbox_calc_center_aabb(bb, center);
   BKE_boundbox_calc_size_aabb(bb, size);
 
-  switch (ob->boundtype) {
+  if (around_origin) {
+    zero_v3(center);
+  }
+  else {
+    BKE_boundbox_calc_center_aabb(bb, center);
+  }
+
+  switch (boundtype) {
     case OB_BOUND_BOX:
       size_to_mat4(tmp, size);
       copy_v3_v3(tmp[3], center);
@@ -3135,6 +3208,27 @@ static void DRW_shgroup_bounds(OBJECT_ShadingGroupList *sgl, Object *ob, int the
       tmp[2][2] = max_ff(0.0f, size[2] * 2.0f - size[0] * 2.0f);
       mul_m4_m4m4(final_mat, ob->obmat, tmp);
       DRW_buffer_add_entry(sgl->empties.capsule_body, color, &one, final_mat);
+      break;
+  }
+}
+
+static void DRW_shgroup_collision(OBJECT_ShadingGroupList *sgl, Object *ob, int theme_id)
+{
+  switch (ob->rigidbody_object->shape) {
+    case RB_SHAPE_BOX:
+      DRW_shgroup_bounds(sgl, ob, theme_id, OB_BOUND_BOX, true);
+      break;
+    case RB_SHAPE_SPHERE:
+      DRW_shgroup_bounds(sgl, ob, theme_id, OB_BOUND_SPHERE, true);
+      break;
+    case RB_SHAPE_CONE:
+      DRW_shgroup_bounds(sgl, ob, theme_id, OB_BOUND_CONE, true);
+      break;
+    case RB_SHAPE_CYLINDER:
+      DRW_shgroup_bounds(sgl, ob, theme_id, OB_BOUND_CYLINDER, true);
+      break;
+    case RB_SHAPE_CAPSULE:
+      DRW_shgroup_bounds(sgl, ob, theme_id, OB_BOUND_CAPSULE, true);
       break;
   }
 }
@@ -3487,6 +3581,10 @@ static void OBJECT_cache_populate(void *vedata, Object *ob)
         if (hide_object_extra) {
           break;
         }
+        if ((ob->base_flag & BASE_FROM_DUPLI) && (ob->transflag & OB_DUPLICOLLECTION) &&
+            ob->instance_collection) {
+          break;
+        }
         DRW_shgroup_empty(sh_data, sgl, ob, view_layer, rv3d, draw_ctx->sh_cfg);
         break;
       case OB_SPEAKER:
@@ -3564,7 +3662,7 @@ static void OBJECT_cache_populate(void *vedata, Object *ob)
     if (theme_id == TH_UNDEFINED) {
       theme_id = DRW_object_wire_theme_get(ob, view_layer, NULL);
     }
-    DRW_shgroup_bounds(sgl, ob, theme_id);
+    DRW_shgroup_bounds(sgl, ob, theme_id, ob->boundtype, false);
   }
 
   /* Helpers for when we're transforming origins. */
@@ -3623,7 +3721,7 @@ static void OBJECT_cache_populate(void *vedata, Object *ob)
     /* Don't draw bounding box again if draw type is bound box. */
     if ((ob->dtx & OB_DRAWBOUNDOX) && (ob->dt != OB_BOUNDBOX) &&
         !ELEM(ob->type, OB_LAMP, OB_CAMERA, OB_EMPTY, OB_SPEAKER, OB_LIGHTPROBE)) {
-      DRW_shgroup_bounds(sgl, ob, theme_id);
+      DRW_shgroup_bounds(sgl, ob, theme_id, ob->boundtype, false);
     }
 
     if (ob->dtx & OB_AXIS) {
@@ -3631,6 +3729,10 @@ static void OBJECT_cache_populate(void *vedata, Object *ob)
       DRW_object_wire_theme_get(ob, view_layer, &color);
 
       DRW_buffer_add_entry(sgl->empties.empty_axes, color, &axes_size, ob->obmat);
+    }
+
+    if (ob->rigidbody_object) {
+      DRW_shgroup_collision(sgl, ob, theme_id);
     }
 
     if ((md = modifiers_findByType(ob, eModifierType_Smoke)) &&
@@ -3667,7 +3769,8 @@ static void OBJECT_draw_scene(void *vedata)
 
   float clearcol[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 
-  DRW_draw_pass(psl->camera_images_back);
+  DRW_draw_pass(psl->camera_images_back_alpha_under);
+  DRW_draw_pass(psl->camera_images_back_alpha_over);
 
   /* Don't draw Transparent passes in MSAA buffer. */
   //  DRW_draw_pass(psl->bone_envelope);  /* Never drawn in Object mode currently. */
@@ -3775,7 +3878,7 @@ static void OBJECT_draw_scene(void *vedata)
 
   batch_camera_path_free(&stl->g_data->sgl_ghost.camera_path);
 
-  DRW_draw_pass(psl->camera_images_front);
+  DRW_draw_pass(psl->camera_images_front_alpha_over);
   camera_background_images_free_textures();
 
   DRW_draw_pass(psl->ob_center);

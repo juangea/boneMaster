@@ -88,21 +88,37 @@ PyDoc_STRVAR(py_imbuf_resize_doc,
              "\n"
              "   :arg size: New size.\n"
              "   :type size: pair of ints\n"
-             "   :arg method: Method of resizing (TODO)\n"
+             "   :arg method: Method of resizing ('FAST', 'BILINEAR')\n"
              "   :type method: str\n");
 static PyObject *py_imbuf_resize(Py_ImBuf *self, PyObject *args, PyObject *kw)
 {
   PY_IMBUF_CHECK_OBJ(self);
 
   uint size[2];
-  char *method = NULL;
+
+  enum { FAST, BILINEAR };
+  const struct PyC_StringEnumItems method_items[] = {
+      {FAST, "FAST"},
+      {BILINEAR, "BILINEAR"},
+      {0, NULL},
+  };
+  struct PyC_StringEnum method = {method_items, FAST};
 
   static const char *_keywords[] = {"size", "method", NULL};
-  static _PyArg_Parser _parser = {"(II)|s:resize", _keywords, 0};
-  if (!_PyArg_ParseTupleAndKeywordsFast(args, kw, &_parser, &size[0], &size[1], &method)) {
+  static _PyArg_Parser _parser = {"(II)|O&:resize", _keywords, 0};
+  if (!_PyArg_ParseTupleAndKeywordsFast(
+          args, kw, &_parser, &size[0], &size[1], PyC_ParseStringEnum, &method)) {
     return NULL;
   }
-  IMB_scaleImBuf(self->ibuf, UNPACK2(size));
+  if (method.value_found == FAST) {
+    IMB_scalefastImBuf(self->ibuf, UNPACK2(size));
+  }
+  else if (method.value_found == BILINEAR) {
+    IMB_scaleImBuf(self->ibuf, UNPACK2(size));
+  }
+  else {
+    BLI_assert(0);
+  }
   Py_RETURN_NONE;
 }
 
@@ -256,6 +272,22 @@ static int py_imbuf_filepath_set(Py_ImBuf *self, PyObject *value, void *UNUSED(c
   return 0;
 }
 
+PyDoc_STRVAR(py_imbuf_planes_doc, "Number of bits associated with this image.\n\n:type: int");
+static PyObject *py_imbuf_planes_get(Py_ImBuf *self, void *UNUSED(closure))
+{
+  PY_IMBUF_CHECK_OBJ(self);
+  ImBuf *imbuf = self->ibuf;
+  return PyLong_FromLong(imbuf->planes);
+}
+
+PyDoc_STRVAR(py_imbuf_channels_doc, "Number of bit-planes.\n\n:type: int");
+static PyObject *py_imbuf_channels_get(Py_ImBuf *self, void *UNUSED(closure))
+{
+  PY_IMBUF_CHECK_OBJ(self);
+  ImBuf *imbuf = self->ibuf;
+  return PyLong_FromLong(imbuf->channels);
+}
+
 static PyGetSetDef Py_ImBuf_getseters[] = {
     {(char *)"size", (getter)py_imbuf_size_get, (setter)NULL, (char *)py_imbuf_size_doc, NULL},
     {(char *)"ppm",
@@ -268,6 +300,8 @@ static PyGetSetDef Py_ImBuf_getseters[] = {
      (setter)py_imbuf_filepath_set,
      (char *)py_imbuf_filepath_doc,
      NULL},
+    {(char *)"planes", (getter)py_imbuf_planes_get, NULL, (char *)py_imbuf_planes_doc, NULL},
+    {(char *)"channels", (getter)py_imbuf_channels_get, NULL, (char *)py_imbuf_channels_doc, NULL},
     {NULL, NULL, NULL, NULL, NULL} /* Sentinel */
 };
 
@@ -314,7 +348,7 @@ PyTypeObject Py_ImBuf_Type = {
     /* Methods to implement standard operations */
 
     (destructor)py_imbuf_dealloc, /* destructor tp_dealloc; */
-    NULL,                         /* printfunc tp_print; */
+    (printfunc)NULL,              /* printfunc tp_print; */
     NULL,                         /* getattrfunc tp_getattr; */
     NULL,                         /* setattrfunc tp_setattr; */
     NULL,                         /* cmpfunc tp_compare; */
@@ -429,7 +463,7 @@ static PyObject *M_imbuf_load(PyObject *UNUSED(self), PyObject *args, PyObject *
 
   const int file = BLI_open(filepath, O_BINARY | O_RDONLY, 0);
   if (file == -1) {
-    PyErr_Format(PyExc_IOError, "load: %s, failed to open file '%s'", strerror(errno));
+    PyErr_Format(PyExc_IOError, "load: %s, failed to open file '%s'", strerror(errno), filepath);
     return NULL;
   }
 

@@ -261,7 +261,8 @@ int BKE_crazyspace_get_first_deform_matrices_editbmesh(struct Depsgraph *depsgra
                                                        float (**deformcos)[3])
 {
   ModifierData *md;
-  Mesh *me;
+  Mesh *me_input = ob->data;
+  Mesh *me = NULL;
   int i, a, numleft = 0, numVerts = 0;
   int cageIndex = modifiers_getCageIndex(scene, ob, NULL, 1);
   float(*defmats)[3][3] = NULL, (*deformedVerts)[3] = NULL;
@@ -270,7 +271,6 @@ int BKE_crazyspace_get_first_deform_matrices_editbmesh(struct Depsgraph *depsgra
 
   modifiers_clearErrors(ob);
 
-  me = NULL;
   md = modifiers_getVirtualModifierList(ob, &virtualModifierData);
 
   /* compute the deformation matrices and coordinates for the first
@@ -292,7 +292,7 @@ int BKE_crazyspace_get_first_deform_matrices_editbmesh(struct Depsgraph *depsgra
         data_mask = datamasks->mask;
         BLI_linklist_free((LinkNode *)datamasks, NULL);
 
-        me = BKE_mesh_from_editmesh_with_coords_thin_wrap(em, &data_mask, NULL);
+        me = BKE_mesh_from_editmesh_with_coords_thin_wrap(em, &data_mask, NULL, me_input);
         deformedVerts = editbmesh_vert_coords_alloc(em, &numVerts);
         defmats = MEM_mallocN(sizeof(*defmats) * numVerts, "defmats");
 
@@ -355,11 +355,17 @@ static void crazyspace_init_verts_and_matrices(const Mesh *mesh,
   BLI_assert(num_verts == mesh->totvert);
 }
 
-static bool crazyspace_modifier_supports_deform(ModifierData *md)
+static bool crazyspace_modifier_supports_deform_matrices(ModifierData *md)
 {
   if (ELEM(md->type, eModifierType_Subsurf, eModifierType_Multires)) {
     return true;
   }
+  const ModifierTypeInfo *mti = modifierType_getInfo(md->type);
+  return (mti->type == eModifierTypeType_OnlyDeform);
+}
+
+static bool crazyspace_modifier_supports_deform(ModifierData *md)
+{
   const ModifierTypeInfo *mti = modifierType_getInfo(md->type);
   return (mti->type == eModifierTypeType_OnlyDeform);
 }
@@ -391,13 +397,12 @@ int BKE_sculpt_get_first_deform_matrices(struct Depsgraph *depsgraph,
   md = modifiers_getVirtualModifierList(&object_eval, &virtualModifierData);
 
   for (; md; md = md->next) {
-    const ModifierTypeInfo *mti = modifierType_getInfo(md->type);
-
     if (!modifier_isEnabled(scene, md, eModifierMode_Realtime)) {
       continue;
     }
 
-    if (mti->type == eModifierTypeType_OnlyDeform) {
+    if (crazyspace_modifier_supports_deform_matrices(md)) {
+      const ModifierTypeInfo *mti = modifierType_getInfo(md->type);
       if (defmats == NULL) {
         /* NOTE: Evaluated object si re-set to its original undeformed
          * state. */

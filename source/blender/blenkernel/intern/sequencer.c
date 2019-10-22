@@ -3340,7 +3340,8 @@ static ImBuf *seq_render_mask(const SeqRenderData *context, Mask *mask, float nr
 
     /* anim-data */
     adt = BKE_animdata_from_id(&mask->id);
-    BKE_animsys_evaluate_animdata(context->scene, &mask_temp->id, adt, nr, ADT_RECALC_ANIM, false);
+    BKE_animsys_evaluate_animdata(
+        context->scene, &mask_temp->id, adt, mask->sfra + nr, ADT_RECALC_ANIM, false);
 
     maskbuf = MEM_mallocN(sizeof(float) * context->rectx * context->recty, __func__);
 
@@ -4349,6 +4350,7 @@ static void sequence_invalidate_cache(Scene *scene,
   }
 
   sequence_do_invalidate_dependent(scene, seq, &ed->seqbase);
+  DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
   BKE_sequencer_prefetch_stop(scene);
 }
 
@@ -5543,7 +5545,7 @@ Sequence *BKE_sequencer_add_image_strip(bContext *C, ListBase *seqbasep, SeqLoad
   Strip *strip;
 
   seq = BKE_sequence_alloc(seqbasep, seq_load->start_frame, seq_load->channel, SEQ_TYPE_IMAGE);
-  seq->blend_mode = SEQ_TYPE_ALPHAOVER;
+  seq->blend_mode = SEQ_TYPE_CROSS; /* so alpha adjustment fade to the strip below */
 
   /* basic defaults */
   seq->len = seq_load->len ? seq_load->len : 1;
@@ -5702,7 +5704,9 @@ Sequence *BKE_sequencer_add_movie_strip(bContext *C, ListBase *seqbasep, SeqLoad
     seq->views_format = seq_load->views_format;
   }
   seq->flag |= seq_load->flag & SEQ_USE_VIEWS;
-  seq->blend_mode = SEQ_TYPE_ALPHAOVER;
+
+  seq->type = SEQ_TYPE_MOVIE;
+  seq->blend_mode = SEQ_TYPE_CROSS; /* so alpha adjustment fade to the strip below */
 
   for (i = 0; i < totfiles; i++) {
     if (anim_arr[i]) {

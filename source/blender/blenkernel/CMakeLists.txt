@@ -159,6 +159,7 @@ set(SRC
   intern/mesh_runtime.c
   intern/mesh_tangent.c
   intern/mesh_validate.c
+  intern/mirror.c
   intern/modifier.c
   intern/movieclip.c
   intern/multires.c
@@ -182,15 +183,16 @@ set(SRC
   intern/particle_system.c
   intern/pbvh.c
   intern/pbvh_bmesh.c
+  intern/pbvh_parallel.cc
   intern/pointcache.c
   intern/report.c
   intern/rigidbody.c
   intern/scene.c
   intern/screen.c
   intern/seqcache.c
-  intern/seqprefetch.c
   intern/seqeffects.c
   intern/seqmodifier.c
+  intern/seqprefetch.c
   intern/sequencer.c
   intern/shader_fx.c
   intern/shrinkwrap.c
@@ -312,6 +314,7 @@ set(SRC
   BKE_mesh_remesh_voxel.h
   BKE_mesh_runtime.h
   BKE_mesh_tangent.h
+  BKE_mirror.h
   BKE_modifier.h
   BKE_movieclip.h
   BKE_multires.h
@@ -633,6 +636,14 @@ if(WITH_QUADRIFLOW)
      bf_intern_quadriflow
   )
   add_definitions(-DWITH_QUADRIFLOW)
+endif()
+
+if(WITH_TBB)
+  add_definitions(-DWITH_TBB)
+
+  list(APPEND INC_SYS
+    ${TBB_INCLUDE_DIRS}
+  )
 endif()
 
 ## Warnings as errors, this is too strict!

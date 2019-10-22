@@ -794,6 +794,12 @@ static void pose_transform_mirror_update(Object *ob, PoseInitData_Mirror *pid)
 
   for (bPoseChannel *pchan_orig = ob->pose->chanbase.first; pchan_orig;
        pchan_orig = pchan_orig->next) {
+    /* Clear the MIRROR flag from previous runs */
+    pchan_orig->bone->flag &= ~BONE_TRANSFORM_MIRROR;
+  }
+
+  for (bPoseChannel *pchan_orig = ob->pose->chanbase.first; pchan_orig;
+       pchan_orig = pchan_orig->next) {
     /* no layer check, correct mirror is more important */
     if (pchan_orig->bone->flag & BONE_TRANSFORM) {
       bPoseChannel *pchan = BKE_pose_channel_get_mirrored(ob->pose, pchan_orig->name);
@@ -1088,12 +1094,12 @@ static void recalcData_objects(TransInfo *t)
     GSetIterator gs_iter;
     GSET_ITER (gs_iter, motionpath_updates) {
       Object *ob = BLI_gsetIterator_getKey(&gs_iter);
-      ED_pose_recalculate_paths(t->context, t->scene, ob, true);
+      ED_pose_recalculate_paths(t->context, t->scene, ob, POSE_PATH_CALC_RANGE_CURRENT_FRAME);
     }
     BLI_gset_free(motionpath_updates, NULL);
   }
   else if (base && (base->object->mode & OB_MODE_PARTICLE_EDIT) &&
-           PE_get_current(t->scene, base->object)) {
+           PE_get_current(t->depsgraph, t->scene, base->object)) {
     if (t->state != TRANS_CANCEL) {
       applyProject(t);
     }
@@ -1146,7 +1152,7 @@ static void recalcData_objects(TransInfo *t)
 
     if (motionpath_update) {
       /* Update motion paths once for all transformed objects. */
-      ED_objects_recalculate_paths(t->context, t->scene, true);
+      ED_objects_recalculate_paths(t->context, t->scene, OBJECT_PATH_CALC_RANGE_CHANGED);
     }
 
     if (t->options & CTX_OBMODE_XFORM_SKIP_CHILDREN) {
@@ -1707,7 +1713,9 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
     }
   }
   else {
-    if (ISMOUSE(t->launch_event) && (U.flag & USER_RELEASECONFIRM)) {
+    /* Release confirms preference should not affect node editor (T69288, T70504). */
+    if (ISMOUSE(t->launch_event) &&
+        ((U.flag & USER_RELEASECONFIRM) || (t->spacetype == SPACE_NODE))) {
       /* Global "release confirm" on mouse bindings */
       t->flag |= T_RELEASE_CONFIRM;
     }
@@ -1832,7 +1840,7 @@ static void freeTransCustomData(TransInfo *t, TransDataContainer *tc, TransCusto
     custom_data->data = NULL;
   }
   /* In case modes are switched in the same transform session. */
-  custom_data->free_cb = false;
+  custom_data->free_cb = NULL;
   custom_data->use_free = false;
 }
 

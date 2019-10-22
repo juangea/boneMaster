@@ -29,6 +29,7 @@
 #include "BKE_global.h"
 
 #include "GPU_extensions.h"
+#include "GPU_platform.h"
 #include "intern/gpu_shader_private.h"
 #include "intern/gpu_primitive_private.h"
 
@@ -1406,6 +1407,12 @@ static void drw_draw_pass_ex(DRWPass *pass,
   if (DST.batch) {
     DST.batch->program_in_use = false;
     DST.batch = NULL;
+  }
+
+  /* Fix T67342 for some reason. AMD Pro driver bug. */
+  if ((DST.state & DRW_STATE_BLEND_CUSTOM) != 0 &&
+      GPU_type_matches(GPU_DEVICE_ATI, GPU_OS_ANY, GPU_DRIVER_OFFICIAL)) {
+    drw_state_set(DST.state & ~DRW_STATE_BLEND_CUSTOM);
   }
 
   /* HACK: Rasterized discard can affect clear commands which are not
