@@ -108,6 +108,7 @@ static int ui_do_but_EXIT(bContext *C,
                           const wmEvent *event);
 static bool ui_but_find_select_in_enum__cmp(const uiBut *but_a, const uiBut *but_b);
 static void ui_textedit_string_set(uiBut *but, struct uiHandleButtonData *data, const char *str);
+static void button_tooltip_timer_reset(bContext *C, uiBut *but);
 
 #ifdef USE_KEYNAV_LIMIT
 static void ui_mouse_motion_keynav_init(struct uiKeyNavLock *keynav, const wmEvent *event);
@@ -3258,7 +3259,7 @@ static void ui_textedit_begin(bContext *C, uiBut *but, uiHandleButtonData *data)
 
   ui_but_update(but);
 
-  WM_cursor_modal_set(win, BC_TEXTEDITCURSOR);
+  WM_cursor_modal_set(win, WM_CURSOR_TEXT_EDIT);
 
 #ifdef WITH_INPUT_IME
   if (is_num_but == false && BLT_lang_is_ime_supported()) {
@@ -3967,8 +3968,11 @@ static bool ui_do_but_extra_operator_icon(bContext *C,
   uiButExtraOpIcon *op_icon = ui_but_extra_operator_icon_mouse_over_get(but, data, event);
 
   if (op_icon) {
+    ED_region_tag_redraw(data->region);
+    button_tooltip_timer_reset(C, but);
+
     ui_but_extra_operator_icon_apply(C, but, op_icon);
-    button_activate_exit(C, but, data, false, false);
+    /* Note: 'but', 'data' may now be freed, don't access. */
     return true;
   }
 
@@ -4685,7 +4689,7 @@ static void ui_numedit_set_active(uiBut *but)
     }
     else {
       if (data->changed_cursor == false) {
-        WM_cursor_modal_set(data->window, CURSOR_X_MOVE);
+        WM_cursor_modal_set(data->window, WM_CURSOR_X_MOVE);
         data->changed_cursor = true;
       }
     }
@@ -7493,6 +7497,7 @@ static void button_activate_init(bContext *C, ARegion *ar, uiBut *but, uiButtonA
   data = MEM_callocN(sizeof(uiHandleButtonData), "uiHandleButtonData");
   data->wm = CTX_wm_manager(C);
   data->window = CTX_wm_window(C);
+  BLI_assert(ar != NULL);
   data->region = ar;
 
 #ifdef USE_CONT_MOUSE_CORRECT
@@ -7564,7 +7569,7 @@ static void button_activate_init(bContext *C, ARegion *ar, uiBut *but, uiButtonA
 
   if (but->type == UI_BTYPE_GRIP) {
     const bool horizontal = (BLI_rctf_size_x(&but->rect) < BLI_rctf_size_y(&but->rect));
-    WM_cursor_modal_set(data->window, horizontal ? CURSOR_X_MOVE : CURSOR_Y_MOVE);
+    WM_cursor_modal_set(data->window, horizontal ? WM_CURSOR_X_MOVE : WM_CURSOR_Y_MOVE);
   }
   else if (but->type == UI_BTYPE_NUM) {
     ui_numedit_set_active(but);
@@ -8005,6 +8010,7 @@ void ui_but_execute_begin(struct bContext *UNUSED(C),
   *active_back = but->active;
   data = MEM_callocN(sizeof(uiHandleButtonData), "uiHandleButtonData_Fake");
   but->active = data;
+  BLI_assert(ar != NULL);
   data->region = ar;
 }
 
@@ -9816,9 +9822,7 @@ static int ui_pie_handler(bContext *C, const wmEvent *event, uiPopupBlockHandle 
 
           if (but && (U.pie_menu_confirm > 0) &&
               (dist >= U.dpi_fac * (U.pie_menu_threshold + U.pie_menu_confirm))) {
-            if (but) {
-              return ui_but_pie_menu_apply(C, menu, but, true);
-            }
+            return ui_but_pie_menu_apply(C, menu, but, true);
           }
 
           retval = ui_but_pie_menu_apply(C, menu, but, true);

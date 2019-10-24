@@ -192,6 +192,10 @@ set(VPX_VERSION 1.7.0)
 set(VPX_URI https://github.com/webmproject/libvpx/archive/v${VPX_VERSION}/libvpx-v${VPX_VERSION}.tar.gz)
 set(VPX_HASH 1fec931eb5c94279ad219a5b6e0202358e94a93a90cfb1603578c326abfc1238)
 
+set(OPUS_VERSION 1.3.1)
+set(OPUS_URI https://archive.mozilla.org/pub/opus/opus-${OPUS_VERSION}.tar.gz)
+set(OPUS_HASH 65b58e1e25b2a114157014736a3d9dfeaad8d41be1c8179866f144a2fb44ff9d)
+
 set(X264_URI http://download.videolan.org/pub/videolan/x264/snapshots/x264-snapshot-20180811-2245-stable.tar.bz2)
 set(X264_HASH ae8a868a0e236a348b35d79f3ee80294b169d1195408b689f9851383661ed7aa)
 
@@ -306,3 +310,11 @@ set(EMBREE_HASH 3d4a1147002ff43939d45140aa9d6fb8)
 set(OIDN_VERSION 1.0.0)
 set(OIDN_URI https://github.com/OpenImageDenoise/oidn/releases/download/v${OIDN_VERSION}/oidn-${OIDN_VERSION}.src.zip)
 set(OIDN_HASH 19fe67b0164e8f020ac8a4f520defe60)
+
+set(LIBGLU_VERSION 9.0.1)
+set(LIBGLU_URI ftp://ftp.freedesktop.org/pub/mesa/glu/glu-${LIBGLU_VERSION}.tar.xz)
+set(LIBGLU_HASH 151aef599b8259efe9acd599c96ea2a3)
+
+set(MESA_VERSION 18.3.1)
+set(MESA_URI ftp://ftp.freedesktop.org/pub/mesa//mesa-${MESA_VERSION}.tar.xz)
+set(MESA_HASH d60828056d77bfdbae0970f9b15fb1be)

@@ -2527,17 +2527,13 @@ static void update_flowsfluids(
       }
       /* sample subframes */
       else {
-#  if 0
         int scene_frame = (int)DEG_get_ctime(depsgraph);
-#  endif
         // float scene_subframe = scene->r.subframe;  // UNUSED
         int subframe;
         for (subframe = 0; subframe <= subframes; subframe++) {
           EmissionMap em_temp = {NULL};
           float sample_size = 1.0f / (float)(subframes + 1);
-#  if 0
           float prev_frame_pos = sample_size * (float)(subframe + 1);
-#  endif
           float sdt = dt * sample_size;
           int hires_multiplier = 1;
 
@@ -2545,8 +2541,6 @@ static void update_flowsfluids(
             hires_multiplier = sds->amplify + 1;
           }
 
-          /* TODO: setting the scene frame no longer works with the new depsgraph. */
-#  if 0
           /* set scene frame to match previous frame + subframe
            * or use current frame for last sample */
           if (subframe < subframes) {
@@ -2557,7 +2551,6 @@ static void update_flowsfluids(
             scene->r.cfra = scene_frame;
             scene->r.subframe = 0.0f;
           }
-#  endif
 
           if (sfs->source == MOD_SMOKE_FLOW_SOURCE_PARTICLES) {
             /* emit_from_particles() updates timestep internally */
@@ -2569,8 +2562,13 @@ static void update_flowsfluids(
           else { /* MOD_SMOKE_FLOW_SOURCE_MESH */
             /* update flow object frame */
             BLI_mutex_lock(&object_update_lock);
-            BKE_object_modifier_update_subframe(
-                depsgraph, scene, collob, true, 5, DEG_get_ctime(depsgraph), eModifierType_Smoke);
+            BKE_object_modifier_update_subframe(depsgraph,
+                                                scene,
+                                                collob,
+                                                true,
+                                                5,
+                                                BKE_scene_frame_get(scene),
+                                                eModifierType_Smoke);
             BLI_mutex_unlock(&object_update_lock);
 
             /* apply flow */
@@ -3352,14 +3350,16 @@ struct Mesh *smokeModifier_do(
   if (smd->type & MOD_SMOKE_TYPE_DOMAIN && smd->domain &&
       smd->domain->flags & MOD_SMOKE_ADAPTIVE_DOMAIN && smd->domain->base_res[0]) {
     result = createDomainGeometry(smd->domain, ob);
+    BKE_mesh_copy_settings(result, me);
   }
   else {
     result = BKE_mesh_copy_for_eval(me, false);
   }
-  /* XXX This is really not a nice hack, but until root of the problem is understood,
-   * this should be an acceptable workaround I think.
-   * See T58492 for details on the issue. */
-  result->texflag |= ME_AUTOSPACE;
+
+  /* Smoke simulation needs a texture space relative to the adaptive domain bounds, not the
+   * original mesh. So recompute it at this point in the modifier stack. See T58492. */
+  BKE_mesh_texspace_calc(result);
+
   return result;
 }
 

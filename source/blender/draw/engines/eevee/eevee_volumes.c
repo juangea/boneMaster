@@ -54,7 +54,6 @@ static struct {
   struct GPUShader *volumetric_integration_sh;
   struct GPUShader *volumetric_resolve_sh;
 
-  GPUTexture *color_src;
   GPUTexture *depth_src;
 
   GPUTexture *dummy_density;
@@ -413,7 +412,7 @@ void EEVEE_volumes_cache_object_add(EEVEE_ViewLayerData *sldata,
 
   DRWShadingGroup *grp = DRW_shgroup_material_create(mat, vedata->psl->volumetric_objects_ps);
 
-  BKE_mesh_texspace_get_reference((struct Mesh *)ob->data, NULL, &texcoloc, NULL, &texcosize);
+  BKE_mesh_texspace_get_reference((struct Mesh *)ob->data, NULL, &texcoloc, &texcosize);
 
   /* TODO(fclem) remove those "unnecessary" UBOs */
   DRW_shgroup_uniform_block(grp, "planar_block", sldata->planar_ubo);

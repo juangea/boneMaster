@@ -167,8 +167,9 @@ static void dualcon_add_quad(void *output_v, const int vert_indices[4])
 
   cur_poly->loopstart = output->curface * 4;
   cur_poly->totloop = 4;
-  for (i = 0; i < 4; i++)
+  for (i = 0; i < 4; i++) {
     mloop[output->curface * 4 + i].v = vert_indices[i];
+  }
 
   output->curface++;
 }
@@ -767,6 +768,9 @@ static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mes
       result->runtime.cd_dirty_vert |= CD_MASK_NORMAL;
   }
 
+  BKE_mesh_copy_settings(result, mesh);
+  BKE_mesh_calc_edges(result, true, false);
+  result->runtime.cd_dirty_vert |= CD_MASK_NORMAL;
   return result;
 }
 
