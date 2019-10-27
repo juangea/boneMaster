@@ -656,6 +656,12 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         default=False,
     )
 
+    viewport_denoising_samples: IntProperty(
+        name="OIDN min samples",
+        description="The minimum number of samples after which the viewport will be denoised",
+        default=0,
+    )    
+
     bake_type: EnumProperty(
         name="Bake Type",
         default='COMBINED',
