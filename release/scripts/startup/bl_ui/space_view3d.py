@@ -2341,8 +2341,8 @@ class VIEW3D_MT_object_context_menu(Menu):
 
         elif obj.type == 'GPENCIL':
             layout.operator("gpencil.convert", text="Convert to Path").type = 'PATH'
-            layout.operator("gpencil.convert", text="Convert to Bezier Curves").type = 'CURVE'
-            layout.operator("gpencil.convert", text="Convert to Mesh").type = 'POLY'
+            layout.operator("gpencil.convert", text="Convert to Bezier Curve").type = 'CURVE'
+            layout.operator("gpencil.convert", text="Convert to Polygon Curve").type = 'POLY'
 
             layout.operator_menu_enum("object.origin_set", text="Set Origin", property="type")
 
@@ -2522,8 +2522,15 @@ class VIEW3D_MT_object_parent(Menu):
 
     def draw(self, _context):
         layout = self.layout
+        operator_context_default = layout.operator_context
 
         layout.operator_enum("object.parent_set", "type")
+
+        layout.separator()
+
+        layout.operator_context = 'EXEC_DEFAULT'
+        layout.operator("object.parent_no_inverse_set")
+        layout.operator_context = operator_context_default
 
         layout.separator()
 
