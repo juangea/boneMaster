@@ -370,7 +370,7 @@ ccl_device_noinline
     light_ray.dD = differential3_zero();
 
     if (!shadow_blocked(kg, sd, emission_sd, state, &light_ray, &ao_shadow)) {
-      path_radiance_accum_ao(L, state, throughput, ao_alpha, ao_bsdf, ao_shadow);
+      path_radiance_accum_ao(kg, L, state, throughput, ao_alpha, ao_bsdf, ao_shadow);
     }
     else {
       path_radiance_accum_total_ao(L, state, throughput, ao_bsdf);

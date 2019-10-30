@@ -289,6 +289,21 @@ ccl_device_inline void path_radiance_bsdf_bounce(KernelGlobals *kg,
   }
 }
 
+#ifdef __CLAMP_SAMPLE__
+ccl_device_forceinline float path_radiance_clamp_factor(KernelGlobals *kg, float3 L, int bounce)
+{
+  float limit = (bounce > 0) ? kernel_data.integrator.sample_clamp_indirect :
+                               kernel_data.integrator.sample_clamp_direct;
+  float sum = reduce_add(fabs(L));
+  if (sum > limit) {
+    return limit / sum;
+  }
+  else {
+    return 1.0f;
+  }
+}
+#endif
+
 ccl_device_inline void path_radiance_accum_emission(KernelGlobals *kg,
                                                     PathRadiance *L,
                                                     ccl_addr_space PathState *state,
@@ -302,20 +317,26 @@ ccl_device_inline void path_radiance_accum_emission(KernelGlobals *kg,
   }
 #endif
 
+  float3 contribution = throughput * value;
+
 #ifdef __PASSES__
   if (L->use_light_pass) {
+#  ifdef __CLAMP_SAMPLE__
+    contribution *= path_radiance_clamp_factor(kg, contribution, state->bounce - 1);
+#  endif
+
     if (state->bounce == 0)
-      L->emission += throughput * value;
+      L->emission += contribution;
     else if (state->bounce == 1)
-      L->direct_emission += throughput * value;
+      L->direct_emission += contribution;
     else
-      L->indirect += throughput * value;
+      L->indirect += contribution;
 
     uint lightgroups = lamp_lightgroups(kg, lamp);
     if (lightgroups) {
       for (int i = 0; i < kernel_data.film.num_lightgroups; i++) {
         if (lightgroups & (1 << i)) {
-          L->lightgroups[i] += throughput * value;
+          L->lightgroups[i] += contribution;
         }
       }
     }
@@ -323,11 +344,12 @@ ccl_device_inline void path_radiance_accum_emission(KernelGlobals *kg,
   else
 #endif
   {
-    L->emission += throughput * value;
+    L->emission += contribution;
   }
 }
 
-ccl_device_inline void path_radiance_accum_ao(PathRadiance *L,
+ccl_device_inline void path_radiance_accum_ao(KernelGlobals *kg,
+                                              PathRadiance *L,
                                               ccl_addr_space PathState *state,
                                               float3 throughput,
                                               float3 alpha,
@@ -354,21 +376,28 @@ ccl_device_inline void path_radiance_accum_ao(PathRadiance *L,
   }
 #endif
 
+  float3 contribution = throughput * bsdf * ao;
+
 #ifdef __PASSES__
   if (L->use_light_pass) {
+#  ifdef __CLAMP_SAMPLE__
+    /* TODO(lukas): Do we really need to clamp AO? */
+    contribution *= path_radiance_clamp_factor(kg, contribution, state->bounce);
+#  endif
+
     if (state->bounce == 0) {
       /* Directly visible lighting. */
-      L->direct_diffuse += throughput * bsdf * ao;
+      L->direct_diffuse += contribution;
     }
     else {
       /* Indirectly visible lighting after BSDF bounce. */
-      L->indirect += throughput * bsdf * ao;
+      L->indirect += contribution;
     }
   }
   else
 #endif
   {
-    L->emission += throughput * bsdf * ao;
+    L->emission += contribution;
   }
 }
 
@@ -411,15 +440,26 @@ ccl_device_inline void path_radiance_accum_light(KernelGlobals *kg,
   }
 #endif
 
+  float3 shaded_throughput = throughput * shadow;
+
 #ifdef __PASSES__
   if (L->use_light_pass) {
+    /* Compute the clamping based on the total contribution.
+     * The resulting scale is then be applied to all individual components. */
+    float3 full_contribution = shaded_throughput * bsdf_eval_sum(bsdf_eval);
+#  ifdef __CLAMP_SAMPLE__
+    float clamp_factor = path_radiance_clamp_factor(kg, full_contribution, state->bounce);
+    shaded_throughput *= clamp_factor;
+    full_contribution *= clamp_factor;
+#  endif
+
     if (state->bounce == 0) {
       /* directly visible lighting */
-      L->direct_diffuse += throughput * bsdf_eval->diffuse * shadow;
-      L->direct_glossy += throughput * bsdf_eval->glossy * shadow;
-      L->direct_transmission += throughput * bsdf_eval->transmission * shadow;
-      L->direct_subsurface += throughput * bsdf_eval->subsurface * shadow;
-      L->direct_scatter += throughput * bsdf_eval->scatter * shadow;
+      L->direct_diffuse += shaded_throughput * bsdf_eval->diffuse;
+      L->direct_glossy += shaded_throughput * bsdf_eval->glossy;
+      L->direct_transmission += shaded_throughput * bsdf_eval->transmission;
+      L->direct_subsurface += shaded_throughput * bsdf_eval->subsurface;
+      L->direct_scatter += shaded_throughput * bsdf_eval->scatter;
 
       if (is_lamp) {
         L->shadow.x += shadow.x * shadow_fac;
@@ -429,15 +469,14 @@ ccl_device_inline void path_radiance_accum_light(KernelGlobals *kg,
     }
     else {
       /* indirectly visible lighting after BSDF bounce */
-      L->indirect += throughput * bsdf_eval_sum(bsdf_eval) * shadow;
+      L->indirect += full_contribution;
     }
 
     uint lightgroups = lamp_lightgroups(kg, lamp);
     if (lightgroups) {
-      float3 total = throughput * bsdf_eval_sum(bsdf_eval) * shadow;
       for (int i = 0; i < kernel_data.film.num_lightgroups; i++) {
         if (lightgroups & (1 << i)) {
-          L->lightgroups[i] += total;
+          L->lightgroups[i] += full_contribution;
         }
       }
     }
@@ -445,7 +484,7 @@ ccl_device_inline void path_radiance_accum_light(KernelGlobals *kg,
   else
 #endif
   {
-    L->emission += throughput * bsdf_eval->diffuse * shadow;
+    L->emission += shaded_throughput * bsdf_eval->diffuse;
   }
 }
 
@@ -484,20 +523,26 @@ ccl_device_inline void path_radiance_accum_background(KernelGlobals *kg,
   }
 #endif
 
+  float3 contribution = throughput * value;
+
 #ifdef __PASSES__
   if (L->use_light_pass) {
+#  ifdef __CLAMP_SAMPLE__
+    contribution *= path_radiance_clamp_factor(kg, contribution, state->bounce - 1);
+#  endif
+
     if (state->flag & PATH_RAY_TRANSPARENT_BACKGROUND)
-      L->background += throughput * value;
+      L->background += contribution;
     else if (state->bounce == 1)
-      L->direct_emission += throughput * value;
+      L->direct_emission += contribution;
     else
-      L->indirect += throughput * value;
+      L->indirect += contribution;
 
     uint lightgroups = kernel_data.integrator.background_lightgroups;
     if (lightgroups) {
       for (int i = 0; i < kernel_data.film.num_lightgroups; i++) {
         if (lightgroups & (1 << i)) {
-          L->lightgroups[i] += throughput * value;
+          L->lightgroups[i] += contribution;
         }
       }
     }
@@ -505,7 +550,7 @@ ccl_device_inline void path_radiance_accum_background(KernelGlobals *kg,
   else
 #endif
   {
-    L->emission += throughput * value;
+    L->emission += contribution;
   }
 
 #ifdef __DENOISING_FEATURES__
@@ -624,8 +669,6 @@ ccl_device_inline float3 path_radiance_clamp_and_sum(KernelGlobals *kg,
   /* Light Passes are used */
 #ifdef __PASSES__
   float3 L_direct, L_indirect;
-  float clamp_direct = kernel_data.integrator.sample_clamp_direct;
-  float clamp_indirect = kernel_data.integrator.sample_clamp_indirect;
   if (L->use_light_pass) {
     path_radiance_sum_indirect(L);
 
@@ -659,44 +702,6 @@ ccl_device_inline float3 path_radiance_clamp_and_sum(KernelGlobals *kg,
 
       L->emission = make_float3(0.0f, 0.0f, 0.0f);
     }
-
-    /* Clamp direct and indirect samples */
-#  ifdef __CLAMP_SAMPLE__
-    else if (sum > clamp_direct || sum > clamp_indirect) {
-      float scale;
-
-      /* Direct */
-      float sum_direct = fabsf(L_direct.x) + fabsf(L_direct.y) + fabsf(L_direct.z);
-      if (sum_direct > clamp_direct) {
-        scale = clamp_direct / sum_direct;
-        L_direct *= scale;
-
-        L->direct_diffuse *= scale;
-        L->direct_glossy *= scale;
-        L->direct_transmission *= scale;
-        L->direct_subsurface *= scale;
-        L->direct_scatter *= scale;
-        L->emission *= scale;
-        L->background *= scale;
-      }
-
-      /* Indirect */
-      float sum_indirect = fabsf(L_indirect.x) + fabsf(L_indirect.y) + fabsf(L_indirect.z);
-      if (sum_indirect > clamp_indirect) {
-        scale = clamp_indirect / sum_indirect;
-        L_indirect *= scale;
-
-        L->indirect_diffuse *= scale;
-        L->indirect_glossy *= scale;
-        L->indirect_transmission *= scale;
-        L->indirect_subsurface *= scale;
-        L->indirect_scatter *= scale;
-      }
-
-      /* Sum again, after clamping */
-      L_sum = L_direct + L_indirect;
-    }
-#  endif
   }
 
   /* No Light Passes */
