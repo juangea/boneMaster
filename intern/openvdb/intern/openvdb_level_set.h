@@ -45,6 +45,7 @@ struct OpenVDBLevelSet {
   //save input data as reference geometry for sharpenfeatures
   std::vector<openvdb::Vec3s> points;
   std::vector<openvdb::Vec3s> out_points;
+  std::vector<openvdb::Vec4I> out_quads;
   std::vector<openvdb::Vec3I> triangles;
   std::vector<uint32_t> vert_tri;
 
@@ -66,12 +67,14 @@ struct OpenVDBLevelSet {
   const openvdb::FloatGrid::Ptr &get_grid();
   const std::vector<openvdb::Vec3s> &get_points();
   const std::vector<openvdb::Vec3s> &get_out_points();
+  const std::vector<openvdb::Vec4I> &get_out_quads();
   const std::vector<openvdb::Vec3I> &get_triangles();
   const std::vector<uint32_t> &get_vert_tri();
 
   void set_grid(const openvdb::FloatGrid::Ptr &grid);
   void set_points(const std::vector<openvdb::Vec3s> &points);
   void set_out_points(const std::vector<openvdb::Vec3s> &out_points);
+  void set_out_quads(const std::vector<openvdb::Vec4I> &out_quads);
   void set_triangles(const std::vector<openvdb::Vec3I> &triangles);
   void set_vert_tri(const std::vector<uint32_t> &vert_tri);
   openvdb::Vec3s face_normal(uint32_t faceOffset);

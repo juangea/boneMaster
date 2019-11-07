@@ -450,6 +450,199 @@ void VertexNormalOp::operator()(const RangeT &r)
   }
 }
 #endif
+class BuildQuadMapOp {
+ public:
+  BuildQuadMapOp(OpenVDBLevelSet &lvl, std::vector<std::vector<openvdb::Index32>> &quad_map);
+  void operator()(const RangeT &) const;
+
+ private:
+  OpenVDBLevelSet &mLvl;
+  std::vector<std::vector<openvdb::Index32>> *const mQuadMap;
+};
+
+BuildQuadMapOp::BuildQuadMapOp(OpenVDBLevelSet &lvl,
+                               std::vector<std::vector<openvdb::Index32>> &point_quad_map)
+    : mLvl(lvl), mQuadMap(&point_quad_map)
+{
+}
+
+void BuildQuadMapOp::operator()(const RangeT &r) const
+{
+  std::vector<openvdb::Vec4I> quads_in(mLvl.get_out_quads());
+
+  for (int i = r.begin(); i < r.end(); i++) {
+    for (int v = 0; v < 4; v++) {
+      (*mQuadMap)[quads_in[i][v]].push_back(i);
+    }
+  }
+}
+
+class BuildQuadMapOp {
+ public:
+  BuildQuadMapOp(OpenVDBLevelSet &lvl, std::vector<std::vector<openvdb::Index32>> &quad_map);
+  void operator()(const RangeT &) const;
+
+ private:
+  OpenVDBLevelSet &mLvl;
+  std::vector<std::vector<openvdb::Index32>> *const mQuadMap;
+};
+
+BuildQuadMapOp::BuildQuadMapOp(OpenVDBLevelSet &lvl,
+                               std::vector<std::vector<openvdb::Index32>> &point_quad_map)
+    : mLvl(lvl), mQuadMap(&point_quad_map)
+{
+}
+
+void BuildQuadMapOp::operator()(const RangeT &r) const
+{
+  std::vector<openvdb::Vec4I> quads_in(mLvl.get_out_quads());
+
+  for (int i = r.begin(); i < r.end(); i++) {
+    for (int v = 0; v < 4; v++) {
+      (*mQuadMap)[quads_in[i][v]].push_back(i);
+    }
+  }
+}
+class SmoothOp {
+ public:
+  SmoothOp(OpenVDBLevelSet &lvl,
+           std::vector<openvdb::Vec3s> &vertsIn,
+           std::vector<openvdb::Vec4I> &quadsIn,
+           std::vector<openvdb::Vec3s> &verts,
+           std::vector<openvdb::Vec4I> &quads);
+  void operator()(const RangeT &) const;
+
+ private:
+  OpenVDBLevelSet &mLvl;
+  std::vector<openvdb::Vec3s> mVertsIn;
+  std::vector<openvdb::Vec4I> mQuadsIn;
+  std::vector<openvdb::Vec3s> *const mVerts;
+  std::vector<openvdb::Vec4I> *const mQuads;
+};
+
+SmoothOp::SmoothOp(OpenVDBLevelSet &lvl,
+                   std::vector<openvdb::Vec3s> &vertsIn,
+                   std::vector<openvdb::Vec4I> &quadsIn,
+                   std::vector<openvdb::Vec3s> &verts,
+                   std::vector<openvdb::Vec4I> &quads)
+    : mLvl(lvl), mVerts(&verts), mQuads(&quads), mVertsIn(vertsIn), mQuadsIn(quadsIn)
+{
+}
+
+void SmoothOp::operator()(const RangeT &r) const
+{
+  int j = 0;
+  int k = 0;
+  for (int i = r.begin(); i < r.end(); i++) {
+    if (mQuadsIn[i][0] != openvdb::util::INVALID_IDX) {
+      if (!isnan(mVertsIn[mQuadsIn[i][0]][0])) {
+        (*mQuads)[j] = mQuadsIn[i];
+        j++;
+        for (int v = 0; v < 4; v++)
+        {
+        }
+      }
+    }
+  }
+}
+
+class FixPolesOp {
+ public:
+  FixPolesOp(OpenVDBLevelSet &lvl,
+             std::vector<openvdb::Vec3s> &out_points,
+             std::vector<std::vector<openvdb::Index32>> &quad_map,
+             std::vector<openvdb::Vec4I> &out_quads,
+             int &removedVerts,
+             int &removedQuads);
+  void operator()(const RangeT &) const;
+
+ private:
+  OpenVDBLevelSet &mLvl;
+  std::vector<openvdb::Vec3s> *const mPointList;
+  std::vector<std::vector<openvdb::Index32>> *const mQuadMap;
+  std::vector<openvdb::Vec4I> *const mQuadList;
+  int *mRemovedVerts;
+  int *mRemovedQuads;
+};
+
+FixPolesOp::FixPolesOp(OpenVDBLevelSet &lvl,
+                       std::vector<openvdb::Vec3s> &out_points,  // empty vector, correct size
+                       std::vector<std::vector<openvdb::Index32>> &point_quad_map,
+                       std::vector<openvdb::Vec4I> &out_quads,  // empty vector, correct size
+                       int &removedVerts,
+                       int &removedQuads)
+    : mLvl(lvl),
+      mPointList(&out_points),
+      mQuadMap(&point_quad_map),
+      mQuadList(&out_quads),
+      mRemovedVerts(&removedVerts),
+      mRemovedQuads(&removedQuads)
+{
+}
+
+void FixPolesOp::operator()(const RangeT &r) const
+{
+  std::vector<openvdb::Vec3s> points_in(mLvl.get_out_points());
+  std::vector<openvdb::Vec4I> quads_in(mLvl.get_out_quads());
+
+  for (int i = r.begin(); i < r.end(); i++) {
+    // in how many quads do we find i ?, we dont touch the triangles (adaptivity)
+    int quads = mQuadMap[i].size();
+    for (unsigned int q = 0; q < quads; q++) {
+      bool is_diamond_quad = true;
+      unsigned int quad_index = (*mQuadMap)[i][q];
+      openvdb::Vec4I &quad = quads_in[quad_index];
+      // go around the verts of those quads
+      for (unsigned int v = 1; v < 4; v++) {
+        unsigned int pole = mQuadMap[quad[v]].size();
+        // next quad must be 5pole or more
+        if ((v == 1 || v == 3) && (pole < 5)) {
+          is_diamond_quad = false;
+          break;
+        }
+        if ((v == 0 || v == 2) && (pole != 3)) {
+          is_diamond_quad = false;
+          break;
+        }
+      }
+
+      if (is_diamond_quad) {
+
+        // re-assign index 2 to 0 in affected quads
+        int quads = mQuadMap[quad[2]].size();
+        for (int q = 0; q < quads; q++) {
+          int q_index = (*mQuadMap)[quad[2]][q];
+          openvdb::Vec4I qu = quads_in[q_index];
+          for (int v = 0; v < 4; v++) {
+            if (qu[v] == quad[2]) {
+              (*mQuadList)[q_index][v] = quad[0];
+            }
+          }
+        }
+
+        // remove vertex with index 2, the 2nd 3-pole, keep 1,3, set 0 to center between 0 and 2
+        openvdb::Vec3s center = (points_in[quad[0]] + points_in[quad[2]]) * 0.5f;
+        (*mPointList)[quad[2]] = openvdb::Vec3s(NAN, NAN, NAN);
+        (*mPointList)[quad[0]] = center;
+        (*mPointList)[quad[1]] = points_in[quad[1]];
+        (*mPointList)[quad[3]] = points_in[quad[3]];
+
+        // remove this quad from list, as in dont transfer it here
+        const openvdb::Index32 ix = openvdb::util::INVALID_IDX;
+        quad = openvdb::Vec4I(ix, ix, ix, ix);
+        (*mQuadList)[quad_index] = quad;
+        (*mRemovedQuads)++;
+        (*mRemovedVerts)++;
+      }
+      else {
+        (*mQuadList)[quad_index] = quad;
+        for (int v = 0; v < 4; v++) {
+          (*mPointList)[quad[v]] = points_in[quad[v]];
+        }
+      }
+    }
+  }
+}
 
 using RangeT = tbb::blocked_range<size_t>;
 /// TBB body object for threaded sharp feature construction

@@ -191,13 +191,13 @@ void OpenVDBLevelSet::volume_to_mesh(OpenVDBVolumeToMeshData *mesh,
                                      OpenVDBLevelSet *mask)
 {
   std::vector<openvdb::Vec3s> out_points_tmp, out_points;
-  std::vector<openvdb::Vec4I> out_quads;
+  std::vector<openvdb::Vec4I> out_quads_tmp, out_quads;
   std::vector<openvdb::Vec3I> out_tris;
 
   openvdb::tools::volumeToMesh<openvdb::FloatGrid>(*this->grid,
                                                    out_points_tmp,
                                                    out_tris,
-                                                   out_quads,
+                                                   out_quads_tmp,
                                                    isovalue,
                                                    adaptivity,
                                                    relax_disoriented_triangles,
@@ -207,6 +207,48 @@ void OpenVDBLevelSet::volume_to_mesh(OpenVDBVolumeToMeshData *mesh,
 
   // sharpen Features, after meshing
   this->set_out_points(out_points_tmp);
+  this->set_out_quads(out_quads_tmp);
+
+  // mesh topology improvement attempt
+  //convert to bmesh directly (make a new one)
+  //do the processing
+  //back to the vert / face representation
+  //find and remove those verts on this representation ?!
+  //3-pole, 5-pole... in how many faces is this vert index ?
+  //special topology constraints "around" a face 3 5 3 5
+  if (relax_disoriented_triangles) {
+
+    std::vector<std::vector<openvdb::Index32>> quad_map;
+
+    out_points.resize(out_points_tmp.size());
+    out_quads.resize(out_quads_tmp.size());
+    quad_map.resize(out_quads.size() * 4);
+    int removedVerts = 0;
+    int removedQuads = 0;
+
+    openvdb::tools::BuildQuadMapOp bqop = openvdb::tools::BuildQuadMapOp(*this, quad_map);
+    tbb::blocked_range<size_t> range = tbb::blocked_range<size_t>(0, out_quads.size());
+    bqop(range);
+
+    openvdb::tools::FixPolesOp fpop = openvdb::tools::FixPolesOp(*this, out_points, quad_map, out_quads,
+                                                                removedVerts, removedQuads);
+    tbb::blocked_range<size_t> range2 = tbb::blocked_range<size_t>(0, out_points.size());
+    fpop(range2);
+
+    std::vector<openvdb::Vec3s> finalVerts;
+    std::vector<openvdb::Vec4s> finalQuads;
+
+    finalVerts.resize(out_points.size() - removedVerts);
+    finalQuads.resize(out_quads.size() - removedQuads);
+
+    openvdb::tools::SmoothOp cqop = openvdb::tools::SmoothOp(*this, finalVerts, finalQuads)
+
+  }
+  else
+  {
+    out_points = this->get_out_points();
+    out_quads = this->get_out_quads();
+  }
 
   if (this->sharpen_features) {
     out_points.resize(out_points_tmp.size());
@@ -376,6 +418,11 @@ const std::vector<openvdb::Vec3s> &OpenVDBLevelSet::get_out_points()
   return this->out_points;
 }
 
+const std::vector<openvdb::Vec4I> &OpenVDBLevelSet::get_out_quads()
+{
+  return this->out_quads;
+}
+
 const std::vector<openvdb::Vec3I> &OpenVDBLevelSet::get_triangles()
 {
   return this->triangles;
@@ -399,6 +446,11 @@ void OpenVDBLevelSet::set_points(const std::vector<openvdb::Vec3s> &points)
 void OpenVDBLevelSet::set_out_points(const std::vector<openvdb::Vec3s> &out_points)
 {
   this->out_points = out_points;
+}
+
+void OpenVDBLevelSet::set_out_quads(const std::vector<openvdb::Vec4I> &out_quads)
+{
+  this->out_quads = out_quads;
 }
 
 void OpenVDBLevelSet::set_triangles(const std::vector<openvdb::Vec3I> &triangles)
