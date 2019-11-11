@@ -114,6 +114,9 @@ void MESH_OT_extrude_edges_indiv(struct wmOperatorType *ot);
 void MESH_OT_extrude_faces_indiv(struct wmOperatorType *ot);
 void MESH_OT_dupli_extrude_cursor(struct wmOperatorType *ot);
 
+/*editmesh_extrude_destructive.c*/
+void MESH_OT_extrude_destructive(struct wmOperatorType *ot);
+
 /* *** editmesh_extrude_screw.c *** */
 void MESH_OT_screw(struct wmOperatorType *ot);
 

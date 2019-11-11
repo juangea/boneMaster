@@ -443,6 +443,7 @@ void bmo_extrude_face_region_exec(BMesh *bm, BMOperator *op)
   }
 
   BMO_slot_copy(&dupeop, slots_out, "geom.out", op, slots_out, "geom.out");
+  BMO_slot_copy(&dupeop, slots_out, "boundary_map.out", op, slots_out, "boundary_map.out");
 
   slot_edges_exclude = BMO_slot_get(op->slots_in, "edges_exclude");
   for (e = BMO_iter_new(&siter, dupeop.slots_out, "boundary_map.out", 0); e;

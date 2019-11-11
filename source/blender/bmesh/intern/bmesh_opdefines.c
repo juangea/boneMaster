@@ -932,6 +932,31 @@ static BMOpDefine bmo_extrude_vert_indiv_def = {
 };
 
 /*
+ * Destructive Extrude (Regions).
+ *
+ * Extrudes face regions destructively.
+ */
+static BMOpDefine bmo_extrude_destructive_def = {
+  "extrude_destructive",
+  /* slots_in */
+  {{"faces", BMO_OP_SLOT_ELEMENT_BUF, {BM_FACE}},    /* input faces */
+   {"dir", BMO_OP_SLOT_VEC},
+   {"depth", BMO_OP_SLOT_FLT},
+   {"original_loop", BMO_OP_SLOT_BOOL},
+   {"keep_sides", BMO_OP_SLOT_BOOL},
+   {{'\0'}},
+  },
+  /* slots_out */
+  {{"depth_limit", BMO_OP_SLOT_FLT}, /* used for snapping and recursion */
+   {"geom.out", BMO_OP_SLOT_ELEMENT_BUF, {BM_VERT | BM_EDGE | BM_FACE}},
+   {{'\0'}},
+  },
+  bmo_extrude_destructive_exec,
+  (BMO_OPTYPE_FLAG_NORMALS_CALC |
+   BMO_OPTYPE_FLAG_SELECT_FLUSH),
+};
+
+/*
  * Connect Verts.
  *
  * Split faces by adding edges that connect **verts**.
@@ -1041,6 +1066,7 @@ static BMOpDefine bmo_extrude_face_region_def = {
   },
   /* slots_out */
   {{"geom.out", BMO_OP_SLOT_ELEMENT_BUF, {BM_VERT | BM_EDGE | BM_FACE}},
+   {"boundary_map.out", BMO_OP_SLOT_MAPPING, {(int)BMO_OP_SLOT_SUBTYPE_MAP_ELEM}},
    {{'\0'}},
   },
   bmo_extrude_face_region_exec,
@@ -2092,6 +2118,7 @@ const BMOpDefine *bmo_opdefines[] = {
     &bmo_extrude_edge_only_def,
     &bmo_extrude_face_region_def,
     &bmo_extrude_vert_indiv_def,
+    &bmo_extrude_destructive_def,
     &bmo_find_doubles_def,
     &bmo_grid_fill_def,
     &bmo_inset_individual_def,

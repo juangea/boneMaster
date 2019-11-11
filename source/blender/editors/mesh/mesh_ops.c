@@ -79,6 +79,7 @@ void ED_operatortypes_mesh(void)
   WM_operatortype_append(MESH_OT_screw);
 
   WM_operatortype_append(MESH_OT_extrude_region);
+  WM_operatortype_append(MESH_OT_extrude_destructive);
   WM_operatortype_append(MESH_OT_extrude_context);
   WM_operatortype_append(MESH_OT_extrude_faces_indiv);
   WM_operatortype_append(MESH_OT_extrude_edges_indiv);

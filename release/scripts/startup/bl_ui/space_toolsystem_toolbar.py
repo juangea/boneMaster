@@ -620,6 +620,27 @@ class _defs_edit_mesh:
         )
 
     @ToolDef.from_fn
+    def extrude_destructive():
+        def draw_settings(_context, layout, tool):
+            props = tool.operator_properties("mesh.extrude_destructive")
+            layout.prop(props, "original_loop")
+            layout.prop(props, "recurse_loops")
+            layout.prop(props, "destroy_end")
+            layout.prop(props, "keep_sides")
+        return dict(
+            idname="builtin.extrude_destructive",
+            label="Destructive Extrude",
+            description=(
+                "Extrude destructively along combined normals"
+            ),
+            icon="none",
+            widget=None,
+            operator="ops.mesh.extrude_destructive",
+            keymap=(),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
     def extrude_normals():
         def draw_settings(_context, layout, tool):
             props = tool.operator_properties("mesh.extrude_region_shrink_fatten")
@@ -1922,6 +1943,7 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
             None,
             (
                 _defs_edit_mesh.extrude,
+                _defs_edit_mesh.extrude_destructive,
                 _defs_edit_mesh.extrude_normals,
                 _defs_edit_mesh.extrude_individual,
                 _defs_edit_mesh.extrude_cursor,

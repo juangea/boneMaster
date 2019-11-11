@@ -62,6 +62,7 @@ void bmo_edgenet_prepare_exec(BMesh *bm, BMOperator *op);
 void bmo_extrude_discrete_faces_exec(BMesh *bm, BMOperator *op);
 void bmo_extrude_edge_only_exec(BMesh *bm, BMOperator *op);
 void bmo_extrude_face_region_exec(BMesh *bm, BMOperator *op);
+void bmo_extrude_destructive_exec(BMesh *bm, BMOperator *op);
 void bmo_extrude_vert_indiv_exec(BMesh *bm, BMOperator *op);
 void bmo_find_doubles_exec(BMesh *bm, BMOperator *op);
 void bmo_grid_fill_exec(BMesh *bm, BMOperator *op);

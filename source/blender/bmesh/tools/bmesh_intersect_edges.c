@@ -488,8 +488,8 @@ static bool bm_edgexedge_isect_cb(void *userdata, int index_a, int index_b, int 
 {
   bool ret = false;
   struct EDBMSplitData *data = userdata;
-  BMEdge *e_a = BM_edge_at_index(data->bm, index_a);
-  BMEdge *e_b = BM_edge_at_index(data->bm, index_b);
+  BMEdge *e_a = BM_edge_at_index_find(data->bm, index_a);
+  BMEdge *e_b = BM_edge_at_index_find(data->bm, index_b);
 
   float co_a[3], dir_a[3], co_b[3], dir_b[3];
   copy_v3_v3(co_a, e_a->v1->co);
