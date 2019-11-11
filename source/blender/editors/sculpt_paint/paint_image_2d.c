@@ -387,7 +387,12 @@ static unsigned short *brush_painter_curve_mask_new(BrushPainter *painter,
   m = mask;
 
   int aa_samples = 1.0f / (radius * 0.20f);
-  aa_samples = clamp_i(aa_samples, 3, 16);
+  if (brush->sampling_flag & BRUSH_PAINT_ANTIALIASING) {
+    aa_samples = clamp_i(aa_samples, 3, 16);
+  }
+  else {
+    aa_samples = 1;
+  }
 
   /* Temporal until we have the brush properties */
   const float hardness = 1.0f;
@@ -397,8 +402,8 @@ static unsigned short *brush_painter_curve_mask_new(BrushPainter *painter,
   float aa_step = 1.0f / (float)aa_samples;
 
   float bpos[2];
-  bpos[0] = pos[0] - floorf(pos[0]) + offset + aa_offset;
-  bpos[1] = pos[1] - floorf(pos[1]) + offset + aa_offset;
+  bpos[0] = pos[0] - floorf(pos[0]) + offset - aa_offset;
+  bpos[1] = pos[1] - floorf(pos[1]) + offset - aa_offset;
 
   const float co = cosf(DEG2RADF(rotation));
   const float si = sinf(DEG2RADF(rotation));

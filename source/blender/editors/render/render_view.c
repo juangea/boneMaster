@@ -118,7 +118,7 @@ static ScrArea *find_area_image_empty(bContext *C)
   for (sa = sc->areabase.first; sa; sa = sa->next) {
     if (sa->spacetype == SPACE_IMAGE) {
       sima = sa->spacedata.first;
-      if (!sima->image) {
+      if ((sima->mode == SI_MODE_VIEW) && !sima->image) {
         break;
       }
     }
@@ -205,7 +205,7 @@ ScrArea *render_view_open(bContext *C, int mx, int my, ReportList *reports)
 
         /* we already had a fullscreen here -> mark new space as a stacked fullscreen */
         if (sa->full) {
-          sa->flag |= (AREA_FLAG_STACKED_FULLSCREEN | AREA_FLAG_TEMP_TYPE);
+          sa->flag |= AREA_FLAG_STACKED_FULLSCREEN;
         }
       }
       else {
@@ -222,6 +222,7 @@ ScrArea *render_view_open(bContext *C, int mx, int my, ReportList *reports)
     }
   }
   sima = sa->spacedata.first;
+  sima->link_flag |= SPACE_FLAG_TYPE_TEMPORARY;
 
   /* get the correct image, and scale it */
   sima->image = BKE_image_verify_viewer(bmain, IMA_TYPE_R_RESULT, "Render Result");
@@ -240,6 +241,11 @@ ScrArea *render_view_open(bContext *C, int mx, int my, ReportList *reports)
       /* Leave it alone so the image editor will just go back from
        * full screen to the original tiled setup */
     }
+  }
+
+  if ((sima->flag & SI_PREVSPACE) && sima->next) {
+    SpaceLink *old_sl = sima->next;
+    old_sl->link_flag |= SPACE_FLAG_TYPE_WAS_ACTIVE;
   }
 
   return sa;

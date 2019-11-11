@@ -84,6 +84,7 @@ static void brush_defaults(Brush *brush)
   FROM_DEFAULT(normal_weight);
   FROM_DEFAULT(fill_threshold);
   FROM_DEFAULT(flag);
+  FROM_DEFAULT(sampling_flag);
   FROM_DEFAULT_PTR(rgb);
   FROM_DEFAULT_PTR(secondary_rgb);
   FROM_DEFAULT(spacing);
@@ -927,7 +928,7 @@ void BKE_brush_sculpt_reset(Brush *br)
     case SCULPT_TOOL_CLAY_STRIPS:
       br->flag |= BRUSH_ACCUMULATE;
       br->alpha = 0.7f;
-      br->normal_radius_factor = 1.7f;
+      br->normal_radius_factor = 1.55f;
       br->curve_preset = BRUSH_CURVE_SPHERE;
       br->spacing = 6;
       break;

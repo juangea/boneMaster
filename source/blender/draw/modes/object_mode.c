@@ -510,12 +510,13 @@ static void OBJECT_engine_init(void *vedata)
                                                     NULL,
                                                     datatoc_gpu_shader_flat_color_frag_glsl,
                                                     datatoc_common_view_lib_glsl,
-                                                    NULL);
+                                                    "#define IN_PLACE_INSTANCES\n");
 
     sh_data->part_axis = DRW_shader_create_with_lib(datatoc_object_particle_prim_vert_glsl,
                                                     NULL,
                                                     datatoc_gpu_shader_flat_color_frag_glsl,
                                                     datatoc_common_view_lib_glsl,
+                                                    "#define IN_PLACE_INSTANCES\n"
                                                     "#define USE_AXIS\n");
 
     sh_data->part_dot = DRW_shader_create_with_lib(datatoc_object_particle_dot_vert_glsl,
@@ -1235,22 +1236,42 @@ static void DRW_shgroup_camera_background_images(OBJECT_Shaders *sh_data,
       uv2img_space[1][1] = image_height;
 
       const float fit_scale = image_aspect / camera_aspect;
-      img2cam_space[0][0] = 1.0 / image_width;
-      img2cam_space[1][1] = 1.0 / fit_scale / image_height;
+      if (camera_aspect < image_aspect) {
+        img2cam_space[0][0] = 1.0 / (1.0 / fit_scale) / image_width;
+        img2cam_space[1][1] = 1.0 / image_height;
+      }
+      else {
+        img2cam_space[0][0] = 1.0 / image_width;
+        img2cam_space[1][1] = 1.0 / fit_scale / image_height;
+      }
 
       /* Update scaling based on image and camera framing */
       float scale_x = bgpic->scale;
       float scale_y = bgpic->scale;
 
+      float scale_x_offset = image_width;
+      float scale_y_offset = image_height;
+      if (image_aspect > 1.0f) {
+        scale_x_offset /= image_aspect;
+        if (camera_aspect > 1.0f) {
+          scale_x_offset *= min_ff(image_aspect, camera_aspect);
+          scale_y_offset *= min_ff(image_aspect, camera_aspect);
+        }
+      }
+      else {
+        scale_y_offset *= image_aspect;
+        if (camera_aspect < 1.0f) {
+          scale_x_offset /= max_ff(image_aspect, camera_aspect);
+          scale_y_offset /= max_ff(image_aspect, camera_aspect);
+        }
+      }
+
       if (bgpic->flag & CAM_BGIMG_FLAG_CAMERA_ASPECT) {
         if (bgpic->flag & CAM_BGIMG_FLAG_CAMERA_CROP) {
-          if (image_aspect > camera_aspect) {
-            scale_x *= fit_scale;
-            scale_y *= fit_scale;
-          }
+          /* pass */
         }
         else {
-          if (image_aspect > camera_aspect) {
+          if (camera_aspect < image_aspect) {
             scale_x /= fit_scale;
             scale_y /= fit_scale;
           }
@@ -1262,7 +1283,12 @@ static void DRW_shgroup_camera_background_images(OBJECT_Shaders *sh_data,
       }
       else {
         /* Stretch image to camera aspect */
-        scale_y /= 1.0 / fit_scale;
+        if (camera_aspect < image_aspect) {
+          scale_x /= fit_scale;
+        }
+        else {
+          scale_y *= fit_scale;
+        }
       }
 
       // scale image to match the desired aspect ratio
@@ -1270,8 +1296,8 @@ static void DRW_shgroup_camera_background_images(OBJECT_Shaders *sh_data,
       scale_m4[1][1] = scale_y;
 
       /* Translate */
-      translate_m4[3][0] = image_width * bgpic->offset[0] * 2.0f;
-      translate_m4[3][1] = image_height * bgpic->offset[1] * 2.0f;
+      translate_m4[3][0] = bgpic->offset[0] * 2.0f * scale_x_offset;
+      translate_m4[3][1] = bgpic->offset[1] * 2.0f * scale_y_offset;
 
       mul_m4_series(bg_data->transform_mat,
                     win_m4_translate,
@@ -2074,7 +2100,8 @@ static void camera_view3d_stereoscopy_display_extra(OBJECT_ShadingGroupList *sgl
     if (cam->stereo.convergence_mode == CAM_S3D_OFFAXIS) {
       const float shift_x = ((BKE_camera_multiview_shift_x(&scene->r, ob, viewnames[eye]) -
                               cam->shiftx) *
-                             (drawsize * scale[0] * fac));
+                             (drawsize * scale[0] * fac)) *
+                            (cam->stereo.pivot == CAM_S3D_PIVOT_CENTER ? 1.0f : 2.0f);
 
       for (int i = 0; i < 4; i++) {
         cam->runtime.drw_corners[eye][i][0] += shift_x;
