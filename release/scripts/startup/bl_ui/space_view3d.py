@@ -453,13 +453,7 @@ class VIEW3D_HT_header(Header):
 
         # Pivot
         if object_mode in {'OBJECT', 'EDIT', 'EDIT_GPENCIL', 'SCULPT_GPENCIL'} or has_pose_mode:
-            layout.prop_with_popover(
-                tool_settings,
-                "transform_pivot_point",
-                text="",
-                icon_only=True,
-                panel="VIEW3D_PT_pivot_point",
-            )
+            layout.prop(tool_settings, "transform_pivot_point", text="", icon_only=True)
 
         # Snap
         show_snap = False
@@ -4505,11 +4499,13 @@ class VIEW3D_MT_assign_material(Menu):
     def draw(self, context):
         layout = self.layout
         ob = context.active_object
+        mat_active = ob.active_material
 
         for slot in ob.material_slots:
             mat = slot.material
             if mat:
-                layout.operator("gpencil.stroke_change_color", text=mat.name).material = mat.name
+                layout.operator("gpencil.stroke_change_color", text=mat.name,
+                                icon='LAYER_ACTIVE' if mat == mat_active else 'BLANK1').material = mat.name
 
 
 class VIEW3D_MT_gpencil_copy_layer(Menu):
@@ -6040,21 +6036,6 @@ class VIEW3D_PT_overlay_weight_paint(Panel):
         col.prop(overlay, "show_paint_wire")
 
 
-class VIEW3D_PT_pivot_point(Panel):
-    bl_space_type = 'VIEW_3D'
-    bl_region_type = 'HEADER'
-    bl_label = "Pivot Point"
-    bl_ui_units_x = 8
-
-    def draw(self, context):
-        tool_settings = context.tool_settings
-
-        layout = self.layout
-        col = layout.column()
-        col.label(text="Pivot Point")
-        col.prop(tool_settings, "transform_pivot_point", expand=True)
-
-
 class VIEW3D_PT_snapping(Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'HEADER'
@@ -6079,6 +6060,8 @@ class VIEW3D_PT_snapping(Panel):
             col.label(text="Snap with")
             row = col.row(align=True)
             row.prop(tool_settings, "snap_target", expand=True)
+
+            col.prop(tool_settings, "use_snap_backface_culling")
 
             if obj:
                 if object_mode == 'EDIT':
@@ -6928,7 +6911,6 @@ classes = (
     VIEW3D_PT_overlay_weight_paint,
     VIEW3D_PT_overlay_pose,
     VIEW3D_PT_overlay_sculpt,
-    VIEW3D_PT_pivot_point,
     VIEW3D_PT_snapping,
     VIEW3D_PT_proportional_edit,
     VIEW3D_PT_gpencil_origin,
