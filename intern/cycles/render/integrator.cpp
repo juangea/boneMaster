@@ -88,7 +88,7 @@ NODE_DEFINE(Integrator)
   sampling_pattern_enum.insert("pmj", SAMPLING_PATTERN_PMJ);
   SOCKET_ENUM(sampling_pattern, "Sampling Pattern", sampling_pattern_enum, SAMPLING_PATTERN_SOBOL);
   SOCKET_FLOAT(scrambling_distance, "Scrambling Distance", 1.0f);
-  SOCKET_BOOLEAN(use_auto_scramble, "Auto Scramble", true);
+  //SOCKET_BOOLEAN(use_auto_scramble, "Auto Scramble", true);
   SOCKET_BOOLEAN(use_dithered_sampling, "Use Dithered Sampling", false);
   
   return type;
@@ -184,9 +184,12 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
   }
 
   kintegrator->sampling_pattern = sampling_pattern;
+  /*
   if(use_auto_scramble){
     kintegrator->scrambling_distance = scrambling_distance;
   }
+  */
+  kintegrator->scrambling_distance = scrambling_distance;
   
   kintegrator->aa_samples = aa_samples;
 	//kintegrator->aa_samples = aa_samples;

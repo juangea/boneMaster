@@ -39,7 +39,7 @@ float starting_temp, num_iter;
 #define DIM 2
 
 /* Note: The random swapping code is only designed for SIZE=2048 or less. */
-#define SIZE 128
+#define SIZE 2048 //Original is 128, changed by bone-studio
 #define SIZEMASK 0x7f
 #define SIZEBITS 7
 
@@ -51,7 +51,7 @@ float starting_temp, num_iter;
 
 /* To speed up the process, only nearby pixels are considered.
  * For pixels that are further away, the weight is nearly zero anyways. */
-#define WINDOW 10
+#define WINDOW 5 //Original was 10, modifie by bone-studio
 
 
 #define WRAP(x) ((x) & SIZEMASK)

@@ -250,7 +250,7 @@ class CYCLES_RENDER_PT_sampling_advanced(CyclesButtonsPanel, Panel):
         col.prop(cscene, "adaptive_threshold", text="Adaptive Threshold")
         if cscene.sampling_pattern != "PROGRESSIVE_MULTI_JITTER" or cscene.use_adaptive_sampling:      
             layout.prop(cscene, "scrambling_distance", text="Scrambling Distance")
-            layout.prop(cscene, "use_auto_scramble")
+            layout.prop(cscene, "disable_viewport_scramble")
         layout.prop(cscene, "use_square_samples")
 
         layout.separator()
@@ -643,7 +643,7 @@ class CYCLES_RENDER_PT_performance_tiles(CyclesButtonsPanel, Panel):
         sub.prop(rd, "tile_x", text="Tiles X")
         sub.prop(rd, "tile_y", text="Y")
         col.prop(cscene, "tile_order", text="Order")
-        col.prop(cscene, "use_auto_tiles", text="Auto tiles")
+        #col.prop(cscene, "use_auto_tiles", text="Auto tiles")
 
         sub = col.column()
         sub.active = not rd.use_save_buffers

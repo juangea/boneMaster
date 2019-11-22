@@ -346,6 +346,7 @@ void BlenderSync::sync_integrator()
   }
   
 	int samples = get_int(cscene, "samples");
+  /*
   if(get_boolean(cscene, "use_auto_scramble")){
     if(get_boolean(cscene, "use_square_samples")){
       samples *= samples;
@@ -370,6 +371,8 @@ void BlenderSync::sync_integrator()
   {
     integrator->scrambling_distance = get_float(cscene, "scrambling_distance");
   }
+  */
+  integrator->scrambling_distance = get_float(cscene, "scrambling_distance");
 
 
   if (b_scene.render().use_simplify()) {
@@ -901,12 +904,13 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine &b_engine,
     int tile_x = b_engine.tile_x();
     int tile_y = b_engine.tile_y();
     
-		/* auto tile size*/
+    
+		/* auto tile size*//*
 		if (get_boolean(cscene, "use_auto_tiles")){
 			/*  rays to shoot per tile = tile_x*tile_y*spp. How many rays should at once are optimal depends on the GPU,
 			 *  so you can adapt this to your own test. Those numbers where found for the 1080Ti and seem to work well on the 980 and 2070
 			 */
-			 
+			 /*
 			if (samples > 999 && !is_ocl) { //split kernel needs bigger tile size do to it's nature to fully feed the GPU with work.
 				tile_x = 16;
 				tile_y = 16;			
@@ -947,6 +951,7 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine &b_engine,
 				tile_x = tile_y = 16;
 			} //cpus like 8x8 or 16x16 tiles, whatever sample number is used. but it only works with CPU only, not GPU+CPU
 		}
+    */
     params.tile_size = make_int2(tile_x, tile_y);
   }
 
