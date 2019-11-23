@@ -206,7 +206,7 @@ ccl_device void sphere_light_sample(float3 P, LightSample *ls, float radius, flo
 
 	/* Uniform cone PDF. */
 	ls->pdf = uniform_cone_pdf(cos_theta_max);
-	ls->Ng = normalize(n_world);
+	ls->Ng = normalize(n_world)
 }
 
 ccl_device float spot_light_attenuation(float3 dir,
@@ -726,10 +726,7 @@ ccl_device bool lamp_light_eval(
   ls->v = 0.0f;
 
   if (!(ls->shader & SHADER_USE_MIS))
-  {
     return false;
-  }
-    
 
   if (type == LIGHT_DISTANT) {
     /* distant light */
@@ -779,17 +776,13 @@ ccl_device bool lamp_light_eval(
 
     /* sphere light */
     if (radius == 0.0f)
-    {
       return false;
-    }
-      
 
-    if(!ray_sphere_intersect(P, D, t, lightP, radius, &ls->P, &ls->t))
+    if(!ray_sphere_intersect(P, D, t, lightP, radius, &ls->P, &ls->t)) {
     {
       return false;
     }
     ls->Ng = normalize(ls->P - lightP);
-
     ls->D = D;
 
     float invarea = klight->spot.invarea;
