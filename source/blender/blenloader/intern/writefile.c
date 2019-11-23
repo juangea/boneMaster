@@ -139,6 +139,7 @@
 #include "DNA_workspace_types.h"
 #include "DNA_movieclip_types.h"
 #include "DNA_mask_types.h"
+#include "DNA_curveprofile_types.h"
 
 #include "MEM_guardedalloc.h"  // MEM_freeN
 #include "BLI_bitmap.h"
@@ -951,6 +952,12 @@ static void write_curvemapping(WriteData *wd, CurveMapping *cumap)
   writestruct(wd, DATA, CurveMapping, 1, cumap);
 
   write_curvemapping_curves(wd, cumap);
+}
+
+static void write_CurveProfile(WriteData *wd, CurveProfile *profile)
+{
+  writestruct(wd, DATA, CurveProfile, 1, profile);
+  writestruct(wd, DATA, CurveProfilePoint, profile->path_len, profile->path);
 }
 
 static void write_node_socket(WriteData *wd, bNodeSocket *sock)
@@ -1766,6 +1773,12 @@ static void write_modifiers(WriteData *wd, ListBase *modbase)
         writestruct(wd, DATA, CSGVolume_Object, 1, vcob);
       }
     }
+    else if (md->type == eModifierType_Bevel) {
+      BevelModifierData *bmd = (BevelModifierData *)md;
+      if (bmd->custom_profile) {
+        write_CurveProfile(wd, bmd->custom_profile);
+      }
+    }
   }
 }
 
@@ -2539,6 +2552,10 @@ static void write_scene(WriteData *wd, Scene *sce)
   /* write grease-pencil primitive curve to file */
   if (tos->gp_sculpt.cur_primitive) {
     write_curvemapping(wd, tos->gp_sculpt.cur_primitive);
+  }
+  /* Write the curve profile to the file. */
+  if (tos->custom_bevel_profile_preset) {
+    write_CurveProfile(wd, tos->custom_bevel_profile_preset);
   }
 
   write_paint(wd, &tos->imapaint.paint);

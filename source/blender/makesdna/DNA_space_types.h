@@ -83,13 +83,13 @@ typedef struct SpaceLink {
 enum {
   /**
    * The space is not a regular one opened through the editor menu (for example) but spawned by an
-   * operator to fulfill some task and then disappear again. Can typically be cancelled using Esc,
-   * but that is handled on the editor level. */
+   * operator to fulfill some task and then disappear again.
+   * Can typically be cancelled using Escape, but that is handled on the editor level. */
   SPACE_FLAG_TYPE_TEMPORARY = (1 << 0),
   /**
-   * Used to mark a space as active but "overlapped" by temporary fullscreen spaces. Without this
-   * we wouldn't be able to restore the correct active space after closing temp fullscreens
-   * reliably if the same space type is opened twice in a fullscreen stack (see T19296). We don't
+   * Used to mark a space as active but "overlapped" by temporary full-screen spaces. Without this
+   * we wouldn't be able to restore the correct active space after closing temp full-screens
+   * reliably if the same space type is opened twice in a full-screen stack (see T19296). We don't
    * actually open the same space twice, we have to pretend it is by managing area order carefully.
    */
   SPACE_FLAG_TYPE_WAS_ACTIVE = (1 << 1),
@@ -483,6 +483,13 @@ typedef enum eGraphEdit_Runtime_Flag {
   SIPO_RUNTIME_FLAG_NEED_CHAN_SYNC = (1 << 0),
   /** Temporary flag to force fcurves to recalculate colors. */
   SIPO_RUNTIME_FLAG_NEED_CHAN_SYNC_COLOR = (1 << 1),
+
+  /**
+   * These flags are for the mouse-select code to communicate with the transform code. Click
+   * dragging (tweaking) a handle sets the according left/right flag which transform code uses then
+   * to limit translation to this side. */
+  SIPO_RUNTIME_FLAG_TWEAK_HANDLES_LEFT = (1 << 2),
+  SIPO_RUNTIME_FLAG_TWEAK_HANDLES_RIGHT = (1 << 3),
 } eGraphEdit_Runtime_Flag;
 
 /** \} */
