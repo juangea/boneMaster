@@ -1069,6 +1069,41 @@ void TEXT_OT_cut(wmOperatorType *ot)
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Indent or Autocomplete Operator
+ * \{ */
+
+static int text_indent_or_autocomplete_exec(bContext *C, wmOperator *UNUSED(op))
+{
+  Text *text = CTX_data_edit_text(C);
+  TextLine *line = text->curl;
+  bool text_before_cursor = text->curc != 0 && !ELEM(line->line[text->curc - 1], ' ', '\t');
+  if (text_before_cursor && (txt_has_sel(text) == false)) {
+    WM_operator_name_call(C, "TEXT_OT_autocomplete", WM_OP_INVOKE_DEFAULT, NULL);
+  }
+  else {
+    WM_operator_name_call(C, "TEXT_OT_indent", WM_OP_EXEC_DEFAULT, NULL);
+  }
+  return OPERATOR_FINISHED;
+}
+
+void TEXT_OT_indent_or_autocomplete(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Indent or Autocomplete";
+  ot->idname = "TEXT_OT_indent_or_autocomplete";
+  ot->description = "Indent selected text or autocomplete";
+
+  /* api callbacks */
+  ot->exec = text_indent_or_autocomplete_exec;
+  ot->poll = text_edit_poll;
+
+  /* flags */
+  ot->flag = 0;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Indent Operator
  * \{ */
 
@@ -2544,7 +2579,7 @@ static void text_scroll_apply(bContext *C, wmOperator *op, const wmEvent *event)
    * line offset but taken together should still scroll */
   if (!tsc->scrollbar) {
     st->scroll_accum[0] += -tsc->delta[0] / (float)st->cwidth;
-    st->scroll_accum[1] += tsc->delta[1] / (float)(st->lheight_dpi + TXT_LINE_SPACING);
+    st->scroll_accum[1] += tsc->delta[1] / (float)(TXT_LINE_HEIGHT(st));
   }
   else {
     st->scroll_accum[1] += -tsc->delta[1] * st->pix_per_line;
@@ -2982,15 +3017,9 @@ static void text_cursor_set_to_pos(SpaceText *st, ARegion *ar, int x, int y, con
 {
   Text *text = st->text;
   text_update_character_width(st);
-  y = (ar->winy - 2 - y) / (st->lheight_dpi + TXT_LINE_SPACING);
+  y = (ar->winy - 2 - y) / TXT_LINE_HEIGHT(st);
 
-  if (st->showlinenrs) {
-    x -= TXT_OFFSET + TEXTXLOC;
-  }
-  else {
-    x -= TXT_OFFSET;
-  }
-
+  x -= TXT_BODY_LEFT(st);
   if (x < 0) {
     x = 0;
   }
@@ -3261,8 +3290,8 @@ static int text_line_number_invoke(bContext *C, wmOperator *UNUSED(op), const wm
     return OPERATOR_PASS_THROUGH;
   }
 
-  if (!(mval[0] > 2 && mval[0] < (TXT_OFFSET + TEXTXLOC) && mval[1] > 2 &&
-        mval[1] < ar->winy - 2)) {
+  if (!(mval[0] > 2 && mval[0] < (TXT_NUMCOL_WIDTH(st) + (TXT_BODY_LPAD * st->cwidth)) &&
+        mval[1] > 2 && mval[1] < ar->winy - 2)) {
     return OPERATOR_PASS_THROUGH;
   }
 

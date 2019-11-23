@@ -40,6 +40,7 @@ set(DEFSRC
   rna_constraint.c
   rna_context.c
   rna_curve.c
+  rna_curveprofile.c
   rna_depsgraph.c
   rna_dynamicpaint.c
   rna_fcurve.c
