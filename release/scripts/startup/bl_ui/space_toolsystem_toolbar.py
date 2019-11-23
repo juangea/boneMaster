@@ -719,7 +719,7 @@ class _defs_edit_mesh:
             idname="builtin.smooth",
             label="Smooth",
             icon="ops.mesh.vertices_smooth",
-            widget="WM_GGT_value_operator_redo",
+            widget=None,
             keymap=(),
             draw_settings=draw_settings,
         )
@@ -735,7 +735,7 @@ class _defs_edit_mesh:
             idname="builtin.randomize",
             label="Randomize",
             icon="ops.transform.vertex_random",
-            widget="WM_GGT_value_operator_redo",
+            widget=None,
             keymap=(),
             draw_settings=draw_settings,
         )
@@ -911,7 +911,7 @@ class _defs_edit_curve:
             idname="builtin.randomize",
             label="Randomize",
             icon="ops.curve.vertex_random",
-            widget="WM_GGT_value_operator_redo",
+            widget=None,
             keymap=(),
             draw_settings=draw_settings,
         )
