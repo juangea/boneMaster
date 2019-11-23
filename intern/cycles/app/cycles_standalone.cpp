@@ -463,7 +463,7 @@ static void options_parse(int argc, const char **argv)
 
   if (list) {
     vector<DeviceInfo> devices = Device::available_devices();
-    printf("Devices:\n");
+    //printf("Devices:\n");
 
     foreach (DeviceInfo &info, devices) {
       printf("    %-10s%s%s\n",
@@ -498,6 +498,7 @@ static void options_parse(int argc, const char **argv)
   /* find matching device */
   DeviceType device_type = Device::type_from_string(devicename.c_str());
   vector<DeviceInfo> devices = Device::available_devices(DEVICE_MASK(device_type));
+  printf("PROBANDO SEGUNDO cycles_standalone.cpp DEVICE %s %s %s", devices[0].c_str,devices[1].c_str,devices[2].c_str );
 
   bool device_available = false;
   if (!devices.empty()) {

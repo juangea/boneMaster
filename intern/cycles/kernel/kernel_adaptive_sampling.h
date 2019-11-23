@@ -115,6 +115,16 @@ ccl_device void kernel_adaptive_post_adjust(KernelGlobals *kg,
                              kernel_data.film.pass_transmission_color) *= sample_multiplier;
     if (light_flag & PASSMASK(SUBSURFACE_COLOR))
       *(ccl_global float3 *)(buffer + kernel_data.film.pass_subsurface_color) *= sample_multiplier;
+
+    // ASK LUKAS STOCKNER FOR REVIEW OF THIS TO FINIHS COMPATIBILITY BETWEEN ADAPTIVE SAMPLING AND LIGHT GROUPS - bone-studio
+
+    if (light_flag & PASSMASK(LIGHTGROUP)) {
+      int offset = kernel_data.film.pass_lightgroup;
+      for (int i = 0; i < kernel_data.film.num_lightgroups; i++) {
+        *(ccl_global float3 *)(buffer + offset) *= sample_multiplier;
+        offset += 4;        
+      }
+    }
   }
 #endif
 

@@ -85,7 +85,7 @@ int main(int argc, const char **argv)
   if (list) {
     vector<DeviceInfo> &devices = Device::available_devices();
 
-    printf("Devices:\n");
+    //printf("Devices:\n");
 
     foreach (DeviceInfo &info, devices) {
       printf("    %s%s\n", info.description.c_str(), (info.display_device) ? " (display)" : "");

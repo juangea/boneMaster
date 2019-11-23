@@ -226,23 +226,17 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         default=False,
     )
     
-    #use_auto_scramble: BoolProperty(
-    #    name="Auto Scramble",
-    #    description="Enable automatic scrambling distance",
-    #    default=False,
-    #)    
-
-    #use_auto_tiles: BoolProperty(
-    #    name="Auto Tiles",
-    #    description="Automatically manage tile size and draw order for optimal performance and memory usage",
-    #    default=False,
-    #)
-
-    disable_viewport_scramble: BoolProperty(
+    disable_viewport_scramble: BoolProperty( #use_auto_scramble
         name="Disable Viewport Scramble",
-        description="Disable Scramble in viewport",
+        description="Disable Scrambling Distance on viewport preview",
         default=False,
-    )      
+    )    
+
+    renderfarm_safe_tiles: BoolProperty(
+        name="Renderfarm Safe Tiles",
+        description="Manage tile size for CPU or GPU, designed for mixed renderfarm use",
+        default=False,
+    ) 
 
     samples: IntProperty(
         name="Samples",
