@@ -197,7 +197,7 @@ bool ShaderNode::equals(const ShaderNode &other)
 
 /* Graph */
 
-ShaderGraph::ShaderGraph()
+ShaderGraph::ShaderGraph(Shader *shader) : shader(shader)
 {
   finalized = false;
   simplified = false;
@@ -584,7 +584,7 @@ void ShaderGraph::constant_fold(Scene *scene)
 void ShaderGraph::simplify_settings(Scene *scene)
 {
   foreach (ShaderNode *node, nodes) {
-    node->simplify_settings(scene);
+    node->simplify_settings(scene, shader);
   }
 }
 

@@ -210,7 +210,7 @@ static void xml_read_shader_graph(XMLReadState &state, Shader *shader, xml_node 
 {
   xml_read_node(state, shader, graph_node);
 
-  ShaderGraph *graph = new ShaderGraph();
+  ShaderGraph *graph = new ShaderGraph(shader);
 
   /* local state, shader nodes can't link to nodes outside the shader graph */
   XMLReader graph_reader;

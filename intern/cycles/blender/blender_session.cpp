@@ -142,9 +142,9 @@ void BlenderSession::create_session()
   scene->image_manager->builtin_image_info_cb = function_bind(
       &BlenderSession::builtin_image_info, this, _1, _2, _3);
   scene->image_manager->builtin_image_pixels_cb = function_bind(
-      &BlenderSession::builtin_image_pixels, this, _1, _2, _3, _4, _5, _6);
+      &BlenderSession::builtin_image_pixels, this, _1, _2, _3, _4, _5, _6, _7);
   scene->image_manager->builtin_image_float_pixels_cb = function_bind(
-      &BlenderSession::builtin_image_float_pixels, this, _1, _2, _3, _4, _5, _6);
+      &BlenderSession::builtin_image_float_pixels, this, _1, _2, _3, _4, _5, _6, _7);
 
   session->scene = scene;
 
@@ -1225,6 +1225,7 @@ void BlenderSession::builtin_image_info(const string &builtin_name,
 
 bool BlenderSession::builtin_image_pixels(const string &builtin_name,
                                           void *builtin_data,
+                                          int tile,
                                           unsigned char *pixels,
                                           const size_t pixels_size,
                                           const bool associate_alpha,
@@ -1244,7 +1245,7 @@ bool BlenderSession::builtin_image_pixels(const string &builtin_name,
   const int height = b_image.size()[1];
   const int channels = b_image.channels();
 
-  unsigned char *image_pixels = image_get_pixels_for_frame(b_image, frame);
+  unsigned char *image_pixels = image_get_pixels_for_frame(b_image, frame, tile);
   const size_t num_pixels = ((size_t)width) * height;
 
   if (image_pixels && num_pixels * channels == pixels_size) {
@@ -1291,6 +1292,7 @@ bool BlenderSession::builtin_image_pixels(const string &builtin_name,
 
 bool BlenderSession::builtin_image_float_pixels(const string &builtin_name,
                                                 void *builtin_data,
+                                                int tile,
                                                 float *pixels,
                                                 const size_t pixels_size,
                                                 const bool,
@@ -1314,7 +1316,7 @@ bool BlenderSession::builtin_image_float_pixels(const string &builtin_name,
     const int channels = b_image.channels();
 
     float *image_pixels;
-    image_pixels = image_get_float_pixels_for_frame(b_image, frame);
+    image_pixels = image_get_float_pixels_for_frame(b_image, frame, tile);
     const size_t num_pixels = ((size_t)width) * height;
 
     if (image_pixels && num_pixels * channels == pixels_size) {
