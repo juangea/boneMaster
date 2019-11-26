@@ -112,20 +112,6 @@ static bScreen *screen_parent_find(const bScreen *screen)
   return NULL;
 }
 
-static int cmp_image_tile(const void *a, const void *b)
-{
-  const ImageTile *tile_a = a;
-  const ImageTile *tile_b = b;
-
-  if (tile_a->tile_number < tile_b->tile_number) {
-    return -1;
-  }
-  if (tile_a->tile_number > tile_b->tile_number) {
-    return 1;
-  }
-  return 0;
-}
-
 static void do_version_workspaces_create_from_screens(Main *bmain)
 {
   for (bScreen *screen = bmain->screens.first; screen; screen = screen->id.next) {
@@ -3946,7 +3932,8 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
     }
   }
 
-  if (!MAIN_VERSION_ATLEAST(bmain, 282, 2)) {
+  {
+    /* Versioning code until next subversion bump goes here. */
     for (bScreen *screen = bmain->screens.first; screen; screen = screen->id.next) {
       for (ScrArea *sa = screen->areabase.first; sa; sa = sa->next) {
         sa->flag &= ~AREA_FLAG_UNUSED_6;
@@ -3991,37 +3978,5 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
         br->pose_smooth_iterations = 4;
       }
     }
-
-    if (!DNA_struct_elem_find(fd->filesdna, "Image", "short", "num_tiles")) {
-      for (Image *ima = bmain->images.first; ima; ima = ima->id.next) {
-        ImageTile *tile = MEM_callocN(sizeof(ImageTile), "Image Tiles");
-        tile->ok = 1;
-        BLI_addtail(&ima->tiles, tile);
-      }
-    }
-
-    /* Files saved with older versions of the UDIM patch might not have sorted tiles.
-     * We can probably remove this in the final commit. */
-    for (Image *ima = bmain->images.first; ima; ima = ima->id.next) {
-      BLI_listbase_sort(&ima->tiles, cmp_image_tile);
-    }
-
-    if (!DNA_struct_elem_find(fd->filesdna, "SpaceImage", "int", "tile_grid_shape[2]")) {
-      for (bScreen *screen = bmain->screens.first; screen; screen = screen->id.next) {
-        for (ScrArea *sa = screen->areabase.first; sa; sa = sa->next) {
-          for (SpaceLink *sl = sa->spacedata.first; sl; sl = sl->next) {
-            if (sl->spacetype == SPACE_IMAGE) {
-              SpaceImage *sima = (SpaceImage *)sl;
-              sima->tile_grid_shape[0] = 1;
-              sima->tile_grid_shape[1] = 1;
-            }
-          }
-        }
-      }
-    }
-  }
-
-  {
-    /* Versioning code until next subversion bump goes here. */
   }
 }

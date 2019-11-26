@@ -1185,17 +1185,9 @@ static DRWShadingGroup *drw_shgroup_material_inputs(DRWShadingGroup *grp,
       GPUTexture *tex = NULL;
 
       if (input->ima) {
-        /* If there's no specified iuser but we need a different tile, create a temporary one. */
-        ImageUser local_iuser = {NULL};
-        local_iuser.ok = true;
-        local_iuser.tile = input->image_tile;
-
-        ImageUser *iuser = input->iuser ? input->iuser : &local_iuser;
-        iuser->tile = input->image_tile;
-
         GPUTexture **tex_ref = BLI_memblock_alloc(DST.vmempool->images);
 
-        *tex_ref = tex = GPU_texture_from_blender(input->ima, iuser, GL_TEXTURE_2D);
+        *tex_ref = tex = GPU_texture_from_blender(input->ima, input->iuser, GL_TEXTURE_2D);
 
         GPU_texture_ref(tex);
       }

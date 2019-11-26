@@ -1653,7 +1653,7 @@ void UI_drop_color_copy(wmDrag *drag, wmDropBox *drop)
   RNA_boolean_set(drop->ptr, "gamma", drag_info->gamma_corrected);
 }
 
-static int drop_color_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+static int drop_color_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
 {
   ARegion *ar = CTX_wm_region(C);
   uiBut *but = NULL;
@@ -1696,7 +1696,7 @@ static int drop_color_invoke(bContext *C, wmOperator *op, const wmEvent *event)
       srgb_to_linearrgb_v3_v3(color, color);
     }
 
-    ED_imapaint_bucket_fill(C, color, op, event->mval);
+    ED_imapaint_bucket_fill(C, color, op);
   }
 
   ED_region_tag_redraw(ar);

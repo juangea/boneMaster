@@ -74,12 +74,6 @@ static int node_shader_gpu_tex_image(GPUMaterial *mat,
       "node_tex_image_cubic",
       "node_tex_image_smart",
   };
-  static const char *names_tiled[] = {
-      "node_tex_tile_linear",
-      "node_tex_tile_nearest",
-      "node_tex_tile_cubic",
-      "node_tex_tile_smart",
-  };
   static const char *names_box[] = {
       "tex_box_sample_linear",
       "tex_box_sample_nearest",
@@ -129,77 +123,60 @@ static int node_shader_gpu_tex_image(GPUMaterial *mat,
 
   node_shader_gpu_tex_mapping(mat, node, in, out);
 
-  if (ima->source == IMA_SRC_TILED) {
-    GPUNodeLink *map;
-    GPU_link(mat, "node_tex_tile_map", in[0].link, &out[0].link, &map);
-    LISTBASE_FOREACH (ImageTile *, tile, &ima->tiles) {
-      float tile_number = tile->tile_number;
-      GPU_link(mat,
-               names_tiled[tex->interpolation],
-               map,
-               GPU_uniform(&tile_number),
-               GPU_image(ima, iuser, tile->tile_number),
-               out[0].link,
-               &out[0].link,
-               &out[1].link);
-    }
-  }
-  else {
-    switch (tex->projection) {
-      case SHD_PROJ_FLAT:
-        if (do_texco_clip) {
-          GPU_link(mat, "set_rgb", *texco, &input_coords);
-        }
-        if (do_texco_extend) {
-          GPU_link(mat, "point_texco_clamp", *texco, GPU_image(ima, iuser, 0), texco);
-        }
-        GPU_stack_link(mat, node, gpu_node_name, in, out, GPU_image(ima, iuser, 0));
-        break;
-
-      case SHD_PROJ_BOX:
-        vnor = GPU_builtin(GPU_WORLD_NORMAL);
-        ob_mat = GPU_builtin(GPU_OBJECT_MATRIX);
-        blend = GPU_uniform(&tex->projection_blend);
-        gpu_image = GPU_image(ima, iuser, 0);
-
-        /* equivalent to normal_world_to_object */
-        GPU_link(mat, "normal_transform_transposed_m4v3", vnor, ob_mat, &norm);
-        GPU_link(mat, gpu_node_name, *texco, norm, GPU_image(ima, iuser, 0), &col1, &col2, &col3);
-        GPU_stack_link(
-            mat, node, "node_tex_image_box", in, out, norm, col1, col2, col3, gpu_image, blend);
-        break;
-
-      case SHD_PROJ_SPHERE:
-        GPU_link(mat, "point_texco_remap_square", *texco, texco);
-        GPU_link(mat, "point_map_to_sphere", *texco, texco);
-        if (do_texco_clip) {
-          GPU_link(mat, "set_rgb", *texco, &input_coords);
-        }
-        if (do_texco_extend) {
-          GPU_link(mat, "point_texco_clamp", *texco, GPU_image(ima, iuser, 0), texco);
-        }
-        GPU_stack_link(mat, node, gpu_node_name, in, out, GPU_image(ima, iuser, 0));
-        break;
-
-      case SHD_PROJ_TUBE:
-        GPU_link(mat, "point_texco_remap_square", *texco, texco);
-        GPU_link(mat, "point_map_to_tube", *texco, texco);
-        if (do_texco_clip) {
-          GPU_link(mat, "set_rgb", *texco, &input_coords);
-        }
-        if (do_texco_extend) {
-          GPU_link(mat, "point_texco_clamp", *texco, GPU_image(ima, iuser, 0), texco);
-        }
-        GPU_stack_link(mat, node, gpu_node_name, in, out, GPU_image(ima, iuser, 0));
-        break;
-    }
-
-    if (tex->projection != SHD_PROJ_BOX) {
+  switch (tex->projection) {
+    case SHD_PROJ_FLAT:
       if (do_texco_clip) {
-        gpu_node_name = names_clip[tex->interpolation];
-        in[0].link = input_coords;
-        GPU_stack_link(mat, node, gpu_node_name, in, out, GPU_image(ima, iuser, 0), out[0].link);
+        GPU_link(mat, "set_rgb", *texco, &input_coords);
       }
+      if (do_texco_extend) {
+        GPU_link(mat, "point_texco_clamp", *texco, GPU_image(ima, iuser), texco);
+      }
+      GPU_stack_link(mat, node, gpu_node_name, in, out, GPU_image(ima, iuser));
+      break;
+
+    case SHD_PROJ_BOX:
+      vnor = GPU_builtin(GPU_WORLD_NORMAL);
+      ob_mat = GPU_builtin(GPU_OBJECT_MATRIX);
+      blend = GPU_uniform(&tex->projection_blend);
+      gpu_image = GPU_image(ima, iuser);
+
+      /* equivalent to normal_world_to_object */
+      GPU_link(mat, "normal_transform_transposed_m4v3", vnor, ob_mat, &norm);
+      GPU_link(mat, gpu_node_name, *texco, norm, GPU_image(ima, iuser), &col1, &col2, &col3);
+      GPU_stack_link(
+          mat, node, "node_tex_image_box", in, out, norm, col1, col2, col3, gpu_image, blend);
+      break;
+
+    case SHD_PROJ_SPHERE:
+      GPU_link(mat, "point_texco_remap_square", *texco, texco);
+      GPU_link(mat, "point_map_to_sphere", *texco, texco);
+      if (do_texco_clip) {
+        GPU_link(mat, "set_rgb", *texco, &input_coords);
+      }
+      if (do_texco_extend) {
+        GPU_link(mat, "point_texco_clamp", *texco, GPU_image(ima, iuser), texco);
+      }
+      GPU_stack_link(mat, node, gpu_node_name, in, out, GPU_image(ima, iuser));
+      break;
+
+    case SHD_PROJ_TUBE:
+      GPU_link(mat, "point_texco_remap_square", *texco, texco);
+      GPU_link(mat, "point_map_to_tube", *texco, texco);
+      if (do_texco_clip) {
+        GPU_link(mat, "set_rgb", *texco, &input_coords);
+      }
+      if (do_texco_extend) {
+        GPU_link(mat, "point_texco_clamp", *texco, GPU_image(ima, iuser), texco);
+      }
+      GPU_stack_link(mat, node, gpu_node_name, in, out, GPU_image(ima, iuser));
+      break;
+  }
+
+  if (tex->projection != SHD_PROJ_BOX) {
+    if (do_texco_clip) {
+      gpu_node_name = names_clip[tex->interpolation];
+      in[0].link = input_coords;
+      GPU_stack_link(mat, node, gpu_node_name, in, out, GPU_image(ima, iuser), out[0].link);
     }
   }
 

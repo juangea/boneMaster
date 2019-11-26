@@ -56,9 +56,6 @@ typedef struct ImageUser {
   short pass;
   char _pad1[2];
 
-  int tile;
-  int _pad2;
-
   /** Listbase indices, for menu browsing or retrieve buffer. */
   short multi_index, view, layer;
   short flag;
@@ -91,19 +88,6 @@ typedef struct RenderSlot {
   struct RenderResult *render;
 } RenderSlot;
 
-typedef struct ImageTile {
-  struct ImageTile *next, *prev;
-
-  /** Not written in file 2 = TEXTARGET_COUNT. */
-  struct GPUTexture *gputexture[2];
-
-  char ok;
-  char _pad[3];
-
-  int tile_number;
-  char label[64];
-} ImageTile;
-
 /* iuser->flag */
 #define IMA_ANIM_ALWAYS (1 << 0)
 /* #define IMA_UNUSED_1         (1 << 1) */
@@ -125,6 +109,8 @@ typedef struct Image {
 
   /** Not written in file. */
   struct MovieCache *cache;
+  /** Not written in file 2 = TEXTARGET_COUNT. */
+  struct GPUTexture *gputexture[2];
 
   /* sources from: */
   ListBase anims;
@@ -148,6 +134,8 @@ typedef struct Image {
   struct PreviewImage *preview;
 
   int lastused;
+  short ok;
+  char _pad4[6];
 
   /* for generated images */
   int gen_x, gen_y;
@@ -162,17 +150,12 @@ typedef struct Image {
   ColorManagedColorspaceSettings colorspace_settings;
   char alpha_mode;
 
-  char _pad;
+  char _pad[5];
 
   /* Multiview */
   /** For viewer node stereoscopy. */
   char eye;
   char views_format;
-
-  /* ImageTile list for UDIMs. */
-  int active_tile_index;
-  ListBase tiles;
-
   /** ImageView. */
   ListBase views;
   struct Stereo3dFormat *stereo3d_format;
@@ -219,7 +202,6 @@ enum {
   IMA_SRC_MOVIE = 3,
   IMA_SRC_GENERATED = 4,
   IMA_SRC_VIEWER = 5,
-  IMA_SRC_TILED = 6,
 };
 
 /* Image.type, how to handle or generate the image */

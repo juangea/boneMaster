@@ -172,8 +172,6 @@ class SceneParams {
   bool persistent_data;
   int texture_limit;
 
-  bool background;
-
   SceneParams()
   {
     shadingsystem = SHADINGSYSTEM_SVM;
@@ -184,7 +182,6 @@ class SceneParams {
     num_bvh_time_steps = 0;
     persistent_data = false;
     texture_limit = 0;
-    background = true;
   }
 
   bool modified(const SceneParams &params)

@@ -173,7 +173,7 @@ class ShaderNode : public Node {
   /* Simplify settings used by artists to the ones which are simpler to
    * evaluate in the kernel but keep the final result unchanged.
    */
-  virtual void simplify_settings(Scene * /*scene*/, Shader * /*shader*/){};
+  virtual void simplify_settings(Scene * /*scene*/){};
 
   virtual bool has_surface_emission()
   {
@@ -318,9 +318,8 @@ class ShaderGraph {
   bool finalized;
   bool simplified;
   string displacement_hash;
-  Shader *shader;
 
-  ShaderGraph(Shader *shader);
+  ShaderGraph();
   ~ShaderGraph();
 
   ShaderNode *add(ShaderNode *node);

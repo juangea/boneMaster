@@ -1120,13 +1120,8 @@ static void icon_preview_startjob(void *customdata, short *stop, short *do_updat
       ImBuf *ibuf = NULL;
       ImageUser iuser = {NULL};
 
-      if (ima == NULL) {
-        return;
-      }
-
-      ImageTile *tile = BKE_image_get_tile(ima, 0);
-      /* tile->ok is zero when Image cannot load */
-      if (tile->ok == 0) {
+      /* ima->ok is zero when Image cannot load */
+      if (ima == NULL || ima->ok == 0) {
         return;
       }
 

@@ -605,8 +605,7 @@ void ShaderManager::add_default(Scene *scene)
 {
   /* default surface */
   {
-    Shader *shader = new Shader();
-    ShaderGraph *graph = new ShaderGraph(shader);
+    ShaderGraph *graph = new ShaderGraph();
 
     DiffuseBsdfNode *diffuse = new DiffuseBsdfNode();
     diffuse->color = make_float3(0.8f, 0.8f, 0.8f);
@@ -614,6 +613,7 @@ void ShaderManager::add_default(Scene *scene)
 
     graph->connect(diffuse->output("BSDF"), graph->output()->input("Surface"));
 
+    Shader *shader = new Shader();
     shader->name = "default_surface";
     shader->graph = graph;
     scene->shaders.push_back(shader);
@@ -622,8 +622,7 @@ void ShaderManager::add_default(Scene *scene)
 
   /* default light */
   {
-    Shader *shader = new Shader();
-    ShaderGraph *graph = new ShaderGraph(shader);
+    ShaderGraph *graph = new ShaderGraph();
 
     EmissionNode *emission = new EmissionNode();
     emission->color = make_float3(0.8f, 0.8f, 0.8f);
@@ -632,6 +631,7 @@ void ShaderManager::add_default(Scene *scene)
 
     graph->connect(emission->output("Emission"), graph->output()->input("Surface"));
 
+    Shader *shader = new Shader();
     shader->name = "default_light";
     shader->graph = graph;
     scene->shaders.push_back(shader);
@@ -640,9 +640,9 @@ void ShaderManager::add_default(Scene *scene)
 
   /* default background */
   {
-    Shader *shader = new Shader();
-    ShaderGraph *graph = new ShaderGraph(shader);
+    ShaderGraph *graph = new ShaderGraph();
 
+    Shader *shader = new Shader();
     shader->name = "default_background";
     shader->graph = graph;
     scene->shaders.push_back(shader);
@@ -651,9 +651,9 @@ void ShaderManager::add_default(Scene *scene)
 
   /* default empty */
   {
-    Shader *shader = new Shader();
-    ShaderGraph *graph = new ShaderGraph(shader);
+    ShaderGraph *graph = new ShaderGraph();
 
+    Shader *shader = new Shader();
     shader->name = "default_empty";
     shader->graph = graph;
     scene->shaders.push_back(shader);
