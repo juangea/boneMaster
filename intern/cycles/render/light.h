@@ -82,7 +82,7 @@ class Light : public Node {
 
   void tag_update(Scene *scene);
 
-  /* Check whether the light has contribution the the scene. */
+  /* Check whether the light has contribution the scene. */
   bool has_contribution(Scene *scene);
 };
 
