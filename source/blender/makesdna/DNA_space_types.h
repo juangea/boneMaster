@@ -973,7 +973,8 @@ typedef struct FileDirEntry {
   int act_variant;
 } FileDirEntry;
 
-/** Array of direntries.
+/**
+ * Array of direntries.
  *
  * This struct is used in various, different contexts.
  *
@@ -1217,8 +1218,11 @@ typedef struct SpaceText {
   /** Cache for faster drawing. */
   void *drawcache;
 
-  /** Runtime, for scroll increments smaller than a line. */
-  float scroll_accum[2];
+  /**
+   * Run-time for scroll increments smaller than a line (smooth scroll).
+   * Values must be between zero and the line, column width: (cwidth, TXT_LINE_HEIGHT(st)).
+   */
+  int scroll_ofs_px[2];
 } SpaceText;
 
 /* SpaceText flags (moved from DNA_text_types.h) */
