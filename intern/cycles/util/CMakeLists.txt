@@ -60,7 +60,6 @@ set(SRC_HEADERS
   util_debug.h
   util_defines.h
   util_deque.h
-  util_disjoint_set.h
   util_guarded_allocator.cpp
   util_foreach.h
   util_function.h
