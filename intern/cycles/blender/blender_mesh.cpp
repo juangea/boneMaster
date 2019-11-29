@@ -705,20 +705,28 @@ static void attr_create_random_per_island(Scene *scene,
     return;
   }
 
-  DisjointSet verticesSets(number_of_vertices);
+  DisjointSet vertices_sets(number_of_vertices);
 
   BL::Mesh::edges_iterator e;
   for (b_mesh.edges.begin(e); e != b_mesh.edges.end(); ++e) {
-    verticesSets.join(e->vertices()[0], e->vertices()[1]);
+    vertices_sets.join(e->vertices()[0], e->vertices()[1]);
   }
 
   AttributeSet &attributes = (subdivision) ? mesh->subd_attributes : mesh->attributes;
   Attribute *attribute = attributes.add(ATTR_STD_RANDOM_PER_ISLAND);
   float *data = attribute->data_float();
 
-  BL::Mesh::loop_triangles_iterator t;
-  for (b_mesh.loop_triangles.begin(t); t != b_mesh.loop_triangles.end(); ++t) {
-    data[t->index()] = hash_uint_to_float(verticesSets.find(t->vertices()[0]));
+  if (!subdivision) {
+    BL::Mesh::loop_triangles_iterator t;
+    for (b_mesh.loop_triangles.begin(t); t != b_mesh.loop_triangles.end(); ++t) {
+      data[t->index()] = hash_uint_to_float(vertices_sets.find(t->vertices()[0]));
+    }
+  }
+  else {
+    BL::Mesh::polygons_iterator p;
+    for (b_mesh.polygons.begin(p); p != b_mesh.polygons.end(); ++p) {
+      data[p->index()] = hash_uint_to_float(vertices_sets.find(p->vertices()[0]));
+    }
   }
 }
 

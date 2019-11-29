@@ -38,28 +38,34 @@ class DisjointSet {
 
   size_t find(size_t x)
   {
-    if (parents[x] != x) {
-      parents[x] = find(parents[x]);
+    size_t root = x;
+    while (parents[root] != root) {
+      root = parents[root];
     }
-    return parents[x];
+    while (parents[x] != root) {
+      size_t parent = parents[x];
+      parents[x] = root;
+      x = parent;
+    }
+    return root;
   }
 
   void join(size_t x, size_t y)
   {
-    size_t xRoot = find(x);
-    size_t yRoot = find(y);
+    size_t x_root = find(x);
+    size_t y_root = find(y);
 
-    if (xRoot == yRoot) {
+    if (x_root == y_root) {
       return;
     }
 
-    if (ranks[xRoot] < ranks[yRoot]) {
-      std::swap(xRoot, yRoot);
+    if (ranks[x_root] < ranks[y_root]) {
+      std::swap(x_root, y_root);
     }
-    parents[yRoot] = xRoot;
+    parents[y_root] = x_root;
 
-    if (ranks[xRoot] == ranks[yRoot]) {
-      ranks[xRoot]++;
+    if (ranks[x_root] == ranks[y_root]) {
+      ranks[x_root]++;
     }
   }
 };
