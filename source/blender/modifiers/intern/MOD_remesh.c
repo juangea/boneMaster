@@ -680,6 +680,9 @@ static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mes
       }
 
       if (result) {
+        //new ... need to copy materials etc on our own
+        BKE_mesh_copy_settings(result, mesh);
+
         // update cache
         if (rmd_orig->mesh_cached) {
           BKE_mesh_free(rmd_orig->mesh_cached);
