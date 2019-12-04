@@ -281,6 +281,11 @@ static void armature_transform_recurse(ListBase *bonebase,
 {
   for (Bone *bone = bonebase->first; bone; bone = bone->next) {
 
+    /* Store the initial bone roll in a matrix, this is needed even for child bones
+     * so any change in head/tail doesn't cause the roll to change.
+     *
+     * Logic here is different to edit-mode because
+     * this is calculated in relative to the parent. */
     float roll_mat3_pre[3][3];
     {
       float delta[3];
@@ -290,6 +295,7 @@ static void armature_transform_recurse(ListBase *bonebase,
         mul_m3_m3m3(roll_mat3_pre, mat3, roll_mat3_pre);
       }
     }
+    /* Optional, use this for predictable results since the roll is re-calculated below anyway. */
     bone->roll = 0.0f;
 
     mul_m4_v3(mat, bone->arm_head);
@@ -308,17 +314,14 @@ static void armature_transform_recurse(ListBase *bonebase,
       copy_v3_v3(bone->tail, bone->arm_tail);
     }
 
+    /* Now the head/tail have been updated, set the roll back, matching 'roll_mat3_pre'. */
     {
-      float roll_mat3_post[3][3];
-      float delta_mat3[3][3];
+      float roll_mat3_post[3][3], delta_mat3[3][3];
       float delta[3];
       sub_v3_v3v3(delta, bone->tail, bone->head);
-      vec_roll_to_mat3(delta, bone->roll, roll_mat3_post);
-      normalize_v3(delta);
-
+      vec_roll_to_mat3(delta, 0.0f, roll_mat3_post);
       invert_m3(roll_mat3_post);
       mul_m3_m3m3(delta_mat3, roll_mat3_post, roll_mat3_pre);
-
       bone->roll = atan2f(delta_mat3[2][0], delta_mat3[2][2]);
     }
 
@@ -1558,7 +1561,6 @@ static void armature_vert_task(void *__restrict userdata,
     MDeformWeight *dw = dvert->dw;
     int deformed = 0;
     unsigned int j;
-    float acum_weight = 0;
     for (j = dvert->totweight; j != 0; j--, dw++) {
       const int index = dw->def_nr;
       if (index >= 0 && index < data->defbase_tot && (pchan = data->defnrToPC[index])) {
@@ -1572,20 +1574,8 @@ static void armature_vert_task(void *__restrict userdata,
               co, bone->arm_head, bone->arm_tail, bone->rad_head, bone->rad_tail, bone->dist);
         }
 
-        /* check limit of weight */
-        if (data->target->type == OB_GPENCIL) {
-          if (acum_weight + weight >= 1.0f) {
-            weight = 1.0f - acum_weight;
-          }
-          acum_weight += weight;
-        }
-
         pchan_bone_deform(pchan, weight, vec, dq, smat, co, &contrib);
 
-        /* if acumulated weight limit exceed, exit loop */
-        if ((data->target->type == OB_GPENCIL) && (acum_weight >= 1.0f)) {
-          break;
-        }
       }
     }
     /* if there are vertexgroups but not groups with bones
