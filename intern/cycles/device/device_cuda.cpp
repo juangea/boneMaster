@@ -1853,8 +1853,8 @@ class CUDADevice : public Device {
     }
     else
     {
-      if (end_sample > 4096){
-        step_samples = 4096;
+      if (end_sample > 8192){
+        step_samples = 8192;
       }
     }
     
