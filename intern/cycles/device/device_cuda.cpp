@@ -1847,14 +1847,14 @@ class CUDADevice : public Device {
 
 		if (!info.display_device)
     {
-      if (end_sample > 8192){
-        step_samples = 8192;
+      if (end_sample > 2048){
+        step_samples = 2048;
       }      
     }
     else
     {
-      if (end_sample > 8192){
-        step_samples = 8192;
+      if (end_sample > 2048){
+        step_samples = 2048;
       }
     }
     
