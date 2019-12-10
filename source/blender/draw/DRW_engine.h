@@ -23,6 +23,10 @@
 #ifndef __DRW_ENGINE_H__
 #define __DRW_ENGINE_H__
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "BLI_sys_types.h" /* for bool */
 
 struct ARegion;
@@ -48,6 +52,7 @@ struct rcti;
 /* Buffer and textures used by the viewport by default */
 typedef struct DefaultFramebufferList {
   struct GPUFrameBuffer *default_fb;
+  struct GPUFrameBuffer *in_front_fb;
   struct GPUFrameBuffer *color_only_fb;
   struct GPUFrameBuffer *depth_only_fb;
   struct GPUFrameBuffer *multisample_fb;
@@ -56,6 +61,7 @@ typedef struct DefaultFramebufferList {
 typedef struct DefaultTextureList {
   struct GPUTexture *color;
   struct GPUTexture *depth;
+  struct GPUTexture *depth_in_front;
   struct GPUTexture *multisample_color;
   struct GPUTexture *multisample_depth;
 } DefaultTextureList;
@@ -165,5 +171,9 @@ void DRW_deferred_shader_remove(struct GPUMaterial *mat);
 
 struct DrawDataList *DRW_drawdatalist_from_id(struct ID *id);
 void DRW_drawdata_free(struct ID *id);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __DRW_ENGINE_H__ */
