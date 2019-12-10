@@ -635,7 +635,7 @@ ccl_device_inline bool lamp_light_sample(
       ls->u = dot(inplane, axisu) * (1.0f / dot(axisu, axisu)) + 0.5f;
       ls->v = dot(inplane, axisv) * (1.0f / dot(axisv, axisv)) + 0.5f;
 
-      ls->Ng = make_float3(klight->area.dir[0], klight->area.dir[1], klight->area.dir[2]);
+      ls->Ng = D;
       ls->D = normalize_len(ls->P - P, &ls->t);
 
       ls->eval_fac = 0.25f * invarea;
@@ -1150,51 +1150,5 @@ ccl_device_inline int light_select_num_samples(KernelGlobals *kg, int index)
 {
   return kernel_tex_fetch(__lights, index).samples;
 }
-
-/* Clip a ray to the iluminated segment based on a light sample. */
-ccl_device bool kernel_light_clip_ray(KernelGlobals *kg, const Ray *ray, const LightSample *ls, float *t_near, float *t_far)
-{
-  *t_near = 0.0f;
-  *t_far = ray->t;
-  /* For area lights, clip the ray to the front (emitting side). */
-  if (ls->type == LIGHT_AREA) {
-    /* Intersect the ray with the light's plane. */
-    const ccl_global KernelLight &klight = kernel_tex_fetch(__lights, ls->lamp);
-    float t_intersect;
-    const float3 co = make_float3(klight.co[0], klight.co[1], klight.co[2]);
-    const float3 Ng = make_float3(klight.area.dir[0], klight.area.dir[1], klight.area.dir[2]);
-    if (ray_plane_intersect(ray->P, ray->D, co, Ng, &t_intersect)) {
-      if (t_intersect > 0.0f) {
-        if (dot(Ng, ray->D) > 0.0f) {
-          *t_near = t_intersect;
-        }
-        else {
-          *t_far = min(t_intersect, *t_far);
-        }
-      }
-    }
-  }
-  else if (ls->type == LIGHT_SPOT) {
-    /* Intersect the ray with the light's cone. */
-    const ccl_global KernelLight &klight = kernel_tex_fetch(__lights, ls->lamp);
-    float t0, t1;
-    const float3 spot_D = make_float3(klight.spot.dir[0], klight.spot.dir[1], klight.spot.dir[2]);
-    if (ray_cone_intersect(ray->P, ray->D, ls->P, spot_D, klight.spot.spot_angle, &t0, &t1)) {
-      /* If the ray origin is inside the cone, use only the first intersection. */
-      if (dot(normalize(ls->P - ray->P), spot_D) > klight.spot.spot_angle) {
-        *t_far = min(*t_far, t0);
-      }
-      else {
-        *t_near = max(*t_near, t0);
-        *t_far = min(*t_far, t1);
-      }
-    }
-    else {
-      return false;
-    }
-  }
-  return true;
-}
-
 
 CCL_NAMESPACE_END
