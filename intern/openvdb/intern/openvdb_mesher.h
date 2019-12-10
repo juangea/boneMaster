@@ -553,7 +553,7 @@ bool validQuad(openvdb::Vec4I quad)
 
 bool validVert(openvdb::Vec3s vert)
 {
-  return !(isnan(vert[0]) || isnan(vert[1]) || isnan(vert[2]));
+  return !(std::isnan(vert[0]) || std::isnan(vert[1]) || std::isnan(vert[2]));
 }
 
 void SmoothOp::operator()(const RangeT &r) const
