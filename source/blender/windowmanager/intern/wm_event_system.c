@@ -2850,7 +2850,7 @@ static int wm_handlers_do_intern(bContext *C, wmEvent *event, ListBase *handlers
           if (wm_gizmomap_highlight_set(gzmap, C, gz, part)) {
             if (gz != NULL) {
               if (U.flag & USER_TOOLTIPS) {
-                WM_tooltip_timer_init(C, CTX_wm_window(C), region, WM_gizmomap_tooltip_init);
+                WM_tooltip_timer_init(C, CTX_wm_window(C), area, region, WM_gizmomap_tooltip_init);
               }
             }
           }
@@ -3728,8 +3728,40 @@ wmKeyMap *WM_event_get_keymap_from_toolsystem(wmWindowManager *wm, wmEventHandle
   handler->keymap_tool = NULL;
   bToolRef_Runtime *tref_rt = sa->runtime.tool ? sa->runtime.tool->runtime : NULL;
   if (tref_rt && tref_rt->keymap[0]) {
+    const char *keymap_id = tref_rt->keymap;
+
+    /* Support for the gizmo owning the tool keymap. */
+    if (USER_EXPEREMENTAL_TEST(&U, use_tool_fallback)) {
+      if (tref_rt->gizmo_group[0] != '\0') {
+        wmGizmoMap *gzmap = NULL;
+        wmGizmoGroup *gzgroup = NULL;
+        for (ARegion *ar = sa->regionbase.first; ar; ar = ar->next) {
+          if (ar->gizmo_map != NULL) {
+            gzmap = ar->gizmo_map;
+            gzgroup = WM_gizmomap_group_find(gzmap, tref_rt->gizmo_group);
+            if (gzgroup != NULL) {
+              break;
+            }
+          }
+        }
+        if (gzgroup != NULL) {
+          if (gzgroup->type->flag & WM_GIZMOGROUPTYPE_TOOL_FALLBACK_KEYMAP) {
+            /* If all are hidden, don't override. */
+            if (gzgroup->use_fallback_keymap) {
+              wmGizmo *highlight = wm_gizmomap_highlight_get(gzmap);
+              if (highlight == NULL) {
+                if (tref_rt->keymap_fallback[0]) {
+                  keymap_id = tref_rt->keymap_fallback;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
     wmKeyMap *km = WM_keymap_list_find_spaceid_or_empty(
-        &wm->userconf->keymaps, tref_rt->keymap, sa->spacetype, RGN_TYPE_WINDOW);
+        &wm->userconf->keymaps, keymap_id, sa->spacetype, RGN_TYPE_WINDOW);
     /* We shouldn't use keymaps from unrelated spaces. */
     if (km != NULL) {
       handler->keymap_tool = sa->runtime.tool;
@@ -4133,6 +4165,8 @@ static int convert_key(GHOST_TKey key)
         return LEFTALTKEY;
       case GHOST_kKeyRightAlt:
         return RIGHTALTKEY;
+      case GHOST_kKeyApp:
+        return APPKEY;
 
       case GHOST_kKeyCapsLock:
         return CAPSLOCKKEY;
