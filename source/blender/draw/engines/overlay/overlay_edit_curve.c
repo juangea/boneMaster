@@ -119,6 +119,11 @@ void OVERLAY_edit_surf_cache_populate(OVERLAY_Data *vedata, Object *ob)
 void OVERLAY_edit_curve_draw(OVERLAY_Data *vedata)
 {
   OVERLAY_PassList *psl = vedata->psl;
+  OVERLAY_FramebufferList *fbl = vedata->fbl;
+
+  if (DRW_state_is_fbo()) {
+    GPU_framebuffer_bind(fbl->overlay_default_fb);
+  }
 
   DRW_draw_pass(psl->edit_curve_wire_ps[0]);
   DRW_draw_pass(psl->edit_curve_wire_ps[1]);
