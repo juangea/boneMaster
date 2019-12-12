@@ -323,6 +323,14 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         default='SOBOL',
     )
 
+    scrambling_distance: FloatProperty(
+        name="Scrambling distance",
+        description="The amount of pixel-dependent scrambling applied to the Sobol sequence,"
+                    "lower values might speed up rendering but can cause visible artifacts",
+        min=0.0, max=1.0,
+        default=1.0,
+    )    
+
     use_layer_samples: EnumProperty(
         name="Layer Samples",
         description="How to use per view layer sample settings",

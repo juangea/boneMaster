@@ -248,6 +248,7 @@ class CYCLES_RENDER_PT_sampling_advanced(CyclesButtonsPanel, Panel):
         row.prop(cscene, "use_animated_seed", text="", icon='TIME')
 
         layout.prop(cscene, "sampling_pattern", text="Pattern")
+        layout.prop(cscene, "scrambling_distance")
 
         layout.prop(cscene, "use_square_samples")
 
