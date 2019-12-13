@@ -49,10 +49,13 @@ ccl_device void kernel_shadow_blocked_dl(KernelGlobals *kg)
   PathRadiance *L = &kernel_split_state.path_radiance[ray_index];
   ShaderData *sd = kernel_split_sd(sd, ray_index);
   float3 throughput = kernel_split_state.throughput[ray_index];
+  uint buffer_offset = kernel_split_state.buffer_offset[ray_index];
+  ccl_global float *buffer = kernel_split_params.tile.buffer + buffer_offset;
 
   BsdfEval L_light = kernel_split_state.bsdf_eval[ray_index];
   ShaderData *emission_sd = AS_SHADER_DATA(&kernel_split_state.sd_DL_shadow[ray_index]);
   bool is_lamp = kernel_split_state.is_lamp[ray_index];
+  uint lightgroups = kernel_split_state.lightgroups[ray_index];
 
 #if defined(__BRANCHED_PATH__) || defined(__SHADOW_TRICKS__)
   bool use_branched = false;
@@ -77,7 +80,7 @@ ccl_device void kernel_shadow_blocked_dl(KernelGlobals *kg)
 
   if (use_branched) {
     kernel_branched_path_surface_connect_light(
-        kg, sd, emission_sd, state, throughput, 1.0f, L, all);
+        kg, sd, emission_sd, state, buffer, throughput, 1.0f, L, all);
   }
   else
 #endif /* defined(__BRANCHED_PATH__) || defined(__SHADOW_TRICKS__)*/
@@ -87,7 +90,8 @@ ccl_device void kernel_shadow_blocked_dl(KernelGlobals *kg)
 
     if (!shadow_blocked(kg, sd, emission_sd, state, &ray, &shadow)) {
       /* accumulate */
-      path_radiance_accum_light(kg, L, state, throughput, &L_light, shadow, 1.0f, is_lamp);
+      path_radiance_accum_light(
+          kg, L, state, buffer, throughput, &L_light, shadow, 1.0f, lightgroups, is_lamp);
     }
     else {
       path_radiance_accum_total_light(L, state, throughput, &L_light);
