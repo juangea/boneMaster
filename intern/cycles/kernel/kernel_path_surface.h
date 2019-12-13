@@ -65,7 +65,7 @@ ccl_device_noinline_cpu void kernel_branched_path_surface_connect_light(
         }
         num_samples = ceil_to_int(num_samples_adjust * light_select_num_samples(kg, i));
         num_all_lights = kernel_data.integrator.num_all_lights;
-        lamp_rng_hash = cmj_hash(state->rng_hash, i);
+        lamp_rng_hash = path_rng_hash(state->rng_hash, i);
         double_pdf = kernel_data.integrator.pdf_triangles != 0.0f;
       }
       /* mesh light sampling */

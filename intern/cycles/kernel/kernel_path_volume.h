@@ -167,7 +167,7 @@ ccl_device void kernel_branched_path_volume_connect_light(KernelGlobals *kg,
         }
         num_samples = light_select_num_samples(kg, i);
         num_all_lights = kernel_data.integrator.num_all_lights;
-        lamp_rng_hash = cmj_hash(state->rng_hash, i);
+        lamp_rng_hash = path_rng_hash(state->rng_hash, i);
         double_pdf = kernel_data.integrator.pdf_triangles != 0.0f;
       }
       /* mesh light sampling */
