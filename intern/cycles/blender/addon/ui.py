@@ -1280,7 +1280,11 @@ class CYCLES_OBJECT_PT_visibility_ray_visibility(CyclesButtonsPanel, Panel):
         flow = layout.grid_flow(row_major=True, columns=0, even_columns=True, even_rows=False, align=False)
 
         col = flow.column()
-        col.prop(visibility, "camera")
+
+        if ob.type == 'LIGHT':
+            col.prop(visibility, "lamp_camera")
+        else:        
+            col.prop(visibility, "camera")
         col = flow.column()
         col.prop(visibility, "diffuse")
         col = flow.column()
@@ -1585,7 +1589,7 @@ class CYCLES_WORLD_PT_ray_visibility(CyclesButtonsPanel, Panel):
 
         flow = layout.column_flow()
 
-        flow.prop(visibility, "camera")
+        flow.prop(visibility, "camera")        
         flow.prop(visibility, "diffuse")
         flow.prop(visibility, "glossy")
         flow.prop(visibility, "transmission")

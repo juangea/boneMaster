@@ -1352,6 +1352,7 @@ typedef struct KernelIntegrator {
 
   /* mis */
   int use_lamp_mis;
+  int use_lamp_direct;
 
   /* sampler */
   int sampling_pattern;
@@ -1369,7 +1370,7 @@ typedef struct KernelIntegrator {
 
   int max_closures;
 
-  int pad1,pad2,pad3; //I added Scramble and dither_size, with this we need 3 pads
+  int pad1,pad2; //I added Scramble and dither_size, with this we need 3 pads
 } KernelIntegrator;
 static_assert_align(KernelIntegrator, 16);
 

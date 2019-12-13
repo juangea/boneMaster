@@ -1035,6 +1035,12 @@ class CyclesVisibilitySettings(bpy.types.PropertyGroup):
         description="Object visibility for camera rays",
         default=True,
     )
+    # A separare option for lamps is needed to have a different default value.
+    lamp_camera: BoolProperty(
+            name="Camera",
+            description="Light visibility for camera rays",
+            default=False,
+    )    
     diffuse: BoolProperty(
         name="Diffuse",
         description="Object visibility for diffuse reflection rays",

@@ -206,7 +206,7 @@ bool DeviceSplitKernel::path_trace(DeviceTask *task,
                                  int(double(time_multiplier) / avg_time_per_sample) + 1 :
                                  initial_num_samples;
 
-    int samples_per_second = 2048;
+    samples_per_second = 2048;
 
     RenderTile subtile = tile;
     subtile.start_sample = tile.sample;
