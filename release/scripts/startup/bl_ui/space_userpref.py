@@ -2176,28 +2176,12 @@ class ExperimentalPanel:
         self.draw_props(context, layout)
 
 
-class USERPREF_PT_experimental_all(ExperimentalPanel, Panel):
-    bl_label = "All"
-    bl_options = {'HIDE_HEADER'}
-
-    def draw_props(self, context, layout):
-        prefs = context.preferences
-        experimental = prefs.experimental
-
-        col = layout.column()
-        col.prop(experimental, "use_experimental_all")
-
-        # For the other settings create new panels
-        # and make sure they are disabled if use_experimental_all is True
-
-
 class USERPREF_PT_experimental_ui(ExperimentalPanel, Panel):
     bl_label = "User Interface"
 
     def draw_props(self, context, layout):
         prefs = context.preferences
         experimental = prefs.experimental
-        layout.active = not experimental.use_experimental_all
 
         task = "T66304"
         split = layout.split(factor=0.66)
@@ -2217,7 +2201,6 @@ class USERPREF_PT_experimental_virtual_reality(ExperimentalPanel, Panel):
     def draw_props(self, context, layout):
         prefs = context.preferences
         experimental = prefs.experimental
-        layout.active = not experimental.use_experimental_all
 
         task = "T71347"
         split = layout.split(factor=0.66)
@@ -2233,6 +2216,20 @@ class USERPREF_PT_experimental_virtual_reality(ExperimentalPanel, Panel):
         col = split.column()
         col.operator("wm.url_open", text=task, icon='URL').url = self.url_prefix + task
 """
+
+
+class USERPREF_PT_experimental_usd(ExperimentalPanel, Panel):
+    bl_label = "Universal Scene Description"
+
+    def draw_props(self, context, layout):
+        prefs = context.preferences
+
+        split = layout.split(factor=0.66)
+        col = split.split()
+        col.prop(prefs.experimental, "use_usd_exporter", text="USD Exporter")
+        col = split.split()
+        url = "https://devtalk.blender.org/t/universal-scene-description-usd-exporter-feedback/10920"
+        col.operator("wm.url_open", text='Give Feedback', icon='URL').url = url
 
 
 # Order of registration defines order in UI,
@@ -2316,8 +2313,8 @@ classes = (
     USERPREF_PT_studiolight_matcaps,
     USERPREF_PT_studiolight_world,
 
-    USERPREF_PT_experimental_all,
     USERPREF_PT_experimental_ui,
+    USERPREF_PT_experimental_usd,
 
     # Popovers.
     USERPREF_PT_ndof_settings,

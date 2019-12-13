@@ -133,7 +133,6 @@ def _template_items_basic_tools(*, connected=False):
         op_tool_cycle("builtin.rotate", {"type": 'E', "value": 'PRESS'}),
         op_tool_cycle("builtin.scale", {"type": 'R', "value": 'PRESS'}),
         op_tool_cycle("builtin.transform", {"type": 'T', "value": 'PRESS'}),
-        op_tool_cycle("builtin.scale_cage", {"type": 'R', "value": 'PRESS', "shift": True}),
         op_tool_cycle("builtin.annotate", {"type": 'D', "value": 'PRESS'}),
         op_tool_cycle("builtin.measure", {"type": 'M', "value": 'PRESS'}),
         op_tool_cycle("builtin.cursor", {"type": 'C', "value": 'PRESS'}),
@@ -2631,7 +2630,6 @@ def km_pose(params):
         op_tool_cycle("builtin.move", {"type": 'W', "value": 'PRESS'}),
         op_tool_cycle("builtin.rotate", {"type": 'E', "value": 'PRESS'}),
         op_tool_cycle("builtin.scale", {"type": 'R', "value": 'PRESS'}),
-        op_tool_cycle("builtin.scale_cage", {"type": 'R', "value": 'PRESS', "shift": True}),
         op_tool_cycle("builtin.transform", {"type": 'T', "value": 'PRESS'}),
         op_tool_cycle("builtin.measure", {"type": 'M', "value": 'PRESS'}),
     ])
@@ -3018,6 +3016,9 @@ def km_sculpt(params):
         # Dynamic topology
         ("sculpt.dynamic_topology_toggle", {"type": 'D', "value": 'PRESS', "ctrl": True}, None),
         ("sculpt.set_detail_size", {"type": 'D', "value": 'PRESS', "shift": True}, None),
+        # Remesh
+        ("object.voxel_remesh", {"type": 'R', "value": 'PRESS', "ctrl": True}, None),
+        ("object.quadriflow_remesh", {"type": 'R', "value": 'PRESS', "ctrl": True, "alt": True}, None),
         # Brush properties
         ("brush.scale_size", {"type": 'LEFT_BRACKET', "value": 'PRESS'},
          {"properties": [("scalar", 0.9)]}),
@@ -3256,7 +3257,6 @@ def km_lattice(params):
         op_tool_cycle("builtin.move", {"type": 'W', "value": 'PRESS'}),
         op_tool_cycle("builtin.rotate", {"type": 'E', "value": 'PRESS'}),
         op_tool_cycle("builtin.scale", {"type": 'R', "value": 'PRESS'}),
-        op_tool_cycle("builtin.scale_cage", {"type": 'R', "value": 'PRESS', "shift": True}),
         op_tool_cycle("builtin.transform", {"type": 'T', "value": 'PRESS'}),
         op_tool_cycle("builtin.measure", {"type": 'M', "value": 'PRESS'}),
     ])
