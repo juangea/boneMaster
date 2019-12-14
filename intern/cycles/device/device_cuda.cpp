@@ -1817,8 +1817,8 @@ class CUDADevice : public Device {
     int end_sample = rtile.start_sample + rtile.num_samples;
 
     step_samples = end_sample;
-		if (end_sample > 4000){
-			step_samples = 2048;
+		if (end_sample > 4096){
+			step_samples = 4096;
 		}    
 
     for (int sample = start_sample; sample < end_sample; sample += step_samples) {
