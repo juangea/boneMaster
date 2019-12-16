@@ -1819,7 +1819,7 @@ class CUDADevice : public Device {
     step_samples = end_sample;
 		if (end_sample > 4096){
 			step_samples = 4096;
-		}    
+		}
 
     for (int sample = start_sample; sample < end_sample; sample += step_samples) {
       /* Setup and copy work tile to device. */
