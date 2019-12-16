@@ -64,16 +64,27 @@ set(SRC
   hierarchy_context_order_test.cc
 )
 
-if(UNIX AND NOT APPLE)
-  # TODO(Sybren): This unit test has only been tested on Linux, and should possibly be
-  # restructured to support other platforms as well.
-  list(APPEND SRC usd_stage_creation_test.cc)
-endif()
+# TODO(Sybren): re-enable this unit test.
+# if(NOT APPLE)
+#   # TODO(Sybren): This unit test has only been tested on Linux, and should possibly be
+#   # restructured to support other platforms as well.
+#   list(APPEND SRC usd_stage_creation_test.cc)
+# endif()
 
 
 if(WITH_BUILDINFO)
   list(APPEND SRC "$<TARGET_OBJECTS:buildinfoobj>")
 endif()
+
+# get_cmake_property(_variableNames VARIABLES)
+# list (SORT _variableNames)
+# foreach (_variableName ${_variableNames})
+#     message(STATUS "${_variableName}=${${_variableName}}")
+# endforeach()
+
+# Works on Linux, not on Windows:
+# set(_usd_DATAFILES_DIR "${CMAKE_INSTALL_PREFIX}/${BLENDER_VERSION}/datafiles/usd")
+set(_usd_DATAFILES_DIR "$<TARGET_FILE_DIR:blender>/${BLENDER_VERSION}/datafiles/usd")
 
 BLENDER_SRC_GTEST_EX(
   NAME usd
@@ -81,7 +92,10 @@ BLENDER_SRC_GTEST_EX(
   EXTRA_LIBS "${LIB}"
   COMMAND_ARGS
     --test-assets-dir "${CMAKE_SOURCE_DIR}/../lib/tests"
-    --test-blender-executable-dir "${EXECUTABLE_OUTPUT_PATH}"
 )
+# TODO(Sybren): add the below CLI argument to the test when the usd_stage_creation_test.cc
+# test is reenabled.
+# --test-usd-datafiles-dir "${_usd_DATAFILES_DIR}"
+unset(_usd_DATAFILES_DIR)
 
 setup_liblinks(usd_test)
