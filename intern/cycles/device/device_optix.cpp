@@ -634,7 +634,8 @@ class OptiXDevice : public Device {
 
     const int end_sample = rtile.start_sample + rtile.num_samples;
     // Keep this number reasonable to avoid running into TDRs
-    const int step_samples = (info.display_device ? 128 : 128);
+    //const int step_samples = (info.display_device ? 1 : 1);
+    const int step_samples = 1;
     // Offset into launch params buffer so that streams use separate data
     device_ptr launch_params_ptr = launch_params.device_pointer +
                                    thread_index * launch_params.data_elements;
