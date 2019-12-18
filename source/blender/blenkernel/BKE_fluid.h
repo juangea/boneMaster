@@ -24,25 +24,25 @@
  * \ingroup bke
  */
 
-struct Scene;
 struct FluidDomainSettings;
 struct FluidModifierData;
+struct Scene;
 
-typedef float (*bresenham_callback)(
+typedef float (*BKE_Fluid_BresenhamFn)(
     float *result, float *input, int res[3], int *pixel, float *tRay, float correct);
 
-struct Mesh *fluidModifier_do(struct FluidModifierData *mmd,
-                              struct Depsgraph *depsgraph,
-                              struct Scene *scene,
-                              struct Object *ob,
-                              struct Mesh *me);
+struct Mesh *BKE_fluid_modifier_do(struct FluidModifierData *mmd,
+                                   struct Depsgraph *depsgraph,
+                                   struct Scene *scene,
+                                   struct Object *ob,
+                                   struct Mesh *me);
 
-void fluidModifier_free(struct FluidModifierData *mmd);
-void fluidModifier_reset(struct FluidModifierData *mmd);
-void fluidModifier_createType(struct FluidModifierData *mmd);
-void fluidModifier_copy(const struct FluidModifierData *mmd,
-                        struct FluidModifierData *tmmd,
-                        const int flag);
+void BKE_fluid_modifier_free(struct FluidModifierData *mmd);
+void BKE_fluid_modifier_reset(struct FluidModifierData *mmd);
+void BKE_fluid_modifier_create_type_data(struct FluidModifierData *mmd);
+void BKE_fluid_modifier_copy(const struct FluidModifierData *mmd,
+                             struct FluidModifierData *tmmd,
+                             const int flag);
 
 void BKE_fluid_reallocate_fluid(struct FluidDomainSettings *mds, int res[3], int free_old);
 void BKE_fluid_reallocate_copy_fluid(struct FluidDomainSettings *mds,
@@ -58,12 +58,12 @@ void BKE_fluid_cache_free(struct FluidDomainSettings *mds, struct Object *ob, in
 float BKE_fluid_get_velocity_at(struct Object *ob, float position[3], float velocity[3]);
 int BKE_fluid_get_data_flags(struct FluidDomainSettings *mds);
 
-void BKE_fluid_create_particle_system(struct Main *bmain,
+void BKE_fluid_particle_system_create(struct Main *bmain,
                                       struct Object *ob,
                                       const char *pset_name,
                                       const char *parts_name,
                                       const char *psys_name,
                                       const int psys_type);
-void BKE_fluid_delete_particle_system(struct Object *ob, const int particle_type);
+void BKE_fluid_particle_system_destroy(struct Object *ob, const int particle_type);
 
 #endif /* __BKE_FLUID_H__ */

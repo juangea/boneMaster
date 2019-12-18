@@ -1,6 +1,4 @@
 /*
- * ***** BEGIN GPL LICENSE BLOCK *****
- *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
@@ -17,15 +15,9 @@
  *
  * The Original Code is Copyright (C) Blender Foundation
  * All rights reserved.
- *
- * The Original Code is: all of this file.
- *
- * Contributor(s): Sebastian Barschkis (sebbas)
- *
- * ***** END GPL LICENSE BLOCK *****
  */
 
-/** \file blender/editors/physics/physics_fluid.c
+/** \file
  *  \ingroup edphys
  */
 
@@ -78,13 +70,13 @@
 #define FLUID_JOB_BAKE_NOISE "FLUID_OT_bake_noise"
 #define FLUID_JOB_BAKE_MESH "FLUID_OT_bake_mesh"
 #define FLUID_JOB_BAKE_PARTICLES "FLUID_OT_bake_particles"
-#define FLUID_JOB_BAKE_GUIDING "FLUID_OT_bake_guiding"
+#define FLUID_JOB_BAKE_GUIDES "FLUID_OT_bake_guides"
 #define FLUID_JOB_FREE_ALL "FLUID_OT_free_all"
 #define FLUID_JOB_FREE_DATA "FLUID_OT_free_data"
 #define FLUID_JOB_FREE_NOISE "FLUID_OT_free_noise"
 #define FLUID_JOB_FREE_MESH "FLUID_OT_free_mesh"
 #define FLUID_JOB_FREE_PARTICLES "FLUID_OT_free_particles"
-#define FLUID_JOB_FREE_GUIDING "FLUID_OT_free_guiding"
+#define FLUID_JOB_FREE_GUIDES "FLUID_OT_free_guides"
 #define FLUID_JOB_BAKE_PAUSE "FLUID_OT_pause_bake"
 
 typedef struct FluidJob {
@@ -108,41 +100,53 @@ typedef struct FluidJob {
   int *pause_frame;
 } FluidJob;
 
-static inline bool fluid_is_bake_all(FluidJob *job) {
+static inline bool fluid_is_bake_all(FluidJob *job)
+{
   return (STREQ(job->type, FLUID_JOB_BAKE_ALL));
 }
-static inline bool fluid_is_bake_data(FluidJob *job) {
+static inline bool fluid_is_bake_data(FluidJob *job)
+{
   return (STREQ(job->type, FLUID_JOB_BAKE_DATA));
 }
-static inline bool fluid_is_bake_noise(FluidJob *job) {
+static inline bool fluid_is_bake_noise(FluidJob *job)
+{
   return (STREQ(job->type, FLUID_JOB_BAKE_NOISE));
 }
-static inline bool fluid_is_bake_mesh(FluidJob *job) {
+static inline bool fluid_is_bake_mesh(FluidJob *job)
+{
   return (STREQ(job->type, FLUID_JOB_BAKE_MESH));
 }
-static inline bool fluid_is_bake_particle(FluidJob *job) {
+static inline bool fluid_is_bake_particle(FluidJob *job)
+{
   return (STREQ(job->type, FLUID_JOB_BAKE_PARTICLES));
 }
-static inline bool fluid_is_bake_guiding(FluidJob *job) {
-  return (STREQ(job->type, FLUID_JOB_BAKE_GUIDING));
+static inline bool fluid_is_bake_guiding(FluidJob *job)
+{
+  return (STREQ(job->type, FLUID_JOB_BAKE_GUIDES));
 }
-static inline bool fluid_is_free_all(FluidJob *job) {
+static inline bool fluid_is_free_all(FluidJob *job)
+{
   return (STREQ(job->type, FLUID_JOB_FREE_ALL));
 }
-static inline bool fluid_is_free_data(FluidJob *job) {
+static inline bool fluid_is_free_data(FluidJob *job)
+{
   return (STREQ(job->type, FLUID_JOB_FREE_DATA));
 }
-static inline bool fluid_is_free_noise(FluidJob *job) {
+static inline bool fluid_is_free_noise(FluidJob *job)
+{
   return (STREQ(job->type, FLUID_JOB_FREE_NOISE));
 }
-static inline bool fluid_is_free_mesh(FluidJob *job) {
+static inline bool fluid_is_free_mesh(FluidJob *job)
+{
   return (STREQ(job->type, FLUID_JOB_FREE_MESH));
 }
-static inline bool fluid_is_free_particles(FluidJob *job) {
+static inline bool fluid_is_free_particles(FluidJob *job)
+{
   return (STREQ(job->type, FLUID_JOB_FREE_PARTICLES));
 }
-static inline bool fluid_is_free_guiding(FluidJob *job) {
-  return (STREQ(job->type, FLUID_JOB_FREE_GUIDING));
+static inline bool fluid_is_free_guiding(FluidJob *job)
+{
+  return (STREQ(job->type, FLUID_JOB_FREE_GUIDES));
 }
 
 static bool fluid_initjob(
@@ -177,8 +181,8 @@ static bool fluid_initjob(
 static bool fluid_initpaths(FluidJob *job, ReportList *reports)
 {
   FluidDomainSettings *mds = job->mmd->domain;
-  char tmpDir[FILE_MAX];
-  tmpDir[0] = '\0';
+  char temp_dir[FILE_MAX];
+  temp_dir[0] = '\0';
 
   const char *relbase = modifier_path_relbase(job->bmain, job->ob);
 
@@ -192,11 +196,11 @@ static bool fluid_initpaths(FluidJob *job, ReportList *reports)
                 mds->cache_directory);
   }
 
-  BLI_strncpy(tmpDir, mds->cache_directory, FILE_MAXDIR);
-  BLI_path_abs(tmpDir, relbase);
+  BLI_strncpy(temp_dir, mds->cache_directory, FILE_MAXDIR);
+  BLI_path_abs(temp_dir, relbase);
 
   /* Ensure whole path exists */
-  const bool dir_exists = BLI_dir_create_recursive(tmpDir);
+  const bool dir_exists = BLI_dir_create_recursive(temp_dir);
 
   /* We change path to some presumably valid default value, but do not allow bake process to
    * continue, this gives user chance to set manually another path. */
@@ -207,28 +211,28 @@ static bool fluid_initpaths(FluidJob *job, ReportList *reports)
     BKE_reportf(reports,
                 RPT_ERROR,
                 "Fluid: Could not create cache directory '%s', reset to default '%s'",
-                tmpDir,
+                temp_dir,
                 mds->cache_directory);
 
-    BLI_strncpy(tmpDir, mds->cache_directory, FILE_MAXDIR);
-    BLI_path_abs(tmpDir, relbase);
+    BLI_strncpy(temp_dir, mds->cache_directory, FILE_MAXDIR);
+    BLI_path_abs(temp_dir, relbase);
 
     /* Ensure whole path exists and is writable. */
-    if (!BLI_dir_create_recursive(tmpDir)) {
+    if (!BLI_dir_create_recursive(temp_dir)) {
       BKE_reportf(reports,
                   RPT_ERROR,
                   "Fluid: Could not use default cache directory '%s', "
                   "please define a valid cache path manually",
-                  tmpDir);
+                  temp_dir);
     }
     /* Copy final dir back into domain settings */
-    BLI_strncpy(mds->cache_directory, tmpDir, FILE_MAXDIR);
+    BLI_strncpy(mds->cache_directory, temp_dir, FILE_MAXDIR);
 
     return false;
   }
 
   /* Copy final dir back into domain settings */
-  BLI_strncpy(mds->cache_directory, tmpDir, FILE_MAXDIR);
+  BLI_strncpy(mds->cache_directory, temp_dir, FILE_MAXDIR);
   return true;
 }
 
@@ -255,8 +259,9 @@ static void fluid_bake_sequence(FluidJob *job)
   }
 
   /* Show progress bar. */
-  if (job->do_update)
+  if (job->do_update) {
     *(job->do_update) = true;
+  }
 
   /* Get current pause frame (pointer) - depending on bake type */
   pause_frame = job->pause_frame;
@@ -283,10 +288,12 @@ static void fluid_bake_sequence(FluidJob *job)
     }
 
     /* Update progress bar */
-    if (job->do_update)
+    if (job->do_update) {
       *(job->do_update) = true;
-    if (job->progress)
+    }
+    if (job->progress) {
       *(job->progress) = progress;
+    }
 
     CFRA = frame;
 
@@ -319,9 +326,9 @@ static void fluid_bake_endjob(void *customdata)
     mds->cache_flag &= ~FLUID_DOMAIN_OUTDATED_PARTICLES;
   }
   if (fluid_is_bake_guiding(job) || fluid_is_bake_all(job)) {
-    mds->cache_flag &= ~FLUID_DOMAIN_BAKING_GUIDING;
-    mds->cache_flag |= FLUID_DOMAIN_BAKED_GUIDING;
-    mds->cache_flag &= ~FLUID_DOMAIN_OUTDATED_GUIDING;
+    mds->cache_flag &= ~FLUID_DOMAIN_BAKING_GUIDE;
+    mds->cache_flag |= FLUID_DOMAIN_BAKED_GUIDE;
+    mds->cache_flag &= ~FLUID_DOMAIN_OUTDATED_GUIDE;
   }
   if (fluid_is_bake_data(job) || fluid_is_bake_all(job)) {
     mds->cache_flag &= ~FLUID_DOMAIN_BAKING_DATA;
@@ -338,10 +345,8 @@ static void fluid_bake_endjob(void *customdata)
    *  Report for ended bake and how long it took */
   if (job->success) {
     /* Show bake info */
-    WM_reportf(RPT_INFO,
-               "Fluid: %s complete! (%.2f)",
-               job->name,
-               PIL_check_seconds_timer() - job->start);
+    WM_reportf(
+        RPT_INFO, "Fluid: %s complete! (%.2f)", job->name, PIL_check_seconds_timer() - job->start);
   }
   else {
     if (mds->error != NULL && mds->error[0] != '\0') {
@@ -358,8 +363,7 @@ static void fluid_bake_startjob(void *customdata, short *stop, short *do_update,
   FluidJob *job = customdata;
   FluidDomainSettings *mds = job->mmd->domain;
 
-  char tmpDir[FILE_MAX];
-  tmpDir[0] = '\0';
+  char temp_dir[FILE_MAX];
 
   job->stop = stop;
   job->do_update = do_update;
@@ -372,61 +376,61 @@ static void fluid_bake_startjob(void *customdata, short *stop, short *do_update,
   BKE_spacedata_draw_locks(true);
 
   if (fluid_is_bake_noise(job) || fluid_is_bake_all(job)) {
-    tmpDir[0] = '\0';
-    BLI_path_join(tmpDir, sizeof(tmpDir), mds->cache_directory, FLUID_DOMAIN_DIR_NOISE, NULL);
-    BLI_dir_create_recursive(tmpDir); /* Create 'noise' subdir if it does not exist already */
+    BLI_path_join(temp_dir, sizeof(temp_dir), mds->cache_directory, FLUID_DOMAIN_DIR_NOISE, NULL);
+    BLI_dir_create_recursive(temp_dir); /* Create 'noise' subdir if it does not exist already */
     mds->cache_flag &= ~(FLUID_DOMAIN_BAKED_NOISE | FLUID_DOMAIN_OUTDATED_NOISE);
     mds->cache_flag |= FLUID_DOMAIN_BAKING_NOISE;
     job->pause_frame = &mds->cache_frame_pause_noise;
   }
   if (fluid_is_bake_mesh(job) || fluid_is_bake_all(job)) {
-    tmpDir[0] = '\0';
-    BLI_path_join(tmpDir, sizeof(tmpDir), mds->cache_directory, FLUID_DOMAIN_DIR_MESH, NULL);
-    BLI_dir_create_recursive(tmpDir); /* Create 'mesh' subdir if it does not exist already */
+    BLI_path_join(temp_dir, sizeof(temp_dir), mds->cache_directory, FLUID_DOMAIN_DIR_MESH, NULL);
+    BLI_dir_create_recursive(temp_dir); /* Create 'mesh' subdir if it does not exist already */
     mds->cache_flag &= ~(FLUID_DOMAIN_BAKED_MESH | FLUID_DOMAIN_OUTDATED_MESH);
     mds->cache_flag |= FLUID_DOMAIN_BAKING_MESH;
     job->pause_frame = &mds->cache_frame_pause_mesh;
   }
   if (fluid_is_bake_particle(job) || fluid_is_bake_all(job)) {
-    tmpDir[0] = '\0';
-    BLI_path_join(tmpDir, sizeof(tmpDir), mds->cache_directory, FLUID_DOMAIN_DIR_PARTICLES, NULL);
-    BLI_dir_create_recursive(tmpDir); /* Create 'particles' subdir if it does not exist already */
+    BLI_path_join(
+        temp_dir, sizeof(temp_dir), mds->cache_directory, FLUID_DOMAIN_DIR_PARTICLES, NULL);
+    BLI_dir_create_recursive(
+        temp_dir); /* Create 'particles' subdir if it does not exist already */
     mds->cache_flag &= ~(FLUID_DOMAIN_BAKED_PARTICLES | FLUID_DOMAIN_OUTDATED_PARTICLES);
     mds->cache_flag |= FLUID_DOMAIN_BAKING_PARTICLES;
     job->pause_frame = &mds->cache_frame_pause_particles;
   }
   if (fluid_is_bake_guiding(job) || fluid_is_bake_all(job)) {
-    tmpDir[0] = '\0';
-    BLI_path_join(tmpDir, sizeof(tmpDir), mds->cache_directory, FLUID_DOMAIN_DIR_GUIDING, NULL);
-    BLI_dir_create_recursive(tmpDir); /* Create 'guiding' subdir if it does not exist already */
-    mds->cache_flag &= ~(FLUID_DOMAIN_BAKED_GUIDING | FLUID_DOMAIN_OUTDATED_GUIDING);
-    mds->cache_flag |= FLUID_DOMAIN_BAKING_GUIDING;
-    job->pause_frame = &mds->cache_frame_pause_guiding;
+    BLI_path_join(temp_dir, sizeof(temp_dir), mds->cache_directory, FLUID_DOMAIN_DIR_GUIDE, NULL);
+    BLI_dir_create_recursive(temp_dir); /* Create 'guiding' subdir if it does not exist already */
+    mds->cache_flag &= ~(FLUID_DOMAIN_BAKED_GUIDE | FLUID_DOMAIN_OUTDATED_GUIDE);
+    mds->cache_flag |= FLUID_DOMAIN_BAKING_GUIDE;
+    job->pause_frame = &mds->cache_frame_pause_guide;
   }
   if (fluid_is_bake_data(job) || fluid_is_bake_all(job)) {
-    tmpDir[0] = '\0';
-    BLI_path_join(tmpDir, sizeof(tmpDir), mds->cache_directory, FLUID_DOMAIN_DIR_CONFIG, NULL);
-    BLI_dir_create_recursive(tmpDir); /* Create 'config' subdir if it does not exist already */
-    tmpDir[0] = '\0';
-    BLI_path_join(tmpDir, sizeof(tmpDir), mds->cache_directory, FLUID_DOMAIN_DIR_DATA, NULL);
-    BLI_dir_create_recursive(tmpDir); /* Create 'data' subdir if it does not exist already */
+    BLI_path_join(temp_dir, sizeof(temp_dir), mds->cache_directory, FLUID_DOMAIN_DIR_CONFIG, NULL);
+    BLI_dir_create_recursive(temp_dir); /* Create 'config' subdir if it does not exist already */
+
+    BLI_path_join(temp_dir, sizeof(temp_dir), mds->cache_directory, FLUID_DOMAIN_DIR_DATA, NULL);
+    BLI_dir_create_recursive(temp_dir); /* Create 'data' subdir if it does not exist already */
     mds->cache_flag &= ~(FLUID_DOMAIN_BAKED_DATA | FLUID_DOMAIN_OUTDATED_DATA);
     mds->cache_flag |= FLUID_DOMAIN_BAKING_DATA;
     job->pause_frame = &mds->cache_frame_pause_data;
 
     if (mds->flags & FLUID_DOMAIN_EXPORT_MANTA_SCRIPT) {
-      BLI_path_join(tmpDir, sizeof(tmpDir), mds->cache_directory, FLUID_DOMAIN_DIR_SCRIPT, NULL);
-      BLI_dir_create_recursive(tmpDir); /* Create 'script' subdir if it does not exist already */
+      BLI_path_join(
+          temp_dir, sizeof(temp_dir), mds->cache_directory, FLUID_DOMAIN_DIR_SCRIPT, NULL);
+      BLI_dir_create_recursive(temp_dir); /* Create 'script' subdir if it does not exist already */
     }
   }
   DEG_id_tag_update(&job->ob->id, ID_RECALC_GEOMETRY);
 
   fluid_bake_sequence(job);
 
-  if (do_update)
+  if (do_update) {
     *do_update = true;
-  if (stop)
+  }
+  if (stop) {
     *stop = 0;
+  }
 }
 
 static void fluid_free_endjob(void *customdata)
@@ -442,10 +446,8 @@ static void fluid_free_endjob(void *customdata)
    *  Report for ended free job and how long it took */
   if (job->success) {
     /* Show free job info */
-    WM_reportf(RPT_INFO,
-               "Fluid: %s complete! (%.2f)",
-               job->name,
-               PIL_check_seconds_timer() - job->start);
+    WM_reportf(
+        RPT_INFO, "Fluid: %s complete! (%.2f)", job->name, PIL_check_seconds_timer() - job->start);
   }
   else {
     if (mds->error != NULL && mds->error[0] != '\0') {
@@ -462,9 +464,6 @@ static void fluid_free_startjob(void *customdata, short *stop, short *do_update,
   FluidJob *job = customdata;
   FluidDomainSettings *mds = job->mmd->domain;
   Scene *scene = job->scene;
-
-  char tmpDir[FILE_MAX];
-  tmpDir[0] = '\0';
 
   job->stop = stop;
   job->do_update = do_update;
@@ -492,9 +491,11 @@ static void fluid_free_startjob(void *customdata, short *stop, short *do_update,
     cache_map |= FLUID_DOMAIN_OUTDATED_PARTICLES;
   }
   if (fluid_is_free_guiding(job) || fluid_is_free_all(job)) {
-    cache_map |= FLUID_DOMAIN_OUTDATED_GUIDING;
+    cache_map |= FLUID_DOMAIN_OUTDATED_GUIDE;
   }
+#ifdef WITH_FLUID
   BKE_fluid_cache_free(mds, job->ob, cache_map);
+#endif
 
   *do_update = true;
   *stop = 0;
@@ -572,8 +573,9 @@ static int fluid_bake_invoke(struct bContext *C,
 static int fluid_bake_modal(bContext *C, wmOperator *UNUSED(op), const wmEvent *event)
 {
   /* no running blender, remove handler and pass through */
-  if (0 == WM_jobs_test(CTX_wm_manager(C), CTX_data_scene(C), WM_JOB_TYPE_OBJECT_SIM_FLUID))
+  if (0 == WM_jobs_test(CTX_wm_manager(C), CTX_data_scene(C), WM_JOB_TYPE_OBJECT_SIM_FLUID)) {
     return OPERATOR_FINISHED | OPERATOR_PASS_THROUGH;
+  }
 
   switch (event->type) {
     case ESCKEY:
@@ -797,12 +799,12 @@ void FLUID_OT_free_particles(wmOperatorType *ot)
   ot->poll = ED_operator_object_active_editable;
 }
 
-void FLUID_OT_bake_guiding(wmOperatorType *ot)
+void FLUID_OT_bake_guides(wmOperatorType *ot)
 {
   /* identifiers */
-  ot->name = "Bake Guiding";
+  ot->name = "Bake Guides";
   ot->description = "Bake Fluid Guiding";
-  ot->idname = FLUID_JOB_BAKE_GUIDING;
+  ot->idname = FLUID_JOB_BAKE_GUIDES;
 
   /* api callbacks */
   ot->exec = fluid_bake_exec;
@@ -811,12 +813,12 @@ void FLUID_OT_bake_guiding(wmOperatorType *ot)
   ot->poll = ED_operator_object_active_editable;
 }
 
-void FLUID_OT_free_guiding(wmOperatorType *ot)
+void FLUID_OT_free_guides(wmOperatorType *ot)
 {
   /* identifiers */
-  ot->name = "Free Guiding";
+  ot->name = "Free Guides";
   ot->description = "Free Fluid Guiding";
-  ot->idname = FLUID_JOB_FREE_GUIDING;
+  ot->idname = FLUID_JOB_FREE_GUIDES;
 
   /* api callbacks */
   ot->exec = fluid_free_exec;

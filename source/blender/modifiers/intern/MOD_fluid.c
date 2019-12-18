@@ -60,18 +60,26 @@ static void initData(ModifierData *md)
 
 static void copyData(const ModifierData *md, ModifierData *target, const int flag)
 {
+#ifndef WITH_FLUID
+  UNUSED_VARS(md, target, flag);
+#else
   const FluidModifierData *mmd = (const FluidModifierData *)md;
   FluidModifierData *tmmd = (FluidModifierData *)target;
 
-  fluidModifier_free(tmmd);
-  fluidModifier_copy(mmd, tmmd, flag);
+  BKE_fluid_modifier_free(tmmd);
+  BKE_fluid_modifier_copy(mmd, tmmd, flag);
+#endif /* WITH_FLUID */
 }
 
 static void freeData(ModifierData *md)
 {
+#ifndef WITH_FLUID
+  UNUSED_VARS(md);
+#else
   FluidModifierData *mmd = (FluidModifierData *)md;
 
-  fluidModifier_free(mmd);
+  BKE_fluid_modifier_free(mmd);
+#endif /* WITH_FLUID */
 }
 
 static void requiredDataMask(Object *UNUSED(ob),
@@ -96,6 +104,10 @@ static void requiredDataMask(Object *UNUSED(ob),
 
 static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mesh *me)
 {
+#ifndef WITH_FLUID
+  UNUSED_VARS(md, ctx);
+  return me;
+#else
   FluidModifierData *mmd = (FluidModifierData *)md;
   Mesh *result = NULL;
 
@@ -105,8 +117,9 @@ static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mes
 
   Scene *scene = DEG_get_evaluated_scene(ctx->depsgraph);
 
-  result = fluidModifier_do(mmd, ctx->depsgraph, scene, ctx->object, me);
+  result = BKE_fluid_modifier_do(mmd, ctx->depsgraph, scene, ctx->object, me);
   return result ? result : me;
+#endif /* WITH_FLUID */
 }
 
 static bool dependsOnTime(ModifierData *UNUSED(md))
@@ -150,11 +163,11 @@ static void updateDepsgraph(ModifierData *md, const ModifierUpdateDepsgraphConte
                                  PFIELD_SMOKEFLOW,
                                  "Fluid Force Field");
 
-    if (mmd->domain->guiding_parent != NULL) {
+    if (mmd->domain->guide_parent != NULL) {
       DEG_add_object_relation(
-          ctx->node, mmd->domain->guiding_parent, DEG_OB_COMP_TRANSFORM, "Fluid Guiding Object");
+          ctx->node, mmd->domain->guide_parent, DEG_OB_COMP_TRANSFORM, "Fluid Guiding Object");
       DEG_add_object_relation(
-          ctx->node, mmd->domain->guiding_parent, DEG_OB_COMP_GEOMETRY, "Fluid Guiding Object");
+          ctx->node, mmd->domain->guide_parent, DEG_OB_COMP_GEOMETRY, "Fluid Guiding Object");
     }
   }
 }
@@ -168,8 +181,8 @@ static void foreachIDLink(ModifierData *md, Object *ob, IDWalkFunc walk, void *u
     walk(userData, ob, (ID **)&mmd->domain->fluid_group, IDWALK_CB_NOP);
     walk(userData, ob, (ID **)&mmd->domain->force_group, IDWALK_CB_NOP);
 
-    if (mmd->domain->guiding_parent) {
-      walk(userData, ob, (ID **)&mmd->domain->guiding_parent, IDWALK_CB_NOP);
+    if (mmd->domain->guide_parent) {
+      walk(userData, ob, (ID **)&mmd->domain->guide_parent, IDWALK_CB_NOP);
     }
 
     if (mmd->domain->effector_weights) {
