@@ -45,7 +45,7 @@
 #include "BKE_mesh_remap.h"
 #include "BKE_multires.h"
 #include "BKE_ocean.h"
-#include "BKE_fluid.h" /* For fluidModifier_free & fluidModifier_createType */
+#include "BKE_fluid.h" /* For BKE_fluid_modifier_free & BKE_fluid_modifier_create_type_data */
 
 #include "RNA_access.h"
 #include "RNA_define.h"
@@ -718,7 +718,6 @@ static StructRNA *rna_Modifier_refine(struct PointerRNA *ptr)
       return &RNA_WeightedNormalModifier;
     /* Default */
     case eModifierType_Fluidsim: /* deprecated */
-    case eModifierType_Smoke:
     case eModifierType_None:
     case eModifierType_ShapeKey:
     case NUM_MODIFIER_TYPES:
@@ -1038,8 +1037,10 @@ static void rna_fluid_set_type(Main *bmain, Scene *scene, PointerRNA *ptr)
     return;
   }
 
-  fluidModifier_free(mmd);       /* XXX TODO: completely free all 3 pointers */
-  fluidModifier_createType(mmd); /* create regarding of selected type */
+#  ifdef WITH_FLUID
+  BKE_fluid_modifier_free(mmd);             /* XXX TODO: completely free all 3 pointers */
+  BKE_fluid_modifier_create_type_data(mmd); /* create regarding of selected type */
+#  endif
 
   switch (mmd->type) {
     case MOD_FLUID_TYPE_DOMAIN:
@@ -3632,7 +3633,7 @@ static void rna_def_modifier_fluid(BlenderRNA *brna)
   RNA_def_property_pointer_sdna(prop, NULL, "flow");
   RNA_def_property_ui_text(prop, "Flow Settings", "");
 
-  prop = RNA_def_property(srna, "effec_settings", PROP_POINTER, PROP_NONE);
+  prop = RNA_def_property(srna, "effector_settings", PROP_POINTER, PROP_NONE);
   RNA_def_property_pointer_sdna(prop, NULL, "effector");
   RNA_def_property_ui_text(prop, "Effector Settings", "");
 

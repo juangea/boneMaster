@@ -28,11 +28,11 @@
 extern "C" {
 #endif
 
+struct FluidModifierData;
 struct ImBuf;
 struct Image;
 struct ImageUser;
 struct Main;
-struct FluidModifierData;
 
 #include "DNA_object_enums.h"
 
@@ -83,7 +83,7 @@ void GPU_free_images(struct Main *bmain);
 void GPU_free_images_anim(struct Main *bmain);
 void GPU_free_images_old(struct Main *bmain);
 
-/* smoke drawing functions */
+/* gpu_draw_smoke.c  */
 void GPU_free_smoke(struct FluidModifierData *mmd);
 void GPU_free_smoke_velocity(struct FluidModifierData *mmd);
 void GPU_create_smoke(struct FluidModifierData *mmd, int highres);
