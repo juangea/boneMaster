@@ -1,6 +1,4 @@
 /*
- * ***** BEGIN GPL LICENSE BLOCK *****
- *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
@@ -17,14 +15,10 @@
  *
  * The Original Code is Copyright (C) 2016 Blender Foundation.
  * All rights reserved.
- *
- * Contributor(s): Sebastian Barschkis (sebbas)
- *
- * ***** END GPL LICENSE BLOCK *****
  */
 
-/** \file mantaflow/intern/MANTA.cpp
- *  \ingroup mantaflow
+/** \file
+ * \ingroup mantaflow
  */
 
 #include <sstream>
@@ -76,7 +70,7 @@ MANTA::MANTA(int *res, FluidModifierData *mmd) : mCurrentID(++solverID)
   mUsingObstacle = (mmd->domain->active_fields & FLUID_DOMAIN_ACTIVE_OBSTACLE);
   mUsingInvel = (mmd->domain->active_fields & FLUID_DOMAIN_ACTIVE_INVEL);
   mUsingOutflow = (mmd->domain->active_fields & FLUID_DOMAIN_ACTIVE_OUTFLOW);
-  mUsingGuiding = (mmd->domain->flags & FLUID_DOMAIN_USE_GUIDING);
+  mUsingGuiding = (mmd->domain->flags & FLUID_DOMAIN_USE_GUIDE);
 
   // Simulation constants
   mTempAmb = 0;  // TODO: Maybe use this later for buoyancy calculation
@@ -206,7 +200,7 @@ MANTA::MANTA(int *res, FluidModifierData *mmd) : mCurrentID(++solverID)
     }
 
     if (mUsingGuiding) {
-      mResGuiding = (mmd->domain->guiding_parent) ? mmd->domain->guide_res : mmd->domain->res;
+      mResGuiding = (mmd->domain->guide_parent) ? mmd->domain->guide_res : mmd->domain->res;
       initGuiding(mmd);
     }
     if (mUsingFractions) {
@@ -232,7 +226,7 @@ MANTA::MANTA(int *res, FluidModifierData *mmd) : mCurrentID(++solverID)
       initOutflow(mmd);
 
     if (mUsingGuiding) {
-      mResGuiding = (mmd->domain->guiding_parent) ? mmd->domain->guide_res : mmd->domain->res;
+      mResGuiding = (mmd->domain->guide_parent) ? mmd->domain->guide_res : mmd->domain->res;
       initGuiding(mmd);
     }
 
@@ -609,7 +603,7 @@ std::string MANTA::getRealValue(const std::string &varName, FluidModifierData *m
   else if (varName == "USING_OBSTACLE")
     ss << (mmd->domain->active_fields & FLUID_DOMAIN_ACTIVE_OBSTACLE ? "True" : "False");
   else if (varName == "USING_GUIDING")
-    ss << (mmd->domain->flags & FLUID_DOMAIN_USE_GUIDING ? "True" : "False");
+    ss << (mmd->domain->flags & FLUID_DOMAIN_USE_GUIDE ? "True" : "False");
   else if (varName == "USING_INVEL")
     ss << (mmd->domain->active_fields & FLUID_DOMAIN_ACTIVE_INVEL ? "True" : "False");
   else if (varName == "USING_OUTFLOW")
@@ -926,11 +920,11 @@ std::string MANTA::getRealValue(const std::string &varName, FluidModifierData *m
     ss << (((mmd->domain->particle_type & tmpVar)) ? "True" : "False");
   }
   else if (varName == "GUIDING_ALPHA")
-    ss << mmd->domain->guiding_alpha;
+    ss << mmd->domain->guide_alpha;
   else if (varName == "GUIDING_BETA")
-    ss << mmd->domain->guiding_beta;
+    ss << mmd->domain->guide_beta;
   else if (varName == "GUIDING_FACTOR")
-    ss << mmd->domain->guiding_vel_factor;
+    ss << mmd->domain->guide_vel_factor;
   else if (varName == "GRAVITY_X")
     ss << mmd->domain->gravity[0];
   else if (varName == "GRAVITY_Y")
@@ -1541,7 +1535,7 @@ int MANTA::readGuiding(FluidModifierData *mmd, int framenr, bool sourceDomain)
   targetFile[0] = '\0';
 
   std::string gformat = getCacheFileEnding(mmd->domain->cache_data_format);
-  const char *subdir = (sourceDomain) ? FLUID_DOMAIN_DIR_DATA : FLUID_DOMAIN_DIR_GUIDING;
+  const char *subdir = (sourceDomain) ? FLUID_DOMAIN_DIR_DATA : FLUID_DOMAIN_DIR_GUIDE;
 
   BLI_path_join(
       cacheDirGuiding, sizeof(cacheDirGuiding), mmd->domain->cache_directory, subdir, NULL);
@@ -1596,7 +1590,7 @@ int MANTA::bakeData(FluidModifierData *mmd, int framenr)
   BLI_path_join(cacheDirGuiding,
                 sizeof(cacheDirGuiding),
                 mmd->domain->cache_directory,
-                FLUID_DOMAIN_DIR_GUIDING,
+                FLUID_DOMAIN_DIR_GUIDE,
                 NULL);
   BLI_path_make_safe(cacheDirData);
   BLI_path_make_safe(cacheDirGuiding);
@@ -1742,7 +1736,7 @@ int MANTA::bakeGuiding(FluidModifierData *mmd, int framenr)
   BLI_path_join(cacheDirGuiding,
                 sizeof(cacheDirGuiding),
                 mmd->domain->cache_directory,
-                FLUID_DOMAIN_DIR_GUIDING,
+                FLUID_DOMAIN_DIR_GUIDE,
                 NULL);
   BLI_path_make_safe(cacheDirGuiding);
 
@@ -1790,27 +1784,23 @@ void MANTA::exportSmokeScript(FluidModifierData *mmd)
   if (with_debug)
     std::cout << "MANTA::exportSmokeScript()" << std::endl;
 
-  char cacheDirScript[FILE_MAX];
-  cacheDirScript[0] = '\0';
+  char cacheDir[FILE_MAX] = "\0";
+  char cacheDirScript[FILE_MAX] = "\0";
 
-  BLI_path_join(cacheDirScript,
-                sizeof(cacheDirScript),
-                mmd->domain->cache_directory,
-                FLUID_DOMAIN_DIR_SCRIPT,
-                NULL);
-  BLI_path_make_safe(cacheDirScript);
-  BLI_dir_create_recursive(
-      cacheDirScript); /* Create 'script' subdir if it does not exist already */
   BLI_path_join(
-      cacheDirScript, sizeof(cacheDirScript), cacheDirScript, FLUID_DOMAIN_SMOKE_SCRIPT, NULL);
-  BLI_path_make_safe(cacheDirScript);
+      cacheDir, sizeof(cacheDir), mmd->domain->cache_directory, FLUID_DOMAIN_DIR_SCRIPT, NULL);
+  BLI_path_make_safe(cacheDir);
+  /* Create 'script' subdir if it does not exist already */
+  BLI_dir_create_recursive(cacheDir);
+  BLI_path_join(cacheDirScript, sizeof(cacheDirScript), cacheDir, FLUID_DOMAIN_SMOKE_SCRIPT, NULL);
+  BLI_path_make_safe(cacheDir);
 
   bool noise = mmd->domain->flags & FLUID_DOMAIN_USE_NOISE;
   bool heat = mmd->domain->active_fields & FLUID_DOMAIN_ACTIVE_HEAT;
   bool colors = mmd->domain->active_fields & FLUID_DOMAIN_ACTIVE_COLORS;
   bool fire = mmd->domain->active_fields & FLUID_DOMAIN_ACTIVE_FIRE;
   bool obstacle = mmd->domain->active_fields & FLUID_DOMAIN_ACTIVE_OBSTACLE;
-  bool guiding = mmd->domain->active_fields & FLUID_DOMAIN_ACTIVE_GUIDING;
+  bool guiding = mmd->domain->active_fields & FLUID_DOMAIN_ACTIVE_GUIDE;
   bool invel = mmd->domain->active_fields & FLUID_DOMAIN_ACTIVE_INVEL;
 
   std::string manta_script;
@@ -1897,19 +1887,16 @@ void MANTA::exportLiquidScript(FluidModifierData *mmd)
   if (with_debug)
     std::cout << "MANTA::exportLiquidScript()" << std::endl;
 
-  char cacheDirScript[FILE_MAX];
-  cacheDirScript[0] = '\0';
+  char cacheDir[FILE_MAX] = "\0";
+  char cacheDirScript[FILE_MAX] = "\0";
 
-  BLI_path_join(cacheDirScript,
-                sizeof(cacheDirScript),
-                mmd->domain->cache_directory,
-                FLUID_DOMAIN_DIR_SCRIPT,
-                NULL);
-  BLI_path_make_safe(cacheDirScript);
-  BLI_dir_create_recursive(
-      cacheDirScript); /* Create 'script' subdir if it does not exist already */
   BLI_path_join(
-      cacheDirScript, sizeof(cacheDirScript), cacheDirScript, FLUID_DOMAIN_LIQUID_SCRIPT, NULL);
+      cacheDir, sizeof(cacheDir), mmd->domain->cache_directory, FLUID_DOMAIN_DIR_SCRIPT, NULL);
+  BLI_path_make_safe(cacheDir);
+  /* Create 'script' subdir if it does not exist already */
+  BLI_dir_create_recursive(cacheDir);
+  BLI_path_join(
+      cacheDirScript, sizeof(cacheDirScript), cacheDir, FLUID_DOMAIN_LIQUID_SCRIPT, NULL);
   BLI_path_make_safe(cacheDirScript);
 
   bool mesh = mmd->domain->flags & FLUID_DOMAIN_USE_MESH;
@@ -1918,7 +1905,7 @@ void MANTA::exportLiquidScript(FluidModifierData *mmd)
   bool floater = mmd->domain->particle_type & FLUID_DOMAIN_PARTICLE_FOAM;
   bool tracer = mmd->domain->particle_type & FLUID_DOMAIN_PARTICLE_TRACER;
   bool obstacle = mmd->domain->active_fields & FLUID_DOMAIN_ACTIVE_OBSTACLE;
-  bool guiding = mmd->domain->active_fields & FLUID_DOMAIN_ACTIVE_GUIDING;
+  bool guiding = mmd->domain->active_fields & FLUID_DOMAIN_ACTIVE_GUIDE;
   bool invel = mmd->domain->active_fields & FLUID_DOMAIN_ACTIVE_INVEL;
 
   std::string manta_script;
