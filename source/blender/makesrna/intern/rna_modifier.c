@@ -5383,6 +5383,11 @@ static void rna_def_modifier_remesh(BlenderRNA *brna)
       "Accumulate the mesh changes over time by re-using and updating the cached mesh");
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
+  prop = RNA_def_property(srna, "fix_poles", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", MOD_REMESH_FIX_POLES);
+  RNA_def_property_ui_text(prop, "Fix Poles", "Produces less poles and a better topology flow");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
   /* voxel remesh, particle mode parameters*/
   prop = RNA_def_property(srna, "part_min_radius", PROP_FLOAT, PROP_UNSIGNED);
   RNA_def_property_range(prop, 0.001, FLT_MAX);

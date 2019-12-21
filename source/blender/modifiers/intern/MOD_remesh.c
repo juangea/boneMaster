@@ -44,6 +44,7 @@
 #include "BKE_library_query.h"
 #include "BKE_object.h"
 #include "BKE_remesh.h"
+#include "BKE_mesh_remesh_voxel.h"
 
 #include "DEG_depsgraph_query.h"
 
@@ -695,6 +696,17 @@ static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mes
         // adaptivity can mess up normals, try to recalc them by tagging them as dirty
         if (rmd->adaptivity > 0.0f)
            result->runtime.cd_dirty_vert |= CD_MASK_NORMAL;
+
+        CustomData_MeshMasks mask = CD_MASK_DERIVEDMESH;
+        CustomData_merge(&mesh->vdata, &result->vdata, mask.vmask, CD_CALLOC, result->totvert);
+        CustomData_merge(&mesh->edata, &result->edata, mask.emask, CD_CALLOC, result->totedge);
+        CustomData_merge(&mesh->ldata, &result->ldata, mask.lmask, CD_CALLOC, result->totloop);
+        CustomData_merge(&mesh->pdata, &result->pdata, mask.pmask, CD_CALLOC, result->totpoly);
+
+        if (rmd->flag & MOD_REMESH_FIX_POLES) {
+          result = BKE_mesh_remesh_voxel_fix_poles(result,
+                                                   (rmd->flag & MOD_REMESH_SHARPEN_FEATURES) == 0);
+        }
       }
 
       return result;

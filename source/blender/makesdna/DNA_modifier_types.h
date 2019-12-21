@@ -1547,6 +1547,7 @@ typedef enum eRemeshModifierFlags {
   MOD_REMESH_LIVE_REMESH = (1 << 5),
   MOD_REMESH_ACCUMULATE = (1 << 6),
   MOD_REMESH_SHARPEN_FEATURES = (1 << 7),
+  MOD_REMESH_FIX_POLES = (1 << 8),
 } RemeshModifierFlags;
 
 typedef enum eRemeshModifierMode {
@@ -1677,10 +1678,9 @@ typedef struct RemeshModifierData {
 
   /* octree depth */
   char depth;
-
-  char flag;
   char mode;
-  char _pad;
+
+  short flag;
 } RemeshModifierData;
 
 /* Skin modifier */
