@@ -642,8 +642,7 @@ static void join_mesh_to_mesh(Mesh *mesh,
 
 static Object *join_mesh_and_operands(RemeshModifierData *rmd,
                                       ModifierEvalContext *ctx,
-                                      Mesh *messh,
-                                      Mesh *result)
+                                      Mesh *messh)
 {
   float imat[4][4], omat[4][4];
   Mesh *mesh = NULL;
@@ -652,13 +651,10 @@ static Object *join_mesh_and_operands(RemeshModifierData *rmd,
   vertstart = polystart = loopstart = edgestart = num_verts = num_polys = num_loops = num_edges =
       0;
 
-  short totcol = 0;
-
   num_verts = messh->totvert;
   num_edges = messh->totedge;
   num_loops = messh->totloop;
   num_polys = messh->totpoly;
-  totcol = ctx->object->totcol;
 
   for (vcob = rmd->csg_operands.first; vcob; vcob = vcob->next) {
     if (vcob->object && (vcob->flag & MOD_REMESH_CSG_OBJECT_ENABLED)) {
@@ -667,7 +663,6 @@ static Object *join_mesh_and_operands(RemeshModifierData *rmd,
       num_polys += me->totpoly;
       num_loops += me->totloop;
       num_edges += me->totedge;
-      totcol += vcob->object->totcol;
     }
   }
 
@@ -723,7 +718,6 @@ static Object *join_mesh_and_operands(RemeshModifierData *rmd,
   fob->runtime.mesh_orig = mesh;
   fob->runtime.mesh_eval = mesh;
   fob->runtime.mesh_deform_eval = mesh; //seems this is being retrieved by datatransfer
-  //fob->runtime.last_data_mask = CD_MASK_DERIVEDMESH;
 
   return fob;
 }
@@ -885,11 +879,8 @@ static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mes
 
         if (rmd->flag & MOD_REMESH_REPROJECT_DATA) {
           Scene *sc = DEG_get_evaluated_scene(ctx->depsgraph);
-          float imat[4][4], omat[4][4];
-          invert_m4_m4(imat, ctx->object->obmat);
-          unit_m4(omat);
-
-          Object *obs = join_mesh_and_operands(rmd, ctx, mesh, result);
+         
+          Object *obs = join_mesh_and_operands(rmd, ctx, mesh);
           int layers_select_src[4];
           int layers_select_dst[4];
           char defgrp[1] = {'\0'};
