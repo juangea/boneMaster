@@ -26,6 +26,7 @@
 #include "BLI_listbase.h"
 #include "BLI_math_base.h"
 #include "BLI_memarena.h"
+#include "BLI_alloca.h"
 
 #include "DNA_meshdata_types.h"
 #include "DNA_modifier_types.h"
@@ -40,11 +41,17 @@
 #include "BKE_mball_tessellate.h"
 #include "BKE_mesh.h"
 #include "BKE_mesh_runtime.h"
+#include "BKE_mesh_mapping.h"
+#include "BKE_mesh_remap.h"
 #include "BKE_library.h"
 #include "BKE_library_query.h"
 #include "BKE_object.h"
 #include "BKE_remesh.h"
 #include "BKE_mesh_remesh_voxel.h"
+#include "BKE_data_transfer.h"
+#include "BKE_report.h"
+#include "BKE_material.h"
+#include "BKE_bvhutils.h"
 
 #include "DEG_depsgraph_query.h"
 
@@ -61,6 +68,8 @@
 #ifdef WITH_OPENVDB
 #  include "openvdb_capi.h"
 #endif
+
+static void transfer_materials(Mesh *src, Mesh *dst);
 
 static void initData(ModifierData *md)
 {
@@ -435,25 +444,7 @@ static Mesh *repolygonize(RemeshModifierData *rmd, Object* ob, Mesh* derived, Pa
 
 static Mesh *voxel_remesh(RemeshModifierData *rmd, Mesh *mesh, struct OpenVDBLevelSet *level_set)
 {
-  MLoopCol **remap = NULL;
   Mesh *target = NULL;
-
-  if (rmd->flag & MOD_REMESH_REPROJECT_VPAINT) {
-    CSGVolume_Object *vcob;
-    int i = 1;
-    remap = MEM_calloc_arrayN(
-        BLI_listbase_count(&rmd->csg_operands) + 1, sizeof(MLoopCol *), "remap");
-    remap[0] = BKE_remesh_remap_loop_vertex_color_layer(mesh);
-    for (vcob = rmd->csg_operands.first; vcob; vcob = vcob->next) {
-      if (vcob->object && vcob->flag & MOD_REMESH_CSG_OBJECT_ENABLED) {
-        Mesh *me = BKE_mesh_new_from_object(NULL, vcob->object, true);
-        if (me) {
-          remap[i] = BKE_remesh_remap_loop_vertex_color_layer(me);
-        }
-        i++;
-      }
-    }
-  }
 
   OpenVDBLevelSet_filter(
       level_set, rmd->filter_type,
@@ -469,29 +460,6 @@ static Mesh *voxel_remesh(RemeshModifierData *rmd, Mesh *mesh, struct OpenVDBLev
       level_set, rmd->isovalue * rmd->voxel_size, rmd->adaptivity,
       rmd->flag & MOD_REMESH_RELAX_TRIANGLES, rmd->levelset_cached);
   OpenVDBLevelSet_free(level_set);
-
-  if (rmd->flag & MOD_REMESH_REPROJECT_VPAINT) {
-    int i = 1;
-    CSGVolume_Object *vcob;
-
-    if (remap[0]) {
-      BKE_remesh_voxel_reproject_remapped_vertex_paint(target, mesh, remap[0]);
-      MEM_freeN(remap[0]);
-    }
-
-    for (vcob = rmd->csg_operands.first; vcob; vcob = vcob->next) {
-      if (vcob->object && vcob->flag & MOD_REMESH_CSG_OBJECT_ENABLED && remap && remap[i]) {
-        Mesh *me = BKE_object_get_final_mesh(vcob->object);
-        BKE_remesh_voxel_reproject_remapped_vertex_paint(target, me, remap[i]);
-        if (remap[i])
-          MEM_freeN(remap[i]);
-        i++;
-      }
-    }
-
-    MEM_freeN(remap);
-    BKE_mesh_update_customdata_pointers(target, false);
-  }
 
   if (rmd->flag & MOD_REMESH_SMOOTH_NORMALS) {
     MPoly *mpoly = target->mpoly;
@@ -588,6 +556,211 @@ static Mesh *copy_mesh(Mesh *me)
   return result;
 }
 #  endif
+
+static void remesh_copy_customdata(CustomData *src,
+                                  CustomData *dst,
+                                  CustomDataMask mask,
+                                  int src_ofs,
+                                  int dst_ofs,
+                                  int copyelem,
+                                  int totelem)
+{
+  CustomDataLayer *layer;
+  int i;
+  for (i = 0; i < src->totlayer; i++) {
+    layer = src->layers + i;
+    if (mask & CD_TYPE_AS_MASK(layer->type)) {
+      if (!CustomData_get_layer_named(dst, layer->type, layer->name)) {
+        CustomData_add_layer_named(dst, layer->type, CD_CALLOC, NULL, totelem, layer->name);
+      }
+
+      CustomData_copy_data_layer(src,
+                                 dst,
+                                 i,
+                                 CustomData_get_named_layer_index(dst, layer->type, layer->name),
+                                 src_ofs,
+                                 dst_ofs,
+                                 copyelem);
+    }
+  }
+}
+
+static void join_mesh_to_mesh(Mesh *mesh,
+                              Mesh *me,
+                              int vertstart,
+                              int edgestart,
+                              int loopstart,
+                              int polystart,
+                              int num_verts,
+                              int num_edges,
+                              int num_loops,
+                              int num_polys,
+                              float mat[4][4])
+{
+  MPoly *mp;
+  MLoop *ml;
+  MEdge *e;
+  int i;
+
+  memcpy(mesh->mvert + vertstart, me->mvert, me->totvert * sizeof(MVert));
+  for (int v = 0; v < me->totvert; v++) {
+    mul_m4_v3(mat, mesh->mvert[v + vertstart].co);
+  }
+
+  memcpy(mesh->mpoly + polystart, me->mpoly, me->totpoly * sizeof(MPoly));
+
+  for (i = 0, mp = mesh->mpoly + polystart; i < me->totpoly; ++i, ++mp) {
+    /* adjust loopstart index */
+    mp->loopstart += loopstart;
+  }
+
+  memcpy(mesh->mloop + loopstart, me->mloop, me->totloop * sizeof(MLoop));
+
+  for (i = 0, ml = mesh->mloop + loopstart; i < me->totloop; ++i, ++ml) {
+    /* adjust vertex index */
+    ml->v += vertstart;
+    ml->e += edgestart;
+  }
+
+  memcpy(mesh->medge + edgestart, me->medge, me->totedge * sizeof(MEdge));
+
+  for (i = 0, e = mesh->medge + edgestart; i < me->totedge; ++i, ++e) {
+    /* adjust vertex indices */
+    e->v1 += vertstart;
+    e->v2 += vertstart;
+  }
+
+  remesh_copy_customdata(
+      &me->vdata, &mesh->vdata, CD_MASK_DERIVEDMESH.vmask, 0, vertstart, me->totvert, num_verts);
+  remesh_copy_customdata(
+      &me->edata, &mesh->edata, CD_MASK_DERIVEDMESH.emask, 0, edgestart, me->totedge, num_edges);
+  remesh_copy_customdata(
+      &me->ldata, &mesh->ldata, CD_MASK_DERIVEDMESH.lmask, 0, loopstart, me->totloop, num_loops);
+  remesh_copy_customdata(
+      &me->pdata, &mesh->pdata, CD_MASK_DERIVEDMESH.pmask, 0, polystart, me->totpoly, num_polys);
+}
+
+static Object *join_mesh_and_operands(RemeshModifierData *rmd,
+                                      ModifierEvalContext *ctx,
+                                      Mesh *messh,
+                                      Mesh *result)
+{
+  float imat[4][4], omat[4][4];
+  Mesh *mesh = NULL;
+  CSGVolume_Object *vcob;
+  int vertstart, polystart, loopstart, edgestart, num_verts, num_polys, num_loops, num_edges;
+  vertstart = polystart = loopstart = edgestart = num_verts = num_polys = num_loops = num_edges =
+      0;
+
+  short totcol = 0;
+
+  num_verts = messh->totvert;
+  num_edges = messh->totedge;
+  num_loops = messh->totloop;
+  num_polys = messh->totpoly;
+  totcol = ctx->object->totcol;
+
+  for (vcob = rmd->csg_operands.first; vcob; vcob = vcob->next) {
+    if (vcob->object && (vcob->flag & MOD_REMESH_CSG_OBJECT_ENABLED)) {
+      Mesh *me = BKE_mesh_new_from_object(ctx->depsgraph, vcob->object, true);
+      num_verts += me->totvert;
+      num_polys += me->totpoly;
+      num_loops += me->totloop;
+      num_edges += me->totedge;
+      totcol += vcob->object->totcol;
+    }
+  }
+
+  mesh = BKE_mesh_new_nomain(num_verts, num_edges, 0, num_loops, num_polys);
+
+  invert_m4_m4(imat, ctx->object->obmat);
+  unit_m4(omat);
+
+  join_mesh_to_mesh(mesh,
+                    messh,
+                    vertstart,
+                    edgestart,
+                    loopstart,
+                    polystart,
+                    num_verts,
+                    num_edges,
+                    num_loops,
+                    num_polys,
+                    omat);
+
+  vertstart += messh->totvert;
+  polystart += messh->totpoly;
+  loopstart += messh->totloop;
+  edgestart += messh->totedge;
+
+  for (vcob = rmd->csg_operands.first; vcob; vcob = vcob->next) {
+    if (vcob->object && (vcob->flag & MOD_REMESH_CSG_OBJECT_ENABLED)) {
+      Mesh *me = BKE_mesh_new_from_object(ctx->depsgraph, vcob->object, true);
+      mul_m4_m4m4(omat, imat, vcob->object->obmat);
+
+      join_mesh_to_mesh(mesh, me, vertstart, edgestart, loopstart, polystart,
+                        num_verts, num_edges, num_loops, num_polys, omat);
+
+      vertstart += me->totvert;
+      polystart += me->totpoly;
+      loopstart += me->totloop;
+      edgestart += me->totedge;
+    }
+  }
+
+  //force normals calculation here for datatransfer
+  mesh->runtime.cd_dirty_poly |= CD_MASK_NORMAL;
+  mesh->runtime.cd_dirty_vert |= CD_MASK_NORMAL;
+
+  BKE_mesh_ensure_normals_for_display(mesh);
+  BKE_mesh_calc_normals_split(mesh);
+
+  // create a nomain object here, too bad datatransfer needs 2 objects...
+  Object *fob = BKE_id_new_nomain(ID_OB, NULL);
+  fob->type = OB_MESH;
+  fob->data = mesh;
+  //fake evaluated mesh here, just because datatransfer doesnt accept a source mesh, sheesh
+  fob->runtime.mesh_orig = mesh;
+  fob->runtime.mesh_eval = mesh;
+  fob->runtime.mesh_deform_eval = mesh; //seems this is being retrieved by datatransfer
+  //fob->runtime.last_data_mask = CD_MASK_DERIVEDMESH;
+
+  return fob;
+}
+
+static void transfer_materials(Mesh* src, Mesh* dst)
+{
+  BVHTreeFromMesh bvhtree_src = {
+      .nearest_callback = NULL,
+  };
+  BKE_bvhtree_from_mesh_get(&bvhtree_src, src, BVHTREE_FROM_LOOPTRI, 2);
+
+  MLoopTri* lt_dst = BKE_mesh_runtime_looptri_ensure(dst);
+  int len_dst = BKE_mesh_runtime_looptri_len(dst);
+
+  MLoopTri *lt_src = BKE_mesh_runtime_looptri_ensure(src);
+
+  for (int i = 0; i < len_dst; i++) {
+    float from_co[3] = {0, 0, 0};
+    BVHTreeNearest nearest_src;
+    nearest_src.index = -1;
+    nearest_src.dist_sq = FLT_MAX;
+    for (int j = 0; j < 3; j++) {
+      MVert mv = dst->mvert[dst->mloop[lt_dst[i].tri[j]].v];
+      add_v3_v3(from_co, mv.co);
+    }
+    mul_v3_fl(from_co, 0.333333f);
+
+    BLI_bvhtree_find_nearest(
+        bvhtree_src.tree, from_co, &nearest_src, bvhtree_src.nearest_callback, &bvhtree_src);
+
+    if (nearest_src.index != -1) {
+      dst->mpoly[lt_dst[i].poly].mat_nr = src->mpoly[lt_src[nearest_src.index].poly].mat_nr;
+    }
+  }
+
+  free_bvhtree_from_mesh(&bvhtree_src);
+}
 
 static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mesh *mesh)
 {
@@ -697,15 +870,83 @@ static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mes
         if (rmd->adaptivity > 0.0f)
            result->runtime.cd_dirty_vert |= CD_MASK_NORMAL;
 
-        CustomData_MeshMasks mask = CD_MASK_DERIVEDMESH;
-        CustomData_merge(&mesh->vdata, &result->vdata, mask.vmask, CD_CALLOC, result->totvert);
-        CustomData_merge(&mesh->edata, &result->edata, mask.emask, CD_CALLOC, result->totedge);
-        CustomData_merge(&mesh->ldata, &result->ldata, mask.lmask, CD_CALLOC, result->totloop);
-        CustomData_merge(&mesh->pdata, &result->pdata, mask.pmask, CD_CALLOC, result->totpoly);
-
         if (rmd->flag & MOD_REMESH_FIX_POLES) {
           result = BKE_mesh_remesh_voxel_fix_poles(result,
                                                    (rmd->flag & MOD_REMESH_SHARPEN_FEATURES) == 0);
+        }
+
+        {
+          CustomData_MeshMasks mask = CD_MASK_DERIVEDMESH;
+          CustomData_merge(&mesh->vdata, &result->vdata, mask.vmask, CD_CALLOC, result->totvert);
+          CustomData_merge(&mesh->edata, &result->edata, mask.emask, CD_CALLOC, result->totedge);
+          CustomData_merge(&mesh->ldata, &result->ldata, mask.lmask, CD_CALLOC, result->totloop);
+          CustomData_merge(&mesh->pdata, &result->pdata, mask.pmask, CD_CALLOC, result->totpoly);
+        }
+
+        if (rmd->flag & MOD_REMESH_REPROJECT_DATA) {
+          Scene *sc = DEG_get_evaluated_scene(ctx->depsgraph);
+          float imat[4][4], omat[4][4];
+          invert_m4_m4(imat, ctx->object->obmat);
+          unit_m4(omat);
+
+          Object *obs = join_mesh_and_operands(rmd, ctx, mesh, result);
+          int layers_select_src[4];
+          int layers_select_dst[4];
+          char defgrp[1] = {'\0'};
+          int data_types = DT_TYPE_VERT_ALL | DT_TYPE_EDGE_ALL | DT_TYPE_LOOP_ALL |
+                           DT_TYPE_POLY_ALL;
+
+          int map_vert_mode = MREMAP_MODE_VERT_POLYINTERP_VNORPROJ;
+          int map_edge_mode = MREMAP_MODE_EDGE_EDGEINTERP_VNORPROJ;
+          int map_loop_mode = MREMAP_MODE_LOOP_POLYINTERP_LNORPROJ;
+          int map_poly_mode = MREMAP_MODE_POLY_POLYINTERP_PNORPROJ;
+          
+
+          CustomData_MeshMasks mask = CD_MASK_BAREMESH;
+          ReportList reports;
+          BKE_reports_init(&reports, RPT_STORE);
+
+          for (int i = 0; i < DT_MULTILAYER_INDEX_MAX; i++) {
+            layers_select_src[i] = DT_LAYERS_ALL_SRC;
+            layers_select_dst[i] = DT_LAYERS_NAME_DST;
+          }
+
+          BKE_object_data_transfer_dttypes_to_cdmask(data_types, &mask);
+          BKE_mesh_remap_calc_source_cddata_masks_from_map_modes(
+              map_vert_mode, map_edge_mode, map_loop_mode, map_poly_mode, &mask);
+
+          //craft a matching cd mask too...
+          obs->runtime.last_data_mask = mask;
+
+          BKE_object_data_transfer_ex(ctx->depsgraph,
+                                      sc,
+                                      obs,
+                                      ctx->object,
+                                      result,
+                                      data_types,
+                                      false,
+                                      map_vert_mode,
+                                      map_edge_mode,
+                                      map_loop_mode,
+                                      map_poly_mode,
+                                      NULL,
+                                      false,
+                                      FLT_MAX,
+                                      0.0f,
+                                      0.0f,
+                                      layers_select_src,
+                                      layers_select_dst,
+                                      CDT_MIX_TRANSFER,
+                                      1.0f,
+                                      defgrp,
+                                      false,
+                                      &reports);
+
+          transfer_materials(obs->data, result);
+
+          BKE_mesh_free(obs->data);
+          obs->data = NULL;
+          BKE_id_free(NULL, obs);
         }
       }
 

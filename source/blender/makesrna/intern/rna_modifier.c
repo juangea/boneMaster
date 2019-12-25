@@ -5361,10 +5361,10 @@ static void rna_def_modifier_remesh(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Edge Tolerance", "OpenVDB sharpen features edge tolerance");
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
-  prop = RNA_def_property(srna, "reproject_vertex_paint", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, NULL, "flag", MOD_REMESH_REPROJECT_VPAINT);
+  prop = RNA_def_property(srna, "reproject_data", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", MOD_REMESH_REPROJECT_DATA);
   RNA_def_property_ui_text(
-      prop, "Reproject Vertex Paint", "Keep the current vertex paint on the new mesh");
+      prop, "Reproject Data", "Keep the current data on the new mesh");
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
   prop = RNA_def_property(srna, "live_remesh", PROP_BOOLEAN, PROP_NONE);

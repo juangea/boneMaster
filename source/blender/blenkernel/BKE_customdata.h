@@ -253,6 +253,13 @@ void CustomData_copy_data_named(const struct CustomData *source,
                                 int source_index,
                                 int dest_index,
                                 int count);
+void CustomData_copy_data_layer(const CustomData *source,
+                                CustomData *dest,
+                                int src_i,
+                                int dst_i,
+                                int src_index,
+                                int dst_index,
+                                int count);
 void CustomData_copy_elements(int type, void *src_data_ofs, void *dst_data_ofs, int count);
 void CustomData_bmesh_copy_data(const struct CustomData *source,
                                 struct CustomData *dest,

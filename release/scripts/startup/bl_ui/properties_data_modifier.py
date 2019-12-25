@@ -1282,7 +1282,7 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
             row.prop(md, "smooth_normals")
             row = layout.row()
             row.prop(md, "relax_triangles")
-            row.prop(md, "reproject_vertex_paint")
+            row.prop(md, "reproject_data")
             row = layout.row()
             row.prop(md, "accumulate")
             row.prop(md, "fix_poles")
