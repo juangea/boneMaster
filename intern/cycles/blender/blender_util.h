@@ -553,7 +553,7 @@ static inline BL::FluidDomainSettings object_fluid_domain_find(BL::Object &b_ob)
   return BL::FluidDomainSettings(PointerRNA_NULL);
 }
 
-static inline BL::RemeshModifier object_metaball_remesher_find(BL::Object b_ob)
+static inline BL::RemeshModifier object_metaball_voxel_remesher_find(BL::Object b_ob)
 {
 	BL::Object::modifiers_iterator b_mod;
 
@@ -563,6 +563,9 @@ static inline BL::RemeshModifier object_metaball_remesher_find(BL::Object b_ob)
 
 			if(b_fmd.mode() == BL::RemeshModifier::mode_METABALL)
 				return b_fmd;
+
+      if (b_fmd.mode() == BL::RemeshModifier::mode_VOXEL)
+        return b_fmd;
 		}
 	}
 

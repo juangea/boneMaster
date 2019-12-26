@@ -968,7 +968,7 @@ static bool sync_mesh_precalculated_motion(BL::Mesh& b_mesh, BL::Object& b_ob, B
 	if(scene->need_motion() == Scene::MOTION_NONE)
 		return false;
 
-	BL::RemeshModifier b_remesher = object_metaball_remesher_find(b_ob);
+	BL::RemeshModifier b_remesher = object_metaball_voxel_remesher_find(b_ob);
 	if (!(b_remesher))
 		return false;
 
@@ -1211,7 +1211,7 @@ void BlenderSync::sync_mesh_motion(BL::Depsgraph &b_depsgraph,
     return;
 
   /* other precalculated motion (metaball remesher for now only) */
-  BL::RemeshModifier b_remesher = object_metaball_remesher_find(b_ob);
+  BL::RemeshModifier b_remesher = object_metaball_voxel_remesher_find(b_ob);
   if (b_remesher)
 	return;
 
