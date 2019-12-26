@@ -659,10 +659,12 @@ static Object *join_mesh_and_operands(RemeshModifierData *rmd,
   for (vcob = rmd->csg_operands.first; vcob; vcob = vcob->next) {
     if (vcob->object && (vcob->flag & MOD_REMESH_CSG_OBJECT_ENABLED)) {
       Mesh *me = BKE_mesh_new_from_object(ctx->depsgraph, vcob->object, true);
-      num_verts += me->totvert;
-      num_polys += me->totpoly;
-      num_loops += me->totloop;
-      num_edges += me->totedge;
+      if (me) {
+        num_verts += me->totvert;
+        num_polys += me->totpoly;
+        num_loops += me->totloop;
+        num_edges += me->totedge;
+      }
     }
   }
 
@@ -691,15 +693,17 @@ static Object *join_mesh_and_operands(RemeshModifierData *rmd,
   for (vcob = rmd->csg_operands.first; vcob; vcob = vcob->next) {
     if (vcob->object && (vcob->flag & MOD_REMESH_CSG_OBJECT_ENABLED)) {
       Mesh *me = BKE_mesh_new_from_object(ctx->depsgraph, vcob->object, true);
-      mul_m4_m4m4(omat, imat, vcob->object->obmat);
+      if (me) {
+        mul_m4_m4m4(omat, imat, vcob->object->obmat);
 
-      join_mesh_to_mesh(mesh, me, vertstart, edgestart, loopstart, polystart,
-                        num_verts, num_edges, num_loops, num_polys, omat);
+        join_mesh_to_mesh(mesh, me, vertstart, edgestart, loopstart, polystart,
+                          num_verts, num_edges, num_loops, num_polys, omat);
 
-      vertstart += me->totvert;
-      polystart += me->totpoly;
-      loopstart += me->totloop;
-      edgestart += me->totedge;
+        vertstart += me->totvert;
+        polystart += me->totpoly;
+        loopstart += me->totloop;
+        edgestart += me->totedge;
+      }
     }
   }
 
@@ -756,6 +760,68 @@ static void transfer_materials(Mesh* src, Mesh* dst)
   free_bvhtree_from_mesh(&bvhtree_src);
 }
 
+static void transfer_data(RemeshModifierData *rmd, ModifierEvalContext *ctx, Mesh *mesh, Mesh* result)
+{
+  Scene *sc = DEG_get_evaluated_scene(ctx->depsgraph);
+
+  Object *obs = join_mesh_and_operands(rmd, ctx, mesh);
+  int layers_select_src[4];
+  int layers_select_dst[4];
+  char defgrp[1] = {'\0'};
+  int data_types = DT_TYPE_VERT_ALL | DT_TYPE_EDGE_ALL | DT_TYPE_LOOP_ALL | DT_TYPE_POLY_ALL;
+
+  int map_vert_mode = MREMAP_MODE_VERT_POLYINTERP_VNORPROJ;
+  int map_edge_mode = MREMAP_MODE_EDGE_EDGEINTERP_VNORPROJ;
+  int map_loop_mode = MREMAP_MODE_LOOP_POLYINTERP_LNORPROJ;
+  int map_poly_mode = MREMAP_MODE_POLY_POLYINTERP_PNORPROJ;
+
+  CustomData_MeshMasks mask = CD_MASK_BAREMESH;
+  ReportList reports;
+  BKE_reports_init(&reports, RPT_STORE);
+
+  for (int i = 0; i < DT_MULTILAYER_INDEX_MAX; i++) {
+    layers_select_src[i] = DT_LAYERS_ALL_SRC;
+    layers_select_dst[i] = DT_LAYERS_NAME_DST;
+  }
+
+  BKE_object_data_transfer_dttypes_to_cdmask(data_types, &mask);
+  BKE_mesh_remap_calc_source_cddata_masks_from_map_modes(
+      map_vert_mode, map_edge_mode, map_loop_mode, map_poly_mode, &mask);
+
+  // craft a matching cd mask too...
+  obs->runtime.last_data_mask = mask;
+
+  BKE_object_data_transfer_ex(ctx->depsgraph,
+                              sc,
+                              obs,
+                              ctx->object,
+                              result,
+                              data_types,
+                              false,
+                              map_vert_mode,
+                              map_edge_mode,
+                              map_loop_mode,
+                              map_poly_mode,
+                              NULL,
+                              false,
+                              FLT_MAX,
+                              0.0f,
+                              0.0f,
+                              layers_select_src,
+                              layers_select_dst,
+                              CDT_MIX_TRANSFER,
+                              1.0f,
+                              defgrp,
+                              false,
+                              &reports);
+
+  transfer_materials(obs->data, result);
+
+  BKE_mesh_free(obs->data);
+  obs->data = NULL;
+  BKE_id_free(NULL, obs);
+}
+
 static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mesh *mesh)
 {
   RemeshModifierData *rmd;
@@ -778,7 +844,9 @@ static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mes
     if (((rmd->flag & MOD_REMESH_LIVE_REMESH) == 0)) {
       // access mesh cache on ORIGINAL object, cow should not copy / free this over and over again
       if (rmd_orig->mesh_cached) {
-        return copy_mesh(rmd_orig->mesh_cached);
+        Mesh *ret = copy_mesh(rmd_orig->mesh_cached);
+        BKE_mesh_copy_settings(ret, mesh);
+        return ret;
       }
     }
 
@@ -857,9 +925,6 @@ static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mes
           rmd_orig->mesh_cached = NULL;
         }
 
-        // save a copy
-        rmd_orig->mesh_cached = copy_mesh(result);
-
         // adaptivity can mess up normals, try to recalc them by tagging them as dirty
         if (rmd->adaptivity > 0.0f)
            result->runtime.cd_dirty_vert |= CD_MASK_NORMAL;
@@ -878,67 +943,11 @@ static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mes
         }
 
         if (rmd->flag & MOD_REMESH_REPROJECT_DATA) {
-          Scene *sc = DEG_get_evaluated_scene(ctx->depsgraph);
-         
-          Object *obs = join_mesh_and_operands(rmd, ctx, mesh);
-          int layers_select_src[4];
-          int layers_select_dst[4];
-          char defgrp[1] = {'\0'};
-          int data_types = DT_TYPE_VERT_ALL | DT_TYPE_EDGE_ALL | DT_TYPE_LOOP_ALL |
-                           DT_TYPE_POLY_ALL;
-
-          int map_vert_mode = MREMAP_MODE_VERT_POLYINTERP_VNORPROJ;
-          int map_edge_mode = MREMAP_MODE_EDGE_EDGEINTERP_VNORPROJ;
-          int map_loop_mode = MREMAP_MODE_LOOP_POLYINTERP_LNORPROJ;
-          int map_poly_mode = MREMAP_MODE_POLY_POLYINTERP_PNORPROJ;
-          
-
-          CustomData_MeshMasks mask = CD_MASK_BAREMESH;
-          ReportList reports;
-          BKE_reports_init(&reports, RPT_STORE);
-
-          for (int i = 0; i < DT_MULTILAYER_INDEX_MAX; i++) {
-            layers_select_src[i] = DT_LAYERS_ALL_SRC;
-            layers_select_dst[i] = DT_LAYERS_NAME_DST;
-          }
-
-          BKE_object_data_transfer_dttypes_to_cdmask(data_types, &mask);
-          BKE_mesh_remap_calc_source_cddata_masks_from_map_modes(
-              map_vert_mode, map_edge_mode, map_loop_mode, map_poly_mode, &mask);
-
-          //craft a matching cd mask too...
-          obs->runtime.last_data_mask = mask;
-
-          BKE_object_data_transfer_ex(ctx->depsgraph,
-                                      sc,
-                                      obs,
-                                      ctx->object,
-                                      result,
-                                      data_types,
-                                      false,
-                                      map_vert_mode,
-                                      map_edge_mode,
-                                      map_loop_mode,
-                                      map_poly_mode,
-                                      NULL,
-                                      false,
-                                      FLT_MAX,
-                                      0.0f,
-                                      0.0f,
-                                      layers_select_src,
-                                      layers_select_dst,
-                                      CDT_MIX_TRANSFER,
-                                      1.0f,
-                                      defgrp,
-                                      false,
-                                      &reports);
-
-          transfer_materials(obs->data, result);
-
-          BKE_mesh_free(obs->data);
-          obs->data = NULL;
-          BKE_id_free(NULL, obs);
+          transfer_data(rmd, ctx, mesh, result);
         }
+
+        // save a copy
+        rmd_orig->mesh_cached = copy_mesh(result);
       }
 
       return result;
