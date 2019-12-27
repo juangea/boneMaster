@@ -336,6 +336,7 @@ static Mesh *repolygonize(
                                    override_size,
                                    defgrp_size);
       BKE_mesh_free(dm);
+      MEM_freeN(dm);
       return result;
     }
   }
@@ -460,6 +461,7 @@ static Mesh *repolygonize(
                                    override_size,
                                    defgrp_size);
       BKE_mesh_free(dm);
+      MEM_freeN(dm);
       return result;
     }
   }
@@ -519,16 +521,20 @@ static struct OpenVDBLevelSet *csgOperation(struct OpenVDBLevelSet *level_set,
   switch (type) {
     case OB_MESH:
       me_orig = BKE_object_get_evaluated_mesh(depsgraph, vcob->object);
-      me = BKE_mesh_new_nomain(me_orig->totvert,
-                               me_orig->totedge,
-                               me_orig->totface,
-                               me_orig->totloop,
-                               me_orig->totpoly);
+      if (me_orig) {
+        me = BKE_mesh_new_nomain(me_orig->totvert,
+                                 me_orig->totedge,
+                                 me_orig->totface,
+                                 me_orig->totloop,
+                                 me_orig->totpoly);
+        BKE_mesh_nomain_to_mesh(me_orig, me, vcob->object, &CD_MASK_MESH, false);
 
-      BKE_mesh_nomain_to_mesh(me_orig, me, vcob->object, &CD_MASK_MESH, false);
-
-      BKE_remesh_voxel_ovdb_mesh_to_level_set(
-          level_set, me, NULL, false, true, ob, vcob->object, vcob->operation);
+        BKE_remesh_voxel_ovdb_mesh_to_level_set(
+            level_set, me, NULL, false, true, ob, vcob->object, vcob->operation);
+      }
+      else {
+        return level_set;
+      }
       break;
     case OB_FONT:
     case OB_CURVE:
@@ -575,6 +581,7 @@ static struct OpenVDBLevelSet *csgOperation(struct OpenVDBLevelSet *level_set,
   OpenVDBLevelSet_free(level_setB);
   OpenVDBTransform_free(xform);
   BKE_mesh_free(me);
+  MEM_freeN(me);
 
   return level_set;
 }
@@ -696,6 +703,8 @@ static Object *join_mesh_and_operands(RemeshModifierData *rmd,
         num_polys += me->totpoly;
         num_loops += me->totloop;
         num_edges += me->totedge;
+        BKE_mesh_free(me);
+        MEM_freeN(me);
       }
     }
   }
@@ -744,6 +753,8 @@ static Object *join_mesh_and_operands(RemeshModifierData *rmd,
         polystart += me->totpoly;
         loopstart += me->totloop;
         edgestart += me->totedge;
+        BKE_mesh_free(me);
+        MEM_freeN(me);
       }
     }
   }
@@ -862,8 +873,9 @@ static void transfer_data(RemeshModifierData *rmd,
   transfer_materials(obs->data, result);
 
   BKE_mesh_free(obs->data);
+  MEM_freeN(obs->data);
   obs->data = NULL;
-  BKE_id_free(NULL, obs);
+  MEM_freeN(obs);
 }
 
 static void transfer_mblur_data(RemeshModifierData *rmd,
@@ -892,7 +904,7 @@ static void transfer_mblur_data(RemeshModifierData *rmd,
     BLI_kdtree_3d_balance(kdtree);
   }
 
-  //need the (empty) layers too, in case we dont use the particles (for cycles)
+  // need the (empty) layers too, in case we dont use the particles (for cycles)
   psize = CustomData_add_layer_named(&result->vdata, CD_PROP_FLT, CD_CALLOC, NULL, t, "psize");
   velX = CustomData_add_layer_named(&result->vdata, CD_PROP_FLT, CD_CALLOC, NULL, t, "velX");
   velY = CustomData_add_layer_named(&result->vdata, CD_PROP_FLT, CD_CALLOC, NULL, t, "velY");
@@ -1016,22 +1028,16 @@ static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mes
 
         if (rmd_orig->levelset_cached) {
           OpenVDBLevelSet_free(rmd_orig->levelset_cached);
-          rmd_orig->levelset_cached = NULL;
         }
 
         rmd_orig->levelset_cached = OpenVDBLevelSet_copy(level_set);
-        result = voxel_remesh(rmd, mesh, level_set);
+
+        result = voxel_remesh(rmd_orig, mesh, level_set);
       }
 
       if (result) {
         // new ... need to copy materials etc on our own
         BKE_mesh_copy_settings(result, mesh);
-
-        // update cache
-        if (rmd_orig->mesh_cached) {
-          BKE_mesh_free(rmd_orig->mesh_cached);
-          rmd_orig->mesh_cached = NULL;
-        }
 
         // adaptivity can mess up normals, try to recalc them by tagging them as dirty
         if (rmd->adaptivity > 0.0f)
@@ -1056,13 +1062,19 @@ static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mes
 
         // map particle velocities and rotations, size
         // just create the CD layers, even without particles;
-        // null check happens in transfer_mblur_data 
+        // null check happens in transfer_mblur_data
         {
           bool render = ctx->flag & MOD_APPLY_RENDER;
           Scene *scene = DEG_get_input_scene(ctx->depsgraph);
           Object *ob = ctx->object;
           ParticleSystem *psys = get_psys(rmd, ob, scene, render);
           transfer_mblur_data(rmd, ctx, psys, result);
+        }
+
+         // update cache
+        if (rmd_orig->mesh_cached) {
+          BKE_mesh_free(rmd_orig->mesh_cached);
+          MEM_freeN(rmd_orig->mesh_cached); 
         }
 
         // save a copy
@@ -1225,12 +1237,8 @@ static void copyData(const ModifierData *md_src, ModifierData *md_dst, const int
   struct OpenVDBLevelSet *lvl_src = rmd_src->levelset_cached;
 
   modifier_copyData_generic(md_src, md_dst, flag);
-  // only for cow copy, because cow does shallow copy only
-  if (flag & LIB_ID_CREATE_NO_MAIN) {
-    BLI_duplicatelist(&rmd_dst->csg_operands, &rmd_src->csg_operands);
-  }
+  BLI_duplicatelist(&rmd_dst->csg_operands, &rmd_src->csg_operands);
 
-  // here for both ?
   if (me_src) {
     Mesh *me_dst = BKE_mesh_new_nomain(
         me_src->totvert, me_src->totedge, me_src->totface, me_src->totloop, me_src->totpoly);
@@ -1248,8 +1256,10 @@ static void copyData(const ModifierData *md_src, ModifierData *md_dst, const int
 static void freeData(ModifierData *md)
 {
   RemeshModifierData *rmd = (RemeshModifierData *)md;
+
   if (rmd->mesh_cached) {
     BKE_mesh_free(rmd->mesh_cached);
+    MEM_freeN(rmd->mesh_cached);
     rmd->mesh_cached = NULL;
   }
 
@@ -1257,6 +1267,8 @@ static void freeData(ModifierData *md)
     OpenVDBLevelSet_free(rmd->levelset_cached);
     rmd->levelset_cached = NULL;
   }
+
+  BLI_freelistN(&rmd->csg_operands);
 }
 
 ModifierTypeInfo modifierType_Remesh = {

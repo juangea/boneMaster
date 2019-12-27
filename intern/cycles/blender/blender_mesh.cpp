@@ -980,6 +980,9 @@ static bool sync_mesh_precalculated_motion(BL::Mesh& b_mesh, BL::Object& b_ob, B
 		attr_mP = mesh->attributes.add(ATTR_STD_MOTION_VERTEX_POSITION);
 	}
 
+	Transform tfm = get_transform(b_ob.matrix_world());
+	Transform itfm = transform_inverse(tfm);
+
 	/* Only export previous and next frame, we don't have any in between data. */
 	float motion_times[2] = {-1.0f, 1.0f};
 	for(int step = 0; step < 2; step++) {
@@ -1009,8 +1012,9 @@ static bool sync_mesh_precalculated_motion(BL::Mesh& b_mesh, BL::Object& b_ob, B
 				float y = vlY.data[i].value();
 				float z = vlZ.data[i].value();
 
-				//printf("Vel %f %f %f\n", (double)x, (double)y, (double)z);
-				mP[i] = P[i] + make_float3(x, y, z) * relative_time;
+			    ccl::float3 p = transform_point(&itfm, make_float3(x, y, z));
+				//if (b_remesher.mode() == BL::RemeshModifier::mode_VOXEL)
+				mP[i] = P[i] + p * relative_time;
 			}
 		}
 	}
