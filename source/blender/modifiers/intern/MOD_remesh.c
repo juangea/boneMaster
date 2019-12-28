@@ -197,8 +197,9 @@ static int get_particle_data(RemeshModifierData *rmd,
   // take alive, for now
   ParticleData *pa;
   int i = 0, j = 0;
-  float imat[4][4];
+  float imat[4][4], quat[4];
   invert_m4_m4(imat, ob->obmat);
+  mat4_to_quat(quat, imat);
 
   (*pos) = BLI_memarena_calloc(pardata, sizeof(float) * 3 * psys->totpart);
   (*size) = BLI_memarena_calloc(pardata, sizeof(float) * psys->totpart);
@@ -207,7 +208,7 @@ static int get_particle_data(RemeshModifierData *rmd,
   (*index) = BLI_memarena_calloc(pardata, sizeof(int) * psys->totpart);
 
   for (i = 0; i < psys->totpart; i++) {
-    float co[3];
+    float co[3], rt[4];
     pa = psys->particles + i;
     if (pa->alive == PARS_UNBORN && (rmd->pflag & eRemeshFlag_Unborn) == 0)
       continue;
@@ -219,8 +220,15 @@ static int get_particle_data(RemeshModifierData *rmd,
     mul_v3_m4v3(co, imat, pa->state.co);
     copy_v3_v3((*pos)[j], co);
     (*size)[j] = pa->size;
-    copy_v3_v3((*vel)[j], pa->state.vel);
-    copy_qt_qt((*rot)[j], pa->state.rot);
+
+    copy_v3_v3(co, pa->state.vel);
+    mul_m4_v3(imat, co);
+    copy_v3_v3((*vel)[j], co);
+
+    copy_qt_qt(rt, pa->state.rot);
+    mul_qt_qtqt(rt, rt, quat);
+    copy_qt_qt((*rot)[j], rt);
+
     (*index)[j] = i;
     j++;
   }
@@ -270,8 +278,7 @@ static Mesh *repolygonize(
   Mesh *dm = NULL, *result = NULL;
   MVert *mv = NULL, *mv2 = NULL;
   float(*pos)[3] = NULL, (*vel)[3] = NULL, (*rot)[4] = NULL;
-  float *size = NULL, *psize = NULL, *velX = NULL, *velY = NULL, *velZ = NULL, *quatX = NULL,
-        *quatY = NULL, *quatZ = NULL, *quatW = NULL;
+  float *size = NULL, *psize = NULL;
   int i = 0, n = 0, *index, *orig_index;
   bool override_size = rmd->pflag & eRemeshFlag_Size;
   bool verts_only = rmd->pflag & eRemeshFlag_Verts;
@@ -295,29 +302,11 @@ static Mesh *repolygonize(
     dm = BKE_mesh_new_nomain(n, 0, 0, 0, 0);
     mv = dm->mvert;
     psize = CustomData_add_layer_named(&dm->vdata, CD_PROP_FLT, CD_CALLOC, NULL, n, "psize");
-    velX = CustomData_add_layer_named(&dm->vdata, CD_PROP_FLT, CD_CALLOC, NULL, n, "velX");
-    velY = CustomData_add_layer_named(&dm->vdata, CD_PROP_FLT, CD_CALLOC, NULL, n, "velY");
-    velZ = CustomData_add_layer_named(&dm->vdata, CD_PROP_FLT, CD_CALLOC, NULL, n, "velZ");
-
-    quatX = CustomData_add_layer_named(&dm->vdata, CD_PROP_FLT, CD_CALLOC, NULL, n, "quatX");
-    quatY = CustomData_add_layer_named(&dm->vdata, CD_PROP_FLT, CD_CALLOC, NULL, n, "quatY");
-    quatZ = CustomData_add_layer_named(&dm->vdata, CD_PROP_FLT, CD_CALLOC, NULL, n, "quatZ");
-    quatW = CustomData_add_layer_named(&dm->vdata, CD_PROP_FLT, CD_CALLOC, NULL, n, "quatW");
-
     orig_index = CustomData_add_layer(&dm->vdata, CD_ORIGINDEX, CD_CALLOC, NULL, n);
 
     for (i = 0; i < n; i++) {
       copy_v3_v3(mv[i].co, pos[i]);
       psize[i] = size[i];
-      velX[i] = vel[i][0];
-      velY[i] = vel[i][1];
-      velZ[i] = vel[i][2];
-
-      quatX[i] = rot[i][0];
-      quatY[i] = rot[i][1];
-      quatZ[i] = rot[i][2];
-      quatW[i] = rot[i][3];
-
       orig_index[i] = index[i];
     }
 
@@ -355,7 +344,6 @@ static Mesh *repolygonize(
   }
   else if ((rmd->input & MOD_REMESH_VERTICES) && (rmd->input & MOD_REMESH_PARTICLES)) {
     // both, for simplicity only use vert data here
-    float *ovX, *ovY, *ovZ, *oqX, *oqY, *oqZ, *oqW;
     n = 0;
     MemArena *pardata = BLI_memarena_new(BLI_MEMARENA_STD_BUFSIZE, "pardata");
     MDeformVert *dvert_new = NULL;
@@ -366,21 +354,6 @@ static Mesh *repolygonize(
     dm = BKE_mesh_new_nomain(n + derived->totvert, 0, 0, 0, 0);
     psize = CustomData_add_layer_named(
         &dm->vdata, CD_PROP_FLT, CD_CALLOC, NULL, n + derived->totvert, "psize");
-    velX = CustomData_add_layer_named(
-        &dm->vdata, CD_PROP_FLT, CD_CALLOC, NULL, n + derived->totvert, "velX");
-    velY = CustomData_add_layer_named(
-        &dm->vdata, CD_PROP_FLT, CD_CALLOC, NULL, n + derived->totvert, "velY");
-    velZ = CustomData_add_layer_named(
-        &dm->vdata, CD_PROP_FLT, CD_CALLOC, NULL, n + derived->totvert, "velZ");
-
-    quatX = CustomData_add_layer_named(
-        &dm->vdata, CD_PROP_FLT, CD_CALLOC, NULL, n + derived->totvert, "quatX");
-    quatY = CustomData_add_layer_named(
-        &dm->vdata, CD_PROP_FLT, CD_CALLOC, NULL, n + derived->totvert, "quatY");
-    quatZ = CustomData_add_layer_named(
-        &dm->vdata, CD_PROP_FLT, CD_CALLOC, NULL, n + derived->totvert, "quatZ");
-    quatW = CustomData_add_layer_named(
-        &dm->vdata, CD_PROP_FLT, CD_CALLOC, NULL, n + derived->totvert, "quatW");
 
     orig_index = CustomData_add_layer(
         &dm->vdata, CD_ORIGINDEX, CD_CALLOC, NULL, n + derived->totvert);
@@ -393,26 +366,10 @@ static Mesh *repolygonize(
     mv = dm->mvert;
     mv2 = derived->mvert;
 
-    ovX = CustomData_get_layer_named(&derived->vdata, CD_PROP_FLT, "velX");
-    ovY = CustomData_get_layer_named(&derived->vdata, CD_PROP_FLT, "velY");
-    ovZ = CustomData_get_layer_named(&derived->vdata, CD_PROP_FLT, "velZ");
-
-    oqX = CustomData_get_layer_named(&derived->vdata, CD_PROP_FLT, "quatX");
-    oqY = CustomData_get_layer_named(&derived->vdata, CD_PROP_FLT, "quatY");
-    oqZ = CustomData_get_layer_named(&derived->vdata, CD_PROP_FLT, "quatZ");
-    oqW = CustomData_get_layer_named(&derived->vdata, CD_PROP_FLT, "quatW");
 
     for (i = 0; i < n; i++) {
       copy_v3_v3(mv[i].co, pos[i]);
       psize[i] = size[i];
-      velX[i] = vel[i][0];
-      velY[i] = vel[i][1];
-      velZ[i] = vel[i][2];
-
-      quatX[i] = rot[i][0];
-      quatY[i] = rot[i][1];
-      quatZ[i] = rot[i][2];
-      quatW[i] = rot[i][3];
 
       orig_index[i] = index[i];
 
@@ -424,15 +381,6 @@ static Mesh *repolygonize(
     for (i = n; i < n + derived->totvert; i++) {
       copy_v3_v3(mv[i].co, mv2[i - n].co);
       psize[i] = -1.0f;  // use mball sizep
-      velX[i] = ovX ? ovX[i - n] : 0.0f;
-      velY[i] = ovY ? ovY[i - n] : 0.0f;
-      velZ[i] = ovZ ? ovZ[i - n] : 0.0f;
-
-      quatX[i] = oqX ? oqX[i - n] : 1.0f;
-      quatZ[i] = oqY ? oqY[i - n] : 0.0f;
-      quatY[i] = oqZ ? oqZ[i - n] : 0.0f;
-      quatW[i] = oqW ? oqW[i - n] : 0.0f;
-
       orig_index[i] = i;
       if (dvert_new && dvert && defgrp_size > -1) {
         int ind = i - n;
@@ -878,6 +826,42 @@ static void transfer_data(RemeshModifierData *rmd,
   MEM_freeN(obs);
 }
 
+struct ExtractParticleData {
+  int i;
+  float (*vel)[3];
+  float (*rot)[4];
+  float *size;
+  float *psize;
+  float *velX;
+  float *velY;
+  float *velZ;
+  float *quatX;
+  float *quatY;
+  float *quatZ;
+  float *quatW;
+} ExtractParticleData;
+
+static bool extract_particle_data_cb(void *user_data,
+                                     int index,
+                                     const float UNUSED(co[3]),
+                                     float UNUSED(dist_sq))
+{
+  struct ExtractParticleData *xp = (struct ExtractParticleData *)user_data;
+  int k = index;
+  int i = xp->i;
+  xp->velX[k] = xp->vel[i][0];
+  xp->velY[k] = xp->vel[i][1];
+  xp->velZ[k] = xp->vel[i][2];
+  xp->psize[k] = xp->size[i];
+
+  xp->quatX[k] = xp->rot[i][0];
+  xp->quatY[k] = xp->rot[i][1];
+  xp->quatZ[k] = xp->rot[i][2];
+  xp->quatW[k] = xp->rot[i][3];
+
+  return true;
+}
+
 static void transfer_mblur_data(RemeshModifierData *rmd,
                                 ModifierEvalContext *ctx,
                                 ParticleSystem *psys,
@@ -887,9 +871,9 @@ static void transfer_mblur_data(RemeshModifierData *rmd,
   float(*pos)[3] = NULL, (*vel)[3] = NULL, (*rot)[4] = NULL;
   float *size = NULL, *psize = NULL, *velX = NULL, *velY = NULL, *velZ = NULL, *quatX = NULL,
         *quatY = NULL, *quatZ = NULL, *quatW = NULL;
-  int n = 0, *index, *orig_index, t = result->totvert;
+  int n = 0, *index, t = result->totvert;
   MemArena *pardata = NULL;
-  KDTreeNearest_3d *nearest = NULL;
+  // KDTreeNearest_3d *nearest = NULL;
 
   if (psys) {
     kdtree = BLI_kdtree_3d_new(result->totvert);
@@ -918,11 +902,30 @@ static void transfer_mblur_data(RemeshModifierData *rmd,
   if (psys) {
     pardata = BLI_memarena_new(BLI_MEMARENA_STD_BUFSIZE, "pardata");
     n = get_particle_data(rmd, psys, ctx->object, &pos, &size, &vel, &rot, &index, pardata);
+    struct ExtractParticleData xp;
+    xp.psize = psize;
+    xp.size = size;
+    xp.rot = rot;
+    xp.vel = vel;
+    xp.velX = velX;
+    xp.velY = velY;
+    xp.velZ = velZ;
+    xp.quatX = quatX;
+    xp.quatY = quatY;
+    xp.quatZ = quatZ;
+    xp.quatW = quatW;
 
     for (int i = 0; i < n; i++) {
-      int r = BLI_kdtree_3d_range_search(
-          kdtree, pos[i], &nearest, psys->part->size * rmd->part_scale_factor * 2);
-      for (int j = 0; j < r; j++) {
+      // int r = BLI_kdtree_3d_range_search(
+      //    kdtree, pos[i], &nearest, psys->part->size * rmd->part_scale_factor * 2);
+      xp.i = i;
+      BLI_kdtree_3d_range_search_cb(kdtree,
+                                    pos[i],
+                                    psys->part->size * rmd->part_scale_factor * 2,
+                                    extract_particle_data_cb,
+                                    &xp);
+
+      /*for (int j = 0; j < r; j++) {
         int k = nearest[j].index;
         velX[k] = vel[i][0];
         velY[k] = vel[i][1];
@@ -933,7 +936,7 @@ static void transfer_mblur_data(RemeshModifierData *rmd,
         quatY[k] = rot[i][1];
         quatZ[k] = rot[i][2];
         quatW[k] = rot[i][3];
-      }
+      }*/
     }
 
     BLI_kdtree_3d_free(kdtree);
@@ -1071,10 +1074,10 @@ static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mes
           transfer_mblur_data(rmd, ctx, psys, result);
         }
 
-         // update cache
+        // update cache
         if (rmd_orig->mesh_cached) {
           BKE_mesh_free(rmd_orig->mesh_cached);
-          MEM_freeN(rmd_orig->mesh_cached); 
+          MEM_freeN(rmd_orig->mesh_cached);
         }
 
         // save a copy
@@ -1098,6 +1101,10 @@ static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mes
     bool render = ctx->flag & MOD_APPLY_RENDER;
     psys = get_psys(rmd, ctx->object, DEG_get_input_scene(ctx->depsgraph), render);
     result = repolygonize(rmd, ctx->object, mesh, psys, render);
+
+    if (result) {
+      transfer_mblur_data(rmd, ctx, psys, result);
+    }
 
     if (result && (rmd->flag & MOD_REMESH_SMOOTH_SHADING)) {
       MPoly *mpoly = result->mpoly;
