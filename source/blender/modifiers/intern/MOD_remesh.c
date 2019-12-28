@@ -222,7 +222,8 @@ static int get_particle_data(RemeshModifierData *rmd,
     (*size)[j] = pa->size;
 
     copy_v3_v3(co, pa->state.vel);
-    mul_m4_v3(imat, co);
+    // mul_m4_v3(imat, co);
+    mul_qt_v3(quat, co);
     copy_v3_v3((*vel)[j], co);
 
     copy_qt_qt(rt, pa->state.rot);
