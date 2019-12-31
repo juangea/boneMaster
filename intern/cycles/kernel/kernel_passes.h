@@ -376,7 +376,7 @@ ccl_device_inline void kernel_write_result(KernelGlobals *kg,
         buffer + kernel_data.film.pass_denoising_data + DENOISING_PASS_DEPTH, L->denoising_depth);
   }
 #endif /* __DENOISING_FEATURES__ */
-PASSMASK(DIFFUSE_INDIRECT
+
 #ifdef __KERNEL_DEBUG__
   kernel_write_debug_passes(kg, buffer, L);
 #endif
