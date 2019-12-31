@@ -265,20 +265,21 @@ bool RenderBuffers::get_pass_rect(
 
 
     float *sample_count = NULL;
-    if (type == PassType::PASS_COMBINED) {
-      int sample_offset = 0;
-      for (size_t j = 0; j < params.passes.size(); j++) {
-        Pass &pass = params.passes[j];
-        if (pass.type != PASS_SAMPLE_COUNT) {
-          sample_offset += pass.components;
-          continue;
-        }
-        else {
-          sample_count = buffer.data() + sample_offset;
-          break;
-        }
+    //if (type == PassType::PASS_COMBINED) {
+    //APPLY THIS TO ALL PASSES TO MAKE IT COMPATIBLE WITH LIGHTGROUPS
+    int sample_offset = 0;
+    for (size_t j = 0; j < params.passes.size(); j++) {
+      Pass &pass = params.passes[j];
+      if (pass.type != PASS_SAMPLE_COUNT) {
+        sample_offset += pass.components;
+        continue;
       }
-    }    
+      else {
+        sample_count = buffer.data() + sample_offset;
+        break;
+      }
+    }
+    //}     
 
     if (components == 1 && type == PASS_RENDER_TIME) {
       /* Render time is not stored by kernel, but measured per tile. */

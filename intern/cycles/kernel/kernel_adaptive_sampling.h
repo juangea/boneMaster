@@ -54,6 +54,9 @@ ccl_device void kernel_adaptive_post_adjust(KernelGlobals *kg,
 #ifdef __PASSES__
   int flag = kernel_data.film.pass_flag;
 
+  if (flag & PASSMASK(LIGHTGROUP))
+    *(ccl_global float3 *)(buffer + kernel_data.film.pass_lightgroup) *= sample_multiplier;  
+
   if (flag & PASSMASK(SHADOW))
     *(ccl_global float3 *)(buffer + kernel_data.film.pass_shadow) *= sample_multiplier;
 
