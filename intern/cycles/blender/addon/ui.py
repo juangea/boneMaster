@@ -242,7 +242,7 @@ class CYCLES_RENDER_PT_sampling_advanced(CyclesButtonsPanel, Panel):
         row.prop(cscene, "use_animated_seed", text="", icon='TIME')
 
         col = layout.column(align=True)
-        col.active = not(cscene.use_adaptive_sampling)
+        #col.active = not(cscene.use_adaptive_sampling)
         col.prop(cscene, "sampling_pattern", text="Pattern")
         col.prop(cscene, "scrambling_distance")
         col = layout.column(align=True)
