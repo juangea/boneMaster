@@ -274,6 +274,7 @@ enum PathTraceDimension {
 enum SamplingPattern {
   SAMPLING_PATTERN_SOBOL = 0,
   SAMPLING_PATTERN_CMJ = 1,
+  SAMPLING_PATTERN_PMJ = 2,
 
   SAMPLING_NUM_PATTERNS,
 };
@@ -380,6 +381,8 @@ typedef enum PassType {
   PASS_CRYPTOMATTE,
   PASS_AOV_COLOR,
   PASS_AOV_VALUE,
+  PASS_ADAPTIVE_AUX_BUFFER,
+  PASS_SAMPLE_COUNT,
   PASS_CATEGORY_MAIN_END = 31,
 
   PASS_MIST = 32,
@@ -1245,6 +1248,9 @@ typedef struct KernelFilm {
   int cryptomatte_depth;
   int pass_cryptomatte;
 
+  int pass_adaptive_aux_buffer;
+  int pass_sample_count;  
+
   int pass_lightgroup;
   int num_lightgroups;
 
@@ -1259,8 +1265,8 @@ typedef struct KernelFilm {
 
   int pass_aov_color;
   int pass_aov_value;
-  int pad1;
-  int pad2;
+  //int pad1;
+  //int pad2;
 
   /* XYZ to rendering color space transform. float4 instead of float3 to
    * ensure consistent padding/alignment across devices. */
@@ -1282,6 +1288,8 @@ typedef struct KernelFilm {
   int display_divide_pass_stride;
   int use_display_exposure;
   int use_display_pass_alpha;
+
+  //int pad1, pad2;//, pad3;
 } KernelFilm;
 static_assert_align(KernelFilm, 16);
 
@@ -1366,6 +1374,8 @@ typedef struct KernelIntegrator {
   int aa_samples;
   float scrambling_distance;
   int dither_size;
+  int adaptive_min_samples;
+  float adaptive_threshold;  
 
   /* volume render */
   int use_volumes;
@@ -1379,7 +1389,7 @@ typedef struct KernelIntegrator {
 
   uint background_lightgroups;
 
-  int pad1; //I added Scramble and dither_size, with this we need 3 pads
+  int pad1, pad2, pad3; //I added Scramble and dither_size, with this we need 3 pads
 } KernelIntegrator;
 static_assert_align(KernelIntegrator, 16);
 

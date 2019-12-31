@@ -78,8 +78,11 @@ class Film : public Node {
   float mist_falloff;
 
   bool use_light_visibility;
+  bool use_sample_clamp;
   CryptomatteType cryptomatte_passes;
   int cryptomatte_depth;
+
+  bool use_adaptive_sampling;
 
   bool need_update;
 

@@ -253,13 +253,14 @@ def list_render_passes(srl):
 
     # Cycles specific passes.
     crl = srl.cycles
-    if crl.pass_debug_render_time:             yield ("Debug Render Time",             "X",   'VALUE')
-    if crl.pass_debug_bvh_traversed_nodes:     yield ("Debug BVH Traversed Nodes",     "X",   'VALUE')
-    if crl.pass_debug_bvh_traversed_instances: yield ("Debug BVH Traversed Instances", "X",   'VALUE')
-    if crl.pass_debug_bvh_intersections:       yield ("Debug BVH Intersections",       "X",   'VALUE')
-    if crl.pass_debug_ray_bounces:             yield ("Debug Ray Bounces",             "X",   'VALUE')
-    if crl.use_pass_volume_direct:             yield ("VolumeDir",                     "RGB", 'COLOR')
-    if crl.use_pass_volume_indirect:           yield ("VolumeInd",                     "RGB", 'COLOR')
+    if crl.pass_debug_render_time:             engine.register_pass(scene, srl, "Debug Render Time",             1, "X",   'VALUE')
+    if crl.pass_debug_bvh_traversed_nodes:     engine.register_pass(scene, srl, "Debug BVH Traversed Nodes",     1, "X",   'VALUE')
+    if crl.pass_debug_bvh_traversed_instances: engine.register_pass(scene, srl, "Debug BVH Traversed Instances", 1, "X",   'VALUE')
+    if crl.pass_debug_bvh_intersections:       engine.register_pass(scene, srl, "Debug BVH Intersections",       1, "X",   'VALUE')
+    if crl.pass_debug_ray_bounces:             engine.register_pass(scene, srl, "Debug Ray Bounces",             1, "X",   'VALUE')
+    if crl.pass_debug_sample_count:            engine.register_pass(scene, srl, "Debug Sample Count",            1, "X",   'VALUE')
+    if crl.use_pass_volume_direct:             engine.register_pass(scene, srl, "VolumeDir",                     3, "RGB", 'COLOR')
+    if crl.use_pass_volume_indirect:           engine.register_pass(scene, srl, "VolumeInd",                     3, "RGB", 'COLOR')
 
     # Cryptomatte passes.
     if crl.use_pass_crypto_object:

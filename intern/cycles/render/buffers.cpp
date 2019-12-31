@@ -239,6 +239,7 @@ bool RenderBuffers::get_pass_rect(
   if (buffer.data() == NULL) {
     return false;
   }
+  
 
   int pass_offset = 0;
 
@@ -261,6 +262,23 @@ bool RenderBuffers::get_pass_rect(
     float scale_exposure = (pass.exposure) ? scale * exposure : scale;
 
     int size = params.width * params.height;
+
+
+    float *sample_count = NULL;
+    if (type == PassType::PASS_COMBINED) {
+      int sample_offset = 0;
+      for (size_t j = 0; j < params.passes.size(); j++) {
+        Pass &pass = params.passes[j];
+        if (pass.type != PASS_SAMPLE_COUNT) {
+          sample_offset += pass.components;
+          continue;
+        }
+        else {
+          sample_count = buffer.data() + sample_offset;
+          break;
+        }
+      }
+    }    
 
     if (components == 1 && type == PASS_RENDER_TIME) {
       /* Render time is not stored by kernel, but measured per tile. */
@@ -400,6 +418,11 @@ bool RenderBuffers::get_pass_rect(
       }
       else {
         for (int i = 0; i < size; i++, in += pass_stride, pixels += 4) {
+          if (sample_count && sample_count[i * pass_stride] < 0.0f) {
+            scale = (pass.filter) ? -1.0f / (sample_count[i * pass_stride]) : 1.0f;
+            scale_exposure = (pass.exposure) ? scale * exposure : scale;
+          }
+
           float4 f = make_float4(in[0], in[1], in[2], in[3]);
 
           pixels[0] = f.x * scale_exposure;
