@@ -298,10 +298,9 @@ class _defs_transform:
                 layout.label(text="Gizmos:")
 
             show_drag = True
-            if context.preferences.experimental.use_tool_fallback:
-                tool_settings = context.tool_settings
-                if tool_settings.workspace_tool_type == 'FALLBACK':
-                    show_drag = False
+            tool_settings = context.tool_settings
+            if tool_settings.workspace_tool_type == 'FALLBACK':
+                show_drag = False
 
             if show_drag:
                 props = tool.gizmo_group_properties("VIEW3D_GGT_xform_gizmo")
@@ -2138,6 +2137,8 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
             _defs_gpencil_paint.curve,
             _defs_gpencil_paint.box,
             _defs_gpencil_paint.circle,
+            None,
+            *_tools_annotate,
         ],
         'EDIT_GPENCIL': [
             *_tools_gpencil_select,
@@ -2152,11 +2153,13 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
                 _defs_gpencil_edit.shear,
                 _defs_gpencil_edit.tosphere,
             ),
-
+            None,
+            *_tools_annotate,
         ],
         'SCULPT_GPENCIL': [
             _defs_gpencil_sculpt.generate_from_brushes,
             None,
+            *_tools_annotate,
             lambda context: (
                 VIEW3D_PT_tools_active._tools_gpencil_select
                 if _defs_gpencil_sculpt.poll_select_mask(context)
@@ -2165,6 +2168,8 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
         ],
         'WEIGHT_GPENCIL': [
             _defs_gpencil_weight.generate_from_brushes,
+            None,
+            *_tools_annotate,
         ],
     }
 
