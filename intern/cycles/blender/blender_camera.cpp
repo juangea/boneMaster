@@ -900,6 +900,7 @@ BufferParams BlenderSync::get_buffer_params(BL::RenderSettings &b_render,
   }
 
   update_viewport_display_passes(b_v3d, params.passes);
+  params.denoising_data_pass = update_viewport_display_denoising(b_v3d);
 
   return params;
 }

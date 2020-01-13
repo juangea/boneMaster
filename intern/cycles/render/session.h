@@ -157,6 +157,7 @@ class Session {
   void reset(BufferParams &params, int samples);
   void set_samples(int samples);
   void set_pause(bool pause);
+  void set_denoising(bool optix_denoising);
 
   bool update_scene();
   bool load_kernels(bool lock_scene = true);

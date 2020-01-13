@@ -108,11 +108,14 @@ class TileManager {
   bool next_tile(Tile *&tile, int device = 0);
   bool finish_tile(int index, bool &delete_tile);
   bool done();
+  bool ready();
 
   void set_tile_order(TileOrder tile_order_)
   {
     tile_order = tile_order_;
   }
+
+  int get_neighbor_index(int index, int neighbor);
 
   /* ** Sample range rendering. ** */
 
@@ -136,6 +139,7 @@ class TileManager {
   TileOrder tile_order;
   int start_resolution;
   int pixel_size;
+  int num_slices;
   int num_devices;
 
   /* in some cases it is important that the same tile will be returned for the same
@@ -161,7 +165,6 @@ class TileManager {
   int gen_tiles(bool sliced);
   void gen_render_tiles();
 
-  int get_neighbor_index(int index, int neighbor);
   bool check_neighbor_state(int index, Tile::State state);
 };
 

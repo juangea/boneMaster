@@ -325,6 +325,42 @@ class MultiDevice : public Device {
 
   void map_neighbor_tiles(Device *sub_device, RenderTile *tiles)
   {
+    /* Special case for viewport rendering where buffer is the same
+     * for all tiles. In that case copy data from all slices to the
+     * host once and then back to the requested sub device. */
+    device_vector<float> &mem = tiles[4].buffers->buffer;
+    if (mem.device == this) {
+      /* This calls into the 'mem_copy_from' method above which slices
+       * the copy and gets the correct slice data from each device. */
+      mem.copy_from_device();
+
+      device_ptr ptr = 0;
+      foreach (SubDevice &sub, devices) {
+        if (sub.device == sub_device) {
+          ptr = sub.ptr_map[mem.device_pointer];
+          break;
+        }
+      }
+
+      /* Now that the data from all devices is available, copy it back
+       * to the requested sub device so that it has all the neighbor
+       * information it needs to do denoising. */
+      mem.swap_device(sub_device, mem.device_size, ptr);
+      mem.copy_to_device();
+
+      for (int i = 0; i < 9; i++) {
+        if (!tiles[i].buffers) {
+          continue;
+        }
+
+        tiles[i].buffer = mem.device_pointer;
+        tiles[i].device_size = mem.device_size;
+      }
+
+      mem.restore_device();
+      return;
+    }
+
     for (int i = 0; i < 9; i++) {
       if (!tiles[i].buffers) {
         continue;
@@ -346,7 +382,6 @@ class MultiDevice : public Device {
         }
 
         mem.swap_device(sub_device, 0, 0);
-
         mem.copy_to_device();
         tiles[i].buffer = mem.device_pointer;
         tiles[i].device_size = mem.device_size;
@@ -358,11 +393,16 @@ class MultiDevice : public Device {
 
   void unmap_neighbor_tiles(Device *sub_device, RenderTile *tiles)
   {
-    /* Copy denoised result back to the host. */
     device_vector<float> &mem = tiles[9].buffers->buffer;
+    if (mem.device == this) {
+      return;
+    }
+
+    /* Copy denoised result back to the host. */
     mem.swap_device(sub_device, tiles[9].device_size, tiles[9].buffer);
-    mem.copy_from_device(0, mem.data_size, 1);
+    mem.copy_from_device();
     mem.restore_device();
+
     /* Copy denoised result to the original device. */
     mem.copy_to_device();
 

@@ -203,7 +203,7 @@ int TileManager::gen_tiles(bool sliced)
 
   int num_logical_devices = preserve_tile_device ? num_devices : 1;
   int num = min(image_h, num_logical_devices);
-  int slice_num = sliced ? num : 1;
+  int slice_num = num_slices = sliced ? num : 1;
   int tile_w = (tile_size.x >= image_w) ? 1 : divide_up(image_w, tile_size.x);
 
   device_free();
@@ -363,6 +363,7 @@ void TileManager::gen_render_tiles()
 {
   /* Regenerate just the render tiles for progressive render. */
   foreach (Tile &tile, state.tiles) {
+    tile.state = Tile::RENDER;
     state.render_tiles[tile.device].push_back(tile.index);
   }
 }
@@ -386,17 +387,26 @@ void TileManager::set_tiles()
 
 int TileManager::get_neighbor_index(int index, int neighbor)
 {
-  static const int dx[] = {-1, 0, 1, -1, 1, -1, 0, 1, 0}, dy[] = {-1, -1, -1, 0, 0, 1, 1, 1, 0};
+  /* Neighbor indices:
+   *   0 1 2
+   *   3 4 5
+   *   6 7 8
+   */
+  static const int dx[] = {-1, 0, 1, -1, 0, 1, -1, 0, 1};
+  static const int dy[] = {-1, -1, -1, 0, 0, 0, 1, 1, 1};
 
   int resolution = state.resolution_divider;
   int image_w = max(1, params.width / resolution);
   int image_h = max(1, params.height / resolution);
-  int tile_w = (tile_size.x >= image_w) ? 1 : divide_up(image_w, tile_size.x);
-  int tile_h = (tile_size.y >= image_h) ? 1 : divide_up(image_h, tile_size.y);
+  int slice_h = image_h / num_slices;
 
-  int nx = state.tiles[index].x / tile_size.x + dx[neighbor],
-      ny = state.tiles[index].y / tile_size.y + dy[neighbor];
-  if (nx < 0 || ny < 0 || nx >= tile_w || ny >= tile_h)
+  int tile_w = (tile_size.x >= image_w) ? 1 : divide_up(image_w, tile_size.x);
+  int tile_h = (tile_size.y >= slice_h) ? 1 : divide_up(slice_h, tile_size.y);
+
+  /* Tiles in the state tile list are always indexed from left to right, top to bottom. */
+  int nx = (index % tile_w) + dx[neighbor];
+  int ny = (index / tile_w) + dy[neighbor];
+  if (nx < 0 || ny < 0 || nx >= tile_w || ny >= tile_h * num_slices)
     return -1;
 
   return ny * state.tile_stride + nx;
@@ -426,13 +436,10 @@ bool TileManager::finish_tile(int index, bool &delete_tile)
 {
   delete_tile = false;
 
-  if (progressive) {
-    return true;
-  }
-
   switch (state.tiles[index].state) {
     case Tile::RENDER: {
-      if (!schedule_denoising) {
+      /* Do not denoise the first few samples in progressive mode. */
+      if (!schedule_denoising || (progressive && state.resolution_divider > pixel_size)) {
         state.tiles[index].state = Tile::DONE;
         delete_tile = true;
         return true;
@@ -460,7 +467,7 @@ bool TileManager::finish_tile(int index, bool &delete_tile)
           /* It can happen that the tile just finished denoising and already can be freed here.
            * However, in that case it still has to be written before deleting, so we can't delete
            * it yet. */
-          if (neighbor == 8) {
+          if (neighbor == 4) {
             delete_tile = true;
           }
           else {
@@ -508,6 +515,21 @@ bool TileManager::done()
          (state.sample + state.num_samples >= end_sample);
 }
 
+bool TileManager::ready()
+{
+  if (!progressive) {
+    return true;
+  }
+
+  bool all_done = true;
+  foreach (Tile &tile, state.tiles) {
+    if (tile.state != Tile::DONE && tile.state != Tile::RENDER) {
+      all_done = false;
+    }
+  }
+  return all_done;
+}
+
 bool TileManager::next()
 {
   if (done())
@@ -519,7 +541,8 @@ bool TileManager::next()
     state.num_samples = 1;
     set_tiles();
   }
-  else {
+  /* Can only increase sample when all tiles are ready. */
+  else if (ready()) {
     state.sample++;
 
     if (progressive)

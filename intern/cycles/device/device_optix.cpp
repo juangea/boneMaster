@@ -215,6 +215,7 @@ class OptiXDevice : public Device {
 
   OptixDenoiser denoiser = NULL;
   vector<pair<int2, CUdeviceptr>> denoiser_state;
+  int denoiser_input_passes = 0;
 
  public:
   OptiXDevice(DeviceInfo &info_, Stats &stats_, Profiler &profiler_, bool background_)
@@ -675,7 +676,8 @@ class OptiXDevice : public Device {
     const int end_sample = rtile.start_sample + rtile.num_samples;
     // Keep this number reasonable to avoid running into TDRs
     //const int step_samples = (info.display_device ? 1 : 1);
-    const int step_samples = 1;
+    //printf("%d",info.cpu_threads);
+    const int step_samples = 8;
     // Offset into launch params buffer so that streams use separate data
     device_ptr launch_params_ptr = launch_params.device_pointer +
                                    thread_index * launch_params.data_elements;
@@ -849,7 +851,14 @@ class OptiXDevice : public Device {
       }
 #  endif
 
-      if (denoiser == NULL) {
+      const bool recreate_denoiser = (denoiser == NULL) ||
+                                     (task.denoising.optix_input_passes != denoiser_input_passes);
+      if (recreate_denoiser) {
+        // Destroy existing handle before creating new one
+        if (denoiser != NULL) {
+          optixDenoiserDestroy(denoiser);
+        }
+
         // Create OptiX denoiser handle on demand when it is first used
         OptixDenoiserOptions denoiser_options;
         assert(task.denoising.optix_input_passes >= 1 && task.denoising.optix_input_passes <= 3);
@@ -859,6 +868,9 @@ class OptiXDevice : public Device {
         check_result_optix_ret(optixDenoiserCreate(context, &denoiser_options, &denoiser));
         check_result_optix_ret(
             optixDenoiserSetModel(denoiser, OPTIX_DENOISER_MODEL_KIND_HDR, NULL, 0));
+
+        // OptiX denoiser handle was created with the requested number of input passes
+        denoiser_input_passes = task.denoising.optix_input_passes;
       }
 
       OptixDenoiserSizes sizes = {};
@@ -871,13 +883,16 @@ class OptiXDevice : public Device {
       const size_t scratch_offset = sizes.stateSizeInBytes;
 
       // Allocate denoiser state if tile size has changed since last setup
-      if (state_size.x != rect_size.x || state_size.y != rect_size.y) {
+      if (state_size.x != rect_size.x || state_size.y != rect_size.y || recreate_denoiser) {
+        // Free existing state before allocating new one
         if (state) {
           cuMemFree(state);
           state = 0;
         }
+
         check_result_cuda_ret(cuMemAlloc(&state, scratch_offset + scratch_size));
 
+        // Initialize denoiser state for the current tile size
         check_result_optix_ret(optixDenoiserSetup(denoiser,
                                                   cuda_stream[thread_index],
                                                   rect_size.x,

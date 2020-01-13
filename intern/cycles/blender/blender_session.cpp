@@ -884,6 +884,14 @@ void BlenderSession::synchronize(BL::Depsgraph &b_depsgraph_)
   else
     sync->sync_camera(b_render, b_camera_override, width, height, "");
 
+  /* shading */
+  BL::View3DShading b_view3dshading = b_v3d.shading();
+
+  PointerRNA cshading = RNA_pointer_get(&b_view3dshading.ptr, "cycles");
+  bool use_optix_denoising = get_boolean(cshading, "use_optix_denoising");
+
+  session->set_denoising(use_optix_denoising);
+
   /* reset if needed */
   if (scene->need_reset()) {
     BufferParams buffer_params = BlenderSync::get_buffer_params(

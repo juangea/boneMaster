@@ -305,7 +305,7 @@ void Session::run_gpu()
       /* update status and timing */
       update_status_time();
 
-      gpu_need_display_buffer_update = true;
+      gpu_need_display_buffer_update = tile_manager.ready();
       gpu_draw_ready = true;
       progress.set_update();
 
@@ -472,7 +472,7 @@ void Session::release_tile(RenderTile &rtile)
       write_render_tile_cb(rtile);
     }
 
-    if (delete_tile) {
+    if (delete_tile && rtile.buffers != buffers) {
       delete rtile.buffers;
       tile_manager.state.tiles[rtile.tile_index].buffers = NULL;
     }
@@ -500,29 +500,38 @@ void Session::map_neighbor_tiles(RenderTile *tiles, Device *tile_device)
 
   for (int dy = -1, i = 0; dy <= 1; dy++) {
     for (int dx = -1; dx <= 1; dx++, i++) {
-      int px = tiles[4].x + dx * params.tile_size.x;
-      int py = tiles[4].y + dy * params.tile_size.y;
-      if (px >= image_region.x && py >= image_region.y && px < image_region.z &&
-          py < image_region.w) {
-        int tile_index = center_idx + dy * tile_manager.state.tile_stride + dx;
-        Tile *tile = &tile_manager.state.tiles[tile_index];
-        assert(tile->buffers);
+      int nindex = tile_manager.get_neighbor_index(center_idx, i);
+      if (nindex >= 0) {
+        const Tile &tile = tile_manager.state.tiles[nindex];
 
-        tiles[i].buffer = tile->buffers->buffer.device_pointer;
-        tiles[i].x = tile_manager.state.buffer.full_x + tile->x;
-        tiles[i].y = tile_manager.state.buffer.full_y + tile->y;
-        tiles[i].w = tile->w;
-        tiles[i].h = tile->h;
-        tiles[i].buffers = tile->buffers;
+        tiles[i].x = tile_manager.state.buffer.full_x + tile.x;
+        tiles[i].y = tile_manager.state.buffer.full_y + tile.y;
+        tiles[i].w = tile.w;
+        tiles[i].h = tile.h;
 
-        tile->buffers->params.get_offset_stride(tiles[i].offset, tiles[i].stride);
+        if (buffers) {
+          tile_manager.state.buffer.get_offset_stride(tiles[i].offset, tiles[i].stride);
+
+          tiles[i].buffer = buffers->buffer.device_pointer;
+          tiles[i].buffers = buffers;
+        }
+        else {
+          tile.buffers->params.get_offset_stride(tiles[i].offset, tiles[i].stride);
+
+          tiles[i].buffer = tile.buffers->buffer.device_pointer;
+          tiles[i].buffers = tile.buffers;
+        }
       }
       else {
-        tiles[i].buffer = (device_ptr)NULL;
-        tiles[i].buffers = NULL;
+        int px = tiles[4].x + dx * params.tile_size.x;
+        int py = tiles[4].y + dy * params.tile_size.y;
+
         tiles[i].x = clamp(px, image_region.x, image_region.z);
         tiles[i].y = clamp(py, image_region.y, image_region.w);
         tiles[i].w = tiles[i].h = 0;
+
+        tiles[i].buffer = (device_ptr)NULL;
+        tiles[i].buffers = NULL;
       }
     }
   }
@@ -666,7 +675,7 @@ void Session::run_cpu()
         delayed_reset.do_reset = false;
         reset_(delayed_reset.params, delayed_reset.samples);
       }
-      else if (need_copy_to_display_buffer) {
+      else if (need_copy_to_display_buffer && tile_manager.ready()) {
         /* Only copy to display_buffer if we do not reset, we don't
          * want to show the result of an incomplete sample */
         copy_to_display_buffer(tile_manager.state.sample);
@@ -866,6 +875,22 @@ void Session::set_pause(bool pause_)
     pause_cond.notify_all();
 }
 
+void Session::set_denoising(bool optix_denoising)
+{
+  thread_scoped_lock buffers_lock(buffers_mutex);
+
+  if (optix_denoising != params.run_denoising) {
+    params.run_denoising = optix_denoising;
+    params.full_denoising = false;
+    params.optix_denoising = true;
+    tile_manager.schedule_denoising = params.run_denoising;
+
+    scene->film->denoising_data_pass = params.run_denoising;
+
+    scene->film->tag_update(scene);
+  }
+}
+
 void Session::wait()
 {
   if (session_thread) {
@@ -1006,7 +1031,8 @@ void Session::update_status_time(bool show_pause, bool show_done)
 void Session::render()
 {
   /* Clear buffers. */
-  if (buffers && tile_manager.state.sample == tile_manager.range_start_sample) {
+  if (buffers && tile_manager.state.sample == tile_manager.range_start_sample &&
+      tile_manager.ready()) {
     buffers->zero();
   }
 

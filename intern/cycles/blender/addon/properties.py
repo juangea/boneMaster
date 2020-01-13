@@ -1644,11 +1644,18 @@ class CyclesPreferences(bpy.types.AddonPreferences):
 
 
 class CyclesView3DShadingSettings(bpy.types.PropertyGroup):
+
     render_pass: EnumProperty(
         name="Render Pass",
         description="Render pass to show in the 3D Viewport",
         items=enum_view3d_shading_render_pass,
         default='COMBINED',
+    )
+
+    use_optix_denoising: BoolProperty(
+        name="Use OptiX AI Denoising",
+        description="Denoise the image after each sample with the OptiX AI denoiser",
+        default=False,
     )
 
 
