@@ -704,7 +704,7 @@ vector<Pass> BlenderSync::sync_render_passes(BL::RenderLayer &b_rlay, BL::ViewLa
   if (adaptive_sampling) {
     Pass::add(PASS_ADAPTIVE_AUX_BUFFER, passes);
     if (!get_boolean(crp, "pass_debug_sample_count")) {
-      Pass::add(PASS_SAMPLE_COUNT, passes,);
+      Pass::add(PASS_SAMPLE_COUNT, passes);
     }
   }    
 
