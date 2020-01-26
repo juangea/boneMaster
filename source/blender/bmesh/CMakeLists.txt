@@ -184,6 +184,8 @@ if(WITH_BULLET)
   )
   list(APPEND LIB
     extern_bullet
+
+    ${BULLET_LIBRARIES}
   )
   add_definitions(-DWITH_BULLET)
 endif()
