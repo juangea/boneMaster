@@ -1008,6 +1008,9 @@ void BlenderSync::sync_mesh(BL::Depsgraph b_depsgraph, BL::Object b_ob, Mesh *me
   /* mesh fluid motion mantaflow */
   sync_mesh_fluid_motion(b_ob, scene, mesh);
 
+  /*sync other precalculated motion if any*/
+  sync_mesh_precalculated_motion(b_ob, scene, mesh);
+
   /* tag update */
   bool rebuild = (oldtriangles != mesh->triangles) || (oldsubd_faces != mesh->subd_faces) ||
                  (oldsubd_face_corners != mesh->subd_face_corners);
