@@ -51,7 +51,7 @@
 #include "BKE_context.h"
 #include "BKE_global.h"
 #include "BKE_gpencil.h"
-#include "BKE_library.h"
+#include "BKE_lib_id.h"
 #include "BKE_main.h"
 #include "BKE_material.h"
 #include "BKE_object.h"
@@ -1223,7 +1223,7 @@ static int gp_strokes_copy_exec(bContext *C, wmOperator *op)
     GHash *ma_to_name = gp_strokes_copypastebuf_colors_material_to_name_create(bmain);
     for (bGPDstroke *gps = gp_strokes_copypastebuf.first; gps; gps = gps->next) {
       if (ED_gpencil_stroke_can_use(C, gps)) {
-        Material *ma = give_current_material(ob, gps->mat_nr + 1);
+        Material *ma = BKE_object_material_get(ob, gps->mat_nr + 1);
         /* Avoid default material. */
         if (ma == NULL) {
           continue;
@@ -1650,10 +1650,23 @@ static bool gp_actframe_delete_poll(bContext *C)
   return (gpl && gpl->actframe);
 }
 
+static bool gp_annotation_actframe_delete_poll(bContext *C)
+{
+  bGPdata *gpd = ED_annotation_data_get_active(C);
+  bGPDlayer *gpl = BKE_gpencil_layer_getactive(gpd);
+
+  /* only if there's an active layer with an active frame */
+  return (gpl && gpl->actframe);
+}
+
 /* delete active frame - wrapper around API calls */
 static int gp_actframe_delete_exec(bContext *C, wmOperator *op)
 {
-  bGPdata *gpd = ED_gpencil_data_get_active(C);
+  const bool is_annotation = STREQ(op->idname, "GPENCIL_OT_annotation_active_frame_delete");
+
+  bGPdata *gpd = (!is_annotation) ? ED_gpencil_data_get_active(C) :
+                                    ED_annotation_data_get_active(C);
+
   bGPDlayer *gpl = BKE_gpencil_layer_getactive(gpd);
 
   Scene *scene = CTX_data_scene(C);
@@ -1694,6 +1707,19 @@ void GPENCIL_OT_active_frame_delete(wmOperatorType *ot)
   ot->poll = gp_actframe_delete_poll;
 }
 
+void GPENCIL_OT_annotation_active_frame_delete(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Delete Active Frame";
+  ot->idname = "GPENCIL_OT_annotation_active_frame_delete";
+  ot->description = "Delete the active frame for the active Annotation Layer";
+
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  /* callbacks */
+  ot->exec = gp_actframe_delete_exec;
+  ot->poll = gp_annotation_actframe_delete_poll;
+}
 /* **************** Delete All Active Frames ****************** */
 
 static bool gp_actframe_delete_all_poll(bContext *C)
@@ -2827,7 +2853,7 @@ static int gp_stroke_cyclical_set_exec(bContext *C, wmOperator *op)
         }
 
         for (gps = gpf->strokes.first; gps; gps = gps->next) {
-          MaterialGPencilStyle *gp_style = BKE_material_gpencil_settings_get(ob, gps->mat_nr + 1);
+          MaterialGPencilStyle *gp_style = BKE_gpencil_material_settings(ob, gps->mat_nr + 1);
           /* skip strokes that are not selected or invalid for current view */
           if (((gps->flag & GP_STROKE_SELECT) == 0) ||
               ED_gpencil_stroke_can_use(C, gps) == false) {
@@ -2941,7 +2967,7 @@ static int gp_stroke_caps_set_exec(bContext *C, wmOperator *op)
     }
 
     for (bGPDstroke *gps = gpl->actframe->strokes.last; gps; gps = gps->prev) {
-      MaterialGPencilStyle *gp_style = BKE_material_gpencil_settings_get(ob, gps->mat_nr + 1);
+      MaterialGPencilStyle *gp_style = BKE_gpencil_material_settings(ob, gps->mat_nr + 1);
 
       /* skip strokes that are not selected or invalid for current view */
       if (((gps->flag & GP_STROKE_SELECT) == 0) || (ED_gpencil_stroke_can_use(C, gps) == false)) {
@@ -4110,7 +4136,7 @@ static int gp_stroke_separate_exec(bContext *C, wmOperator *op)
               /* add duplicate materials */
 
               /* XXX same material can be in multiple slots. */
-              ma = BKE_material_gpencil_get(ob, gps->mat_nr + 1);
+              ma = BKE_gpencil_material(ob, gps->mat_nr + 1);
 
               idx = BKE_gpencil_object_material_ensure(bmain, ob_dst, ma);
 
@@ -4183,7 +4209,7 @@ static int gp_stroke_separate_exec(bContext *C, wmOperator *op)
           if (ED_gpencil_stroke_can_use(C, gps) == false) {
             continue;
           }
-          ma = BKE_material_gpencil_get(ob, gps->mat_nr + 1);
+          ma = BKE_gpencil_material(ob, gps->mat_nr + 1);
           gps->mat_nr = BKE_gpencil_object_material_ensure(bmain, ob_dst, ma);
         }
       }

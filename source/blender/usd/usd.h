@@ -36,7 +36,6 @@ struct USDExportParams {
   bool export_normals;
   bool export_materials;
   bool selected_objects_only;
-  bool visible_objects_only;
   bool use_instancing;
   enum eEvaluationMode evaluation_mode;
 };
@@ -54,6 +53,8 @@ bool USD_export(struct bContext *C,
                 const char *filepath,
                 const struct USDExportParams *params,
                 bool as_background_job);
+
+int USD_get_version(void);
 
 #ifdef __cplusplus
 }

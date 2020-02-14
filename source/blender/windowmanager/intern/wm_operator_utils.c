@@ -26,6 +26,7 @@
 #include "BLI_string.h"
 
 #include "BKE_context.h"
+#include "BKE_global.h"
 #include "BKE_layer.h"
 
 #include "RNA_access.h"
@@ -147,6 +148,7 @@ static bool interactive_value_update(ValueInteraction *inter,
  * \{ */
 
 struct ObCustomData_ForEditMode {
+  int launch_event;
   bool wait_for_input;
   bool is_active;
   bool is_first;
@@ -176,6 +178,8 @@ static void op_generic_value_exit(wmOperator *op)
     MEM_freeN(cd->objects_xform);
     MEM_freeN(cd);
   }
+
+  G.moving &= ~G_TRANSFORM_EDIT;
 }
 
 static void op_generic_value_restore(wmOperator *op)
@@ -208,6 +212,7 @@ static int op_generic_value_invoke(bContext *C, wmOperator *op, const wmEvent *e
   }
 
   struct ObCustomData_ForEditMode *cd = MEM_callocN(sizeof(*cd), __func__);
+  cd->launch_event = WM_userdef_event_type_from_keymap_type(event->type);
   cd->wait_for_input = RNA_boolean_get(op->ptr, "wait_for_input");
   cd->is_active = !cd->wait_for_input;
   cd->is_first = true;
@@ -228,12 +233,23 @@ static int op_generic_value_invoke(bContext *C, wmOperator *op, const wmEvent *e
   op->customdata = cd;
 
   WM_event_add_modal_handler(C, op);
+  G.moving |= G_TRANSFORM_EDIT;
+
   return OPERATOR_RUNNING_MODAL;
 }
 
 static int op_generic_value_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
   struct ObCustomData_ForEditMode *cd = op->customdata;
+
+  /* Special case, check if we release the event that activated this operator. */
+  if ((event->type == cd->launch_event) && (event->val == KM_RELEASE)) {
+    if (cd->wait_for_input == false) {
+      op_generic_value_exit(op);
+      return OPERATOR_FINISHED;
+    }
+  }
+
   switch (event->type) {
     case MOUSEMOVE:
     case LEFTCTRLKEY:

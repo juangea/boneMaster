@@ -36,7 +36,7 @@
 #include "BLI_math.h"
 
 #include "BKE_context.h"
-#include "BKE_library.h"
+#include "BKE_lib_id.h"
 #include "BKE_movieclip.h"
 #include "BKE_tracking.h"
 #include "BKE_screen.h"
@@ -1083,11 +1083,7 @@ static void graph_region_draw(const bContext *C, ARegion *ar)
   /* scale indicators */
   {
     rcti rect;
-    BLI_rcti_init(&rect,
-                  0,
-                  15 * UI_DPI_FAC,
-                  15 * UI_DPI_FAC,
-                  UI_DPI_FAC * ar->sizey - UI_TIME_SCRUB_MARGIN_Y);
+    BLI_rcti_init(&rect, 0, 15 * UI_DPI_FAC, 15 * UI_DPI_FAC, ar->winy - UI_TIME_SCRUB_MARGIN_Y);
     UI_view2d_draw_scale_y__values(ar, v2d, &rect, TH_TEXT);
   }
 }

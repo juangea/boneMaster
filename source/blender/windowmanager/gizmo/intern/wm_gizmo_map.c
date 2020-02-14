@@ -333,13 +333,11 @@ void WM_gizmomap_tag_refresh(wmGizmoMap *gzmap)
   }
 }
 
-bool WM_gizmomap_tag_refresh_check(wmGizmoMap *gzmap)
+bool WM_gizmomap_tag_delay_refresh_for_tweak_check(wmGizmoMap *gzmap)
 {
-  if (gzmap) {
-    for (int i = 0; i < WM_GIZMOMAP_DRAWSTEP_MAX; i++) {
-      if (gzmap->update_flag[i] & (GIZMOMAP_IS_PREPARE_DRAW | GIZMOMAP_IS_REFRESH_CALLBACK)) {
-        return true;
-      }
+  for (wmGizmoGroup *gzgroup = gzmap->groups.first; gzgroup; gzgroup = gzgroup->next) {
+    if (gzgroup->hide.delay_refresh_for_tweak) {
+      return true;
     }
   }
   return false;
@@ -1090,7 +1088,7 @@ void wm_gizmomap_modal_set(
     gz->state |= WM_GIZMO_STATE_MODAL;
     gzmap->gzmap_context.modal = gz;
 
-    if ((gz->flag & WM_GIZMO_MOVE_CURSOR) && (event->is_motion_absolute == false)) {
+    if ((gz->flag & WM_GIZMO_MOVE_CURSOR) && (event->tablet.is_motion_absolute == false)) {
       WM_cursor_grab_enable(win, WM_CURSOR_WRAP_XY, true, NULL);
       copy_v2_v2_int(gzmap->gzmap_context.event_xy, &event->x);
       gzmap->gzmap_context.event_grabcursor = win->grabcursor;

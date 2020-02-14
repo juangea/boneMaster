@@ -35,6 +35,7 @@
 
 struct KeyBlock;
 struct Object;
+struct SculptPoseIKChainSegment;
 struct SculptUndoNode;
 struct bContext;
 
@@ -73,6 +74,15 @@ void sculpt_pose_calc_pose_data(struct Sculpt *sd,
                                 float pose_offset,
                                 float *r_pose_origin,
                                 float *r_pose_factor);
+
+struct SculptPoseIKChain *sculpt_pose_ik_chain_init(struct Sculpt *sd,
+                                                    struct Object *ob,
+                                                    struct SculptSession *ss,
+                                                    struct Brush *br,
+                                                    const float initial_location[3],
+                                                    const float radius);
+
+void sculpt_pose_ik_chain_free(struct SculptPoseIKChain *ik_chain);
 
 /* Sculpt PBVH abstraction API */
 const float *sculpt_vertex_co_get(struct SculptSession *ss, int index);
@@ -197,20 +207,29 @@ typedef struct SculptThreadedTaskData {
 
   bool use_area_cos;
   bool use_area_nos;
+
+  /* 0=towards view, 1=flipped */
+  float (*area_cos)[3];
+  float (*area_nos)[3];
+  int *count_no;
+  int *count_co;
+
   bool any_vertex_sampled;
 
   float *prev_mask;
 
-  float *pose_origin;
-  float *pose_initial_co;
   float *pose_factor;
-  float (*transform_rot)[4], (*transform_trans)[4], (*transform_trans_inv)[4];
+  float *pose_initial_co;
+  int pose_chain_segment;
 
   float multiplane_scrape_angle;
   float multiplane_scrape_planes[2][4];
 
   float max_distance_squared;
   float nearest_vertex_search_co[3];
+
+  /* Stabilized strength for the Clay Thumb brush. */
+  float clay_strength;
 
   int mask_expand_update_it;
   bool mask_expand_invert_mask;
@@ -250,7 +269,7 @@ typedef struct {
   struct Sculpt *sd;
   struct SculptSession *ss;
   float radius_squared;
-  float *center;
+  const float *center;
   bool original;
   bool ignore_fully_masked;
 } SculptSearchSphereData;
@@ -268,7 +287,10 @@ void sculpt_brush_test_init(struct SculptSession *ss, SculptBrushTest *test);
 bool sculpt_brush_test_sphere(SculptBrushTest *test, const float co[3]);
 bool sculpt_brush_test_sphere_sq(SculptBrushTest *test, const float co[3]);
 bool sculpt_brush_test_sphere_fast(const SculptBrushTest *test, const float co[3]);
-bool sculpt_brush_test_cube(SculptBrushTest *test, const float co[3], float local[4][4]);
+bool sculpt_brush_test_cube(SculptBrushTest *test,
+                            const float co[3],
+                            const float local[4][4],
+                            const float roundness);
 bool sculpt_brush_test_circle_sq(SculptBrushTest *test, const float co[3]);
 bool sculpt_search_sphere_cb(PBVHNode *node, void *data_v);
 bool sculpt_search_circle_cb(PBVHNode *node, void *data_v);
@@ -302,6 +324,8 @@ bool sculpt_pbvh_calc_area_normal(const struct Brush *brush,
  *
  * For descriptions of these settings, check the operator properties.
  */
+
+#define CLAY_STABILIZER_LEN 10
 
 typedef struct StrokeCache {
   /* Invariants */
@@ -379,9 +403,14 @@ typedef struct StrokeCache {
   float anchored_location[3];
 
   /* Pose brush */
-  float *pose_factor;
-  float pose_initial_co[3];
-  float pose_origin[3];
+  struct SculptPoseIKChain *pose_ik_chain;
+
+  /* Clay Thumb brush */
+  /* Angle of the front tilting plane of the brush to simulate clay accumulation. */
+  float clay_thumb_front_angle;
+  /* Stores pressure samples to get an stabilized strength and radius variation. */
+  float clay_pressure_stabilizer[CLAY_STABILIZER_LEN];
+  int clay_pressure_stabilizer_index;
 
   float vertex_rotation; /* amount to rotate the vertices when using rotate brush */
   struct Dial *dial;

@@ -45,7 +45,7 @@
 #include "BKE_editmesh.h"
 #include "BKE_key.h"
 #include "BKE_layer.h"
-#include "BKE_library.h"
+#include "BKE_lib_id.h"
 #include "BKE_main.h"
 #include "BKE_material.h"
 #include "BKE_mesh.h"
@@ -250,7 +250,7 @@ static void join_mesh_single(Depsgraph *depsgraph,
     if (matmap) {
       /* make mapping for materials */
       for (a = 1; a <= ob_src->totcol; a++) {
-        Material *ma = give_current_material(ob_src, a);
+        Material *ma = BKE_object_material_get(ob_src, a);
 
         for (b = 0; b < totcol; b++) {
           if (ma == matar[b]) {
@@ -391,7 +391,7 @@ int join_mesh_exec(bContext *C, wmOperator *op)
 
   /* obact materials in new main array, is nicer start! */
   for (a = 0; a < ob->totcol; a++) {
-    matar[a] = give_current_material(ob, a + 1);
+    matar[a] = BKE_object_material_get(ob, a + 1);
     id_us_plus((ID *)matar[a]);
     /* increase id->us : will be lowered later */
   }
@@ -457,7 +457,7 @@ int join_mesh_exec(bContext *C, wmOperator *op)
          * (but only if limits not exceeded yet) */
         if (totcol < MAXMAT) {
           for (a = 1; a <= ob_iter->totcol; a++) {
-            ma = give_current_material(ob_iter, a);
+            ma = BKE_object_material_get(ob_iter, a);
 
             for (b = 0; b < totcol; b++) {
               if (ma == matar[b]) {
@@ -669,7 +669,7 @@ int join_mesh_exec(bContext *C, wmOperator *op)
   ob->totcol = me->totcol = totcol;
 
   /* other mesh users */
-  test_all_objects_materials(bmain, (ID *)me);
+  BKE_objects_materials_test_all(bmain, (ID *)me);
 
   /* free temp copy of destination shapekeys (if applicable) */
   if (nkey) {
@@ -801,13 +801,30 @@ static MirrTopoStore_t mesh_topo_store = {NULL, -1. - 1, -1};
  */
 int ED_mesh_mirror_topo_table(Object *ob, Mesh *me_eval, char mode)
 {
+
+  Mesh *me_mirror = NULL;
+  BMEditMesh *em_mirror = NULL;
+
+  if (mode != 'e') {
+    Mesh *me = ob->data;
+    if (me_eval != NULL) {
+      me_mirror = me_eval;
+    }
+    else if (me->edit_mesh != NULL) {
+      em_mirror = me->edit_mesh;
+    }
+    else {
+      me_mirror = me;
+    }
+  }
+
   if (mode == 'u') { /* use table */
-    if (ED_mesh_mirrtopo_recalc_check(ob->data, me_eval, &mesh_topo_store)) {
+    if (ED_mesh_mirrtopo_recalc_check(em_mirror, me_mirror, &mesh_topo_store)) {
       ED_mesh_mirror_topo_table(ob, me_eval, 's');
     }
   }
   else if (mode == 's') { /* start table */
-    ED_mesh_mirrtopo_init(ob->data, me_eval, &mesh_topo_store, false);
+    ED_mesh_mirrtopo_init(em_mirror, me_mirror, &mesh_topo_store, false);
   }
   else if (mode == 'e') { /* end table */
     ED_mesh_mirrtopo_free(&mesh_topo_store);

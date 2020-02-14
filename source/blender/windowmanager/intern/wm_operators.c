@@ -65,8 +65,8 @@
 #include "BKE_icons.h"
 #include "BKE_idprop.h"
 #include "BKE_image.h"
-#include "BKE_library.h"
-#include "BKE_library_query.h"
+#include "BKE_lib_id.h"
+#include "BKE_lib_query.h"
 #include "BKE_main.h"
 #include "BKE_material.h"
 #include "BKE_report.h"
@@ -457,7 +457,7 @@ static const char *wm_context_member_from_ptr(bContext *C, const PointerRNA *ptr
       }
       case ID_MA: {
 #  define ID_CAST_OBMATACT(id_pt) \
-    (give_current_material(((Object *)id_pt), ((Object *)id_pt)->actcol))
+    (BKE_object_material_get(((Object *)id_pt), ((Object *)id_pt)->actcol))
         CTX_TEST_PTR_ID_CAST(
             C, "object", "object.active_material", ID_CAST_OBMATACT, ptr->owner_id);
         break;
@@ -716,6 +716,111 @@ void WM_operator_properties_free(PointerRNA *ptr)
     ptr->data = NULL; /* just in case */
   }
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Operator Last Properties API
+ * \{ */
+
+#if 1 /* may want to disable operator remembering previous state for testing */
+
+static bool operator_last_properties_init_impl(wmOperator *op, IDProperty *last_properties)
+{
+  bool changed = false;
+  IDPropertyTemplate val = {0};
+  IDProperty *replaceprops = IDP_New(IDP_GROUP, &val, "wmOperatorProperties");
+  PropertyRNA *iterprop;
+
+  CLOG_INFO(WM_LOG_OPERATORS, 1, "loading previous properties for '%s'", op->type->idname);
+
+  iterprop = RNA_struct_iterator_property(op->type->srna);
+
+  RNA_PROP_BEGIN (op->ptr, itemptr, iterprop) {
+    PropertyRNA *prop = itemptr.data;
+    if ((RNA_property_flag(prop) & PROP_SKIP_SAVE) == 0) {
+      if (!RNA_property_is_set(op->ptr, prop)) { /* don't override a setting already set */
+        const char *identifier = RNA_property_identifier(prop);
+        IDProperty *idp_src = IDP_GetPropertyFromGroup(last_properties, identifier);
+        if (idp_src) {
+          IDProperty *idp_dst = IDP_CopyProperty(idp_src);
+
+          /* note - in the future this may need to be done recursively,
+           * but for now RNA doesn't access nested operators */
+          idp_dst->flag |= IDP_FLAG_GHOST;
+
+          /* add to temporary group instead of immediate replace,
+           * because we are iterating over this group */
+          IDP_AddToGroup(replaceprops, idp_dst);
+          changed = true;
+        }
+      }
+    }
+  }
+  RNA_PROP_END;
+
+  IDP_MergeGroup(op->properties, replaceprops, true);
+  IDP_FreeProperty(replaceprops);
+  return changed;
+}
+
+bool WM_operator_last_properties_init(wmOperator *op)
+{
+  bool changed = false;
+  if (op->type->last_properties) {
+    changed |= operator_last_properties_init_impl(op, op->type->last_properties);
+    for (wmOperator *opm = op->macro.first; opm; opm = opm->next) {
+      IDProperty *idp_src = IDP_GetPropertyFromGroup(op->type->last_properties, opm->idname);
+      if (idp_src) {
+        changed |= operator_last_properties_init_impl(opm, idp_src);
+      }
+    }
+  }
+  return changed;
+}
+
+bool WM_operator_last_properties_store(wmOperator *op)
+{
+  if (op->type->last_properties) {
+    IDP_FreeProperty(op->type->last_properties);
+    op->type->last_properties = NULL;
+  }
+
+  if (op->properties) {
+    CLOG_INFO(WM_LOG_OPERATORS, 1, "storing properties for '%s'", op->type->idname);
+    op->type->last_properties = IDP_CopyProperty(op->properties);
+  }
+
+  if (op->macro.first != NULL) {
+    for (wmOperator *opm = op->macro.first; opm; opm = opm->next) {
+      if (opm->properties) {
+        if (op->type->last_properties == NULL) {
+          op->type->last_properties = IDP_New(
+              IDP_GROUP, &(IDPropertyTemplate){0}, "wmOperatorProperties");
+        }
+        IDProperty *idp_macro = IDP_CopyProperty(opm->properties);
+        STRNCPY(idp_macro->name, opm->type->idname);
+        IDP_ReplaceInGroup(op->type->last_properties, idp_macro);
+      }
+    }
+  }
+
+  return (op->type->last_properties != NULL);
+}
+
+#else
+
+bool WM_operator_last_properties_init(wmOperator *UNUSED(op))
+{
+  return false;
+}
+
+bool WM_operator_last_properties_store(wmOperator *UNUSED(op))
+{
+  return false;
+}
+
+#endif
 
 /** \} */
 
@@ -1238,15 +1343,17 @@ static uiBlock *wm_block_create_redo(bContext *C, ARegion *ar, void *arg_op)
     }
   }
 
+  uiLayout *col = uiLayoutColumn(layout, false);
+
   if (op->type->flag & OPTYPE_MACRO) {
     for (op = op->macro.first; op; op = op->next) {
       uiTemplateOperatorPropertyButs(
-          C, layout, op, UI_BUT_LABEL_ALIGN_NONE, UI_TEMPLATE_OP_PROPS_SHOW_TITLE);
+          C, col, op, UI_BUT_LABEL_ALIGN_NONE, UI_TEMPLATE_OP_PROPS_SHOW_TITLE);
     }
   }
   else {
     uiTemplateOperatorPropertyButs(
-        C, layout, op, UI_BUT_LABEL_ALIGN_NONE, UI_TEMPLATE_OP_PROPS_SHOW_TITLE);
+        C, col, op, UI_BUT_LABEL_ALIGN_NONE, UI_TEMPLATE_OP_PROPS_SHOW_TITLE);
   }
 
   UI_block_bounds_set_popup(block, 6 * U.dpi_fac, NULL);
@@ -1359,8 +1466,6 @@ static uiBlock *wm_operator_ui_create(bContext *C, ARegion *ar, void *userData)
   UI_block_func_set(block, NULL, NULL, NULL);
 
   UI_block_bounds_set_popup(block, 6 * U.dpi_fac, NULL);
-
-  UI_block_active_only_flagged_buttons(C, ar, block);
 
   return block;
 }
@@ -2210,6 +2315,7 @@ static void radial_control_paint_cursor(bContext *UNUSED(C), int x, int y, void 
   float strwidth, strheight;
   float r1 = 0.0f, r2 = 0.0f, rmin = 0.0, tex_radius, alpha;
   float zoom[2], col[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+  float text_color[4];
 
   switch (rc->subtype) {
     case PROP_NONE:
@@ -2336,6 +2442,8 @@ static void radial_control_paint_cursor(bContext *UNUSED(C), int x, int y, void 
   immUnbindProgram();
 
   BLF_size(fontid, 1.75f * fstyle_points * U.pixelsize, U.dpi);
+  UI_GetThemeColor4fv(TH_TEXT_HI, text_color);
+  BLF_color4fv(fontid, text_color);
 
   /* draw value */
   BLF_width_and_height(fontid, str, strdrawlen, &strwidth, &strheight);
@@ -3226,17 +3334,16 @@ static void previews_id_ensure(bContext *C, Scene *scene, ID *id)
   }
 }
 
-static int previews_id_ensure_callback(void *userdata,
-                                       ID *UNUSED(self_id),
-                                       ID **idptr,
-                                       int cb_flag)
+static int previews_id_ensure_callback(LibraryIDLinkCallbackData *cb_data)
 {
+  const int cb_flag = cb_data->cb_flag;
+
   if (cb_flag & IDWALK_CB_PRIVATE) {
     return IDWALK_RET_NOP;
   }
 
-  PreviewsIDEnsureData *data = userdata;
-  ID *id = *idptr;
+  PreviewsIDEnsureData *data = cb_data->user_data;
+  ID *id = *cb_data->id_pointer;
 
   if (id && (id->tag & LIB_TAG_DOIT)) {
     BLI_assert(ELEM(GS(id->name), ID_MA, ID_TE, ID_IM, ID_WO, ID_LA));

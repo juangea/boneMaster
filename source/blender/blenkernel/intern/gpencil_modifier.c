@@ -39,8 +39,8 @@
 #include "DNA_gpencil_types.h"
 #include "DNA_gpencil_modifier_types.h"
 
-#include "BKE_library.h"
-#include "BKE_library_query.h"
+#include "BKE_lib_id.h"
+#include "BKE_lib_query.h"
 #include "BKE_gpencil.h"
 #include "BKE_lattice.h"
 #include "BKE_material.h"
@@ -813,7 +813,7 @@ static void gpencil_frame_copy_noalloc(Object *ob, bGPDframe *gpf, bGPDframe *gp
     bGPDstroke *gps_dst = BKE_gpencil_stroke_duplicate(gps_src);
 
     /* copy color to temp fields to apply temporal changes in the stroke */
-    MaterialGPencilStyle *gp_style = BKE_material_gpencil_settings_get(ob, gps_src->mat_nr + 1);
+    MaterialGPencilStyle *gp_style = BKE_gpencil_material_settings(ob, gps_src->mat_nr + 1);
     if (gp_style) {
       copy_v4_v4(gps_dst->runtime.tmp_stroke_rgba, gp_style->stroke_rgba);
       copy_v4_v4(gps_dst->runtime.tmp_fill_rgba, gp_style->fill_rgba);
@@ -861,6 +861,14 @@ void BKE_gpencil_modifiers_calc(Depsgraph *depsgraph, Scene *scene, Object *ob)
   const bool is_render = (bool)(DEG_get_mode(depsgraph) == DAG_EVAL_RENDER);
   const bool time_remap = BKE_gpencil_has_time_modifiers(ob);
   int cfra_eval = (int)DEG_get_ctime(depsgraph);
+
+  /* Clear any previous evaluated data. */
+  if (ob->runtime.gpencil_tot_layers > 0) {
+    for (int i = 0; i < ob->runtime.gpencil_tot_layers; i++) {
+      bGPDframe *gpf_eval = &ob->runtime.gpencil_evaluated_frames[i];
+      BKE_gpencil_free_frame_runtime_data(gpf_eval);
+    }
+  }
 
   /* Create array of evaluated frames equal to number of layers. */
   ob->runtime.gpencil_tot_layers = BLI_listbase_count(&gpd->layers);

@@ -79,6 +79,7 @@
 
 #include "transform.h"
 #include "transform_convert.h"
+#include "transform_mode.h"
 
 /**
  * Transforming around ourselves is no use, fallback to individual origins,
@@ -450,19 +451,14 @@ int count_set_pose_transflags(Object *ob,
 
   for (pchan = ob->pose->chanbase.first; pchan; pchan = pchan->next) {
     bone = pchan->bone;
+    bone->flag &= ~(BONE_TRANSFORM | BONE_TRANSFORM_MIRROR);
     if (PBONE_VISIBLE(arm, bone)) {
       if ((bone->flag & BONE_SELECTED)) {
         bone->flag |= BONE_TRANSFORM;
       }
-      else {
-        bone->flag &= ~BONE_TRANSFORM;
-      }
 
       bone->flag &= ~BONE_HINGE_CHILD_TRANSFORM;
       bone->flag &= ~BONE_TRANSFORM_CHILD;
-    }
-    else {
-      bone->flag &= ~BONE_TRANSFORM;
     }
   }
 
@@ -1422,7 +1418,6 @@ void autokeyframe_object(bContext *C, Scene *scene, ViewLayer *view_layer, Objec
       if (adt && adt->action) {
         ListBase nla_cache = {NULL, NULL};
         for (fcu = adt->action->curves.first; fcu; fcu = fcu->next) {
-          fcu->flag &= ~FCURVE_SELECTED;
           insert_keyframe(bmain,
                           reports,
                           id,
@@ -1897,8 +1892,8 @@ void special_aftertrans_update(bContext *C, TransInfo *t)
 
     SpaceSeq *sseq = (SpaceSeq *)t->sa->spacedata.first;
 
-    /* marker transform, not especially nice but we may want to move markers
-     * at the same time as keyframes in the dope sheet. */
+    /* Marker transform, not especially nice but we may want to move markers
+     * at the same time as strips in the Video Sequencer. */
     if ((sseq->flag & SEQ_MARKER_TRANS) && (canceled == 0)) {
       /* cant use TFM_TIME_EXTEND
        * for some reason EXTEND is changed into TRANSLATE, so use frame_side instead */

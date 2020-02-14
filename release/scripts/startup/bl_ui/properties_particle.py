@@ -582,7 +582,10 @@ class PARTICLE_PT_rotation(ParticleButtonsPanel, Panel):
         else:
             part = context.space_data.pin_id
 
-        self.layout.prop(part, "use_rotations", text="")
+        layout = self.layout
+        layout.prop(part, "use_rotations", text="")
+        layout.enabled = particle_panel_enabled(context, psys)
+
 
     def draw(self, context):
         layout = self.layout
@@ -1961,7 +1964,7 @@ class PARTICLE_PT_hair_shape(ParticleButtonsPanel, Panel):
         layout.prop(part, "shape", text="Strand Shape")
 
         col = layout.column(align=True)
-        col.prop(part, "root_radius", text="Radius Root")
+        col.prop(part, "root_radius", text="Diameter Root")
         col.prop(part, "tip_radius", text="Tip")
 
         col = layout.column()

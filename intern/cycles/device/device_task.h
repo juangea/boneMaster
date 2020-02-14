@@ -47,6 +47,8 @@ class DenoiseParams {
   int neighbor_frames;
   /* Clamp the input to the range of +-1e8. Should be enough for any legitimate data. */
   bool clamp_input;
+  /* Passes handed over to the OptiX denoiser (default to color + albedo). */
+  int optix_input_passes;
 
   DenoiseParams()
   {
@@ -56,12 +58,13 @@ class DenoiseParams {
     relative_pca = false;
     neighbor_frames = 2;
     clamp_input = true;
+    optix_input_passes = 2;
   }
 };
 
 class DeviceTask : public Task {
  public:
-  typedef enum { RENDER, FILM_CONVERT, SHADER } Type;
+  typedef enum { RENDER, DENOISE, DENOISE_BUFFER, FILM_CONVERT, SHADER } Type;
   Type type;
 
   int x, y, w, h;
@@ -78,7 +81,7 @@ class DeviceTask : public Task {
   int shader_filter;
   int shader_x, shader_w;
 
-  int passes_size;
+  RenderBuffers *buffers;
 
   explicit DeviceTask(Type type = RENDER);
 
@@ -100,6 +103,7 @@ class DeviceTask : public Task {
   vector<int> denoising_frames;
 
   bool denoising_do_filter;
+  bool denoising_use_optix;
   bool denoising_write_passes;
 
   int pass_stride;
@@ -110,7 +114,6 @@ class DeviceTask : public Task {
 
   bool need_finish_queue;
   bool integrator_branched;
-  int2 requested_tile_size;
 
  protected:
   double last_update_time;

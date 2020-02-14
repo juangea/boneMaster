@@ -105,6 +105,7 @@ set(SRC
   intern/data_transfer.c
   intern/deform.c
   intern/displist.c
+  intern/displist_tangent.c
   intern/dynamicpaint.c
   intern/editlattice.c
   intern/editmesh.c
@@ -134,15 +135,17 @@ set(SRC
   intern/lattice.c
   intern/layer.c
   intern/layer_utils.c
+  intern/lib_id.c
+  intern/lib_id_delete.c
+  intern/lib_override.c
+  intern/lib_query.c
+  intern/lib_remap.c
   intern/library.c
-  intern/library_idmap.c
-  intern/library_override.c
-  intern/library_query.c
-  intern/library_remap.c
   intern/light.c
   intern/lightprobe.c
   intern/linestyle.c
   intern/main.c
+  intern/main_idmap.c
   intern/mask.c
   intern/mask_evaluate.c
   intern/mask_rasterize.c
@@ -272,6 +275,7 @@ set(SRC
   BKE_data_transfer.h
   BKE_deform.h
   BKE_displist.h
+  BKE_displist_tangent.h
   BKE_dynamicpaint.h
   BKE_editlattice.h
   BKE_editmesh.h
@@ -297,15 +301,16 @@ set(SRC
   BKE_keyconfig.h
   BKE_lattice.h
   BKE_layer.h
+  BKE_lib_id.h
+  BKE_lib_override.h
+  BKE_lib_query.h
+  BKE_lib_remap.h
   BKE_library.h
-  BKE_library_idmap.h
-  BKE_library_override.h
-  BKE_library_query.h
-  BKE_library_remap.h
   BKE_light.h
   BKE_lightprobe.h
   BKE_linestyle.h
   BKE_main.h
+  BKE_main_idmap.h
   BKE_mask.h
   BKE_material.h
   BKE_mball.h
@@ -370,6 +375,7 @@ set(SRC
   intern/CCGSubSurf_inline.h
   intern/CCGSubSurf_intern.h
   intern/data_transfer_intern.h
+  intern/lib_intern.h
   intern/multires_inline.h
   intern/pbvh_intern.h
   intern/subdiv_converter.h
@@ -425,6 +431,10 @@ if(WITH_AUDASPACE)
   list(APPEND INC_SYS
     ${AUDASPACE_C_INCLUDE_DIRS}
   )
+  list(APPEND LIB
+    ${AUDASPACE_C_LIBRARIES}
+    ${AUDASPACE_PY_LIBRARIES}
+  )
 endif()
 
 if(WITH_BULLET)
@@ -437,6 +447,8 @@ if(WITH_BULLET)
   list(APPEND LIB
     bf_intern_rigidbody
     extern_bullet
+
+    ${BULLET_LIBRARIES}
   )
   add_definitions(-DWITH_BULLET)
 endif()
@@ -491,6 +503,9 @@ if(WITH_CODEC_FFMPEG)
   list(APPEND INC_SYS
     ${FFMPEG_INCLUDE_DIRS}
   )
+  list(APPEND LIB
+    ${FFMPEG_LIBRARIES}
+  )
   add_definitions(-DWITH_FFMPEG)
 
   remove_strict_c_flags_file(
@@ -544,6 +559,9 @@ if(WITH_LZO)
     list(APPEND INC_SYS
       ${LZO_INCLUDE_DIR}
     )
+    list(APPEND LIB
+      ${LZO_LIBRARIES}
+    )
     add_definitions(-DWITH_SYSTEM_LZO)
   else()
     list(APPEND INC_SYS
@@ -574,6 +592,9 @@ if(WITH_FFTW3)
   list(APPEND INC_SYS
     ${FFTW3_INCLUDE_DIRS}
   )
+  list(APPEND LIB
+    ${FFTW3_LIBRARIES}
+  )
   add_definitions(-DFFTW3=1)
 endif()
 
@@ -595,6 +616,9 @@ endif()
 if(WITH_OPENSUBDIV)
   list(APPEND INC_SYS
     ${OPENSUBDIV_INCLUDE_DIRS}
+  )
+  list(APPEND LIB
+    ${OPENSUBDIV_LIBRARIES}
   )
   add_definitions(-DWITH_OPENSUBDIV)
 endif()
@@ -630,6 +654,9 @@ if(WITH_TBB)
 
   list(APPEND INC_SYS
     ${TBB_INCLUDE_DIRS}
+  )
+  list(APPEND LIB
+    ${TBB_LIBRARIES}
   )
 endif()
 

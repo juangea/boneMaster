@@ -452,6 +452,7 @@ class TOPBAR_MT_templates_more(Menu):
 class TOPBAR_MT_file_import(Menu):
     bl_idname = "TOPBAR_MT_file_import"
     bl_label = "Import"
+    bl_owner_use_filter = False
 
     def draw(self, _context):
         if bpy.app.build_options.collada:
@@ -464,6 +465,7 @@ class TOPBAR_MT_file_import(Menu):
 class TOPBAR_MT_file_export(Menu):
     bl_idname = "TOPBAR_MT_file_export"
     bl_label = "Export"
+    bl_owner_use_filter = False
 
     def draw(self, context):
         if bpy.app.build_options.collada:
@@ -471,7 +473,7 @@ class TOPBAR_MT_file_export(Menu):
                                  text="Collada (Default) (.dae)")
         if bpy.app.build_options.alembic:
             self.layout.operator("wm.alembic_export", text="Alembic (.abc)")
-        if bpy.app.build_options.usd and context.preferences.experimental.use_usd_exporter:
+        if bpy.app.build_options.usd:
             self.layout.operator(
                 "wm.usd_export", text="Universal Scene Description (.usd, .usdc, .usda)")
 

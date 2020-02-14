@@ -40,7 +40,7 @@
 #include "BKE_brush.h"
 #include "BKE_context.h"
 #include "BKE_idprop.h"
-#include "BKE_library.h"
+#include "BKE_lib_id.h"
 #include "BKE_main.h"
 #include "BKE_paint.h"
 #include "BKE_workspace.h"
@@ -351,11 +351,11 @@ void WM_toolsystem_ref_set_from_runtime(struct bContext *C,
     *tref->runtime = *tref_rt;
   }
 
-  /* FIXME: ideally Python could check this gizmo group flag and not
+  /* Ideally Python could check this gizmo group flag and not
    * pass in the argument to begin with. */
   bool use_fallback_keymap = false;
 
-  if (USER_EXPERIMENTAL_TEST(&U, use_tool_fallback)) {
+  if (tref->idname_fallback[0] || tref->runtime->keymap_fallback[0]) {
     if (tref_rt->gizmo_group[0]) {
       wmGizmoGroupType *gzgt = WM_gizmogrouptype_find(tref_rt->gizmo_group, false);
       if (gzgt) {
@@ -366,7 +366,7 @@ void WM_toolsystem_ref_set_from_runtime(struct bContext *C,
     }
   }
   if (use_fallback_keymap == false) {
-    tref->runtime->idname_fallback[0] = '\0';
+    tref->idname_fallback[0] = '\0';
     tref->runtime->keymap_fallback[0] = '\0';
   }
 
@@ -487,6 +487,8 @@ static bool toolsystem_key_ensure_check(const bToolKey *tkey)
       break;
     case SPACE_NODE:
       return true;
+    case SPACE_SEQ:
+      return true;
   }
   return false;
 }
@@ -514,6 +516,11 @@ int WM_toolsystem_mode_from_spacetype(ViewLayer *view_layer, ScrArea *sa, int sp
     }
     case SPACE_NODE: {
       mode = 0;
+      break;
+    }
+    case SPACE_SEQ: {
+      SpaceSeq *sseq = sa->spacedata.first;
+      mode = sseq->view;
       break;
     }
   }
@@ -734,6 +741,17 @@ static const char *toolsystem_default_tool(const bToolKey *tkey)
       }
       break;
     case SPACE_NODE: {
+      return "builtin.select_box";
+    }
+    case SPACE_SEQ: {
+      switch (tkey->mode) {
+        case SEQ_VIEW_SEQUENCE:
+          return "builtin.select";
+        case SEQ_VIEW_PREVIEW:
+          return "builtin.annotate";
+        case SEQ_VIEW_SEQUENCE_PREVIEW:
+          return "builtin.select";
+      }
       return "builtin.select_box";
     }
   }

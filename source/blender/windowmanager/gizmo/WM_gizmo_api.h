@@ -236,6 +236,10 @@ void WM_gizmo_target_property_subscribe_all(struct wmGizmo *gz,
                                             struct wmMsgBus *mbus,
                                             struct ARegion *ar);
 
+void WM_gizmo_target_property_anim_autokey(struct bContext *C,
+                                           const struct wmGizmo *gz,
+                                           struct wmGizmoProperty *gz_prop);
+
 /* -------------------------------------------------------------------- */
 /* wmGizmoGroup */
 
@@ -285,7 +289,8 @@ eWM_GizmoFlagMapDrawStep WM_gizmomap_drawstep_from_gizmo_group(const struct wmGi
 void WM_gizmomap_tag_refresh_drawstep(struct wmGizmoMap *gzmap,
                                       const eWM_GizmoFlagMapDrawStep drawstep);
 void WM_gizmomap_tag_refresh(struct wmGizmoMap *gzmap);
-bool WM_gizmomap_tag_refresh_check(struct wmGizmoMap *gzmap);
+
+bool WM_gizmomap_tag_delay_refresh_for_tweak_check(struct wmGizmoMap *gzmap);
 
 void WM_gizmomap_draw(struct wmGizmoMap *gzmap,
                       const struct bContext *C,

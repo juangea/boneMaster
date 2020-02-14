@@ -134,6 +134,7 @@ class _defs_view3d_generic:
             idname="builtin.measure",
             label="Measure",
             description=description,
+            cursor='CROSSHAIR',
             icon="ops.view3d.ruler",
             widget="VIEW3D_GGT_ruler",
             keymap="3D View Tool: Measure",
@@ -143,11 +144,7 @@ class _defs_view3d_generic:
 class _defs_annotate:
 
     def draw_settings_common(context, layout, tool):
-        if type(context.gpencil_data_owner) is bpy.types.Object:
-            gpd = context.scene.grease_pencil
-        else:
-            gpd = context.gpencil_data
-
+        gpd = context.annotation_data
         if gpd is not None:
             if gpd.layers.active_note is not None:
                 text = gpd.layers.active_note
@@ -157,7 +154,7 @@ class _defs_annotate:
             else:
                 text = ""
 
-            gpl = context.active_gpencil_layer
+            gpl = context.active_annotation_layer
             if gpl is not None:
                 layout.label(text="Annotation:")
                 sub = layout.row(align=True)
@@ -292,16 +289,29 @@ class _defs_transform:
         )
 
     @ToolDef.from_fn
+    def shear():
+        def draw_settings(context, layout, _tool):
+            # props = tool.operator_properties("transform.shear")
+            _template_widget.VIEW3D_GGT_xform_gizmo.draw_settings_with_index(context, layout, 2)
+        return dict(
+            idname="builtin.shear",
+            label="Shear",
+            icon="ops.transform.shear",
+            widget="VIEW3D_GGT_xform_shear",
+            keymap="3D View Tool: Shear",
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
     def transform():
         def draw_settings(context, layout, tool):
             if layout.use_property_split:
                 layout.label(text="Gizmos:")
 
             show_drag = True
-            if context.preferences.experimental.use_tool_fallback:
-                tool_settings = context.tool_settings
-                if tool_settings.workspace_tool_type == 'FALLBACK':
-                    show_drag = False
+            tool_settings = context.tool_settings
+            if tool_settings.workspace_tool_type == 'FALLBACK':
+                show_drag = False
 
             if show_drag:
                 props = tool.gizmo_group_properties("VIEW3D_GGT_xform_gizmo")
@@ -362,6 +372,7 @@ class _defs_view3d_select:
             label="Select Lasso",
             icon="ops.generic.select_lasso",
             widget=None,
+            cursor='DEFAULT',
             keymap="3D View Tool: Select Lasso",
             draw_settings=draw_settings,
         )
@@ -386,6 +397,7 @@ class _defs_view3d_select:
             label="Select Circle",
             icon="ops.generic.select_circle",
             widget=None,
+            cursor='DEFAULT',
             keymap="3D View Tool: Select Circle",
             draw_settings=draw_settings,
             draw_cursor=draw_cursor,
@@ -759,20 +771,6 @@ class _defs_edit_mesh:
             label="Randomize",
             icon="ops.transform.vertex_random",
             widget="VIEW3D_GGT_tool_generic_handle_normal",
-            keymap=(),
-            draw_settings=draw_settings,
-        )
-
-    @ToolDef.from_fn
-    def shear():
-        def draw_settings(context, layout, _tool):
-            # props = tool.operator_properties("transform.shear")
-            _template_widget.VIEW3D_GGT_xform_gizmo.draw_settings_with_index(context, layout, 2)
-        return dict(
-            idname="builtin.shear",
-            label="Shear",
-            icon="ops.transform.shear",
-            widget="VIEW3D_GGT_xform_shear",
             keymap=(),
             draw_settings=draw_settings,
         )
@@ -1708,6 +1706,51 @@ class _defs_node_edit:
             keymap="Node Tool: Links Cut",
         )
 
+class _defs_sequencer_generic:
+
+    @ToolDef.from_fn
+    def cut():
+        def draw_settings(_context, layout, tool):
+            props = tool.operator_properties("sequencer.cut")
+            row = layout.row()
+            row.use_property_split = False
+            row.prop(props, "type", expand=True)
+        return dict(
+            idname="builtin.cut",
+            label="Cut",
+            icon="ops.mesh.knife_tool",
+            widget=None,
+            keymap="Sequencer Tool: Cut",
+            draw_settings=draw_settings,
+        )
+
+class _defs_sequencer_select:
+    @ToolDef.from_fn
+    def select():
+        return dict(
+            idname="builtin.select",
+            label="Select",
+            icon="ops.generic.select",
+            widget=None,
+            keymap="Sequencer Tool: Select",
+        )
+    @ToolDef.from_fn
+    def box():
+        def draw_settings(_context, layout, tool):
+            props = tool.operator_properties("sequencer.select_box")
+            row = layout.row()
+            row.use_property_split = False
+            row.prop(props, "mode", text="", expand=True, icon_only=True)
+            pass
+        return dict(
+            idname="builtin.select_box",
+            label="Select Box",
+            icon="ops.generic.select_box",
+            widget=None,
+            keymap="Sequencer Tool: Select Box",
+            draw_settings=draw_settings,
+        )
+
 
 class IMAGE_PT_tools_active(ToolSelectPanelHelper, Panel):
     bl_space_type = 'IMAGE_EDITOR'
@@ -1961,6 +2004,7 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
                 _defs_edit_armature.extrude,
                 _defs_edit_armature.extrude_cursor,
             ),
+            _defs_transform.shear,
         ],
         'EDIT_MESH': [
             *_tools_default,
@@ -1999,7 +2043,7 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
                 _defs_edit_mesh.push_pull,
             ),
             (
-                _defs_edit_mesh.shear,
+                _defs_transform.shear,
                 _defs_edit_mesh.tosphere,
             ),
             (
@@ -2019,16 +2063,23 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
             _defs_edit_curve.curve_radius,
             _defs_edit_curve.tilt,
             None,
+            _defs_transform.shear,
             _defs_edit_curve.curve_vertex_randomize,
         ],
         'EDIT_SURFACE': [
             *_tools_default,
+            None,
+            _defs_transform.shear,
         ],
         'EDIT_METABALL': [
             *_tools_default,
+            None,
+            _defs_transform.shear,
         ],
         'EDIT_LATTICE': [
             *_tools_default,
+            None,
+            _defs_transform.shear,
         ],
         'EDIT_TEXT': [
             _defs_view3d_generic.cursor,
@@ -2116,6 +2167,8 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
             _defs_gpencil_paint.curve,
             _defs_gpencil_paint.box,
             _defs_gpencil_paint.circle,
+            None,
+            *_tools_annotate,
         ],
         'EDIT_GPENCIL': [
             *_tools_gpencil_select,
@@ -2130,11 +2183,13 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
                 _defs_gpencil_edit.shear,
                 _defs_gpencil_edit.tosphere,
             ),
-
+            None,
+            *_tools_annotate,
         ],
         'SCULPT_GPENCIL': [
             _defs_gpencil_sculpt.generate_from_brushes,
             None,
+            *_tools_annotate,
             lambda context: (
                 VIEW3D_PT_tools_active._tools_gpencil_select
                 if _defs_gpencil_sculpt.poll_select_mask(context)
@@ -2143,14 +2198,75 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
         ],
         'WEIGHT_GPENCIL': [
             _defs_gpencil_weight.generate_from_brushes,
+            None,
+            *_tools_annotate,
         ],
     }
+class SEQUENCER_PT_tools_active(ToolSelectPanelHelper, Panel):
+    bl_space_type = 'SEQUENCE_EDITOR'
+    bl_region_type = 'TOOLS'
+    bl_label = "Tools"  # not visible
+    bl_options = {'HIDE_HEADER'}
 
+    # Satisfy the 'ToolSelectPanelHelper' API.
+    keymap_prefix = "Sequence Editor Tool:"
+
+    # Default group to use as a fallback.
+    tool_fallback_id = "builtin.select"
+
+    @classmethod
+    def tools_from_context(cls, context, mode=None):
+        if mode is None:
+            if context.space_data:
+                mode = context.space_data.view_type
+        for tools in (cls._tools[None], cls._tools.get(mode, ())):
+            for item in tools:
+                if not (type(item) is ToolDef) and callable(item):
+                    yield from item(context)
+                else:
+                    yield item
+
+    @classmethod
+    def tools_all(cls):
+        yield from cls._tools.items()
+
+    _tools_select = (
+        (
+            _defs_sequencer_select.select,
+            _defs_sequencer_select.box,
+        ),
+    )
+    _tools_annotate = (
+        (
+            _defs_annotate.scribble,
+            _defs_annotate.line,
+            _defs_annotate.poly,
+            _defs_annotate.eraser,
+        ),
+    )
+
+    _tools = {
+        None: [
+        ],
+        'PREVIEW': [
+            *_tools_annotate,
+        ],
+        'SEQUENCER': [
+            *_tools_select,
+            _defs_sequencer_generic.cut,
+        ],
+        'SEQUENCER_PREVIEW': [
+            *_tools_select,
+            *_tools_annotate,
+            _defs_sequencer_generic.cut,
+        ],
+    }
 
 classes = (
     IMAGE_PT_tools_active,
     NODE_PT_tools_active,
     VIEW3D_PT_tools_active,
+    SEQUENCER_PT_tools_active,
 )
 
 if __name__ == "__main__":  # only for live edit.

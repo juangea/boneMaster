@@ -398,6 +398,7 @@ typedef struct EEVEE_ShadowCascadeRender {
   float projmat[MAX_CASCADE_NUM][4][4];
   float viewmat[4][4], viewinv[4][4];
   float radius[MAX_CASCADE_NUM];
+  float original_bias;
   float cascade_max_dist;
   float cascade_exponent;
   float cascade_fade;
@@ -523,7 +524,6 @@ typedef enum EEVEE_EffectsFlag {
   EFFECT_VELOCITY_BUFFER = (1 << 12),     /* Not really an effect but a feature */
   EFFECT_TAA_REPROJECT = (1 << 13),       /* should be mutually exclusive with EFFECT_TAA */
   EFFECT_DEPTH_DOUBLE_BUFFER = (1 << 14), /* Not really an effect but a feature */
-  EFFECT_ALPHA_CHECKER = (1 << 15),       /* Not really an effect but a feature */
 } EEVEE_EffectsFlag;
 
 typedef struct EEVEE_EffectsInfo {
@@ -588,7 +588,6 @@ typedef struct EEVEE_EffectsInfo {
   /* Alpha Checker */
   float color_checker_dark[4];
   float color_checker_light[4];
-  struct DRWView *checker_view;
   /* Other */
   float prev_persmat[4][4];
   /* Lookdev */
@@ -1057,6 +1056,7 @@ void EEVEE_renderpasses_postprocess(EEVEE_ViewLayerData *sldata,
                                     EEVEE_Data *vedata,
                                     eScenePassType renderpass_type);
 void EEVEE_renderpasses_draw(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata);
+void EEVEE_renderpasses_draw_debug(EEVEE_Data *vedata);
 void EEVEE_renderpasses_free(void);
 bool EEVEE_renderpasses_only_first_sample_pass_active(EEVEE_Data *vedata);
 
