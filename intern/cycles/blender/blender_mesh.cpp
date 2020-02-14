@@ -1001,15 +1001,15 @@ void BlenderSync::sync_mesh(BL::Depsgraph b_depsgraph, BL::Object b_ob, Mesh *me
       else
         create_mesh(scene, mesh, b_mesh, mesh->used_shaders, false);
 
+	  /*sync other precalculated motion if any*/
+      sync_mesh_precalculated_motion(b_mesh, b_ob, scene, mesh);
+
       free_object_to_mesh(b_data, b_ob, b_mesh);
     }
   }
 
   /* mesh fluid motion mantaflow */
   sync_mesh_fluid_motion(b_ob, scene, mesh);
-
-  /*sync other precalculated motion if any*/
-  sync_mesh_precalculated_motion(b_ob, scene, mesh);
 
   /* tag update */
   bool rebuild = (oldtriangles != mesh->triangles) || (oldsubd_faces != mesh->subd_faces) ||
