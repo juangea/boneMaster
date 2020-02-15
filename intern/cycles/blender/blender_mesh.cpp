@@ -1002,7 +1002,7 @@ void BlenderSync::sync_mesh(BL::Depsgraph b_depsgraph, BL::Object b_ob, Mesh *me
         create_mesh(scene, mesh, b_mesh, mesh->used_shaders, false);
 
 	  /*sync other precalculated motion if any*/
-      sync_mesh_precalculated_motion(b_mesh, b_ob, scene, mesh);
+      sync_mesh_precalculated_motion(b_mesh, b_ob, b_scene, scene, mesh);
 
       free_object_to_mesh(b_data, b_ob, b_mesh);
     }
