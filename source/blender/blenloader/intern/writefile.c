@@ -1769,6 +1769,13 @@ static void write_modifiers(WriteData *wd, ListBase *modbase)
         }
       }
     }
+    else if (md->type == eModifierType_Remesh) {
+      RemeshModifierData *rmd = (RemeshModifierData *)md;
+      CSGVolume_Object *vcob;
+      for (vcob = rmd->csg_operands.first; vcob; vcob = vcob->next) {
+        writestruct(wd, DATA, CSGVolume_Object, 1, vcob);
+      }
+    }
     else if (md->type == eModifierType_Bevel) {
       BevelModifierData *bmd = (BevelModifierData *)md;
       if (bmd->custom_profile) {
