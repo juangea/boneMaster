@@ -627,7 +627,8 @@ class OptiXDevice : public CUDADevice {
 
     const int end_sample = rtile.start_sample + rtile.num_samples;
     // Keep this number reasonable to avoid running into TDRs
-    const int step_samples = (info.display_device ? 8 : 32);
+    //const int step_samples = (info.display_device ? 8 : 32);
+    const int step_samples = (info.display_device  4 : 8);
     // Offset into launch params buffer so that streams use separate data
     device_ptr launch_params_ptr = launch_params.device_pointer +
                                    thread_index * launch_params.data_elements;
