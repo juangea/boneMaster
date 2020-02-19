@@ -420,7 +420,7 @@ typedef struct BevelModifierData {
 /* BevelModifierData->flags and BevelModifierData->lim_flags */
 enum {
   MOD_BEVEL_VERT = (1 << 1),
-  /*  unused                  = (1 << 2), */
+  MOD_BEVEL_INVERT_VGROUP = (1 << 2),
   MOD_BEVEL_ANGLE = (1 << 3),
   MOD_BEVEL_WEIGHT = (1 << 4),
   MOD_BEVEL_VGROUP = (1 << 5),
@@ -977,6 +977,7 @@ typedef enum {
   eExplodeFlag_Unborn = (1 << 3),
   eExplodeFlag_Alive = (1 << 4),
   eExplodeFlag_Dead = (1 << 5),
+  eExplodeFlag_INVERT_VGROUP = (1 << 6),
 } ExplodeModifierFlag;
 
 typedef struct ExplodeModifierData {
@@ -1323,11 +1324,10 @@ typedef struct WarpModifierData {
   char _pad[6];
 } WarpModifierData;
 
-#define MOD_WARP_VOLUME_PRESERVE 1
-
 /* WarpModifierData->flag */
 enum {
-  MOD_WARP_INVERT_VGROUP = (1 << 0),
+  MOD_WARP_VOLUME_PRESERVE = (1 << 0),
+  MOD_WARP_INVERT_VGROUP = (1 << 1),
 };
 
 typedef enum {
@@ -1796,6 +1796,7 @@ enum {
   MOD_LAPLACIANSMOOTH_Z = (1 << 3),
   MOD_LAPLACIANSMOOTH_PRESERVE_VOLUME = (1 << 4),
   MOD_LAPLACIANSMOOTH_NORMALIZED = (1 << 5),
+  MOD_LAPLACIANSMOOTH_INVERT_VGROUP = (1 << 6),
 };
 
 typedef struct CorrectiveSmoothDeltaCache {
@@ -1854,9 +1855,13 @@ typedef struct UVWarpModifierData {
   ModifierData modifier;
 
   char axis_u, axis_v;
-  char _pad[6];
+  short flag;
   /** Used for rotate/scale. */
   float center[2];
+
+  float offset[2];
+  float scale[2];
+  float rotation;
 
   /** Source. */
   struct Object *object_src;
@@ -1872,6 +1877,11 @@ typedef struct UVWarpModifierData {
   /** MAX_CUSTOMDATA_LAYER_NAME. */
   char uvlayer_name[64];
 } UVWarpModifierData;
+
+/* UVWarp modifier flags */
+enum {
+  MOD_UVWARP_INVERT_VGROUP = 1 << 0,
+};
 
 /* cache modifier */
 typedef struct MeshCacheModifierData {
@@ -1951,6 +1961,7 @@ typedef struct LaplacianDeformModifierData {
 /* Laplacian Deform modifier flags */
 enum {
   MOD_LAPLACIANDEFORM_BIND = 1 << 0,
+  MOD_LAPLACIANDEFORM_INVERT_VGROUP = 1 << 1,
 };
 
 /* many of these options match 'solidify' */

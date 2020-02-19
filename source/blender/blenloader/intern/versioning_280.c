@@ -891,6 +891,10 @@ static void do_versions_local_collection_bits_set(LayerCollection *layer_collect
 
 static void do_version_curvemapping_flag_extend_extrapolate(CurveMapping *cumap)
 {
+  if (cumap == NULL) {
+    return;
+  }
+
 #define CUMA_EXTEND_EXTRAPOLATE_OLD 1
   for (int curve_map_index = 0; curve_map_index < 4; curve_map_index++) {
     CurveMap *cuma = &cumap->cm[curve_map_index];
@@ -4473,5 +4477,26 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
    */
   {
     /* Keep this block, even when empty. */
+
+    /* Alembic Transform Cache changed from world to local space. */
+    LISTBASE_FOREACH (Object *, ob, &bmain->objects) {
+      LISTBASE_FOREACH (bConstraint *, con, &ob->constraints) {
+        if (con->type == CONSTRAINT_TYPE_TRANSFORM_CACHE) {
+          con->ownspace = CONSTRAINT_SPACE_LOCAL;
+        }
+      }
+    }
+
+    /* Add 2D transform to UV Warp modifier. */
+    if (!DNA_struct_elem_find(fd->filesdna, "UVWarpModifierData", "float", "scale[2]")) {
+      for (Object *ob = bmain->objects.first; ob; ob = ob->id.next) {
+        for (ModifierData *md = ob->modifiers.first; md; md = md->next) {
+          if (md->type == eModifierType_UVWarp) {
+            UVWarpModifierData *umd = (UVWarpModifierData *)md;
+            copy_v2_fl(umd->scale, 1.0f);
+          }
+        }
+      }
+    }
   }
 }

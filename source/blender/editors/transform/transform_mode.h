@@ -26,9 +26,17 @@
 #define __TRANSFORM_MODE_H__
 
 struct AnimData;
+struct LinkNode;
 struct TransInfo;
 struct TransDataContainer;
 struct TransData;
+
+/* header of TransDataEdgeSlideVert, TransDataEdgeSlideEdge */
+typedef struct TransDataGenericSlideVert {
+  struct BMVert *v;
+  struct LinkNode **cd_loop_groups;
+  float co_orig_3d[3];
+} TransDataGenericSlideVert;
 
 /* transform_mode.c */
 bool transdata_check_local_center(TransInfo *t, short around);
@@ -55,6 +63,9 @@ void initAlign(TransInfo *t);
 /* transform_mode_baketime.c */
 void initBakeTime(TransInfo *t);
 
+/* transform_mode_bbone_resize.c */
+void initBoneSize(TransInfo *t);
+
 /* transform_mode_bend.c */
 void initBend(TransInfo *t);
 
@@ -63,9 +74,6 @@ void initBoneEnvelope(TransInfo *t);
 
 /* transform_mode_boneroll.c */
 void initBoneRoll(TransInfo *t);
-
-/* transform_mode_bonesize.c */
-void initBoneSize(TransInfo *t);
 
 /* transform_mode_curveshrinkfatten.c */
 void initCurveShrinkFatten(TransInfo *t);

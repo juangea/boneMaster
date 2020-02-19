@@ -58,6 +58,11 @@
 
 CCL_NAMESPACE_BEGIN
 
+static_assert(Object::MAX_MOTION_STEPS <= RTC_MAX_TIME_STEP_COUNT,
+              "Object and Embree max motion steps inconsistent");
+static_assert(Object::MAX_MOTION_STEPS == Geometry::MAX_MOTION_STEPS,
+              "Object and Geometry max motion steps inconsistent");
+
 #  define IS_HAIR(x) (x & 1)
 
 /* This gets called by Embree at every valid ray/object intersection.
@@ -557,15 +562,29 @@ void BVHEmbree::add_instance(Object *ob, int i)
     instance_bvh->top_level = this;
   }
 
-  const size_t num_motion_steps = ob->use_motion() ? ob->motion.size() : 1;
+  const size_t num_object_motion_steps = ob->use_motion() ? ob->motion.size() : 1;
+  const size_t num_motion_steps = min(num_object_motion_steps, RTC_MAX_TIME_STEP_COUNT);
+  assert(num_object_motion_steps <= RTC_MAX_TIME_STEP_COUNT);
+
   RTCGeometry geom_id = rtcNewGeometry(rtc_shared_device, RTC_GEOMETRY_TYPE_INSTANCE);
   rtcSetGeometryInstancedScene(geom_id, instance_bvh->scene);
   rtcSetGeometryTimeStepCount(geom_id, num_motion_steps);
 
   if (ob->use_motion()) {
+    array<DecomposedTransform> decomp(ob->motion.size());
+    transform_motion_decompose(decomp.data(), ob->motion.data(), ob->motion.size());
     for (size_t step = 0; step < num_motion_steps; ++step) {
-      rtcSetGeometryTransform(
-          geom_id, step, RTC_FORMAT_FLOAT3X4_ROW_MAJOR, (const float *)&ob->motion[step]);
+      RTCQuaternionDecomposition rtc_decomp;
+      rtcInitQuaternionDecomposition(&rtc_decomp);
+      rtcQuaternionDecompositionSetQuaternion(
+          &rtc_decomp, decomp[step].x.w, decomp[step].x.x, decomp[step].x.y, decomp[step].x.z);
+      rtcQuaternionDecompositionSetScale(
+          &rtc_decomp, decomp[step].y.w, decomp[step].z.w, decomp[step].w.w);
+      rtcQuaternionDecompositionSetTranslation(
+          &rtc_decomp, decomp[step].y.x, decomp[step].y.y, decomp[step].y.z);
+      rtcQuaternionDecompositionSetSkew(
+          &rtc_decomp, decomp[step].z.x, decomp[step].z.y, decomp[step].w.x);
+      rtcSetGeometryTransformQuaternion(geom_id, step, &rtc_decomp);
     }
   }
   else {
@@ -578,7 +597,7 @@ void BVHEmbree::add_instance(Object *ob, int i)
   pack.prim_tri_index.push_back_slow(-1);
 
   rtcSetGeometryUserData(geom_id, (void *)instance_bvh->scene);
-  rtcSetGeometryMask(geom_id, ob->visibility);
+  rtcSetGeometryMask(geom_id, ob->visibility_for_tracing());
 
   rtcCommitGeometry(geom_id);
   rtcAttachGeometryByID(scene, geom_id, i * 2);
@@ -589,17 +608,16 @@ void BVHEmbree::add_triangles(const Object *ob, const Mesh *mesh, int i)
 {
   size_t prim_offset = pack.prim_index.size();
   const Attribute *attr_mP = NULL;
-  size_t num_motion_steps = 1;
+  size_t num_geometry_motion_steps = 1;
   if (mesh->has_motion_blur()) {
     attr_mP = mesh->attributes.find(ATTR_STD_MOTION_VERTEX_POSITION);
     if (attr_mP) {
-      num_motion_steps = mesh->motion_steps;
-      if (num_motion_steps > RTC_MAX_TIME_STEP_COUNT) {
-        assert(0);
-        num_motion_steps = RTC_MAX_TIME_STEP_COUNT;
-      }
+      num_geometry_motion_steps = mesh->motion_steps;
     }
   }
+
+  const size_t num_motion_steps = min(num_geometry_motion_steps, RTC_MAX_TIME_STEP_COUNT);
+  assert(num_geometry_motion_steps <= RTC_MAX_TIME_STEP_COUNT);
 
   const size_t num_triangles = mesh->num_triangles();
   RTCGeometry geom_id = rtcNewGeometry(rtc_shared_device, RTC_GEOMETRY_TYPE_TRIANGLE);
@@ -642,7 +660,7 @@ void BVHEmbree::add_triangles(const Object *ob, const Mesh *mesh, int i)
   rtcSetGeometryUserData(geom_id, (void *)prim_offset);
   rtcSetGeometryIntersectFilterFunction(geom_id, rtc_filter_func);
   rtcSetGeometryOccludedFilterFunction(geom_id, rtc_filter_occluded_func);
-  rtcSetGeometryMask(geom_id, ob->visibility);
+  rtcSetGeometryMask(geom_id, ob->visibility_for_tracing());
 
   rtcCommitGeometry(geom_id);
   rtcAttachGeometryByID(scene, geom_id, i * 2);
@@ -771,13 +789,16 @@ void BVHEmbree::add_curves(const Object *ob, const Hair *hair, int i)
 {
   size_t prim_offset = pack.prim_index.size();
   const Attribute *attr_mP = NULL;
-  size_t num_motion_steps = 1;
+  size_t num_geometry_motion_steps = 1;
   if (hair->has_motion_blur()) {
     attr_mP = hair->attributes.find(ATTR_STD_MOTION_VERTEX_POSITION);
     if (attr_mP) {
-      num_motion_steps = hair->motion_steps;
+      num_geometry_motion_steps = hair->motion_steps;
     }
   }
+
+  const size_t num_motion_steps = min(num_geometry_motion_steps, RTC_MAX_TIME_STEP_COUNT);
+  assert(num_geometry_motion_steps <= RTC_MAX_TIME_STEP_COUNT);
 
   const size_t num_curves = hair->num_curves();
   size_t num_segments = 0;
@@ -830,7 +851,7 @@ void BVHEmbree::add_curves(const Object *ob, const Hair *hair, int i)
   rtcSetGeometryUserData(geom_id, (void *)prim_offset);
   rtcSetGeometryIntersectFilterFunction(geom_id, rtc_filter_func);
   rtcSetGeometryOccludedFilterFunction(geom_id, rtc_filter_occluded_func);
-  rtcSetGeometryMask(geom_id, ob->visibility);
+  rtcSetGeometryMask(geom_id, ob->visibility_for_tracing());
 
   rtcCommitGeometry(geom_id);
   rtcAttachGeometryByID(scene, geom_id, i * 2 + 1);

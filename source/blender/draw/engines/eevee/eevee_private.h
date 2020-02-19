@@ -123,7 +123,6 @@ extern struct DrawEngineType draw_engine_eevee_type;
   } \
   ((void)0)
 
-#define MATERIAL_PREVIEW_MODE_ENABLED(v3d) ((v3d) && (v3d->shading.type == OB_MATERIAL))
 #define LOOK_DEV_OVERLAY_ENABLED(v3d) \
   ((v3d) && (v3d->shading.type == OB_MATERIAL) && ((v3d->flag2 & V3D_HIDE_OVERLAYS) == 0) && \
    (v3d->overlay.flag & V3D_OVERLAY_LOOK_DEV))
@@ -805,6 +804,11 @@ typedef struct EEVEE_PrivateData {
   /* Renderpasses */
   /* Bitmask containing the active render_passes */
   eScenePassType render_passes;
+  /* Uniform references that are referenced inside the `renderpass_pass`. They are updated
+   * to reuse the drawing pass and the shading group. */
+  int renderpass_type;
+  int renderpass_current_sample;
+  GPUTexture *renderpass_input;
 
   /** For rendering shadows. */
   struct DRWView *cube_views[6];

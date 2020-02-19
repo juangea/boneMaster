@@ -3583,7 +3583,8 @@ class VIEW3D_MT_edit_mesh_context_menu(Menu):
 
             col.separator()
 
-            col.operator("mesh.loopcut_slide")
+            props = col.operator("mesh.loopcut_slide")
+            props.TRANSFORM_OT_edge_slide.release_confirm = False
             col.operator("mesh.offset_edge_loops_slide")
 
             col.separator()
@@ -6935,7 +6936,10 @@ class VIEW3D_PT_sculpt_context_menu(Panel):
             layout.prop(brush, "normal_weight", slider=True)
 
         if capabilities.has_pinch_factor:
-            layout.prop(brush, "crease_pinch_factor", slider=True, text="Pinch")
+            text = "Pinch"
+            if brush.sculpt_tool in {'BLOB', 'SNAKE_HOOK'}:
+                text = "Magnify"
+            layout.prop(brush, "crease_pinch_factor", slider=True, text=text)
 
         if capabilities.has_rake_factor:
             layout.prop(brush, "rake_factor", slider=True)

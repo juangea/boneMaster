@@ -557,7 +557,7 @@ def km_uv_editor(params):
          {"properties": [("data_path", 'tool_settings.uv_select_mode'), ("value", 'FACE')]}),
         ("wm.context_set_enum", {"type": 'FOUR', "value": 'PRESS'},
          {"properties": [("data_path", 'tool_settings.uv_select_mode'), ("value", 'ISLAND')]}),
-  
+
         ("uv.select", {"type": 'LEFTMOUSE', "value": 'CLICK'},
          {"properties": [("extend", False), ("deselect_all", True)]}),
         ("uv.select", {"type": 'LEFTMOUSE', "value": 'CLICK', "shift": True},
@@ -1727,10 +1727,8 @@ def km_sequencer(params):
         ("sequencer.select_all", {"type": 'A', "value": 'PRESS', "ctrl": True}, {"properties": [("action", 'SELECT')]}),
         ("sequencer.select_all", {"type": 'A', "value": 'PRESS', "ctrl": True, "shift": True}, {"properties": [("action", 'DESELECT')]}),
         ("sequencer.select_all", {"type": 'I', "value": 'PRESS', "ctrl": True}, {"properties": [("action", 'INVERT')]}),
-        ("sequencer.cut", {"type": 'K', "value": 'PRESS'},
+        ("sequencer.split", {"type": 'B', "value": 'PRESS', "ctrl": True},
          {"properties": [("type", 'SOFT')]}),
-        ("sequencer.cut", {"type": 'K', "value": 'PRESS', "shift": True},
-         {"properties": [("type", 'HARD')]}),
         ("sequencer.mute", {"type": 'M', "value": 'PRESS'},
          {"properties": [("unselected", False)]}),
         ("sequencer.mute", {"type": 'M', "value": 'PRESS', "shift": True},
@@ -1779,7 +1777,7 @@ def km_sequencer(params):
         ("sequencer.snap", {"type": 'X', "value": 'PRESS'}, None),
         ("sequencer.swap_inputs", {"type": 'S', "value": 'PRESS', "alt": True}, None),
         *(
-            (("sequencer.cut_multicam",
+            (("sequencer.split_multicam",
               {"type": NUMBERS_1[i], "value": 'PRESS'},
               {"properties": [("camera", i + 1)]})
              for i in range(10)
@@ -1804,7 +1802,6 @@ def km_sequencer(params):
         ("sequencer.select_linked_pick", {"type": 'RIGHT_BRACKET', "value": 'PRESS', "shift": True},
          {"properties": [("extend", True)]}),
         ("sequencer.select_linked", {"type": 'RIGHT_BRACKET', "value": 'PRESS', "ctrl": True}, None),
-        ("sequencer.select_box", {"type": 'Q', "value": 'PRESS'}, None),
         ("sequencer.select_box", {"type": 'EVT_TWEAK_L', "value": 'ANY'},
          {"properties":[("tweak", True), ("mode", 'SET')]}),
         ("sequencer.select_box", {"type": 'EVT_TWEAK_L', "value": 'ANY', "shift": True},
@@ -1823,6 +1820,9 @@ def km_sequencer(params):
         *_template_items_context_menu("SEQUENCER_MT_context_menu", {"type": 'RIGHTMOUSE', "value": 'PRESS'}),
         ("marker.add", {"type": 'M', "value": 'PRESS'}, None),
         ("marker.rename", {"type": 'RET', "value": 'PRESS'}, None),
+        # Tools
+        op_tool_cycle("builtin.select_box", {"type": 'Q', "value": 'PRESS'}),
+        op_tool_cycle("builtin.blade", {"type": 'B', "value": 'PRESS'}),
     ])
 
     return keymap
@@ -3739,7 +3739,13 @@ def keymap_transform_tool_mmb(keymap):
                     km_items_new.append(kmi)
                 elif ty == 'EVT_TWEAK_L':
                     kmi = (kmi[0], kmi[1].copy(), kmi[2])
-                    kmi[1]["type"] = 'EVT_TWEAK_M'
+                    if kmi[1]["value"] == 'ANY':
+                        kmi[1]["type"] = 'MIDDLEMOUSE'
+                        kmi[1]["value"] = 'PRESS'
+                    else:
+                        # Directional tweaking can't be replaced by middle-mouse.
+                        kmi[1]["type"] = 'EVT_TWEAK_M'
+
                     km_items_new.append(kmi)
             km_items.extend(km_items_new)
 

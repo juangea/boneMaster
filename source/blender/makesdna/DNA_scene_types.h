@@ -655,12 +655,8 @@ typedef struct RenderData {
   short subimtype DNA_DEPRECATED;
   short quality DNA_DEPRECATED;
 
-  /**
-   * Render to image editor, fullscreen or to new window.
-   */
-  short displaymode;
   char use_lock_interface;
-  char _pad7;
+  char _pad7[3];
 
   /**
    * Flags for render settings. Use bit-masking to access the settings.
@@ -754,7 +750,10 @@ typedef struct RenderData {
 
   /* render engine */
   char engine[32];
-  char _pad2[4];
+  char _pad2[2];
+
+  /* Performance Options */
+  short perf_flag;
 
   /* Cycles baking */
   struct BakeData bake;
@@ -779,6 +778,11 @@ typedef struct RenderData {
   /* Motion blur shutter */
   struct CurveMapping mblur_shutter_curve;
 } RenderData;
+
+/* RenderData.quality_flag */
+typedef enum eQualityOption {
+  SCE_PERF_HQ_NORMALS = (1 << 0),
+} eQualityOption;
 
 /* RenderData.hair_type */
 typedef enum eHairType {
@@ -1852,13 +1856,6 @@ enum {
   R_SEQ_UNUSED_4 = (1 << 4), /* cleared */
   R_SEQ_OVERRIDE_SCENE_SETTINGS = (1 << 5),
 };
-
-/** #RenderData.displaymode */
-#define R_OUTPUT_SCREEN 0
-#define R_OUTPUT_AREA 1
-#define R_OUTPUT_WINDOW 2
-#define R_OUTPUT_NONE 3
-/*#define R_OUTPUT_FORKED   4*/
 
 /** #RenderData.filtertype (used for nodes) */
 #define R_FILTER_BOX 0
