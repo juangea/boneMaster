@@ -1374,13 +1374,6 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
   bGPdata *gpd = CTX_data_gpencil_data(C);
   PropertyRNA *prop;
 
-  if (op && (prop = RNA_struct_find_property(op->ptr, "center_override")) &&
-      RNA_property_is_set(op->ptr, prop)) {
-    RNA_property_float_get_array(op->ptr, prop, t->center_global);
-    mul_v3_v3(t->center_global, t->aspect);
-    t->flag |= T_OVERRIDE_CENTER;
-  }
-
   if (op && (prop = RNA_struct_find_property(op->ptr, "mouse_coordinate_override")) &&
       RNA_property_is_set(op->ptr, prop)) {
     RNA_property_int_get_array(op->ptr, prop, t->mval);
@@ -1640,7 +1633,6 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
        (RNA_enum_get(op->ptr, "orient_type") == RNA_enum_get(op->ptr, "orient_matrix_type")))) {
     RNA_property_float_get_array(op->ptr, prop, &t->orient_matrix[0][0]);
     copy_m3_m3(t->spacemtx, t->orient_matrix);
-    negate_m3(t->spacemtx);
     /* Some transform modes use this to operate on an axis. */
     t->orient_matrix_is_set = true;
     t->orientation.user = V3D_ORIENT_CUSTOM_MATRIX;
@@ -1779,6 +1771,13 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
 #endif
 
   setTransformViewAspect(t, t->aspect);
+
+  if (op && (prop = RNA_struct_find_property(op->ptr, "center_override")) &&
+      RNA_property_is_set(op->ptr, prop)) {
+    RNA_property_float_get_array(op->ptr, prop, t->center_global);
+    mul_v3_v3(t->center_global, t->aspect);
+    t->flag |= T_OVERRIDE_CENTER;
+  }
 
   setTransformViewMatrices(t);
   initNumInput(&t->num);
