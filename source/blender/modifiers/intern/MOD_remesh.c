@@ -470,7 +470,8 @@ static struct OpenVDBLevelSet *csgOperation(struct OpenVDBLevelSet *level_set,
 
   switch (type) {
     case OB_MESH:
-      me_orig = BKE_object_get_evaluated_mesh(depsgraph, vcob->object);
+      //me_orig = BKE_object_get_evaluated_mesh(depsgraph, vcob->object);
+      me_orig = BKE_object_get_evaluated_mesh(vcob->object);
       if (me_orig) {
         me = BKE_mesh_new_nomain(me_orig->totvert,
                                  me_orig->totedge,
@@ -721,8 +722,8 @@ static Object *join_mesh_and_operands(RemeshModifierData *rmd,
   fob->type = OB_MESH;
   fob->data = mesh;
   // fake evaluated mesh here, just because datatransfer doesnt accept a source mesh, sheesh
-  fob->runtime.mesh_orig = mesh;
-  fob->runtime.mesh_eval = mesh;
+  fob->runtime.data_orig = mesh;
+  fob->runtime.data_eval = mesh;
   fob->runtime.mesh_deform_eval = mesh;  // seems this is being retrieved by datatransfer
 
   return fob;
