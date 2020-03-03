@@ -18,10 +18,13 @@
 #include "render/background.h"
 #include "render/integrator.h"
 #include "render/film.h"
+#include "render/jitter.h"
 #include "render/light.h"
 #include "render/scene.h"
 #include "render/shader.h"
 #include "render/sobol.h"
+
+#include "kernel/kernel_types.h"
 
 #include "util/util_foreach.h"
 #include "util/util_hash.h"
@@ -80,6 +83,7 @@ NODE_DEFINE(Integrator)
   static NodeEnum sampling_pattern_enum;
   sampling_pattern_enum.insert("sobol", SAMPLING_PATTERN_SOBOL);
   sampling_pattern_enum.insert("cmj", SAMPLING_PATTERN_CMJ);
+  sampling_pattern_enum.insert("pmj", SAMPLING_PATTERN_PMJ);
   SOCKET_ENUM(sampling_pattern, "Sampling Pattern", sampling_pattern_enum, SAMPLING_PATTERN_SOBOL);
   SOCKET_FLOAT(scrambling_distance, "Scrambling Distance", 1.0f);
   SOCKET_BOOLEAN(use_dithered_sampling, "Use Dithered Sampling", false);
@@ -210,11 +214,27 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
   int dimensions = PRNG_BASE_NUM + max_samples * PRNG_BOUNCE_NUM;
   dimensions = min(dimensions, SOBOL_MAX_DIMENSIONS);
 
-  uint *directions = dscene->sobol_directions.alloc(SOBOL_BITS * dimensions);
+  if (sampling_pattern == SAMPLING_PATTERN_SOBOL) {
+    uint *directions = dscene->sample_pattern_lut.alloc(SOBOL_BITS * dimensions);
 
-  sobol_generate_direction_vectors((uint(*)[SOBOL_BITS])directions, dimensions);
+    sobol_generate_direction_vectors((uint(*)[SOBOL_BITS])directions, dimensions);
 
-  dscene->sobol_directions.copy_to_device();
+    dscene->sample_pattern_lut.copy_to_device();
+  }
+  else {
+    constexpr int sequence_size = NUM_PMJ_SAMPLES;
+    constexpr int num_sequences = NUM_PMJ_PATTERNS;
+    float2 *directions = (float2 *)dscene->sample_pattern_lut.alloc(sequence_size * num_sequences *
+                                                                    2);
+    TaskPool pool;
+    for (int j = 0; j < num_sequences; ++j) {
+      float2 *sequence = directions + j * sequence_size;
+      pool.push(
+          function_bind(&progressive_multi_jitter_02_generate_2D, sequence, sequence_size, j));
+    }
+    pool.wait_work();
+    dscene->sample_pattern_lut.copy_to_device();
+  }
 
   /* Sobol dithering table */
   if(use_dithered_sampling) {
@@ -236,7 +256,7 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
 
 void Integrator::device_free(Device *, DeviceScene *dscene)
 {
-	dscene->sobol_directions.free();
+	dscene->sample_pattern_lut.free();
 	dscene->sobol_dither.free();
 }
 
