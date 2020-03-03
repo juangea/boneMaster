@@ -75,6 +75,8 @@ class Integrator : public Node {
   bool sample_all_lights_indirect;
   float light_sampling_threshold;
 
+  uint background_lightgroups;
+
   enum Method {
     BRANCHED_PATH = 0,
     PATH = 1,
@@ -85,6 +87,8 @@ class Integrator : public Node {
   Method method;
 
   SamplingPattern sampling_pattern;
+  float scrambling_distance;
+  bool use_dithered_sampling;
 
   bool need_update;
 

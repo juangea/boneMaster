@@ -42,6 +42,7 @@
 CCL_NAMESPACE_BEGIN
 
 static const char *cryptomatte_prefix = "Crypto";
+static const char *lightgroup_postfix = ".Combined";
 
 /* Constructor */
 
@@ -275,9 +276,24 @@ void BlenderSync::sync_integrator()
     }
   }
 
-  integrator->sampling_pattern = (SamplingPattern)get_enum(
-      cscene, "sampling_pattern", SAMPLING_NUM_PATTERNS, SAMPLING_PATTERN_SOBOL);
+  int sampling_pattern = get_enum(cscene, "sampling_pattern");
+	switch(sampling_pattern) {
+		case 1: /* Dithered Sobol */
+			integrator->sampling_pattern = SAMPLING_PATTERN_SOBOL;
+			integrator->use_dithered_sampling = true;
+			break;
+		case 2: /* Correlated Multi-Jittered */
+			integrator->sampling_pattern = SAMPLING_PATTERN_CMJ;
+			integrator->use_dithered_sampling = false;
+			break;
+		case 0: /* Sobol */
+		default:
+			integrator->sampling_pattern = SAMPLING_PATTERN_SOBOL;
+			integrator->use_dithered_sampling = false;
+			break;
+	}
 
+  integrator->scrambling_distance = get_float(cscene, "scrambling_distance");
   integrator->sample_clamp_direct = get_float(cscene, "sample_clamp_direct");
   integrator->sample_clamp_indirect = get_float(cscene, "sample_clamp_indirect");
   if (!preview) {
@@ -487,6 +503,9 @@ PassType BlenderSync::get_pass_type(BL::RenderPass &b_pass)
   if (string_startswith(name, cryptomatte_prefix)) {
     return PASS_CRYPTOMATTE;
   }
+  if (string_endswith(name, lightgroup_postfix)) {
+    return PASS_LIGHTGROUP;
+  }
 #undef MAP_PASS
 
   return PASS_NONE;
@@ -640,6 +659,29 @@ vector<Pass> BlenderSync::sync_render_passes(BL::RenderLayer &b_rlay, BL::ViewLa
     scene->film->cryptomatte_passes = (CryptomatteType)(scene->film->cryptomatte_passes |
                                                         CRYPT_ACCURATE);
   }
+
+  /* TODO: Update existing lights when rendering with multiple render layers. */
+  lightgroups.clear();
+  list<string> lg_names;
+  RNA_BEGIN (&crp, lightgroup, "lightgroups") {
+    BL::Collection b_collection(RNA_pointer_get(&lightgroup, "collection"));
+    bool include_world = get_boolean(lightgroup, "include_world");
+
+    if (!(b_collection || include_world)) {
+      continue;
+    }
+
+    string passname = get_string(lightgroup, "name") + lightgroup_postfix;
+    if (find(lg_names.begin(), lg_names.end(), passname) != lg_names.end()) {
+      continue;
+    }
+    lg_names.push_back(passname);
+
+    b_engine.add_pass(passname.c_str(), 3, "RGB", b_view_layer.name().c_str());
+    Pass::add(PASS_LIGHTGROUP, passes, passname.c_str());
+    lightgroups.push_back(std::make_pair(b_collection, include_world));
+  }
+  RNA_END;
 
   RNA_BEGIN (&crp, b_aov, "aovs") {
     bool is_color = (get_enum(b_aov, "type") == 1);
@@ -846,6 +888,8 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine &b_engine,
                               get_boolean(cscene, "use_progressive_refine");
   if (b_r.use_save_buffers())
     params.progressive_refine = false;
+
+  params.viewport_denoising_samples = get_int(cscene, "viewport_denoising_samples");
 
   if (background) {
     if (params.progressive_refine)
