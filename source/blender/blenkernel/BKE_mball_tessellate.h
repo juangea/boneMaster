@@ -19,6 +19,11 @@
 /** \file
  * \ingroup bke
  */
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct Depsgraph;
 struct Object;
 struct Scene;
@@ -32,5 +37,9 @@ void BKE_mball_cubeTable_free(void);
 
 struct Mesh* BKE_repolygonize_dm(struct Mesh *dm, float thresh, float basesize[3], float wiresize, float rendersize,
                                  bool render, bool override_size, int defgrp_size);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif  /* __BKE_MBALL_TESSELLATE_H__ */
