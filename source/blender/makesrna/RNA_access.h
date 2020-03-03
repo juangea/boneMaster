@@ -475,6 +475,7 @@ extern StructRNA RNA_PropertyGroup;
 extern StructRNA RNA_PropertyGroupItem;
 extern StructRNA RNA_PythonConstraint;
 extern StructRNA RNA_Region;
+extern StructRNA RNA_RemeshModifier;
 extern StructRNA RNA_RenderEngine;
 extern StructRNA RNA_RenderLayer;
 extern StructRNA RNA_RenderPass;

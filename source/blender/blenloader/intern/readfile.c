@@ -5716,6 +5716,12 @@ static void direct_link_modifiers(FileData *fd, ListBase *lb, Object *ob)
         }
       }
     }
+    else if (md->type == eModifierType_Remesh) {
+      RemeshModifierData *rmd = (RemeshModifierData *)md;
+      link_list(fd, &rmd->csg_operands);
+      rmd->mesh_cached = NULL;
+      rmd->levelset_cached = NULL;
+    }
     else if (md->type == eModifierType_Bevel) {
       BevelModifierData *bmd = (BevelModifierData *)md;
       bmd->custom_profile = newdataadr(fd, bmd->custom_profile);
