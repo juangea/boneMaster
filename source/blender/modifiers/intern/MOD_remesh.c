@@ -722,8 +722,8 @@ static Object *join_mesh_and_operands(RemeshModifierData *rmd,
   fob->type = OB_MESH;
   fob->data = mesh;
   // fake evaluated mesh here, just because datatransfer doesnt accept a source mesh, sheesh
-  fob->runtime.data_orig = mesh;
-  fob->runtime.data_eval = mesh;
+  fob->runtime.data_orig = (ID *)mesh;
+  fob->runtime.data_eval = (ID *)mesh;
   fob->runtime.mesh_deform_eval = mesh;  // seems this is being retrieved by datatransfer
 
   return fob;
