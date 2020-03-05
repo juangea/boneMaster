@@ -139,13 +139,13 @@ void OpenVDBLevelSet::sharpenFeaturesPre(float edge_tolerance)
         *this, this->grid->transform(), pointList, pointList_total, operand.vert_start);
     tbb::blocked_range<size_t> range = tbb::blocked_range<size_t>(0, operand.vert_count);
     tbb::parallel_for(range, op);
-    //op(range);
+    // op(range);
 
     openvdb::tools::PrimCpyOp op2 = openvdb::tools::PrimCpyOp(
         *this, primList, primList_total, operand.vert_start, operand.face_start);
     tbb::blocked_range<size_t> range2 = tbb::blocked_range<size_t>(0, operand.face_count);
     tbb::parallel_for(range2, op2);
-    //op2(range2);
+    // op2(range2);
 
     openvdb::tools::QuadAndTriangleDataAdapter<openvdb::Vec3s, openvdb::Vec4I> mesh(pointList,
                                                                                     primList);

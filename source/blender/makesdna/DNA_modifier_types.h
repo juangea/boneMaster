@@ -1593,16 +1593,16 @@ typedef enum eRemeshModifierMode {
 } eRemeshModifierMode;
 
 typedef enum MetaballRemeshFlags {
-	MOD_REMESH_VERTICES = (1 << 0),
-	MOD_REMESH_PARTICLES = (1 << 1),
+  MOD_REMESH_VERTICES = (1 << 0),
+  MOD_REMESH_PARTICLES = (1 << 1),
 } MetaballRemeshFlags;
 
 typedef enum {
-	eRemeshFlag_Alive    = (1 << 0),
-	eRemeshFlag_Dead     = (1 << 1),
-	eRemeshFlag_Unborn   = (1 << 2),
-	eRemeshFlag_Size     = (1 << 3),
-	eRemeshFlag_Verts    = (1 << 4),
+  eRemeshFlag_Alive = (1 << 0),
+  eRemeshFlag_Dead = (1 << 1),
+  eRemeshFlag_Unborn = (1 << 2),
+  eRemeshFlag_Size = (1 << 3),
+  eRemeshFlag_Verts = (1 << 4),
 } MetaballRemeshPsysFlag;
 
 typedef enum {
@@ -1681,7 +1681,7 @@ typedef struct RemeshModifierData {
   int filter_width;
   int filter_iterations;
   float _pad3;
- 
+
   /*voxel, particle mode*/
   float part_scale_factor;
   float part_vel_factor;
@@ -1703,7 +1703,7 @@ typedef struct RemeshModifierData {
   int input;
   int pflag;
   int psys;
-  char size_defgrp_name[64];  /* MAX_VGROUP_NAME */
+  char size_defgrp_name[64]; /* MAX_VGROUP_NAME */
 
   /* octree depth */
   char depth;

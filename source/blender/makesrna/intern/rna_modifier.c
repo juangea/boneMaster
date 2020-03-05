@@ -5443,7 +5443,9 @@ static void rna_def_modifier_remesh(BlenderRNA *brna)
   prop = RNA_def_property(srna, "sharpen_features", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "flag", MOD_REMESH_SHARPEN_FEATURES);
   RNA_def_property_ui_text(
-      prop, "Sharpen Features", "Try to enhance the quality of the remeshed result to match the original better");
+      prop,
+      "Sharpen Features",
+      "Try to enhance the quality of the remeshed result to match the original better");
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
   prop = RNA_def_property(srna, "edge_tolerance", PROP_FLOAT, PROP_UNSIGNED);
@@ -5454,8 +5456,7 @@ static void rna_def_modifier_remesh(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "reproject_data", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "flag", MOD_REMESH_REPROJECT_DATA);
-  RNA_def_property_ui_text(
-      prop, "Reproject Data", "Keep the current data on the new mesh");
+  RNA_def_property_ui_text(prop, "Reproject Data", "Keep the current data on the new mesh");
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
   prop = RNA_def_property(srna, "live_remesh", PROP_BOOLEAN, PROP_NONE);

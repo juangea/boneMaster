@@ -29,11 +29,13 @@
 
 /* OpenVDB Voxel Remesher */
 void BKE_remesh_voxel_ovdb_mesh_to_level_set(struct OpenVDBLevelSet *level_set,
-                                                    Mesh *mesh,
-                                                    struct OpenVDBTransform *transform,
-                                                    bool do_convert, bool do_add,
-                                                    Object* ob_mod, Object *ob_op,
-                                                    RemeshModifierOp op);
+                                             Mesh *mesh,
+                                             struct OpenVDBTransform *transform,
+                                             bool do_convert,
+                                             bool do_add,
+                                             Object *ob_mod,
+                                             Object *ob_op,
+                                             RemeshModifierOp op);
 
 void BKE_remesh_voxel_ovdb_particles_to_level_set(struct OpenVDBLevelSet *level_set,
                                                   ParticleSystem *psys,

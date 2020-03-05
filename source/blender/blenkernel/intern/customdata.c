@@ -2680,12 +2680,12 @@ void CustomData_copy_elements(int type, void *src_data_ofs, void *dst_data_ofs, 
 }
 
 void CustomData_copy_data_layer(const CustomData *source,
-                                       CustomData *dest,
-                                       int src_i,
-                                       int dst_i,
-                                       int src_index,
-                                       int dst_index,
-                                       int count)
+                                CustomData *dest,
+                                int src_i,
+                                int dst_i,
+                                int src_index,
+                                int dst_index,
+                                int count)
 {
   const LayerTypeInfo *typeInfo;
 

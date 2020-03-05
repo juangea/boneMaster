@@ -368,7 +368,6 @@ static Mesh *repolygonize(
     mv = dm->mvert;
     mv2 = derived->mvert;
 
-
     for (i = 0; i < n; i++) {
       copy_v3_v3(mv[i].co, pos[i]);
       psize[i] = size[i];
@@ -470,7 +469,7 @@ static struct OpenVDBLevelSet *csgOperation(struct OpenVDBLevelSet *level_set,
 
   switch (type) {
     case OB_MESH:
-      //me_orig = BKE_object_get_evaluated_mesh(depsgraph, vcob->object);
+      // me_orig = BKE_object_get_evaluated_mesh(depsgraph, vcob->object);
       me_orig = BKE_object_get_evaluated_mesh(vcob->object);
       if (me_orig) {
         me = BKE_mesh_new_nomain(me_orig->totvert,

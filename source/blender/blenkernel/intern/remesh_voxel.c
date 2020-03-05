@@ -64,7 +64,7 @@ void BKE_remesh_voxel_ovdb_mesh_to_level_set(struct OpenVDBLevelSet *level_set,
                                              bool do_add,
                                              Object *ob_mod,
                                              Object *ob_op,
-                                             RemeshModifierOp op)                                       
+                                             RemeshModifierOp op)
 {
   BKE_mesh_runtime_looptri_recalc(mesh);
   const MLoopTri *looptri = BKE_mesh_runtime_looptri_ensure(mesh);

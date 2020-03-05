@@ -59,9 +59,9 @@ class ExtendedLevelSetFilter : public LevelSetFilter<GridT, MaskT, InterruptT> {
   }
 
   void gaussianI(int width = 1,
-                int iterations = 1,
-                float sigma = 1.0,
-                const MaskType *mask = nullptr)
+                 int iterations = 1,
+                 float sigma = 1.0,
+                 const MaskType *mask = nullptr)
   {
     ExtendedFilter f(this, mask);
     f.gaussian(width, iterations, sigma);
@@ -118,8 +118,7 @@ class ExtendedLevelSetFilter : public LevelSetFilter<GridT, MaskT, InterruptT> {
     void box(int width, float sigma);
 
     template<size_t Axis> struct Avg {
-      Avg(const GridT &grid, Int32 w, float s)
-          : acc(grid.tree()), width(w), sigma(s)
+      Avg(const GridT &grid, Int32 w, float s) : acc(grid.tree()), width(w), sigma(s)
       {
       }
       inline ValueType operator()(Coord xyz)
@@ -153,7 +152,7 @@ class ExtendedLevelSetFilter : public LevelSetFilter<GridT, MaskT, InterruptT> {
         }
 
         return static_cast<ValueType>(sum / error);
-        //return static_cast<ValueType>(sum);
+        // return static_cast<ValueType>(sum);
       }
       typename GridT::ConstAccessor acc;
       const Int32 width;
@@ -228,10 +227,10 @@ inline void ExtendedLevelSetFilter<GridT, MaskT, InterruptT>::ExtendedFilter::bo
   if (mMask) {
     typename AlphaMaskT::FloatType a, b;
     AlphaMaskT alpha(mParent->grid(),
-                      *mMask,
-                      mParent->minMask(),
-                      mParent->maxMask(),
-                      mParent->isMaskInverted());
+                     *mMask,
+                     mParent->minMask(),
+                     mParent->maxMask(),
+                     mParent->isMaskInverted());
     for (LeafIterT leafIter = range.begin(); leafIter; ++leafIter) {
       ValueType *buffer = leafIter.buffer(1).data();
       for (VoxelCIterT iter = leafIter->cbeginValueOn(); iter; ++iter) {

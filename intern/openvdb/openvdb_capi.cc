@@ -257,7 +257,8 @@ OpenVDBLevelSet *OpenVDBLevelSet_create(bool initGrid, float voxel_size, float h
 {
   OpenVDBLevelSet *level_set = new OpenVDBLevelSet();
   if (initGrid) {
-    openvdb::FloatGrid::Ptr grid = openvdb::createLevelSet<openvdb::FloatGrid>(voxel_size, half_width);
+    openvdb::FloatGrid::Ptr grid = openvdb::createLevelSet<openvdb::FloatGrid>(voxel_size,
+                                                                               half_width);
     level_set->set_grid(grid);
   }
   return level_set;
@@ -293,7 +294,14 @@ void OpenVDBLevelSet_mesh_to_level_set(struct OpenVDBLevelSet *level_set,
                                        bool do_add,
                                        OpenVDBLevelSet_CSGOperation op)
 {
-  level_set->mesh_to_level_set(vertices, faces, totvertices, totfaces, xform ? xform->get_transform() : nullptr, do_convert, do_add, op);
+  level_set->mesh_to_level_set(vertices,
+                               faces,
+                               totvertices,
+                               totfaces,
+                               xform ? xform->get_transform() : nullptr,
+                               do_convert,
+                               do_add,
+                               op);
 }
 
 void OpenVDBLevelSet_volume_to_mesh(struct OpenVDBLevelSet *level_set,
@@ -301,7 +309,7 @@ void OpenVDBLevelSet_volume_to_mesh(struct OpenVDBLevelSet *level_set,
                                     const double isovalue,
                                     const double adaptivity,
                                     const bool relax_disoriented_triangles,
-                                    struct OpenVDBLevelSet* mask)
+                                    struct OpenVDBLevelSet *mask)
 {
   level_set->volume_to_mesh(mesh, isovalue, adaptivity, relax_disoriented_triangles, mask);
 }
@@ -316,7 +324,8 @@ void OpenVDBLevelSet_filter(struct OpenVDBLevelSet *level_set,
                             const bool sharpen_features,
                             const float edge_tolerance)
 {
-  level_set->filter(filter_type, width, iterations, sigma, distance, bias, sharpen_features, edge_tolerance);
+  level_set->filter(
+      filter_type, width, iterations, sigma, distance, bias, sharpen_features, edge_tolerance);
 }
 
 void OpenVDBLevelSet_CSG_operation(struct OpenVDBLevelSet *out,

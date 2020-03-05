@@ -42,14 +42,14 @@ struct OpenVDBLevelSet {
  private:
   openvdb::FloatGrid::Ptr grid;
 
-  //save input data as reference geometry for sharpenfeatures
+  // save input data as reference geometry for sharpenfeatures
   std::vector<openvdb::Vec3s> points;
   std::vector<openvdb::Vec3s> out_points;
   std::vector<openvdb::Vec4I> out_quads;
   std::vector<openvdb::Vec3I> triangles;
   std::vector<uint32_t> vert_tri;
 
-  //for sharpen features
+  // for sharpen features
   bool sharpen_features;
   float edge_tolerance;
   BoolTreeType::Ptr maskTree;
@@ -57,7 +57,7 @@ struct OpenVDBLevelSet {
   openvdb::FloatGrid::Ptr refGrid;
 
   void sharpenFeaturesPre(float edge_tolerance);
-     
+
  public:
   OpenVDBLevelSet();
   ~OpenVDBLevelSet();
@@ -78,7 +78,7 @@ struct OpenVDBLevelSet {
   void set_triangles(const std::vector<openvdb::Vec3I> &triangles);
   void set_vert_tri(const std::vector<uint32_t> &vert_tri);
   openvdb::Vec3s face_normal(uint32_t faceOffset);
-  
+
   void mesh_to_level_set(const float *vertices,
                          const unsigned int *faces,
                          const unsigned int totvertices,

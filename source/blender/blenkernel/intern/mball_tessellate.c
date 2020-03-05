@@ -1670,99 +1670,107 @@ void BKE_dm_from_metaball(DispList *dl, Mesh *dm, Mesh *odm, int *orig_index)
       mpoly->loopstart = (int)(mloop - allloop);
       // mpoly->flag = ME_SMOOTH;
 
+      mpoly++;
+      mloop += count;
+      dm->totloop += count;
+      index += 4;
+    }
 
-			mpoly++;
-			mloop += count;
-			dm->totloop += count;
-			index += 4;
-		}
-
-		BKE_mesh_calc_edges(dm, true, true);
-		BKE_mesh_calc_normals(dm);
-		BKE_mesh_tessface_ensure(dm);
-		BKE_mesh_runtime_looptri_ensure(dm);
-		dm->runtime.cd_dirty_vert |= CD_MASK_NORMAL;
-	}
+    BKE_mesh_calc_edges(dm, true, true);
+    BKE_mesh_calc_normals(dm);
+    BKE_mesh_tessface_ensure(dm);
+    BKE_mesh_runtime_looptri_ensure(dm);
+    dm->runtime.cd_dirty_vert |= CD_MASK_NORMAL;
+  }
 }
 
-
-Mesh* BKE_repolygonize_dm(Mesh *dm, float thresh, float basesize[3], float wiresize, float rendersize,
-                                 bool render, bool override_size, int defgrp_size)
+Mesh *BKE_repolygonize_dm(Mesh *dm,
+                          float thresh,
+                          float basesize[3],
+                          float wiresize,
+                          float rendersize,
+                          bool render,
+                          bool override_size,
+                          int defgrp_size)
 {
-	Mesh *result = NULL;
-	DispList *dl;
-	unsigned int a;
-	PROCESS process = {0};
-	process.thresh = thresh;
+  Mesh *result = NULL;
+  DispList *dl;
+  unsigned int a;
+  PROCESS process = {0};
+  process.thresh = thresh;
 
-	if      (process.thresh < 0.001f) process.converge_res = 16;
-	else if (process.thresh < 0.01f)  process.converge_res = 8;
-	else if (process.thresh < 0.1f)   process.converge_res = 4;
-	else                              process.converge_res = 2;
+  if (process.thresh < 0.001f)
+    process.converge_res = 16;
+  else if (process.thresh < 0.01f)
+    process.converge_res = 8;
+  else if (process.thresh < 0.1f)
+    process.converge_res = 4;
+  else
+    process.converge_res = 2;
 
-	//if ((!render) && (mb->flag == MB_UPDATE_NEVER)) return;
-	//if ((G.moving & (G_TRANSFORM_OBJ | G_TRANSFORM_EDIT)) && mb->flag == MB_UPDATE_FAST) return;
+  // if ((!render) && (mb->flag == MB_UPDATE_NEVER)) return;
+  // if ((G.moving & (G_TRANSFORM_OBJ | G_TRANSFORM_EDIT)) && mb->flag == MB_UPDATE_FAST) return;
 
-	if (render) {
-		process.size = rendersize;
-	}
-	else {
-		process.size = wiresize;
-		/*if ((G.moving & (G_TRANSFORM_OBJ | G_TRANSFORM_EDIT)) && mb->flag == MB_UPDATE_HALFRES) {
-			process.size *= 2.0f;
-		}*/
-	}
+  if (render) {
+    process.size = rendersize;
+  }
+  else {
+    process.size = wiresize;
+    /*if ((G.moving & (G_TRANSFORM_OBJ | G_TRANSFORM_EDIT)) && mb->flag == MB_UPDATE_HALFRES) {
+      process.size *= 2.0f;
+    }*/
+  }
 
-	process.delta = process.size * 0.001f;
+  process.delta = process.size * 0.001f;
 
-	process.pgn_elements = BLI_memarena_new(BLI_MEMARENA_STD_BUFSIZE, "Metaball memarena");
+  process.pgn_elements = BLI_memarena_new(BLI_MEMARENA_STD_BUFSIZE, "Metaball memarena");
 
-	/* initialize from DM */
-	init_meta_dm(&process, dm, 2.0f, 2.0f, basesize, override_size, defgrp_size);
+  /* initialize from DM */
+  init_meta_dm(&process, dm, 2.0f, 2.0f, basesize, override_size, defgrp_size);
 
-	if (process.totelem > 0) {
-		build_bvh_spatial(&process, &process.metaball_bvh, 0, process.totelem, &process.allbb);
+  if (process.totelem > 0) {
+    build_bvh_spatial(&process, &process.metaball_bvh, 0, process.totelem, &process.allbb);
 
-		process.orig_index = MEM_callocN(process.totelem * sizeof(int), "process origindex");
+    process.orig_index = MEM_callocN(process.totelem * sizeof(int), "process origindex");
 
-		/* don't polygonize metaballs with too high resolution (base mball to small)
-		 * note: Eps was 0.0001f but this was giving problems for blood animation for durian, using 0.00001f */
-		if (basesize[0] > 0.00001f * (process.allbb.max[0] - process.allbb.min[0]) ||
-		    basesize[1] > 0.00001f * (process.allbb.max[1] - process.allbb.min[1]) ||
-		    basesize[2] > 0.00001f * (process.allbb.max[2] - process.allbb.min[2]))
-		{
-			polygonize(&process);
+    /* don't polygonize metaballs with too high resolution (base mball to small)
+     * note: Eps was 0.0001f but this was giving problems for blood animation for durian, using
+     * 0.00001f */
+    if (basesize[0] > 0.00001f * (process.allbb.max[0] - process.allbb.min[0]) ||
+        basesize[1] > 0.00001f * (process.allbb.max[1] - process.allbb.min[1]) ||
+        basesize[2] > 0.00001f * (process.allbb.max[2] - process.allbb.min[2])) {
+      polygonize(&process);
 
-			/* add resulting surface to displist */
-			if (process.curindex) {
-				dl = MEM_callocN(sizeof(DispList), "mballdisp");
-				dl->type = DL_INDEX4;
-				dl->nr = (int)process.curvertex;
-				dl->parts = (int)process.curindex;
+      /* add resulting surface to displist */
+      if (process.curindex) {
+        dl = MEM_callocN(sizeof(DispList), "mballdisp");
+        dl->type = DL_INDEX4;
+        dl->nr = (int)process.curvertex;
+        dl->parts = (int)process.curindex;
 
-				dl->index = (int *)process.indices;
+        dl->index = (int *)process.indices;
 
-				for (a = 0; a < process.curvertex; a++) {
-					normalize_v3(process.no[a]);
-				}
+        for (a = 0; a < process.curvertex; a++) {
+          normalize_v3(process.no[a]);
+        }
 
-				dl->verts = (float *)process.co;
-				dl->nors = (float *)process.no;
+        dl->verts = (float *)process.co;
+        dl->nors = (float *)process.no;
 
-				result = BKE_mesh_new_nomain(dl->nr, 0, 0, dl->parts * 4, dl->parts);
-				BKE_dm_from_metaball(dl, result, dm, process.orig_index);
-				BKE_displist_elem_free(dl);
-			}
-		}
-	}
+        result = BKE_mesh_new_nomain(dl->nr, 0, 0, dl->parts * 4, dl->parts);
+        BKE_dm_from_metaball(dl, result, dm, process.orig_index);
+        BKE_displist_elem_free(dl);
+      }
+    }
+  }
 
-	if (!result)
-		result =  BKE_mesh_new_nomain(0, 0, 0, 0, 0); //return an empty mesh
+  if (!result)
+    result = BKE_mesh_new_nomain(0, 0, 0, 0, 0);  // return an empty mesh
 
-	freepolygonize(&process);
+  freepolygonize(&process);
   if (process.orig_index) {
     MEM_freeN(process.orig_index);
   }
 
-	return result;
+  return result;
 }
