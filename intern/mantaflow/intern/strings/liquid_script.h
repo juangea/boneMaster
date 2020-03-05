@@ -114,6 +114,10 @@ if using_speedvectors_s$ID$:\n\
 pindex_sm$ID$  = sm$ID$.create(ParticleIndexSystem)\n\
 gpi_sm$ID$     = sm$ID$.create(IntGrid)\n\
 \n\
+# Set some initial values\n\
+phiParts_sm$ID$.setConst(9999)\n\
+phi_sm$ID$.setConst(9999)\n\
+\n\
 # Keep track of important objects in dict to load them later on\n\
 liquid_mesh_dict_s$ID$ = dict(lMesh=mesh_sm$ID$)\n\
 \n\
@@ -137,6 +141,12 @@ neighborRatio_sp$ID$ = sp$ID$.create(RealGrid)\n\
 trappedAir_sp$ID$    = sp$ID$.create(RealGrid)\n\
 waveCrest_sp$ID$     = sp$ID$.create(RealGrid)\n\
 kineticEnergy_sp$ID$ = sp$ID$.create(RealGrid)\n\
+\n\
+# Set some initial values\n\
+phi_sp$ID$.setConst(9999)\n\
+phiIn_sp$ID$.setConst(9999)\n\
+phiObs_sp$ID$.setConst(9999)\n\
+phiObsIn_sp$ID$.setConst(9999)\n\
 \n\
 # Keep track of important objects in dict to load them later on\n\
 liquid_particles_dict_final_s$ID$  = dict(ppSnd=ppSnd_sp$ID$, pVelSnd=pVelSnd_pp$ID$, pLifeSnd=pLifeSnd_pp$ID$)\n\
@@ -164,20 +174,22 @@ def liquid_adaptive_step_$ID$(framenr):\n\
     \n\
     if using_obstacle_s$ID$:\n\
         mantaMsg('Initializing obstacle levelset')\n\
+        phiObsIn_s$ID$.join(phiObsSIn_s$ID$) # Join static obstacle map\n\
         phiObsIn_s$ID$.fillHoles(maxDepth=int(res_s$ID$), boundaryWidth=2)\n\
-        extrapolateLsSimple(phi=phiObsIn_s$ID$, distance=int(res_s$ID$/2), inside=True)\n\
+        extrapolateLsSimple(phi=phiObsIn_s$ID$, distance=6, inside=True)\n\
         extrapolateLsSimple(phi=phiObsIn_s$ID$, distance=3, inside=False)\n\
         phiObs_s$ID$.join(phiObsIn_s$ID$)\n\
         \n\
         # Using boundaryWidth=2 to not search beginning from walls (just a performance optimization)\n\
         # Additional sanity check: fill holes in phiObs which can result after joining with phiObsIn\n\
         phiObs_s$ID$.fillHoles(maxDepth=int(res_s$ID$), boundaryWidth=2)\n\
-        extrapolateLsSimple(phi=phiObs_s$ID$, distance=int(res_s$ID$/2), inside=True)\n\
-        extrapolateLsSimple(phi=phiObs_s$ID$, distance=3, inside=False)\n\
+        extrapolateLsSimple(phi=phiObs_s$ID$, distance=6, inside=True)\n\
+        extrapolateLsSimple(phi=phiObs_s$ID$, distance=3)\n\
     \n\
     mantaMsg('Initializing fluid levelset')\n\
-    extrapolateLsSimple(phi=phiIn_s$ID$, distance=int(res_s$ID$/2), inside=True)\n\
-    extrapolateLsSimple(phi=phiIn_s$ID$, distance=int(res_s$ID$/2), inside=False)\n\
+    phiIn_s$ID$.join(phiSIn_s$ID$) # Join static flow map\n\
+    extrapolateLsSimple(phi=phiIn_s$ID$, distance=6, inside=True)\n\
+    extrapolateLsSimple(phi=phiIn_s$ID$, distance=3)\n\
     phi_s$ID$.join(phiIn_s$ID$)\n\
     \n\
     if using_obstacle_s$ID$:\n\
@@ -212,7 +224,7 @@ def liquid_step_$ID$():\n\
     mantaMsg('Liquid step')\n\
     \n\
     mantaMsg('Advecting particles')\n\
-    pp_s$ID$.advectInGrid(flags=flags_s$ID$, vel=vel_s$ID$, integrationMode=IntRK4, deleteInObstacle=False, stopInObstacle=False)\n\
+    pp_s$ID$.advectInGrid(flags=flags_s$ID$, vel=vel_s$ID$, integrationMode=IntRK4, deleteInObstacle=deleteInObstacle_s$ID$, stopInObstacle=False)\n\
     \n\
     mantaMsg('Pushing particles out of obstacles')\n\
     pushOutofObs(parts=pp_s$ID$, flags=flags_s$ID$, phiObs=phiObs_s$ID$)\n\
