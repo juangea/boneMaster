@@ -927,19 +927,6 @@ static void transfer_mblur_data(RemeshModifierData *rmd,
                                     psys->part->size * rmd->part_scale_factor * 2,
                                     extract_particle_data_cb,
                                     &xp);
-
-      /*for (int j = 0; j < r; j++) {
-        int k = nearest[j].index;
-        velX[k] = vel[i][0];
-        velY[k] = vel[i][1];
-        velZ[k] = vel[i][2];
-        psize[k] = size[i];
-
-        quatX[k] = rot[i][0];
-        quatY[k] = rot[i][1];
-        quatZ[k] = rot[i][2];
-        quatW[k] = rot[i][3];
-      }*/
     }
 
     BLI_kdtree_3d_free(kdtree);
@@ -1181,18 +1168,6 @@ static Mesh *applyModifier(ModifierData *UNUSED(md),
 
 #endif /* !WITH_MOD_REMESH */
 
-static void requiredDataMask(Object *UNUSED(ob),
-                             ModifierData *md,
-                             CustomData_MeshMasks *r_cddata_masks)
-{
-  RemeshModifierData *rmd = (RemeshModifierData *)md;
-
-  /* ask for vertexcolors if we need them */
-  if (rmd->mode == MOD_REMESH_VOXEL) {
-    r_cddata_masks->lmask |= CD_MASK_MLOOPCOL;
-  }
-}
-
 static void foreachObjectLink(ModifierData *md, Object *ob, ObjectWalkFunc walk, void *userData)
 {
   RemeshModifierData *rmd = (RemeshModifierData *)md;
@@ -1298,7 +1273,7 @@ ModifierTypeInfo modifierType_Remesh = {
     /* applyModifier */ applyModifier,
 
     /* initData */ initData,
-    /* requiredDataMask */ requiredDataMask,
+    /* requiredDataMask */ NULL,
     /* freeData */ freeData,
     /* isDisabled */ NULL,
     /* updateDepsgraph */ updateDepsgraph,

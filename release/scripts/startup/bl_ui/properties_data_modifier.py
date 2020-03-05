@@ -29,15 +29,6 @@ class ModifierButtonsPanel:
     bl_options = {'HIDE_HEADER'}
 
 
-class DATA_UL_level_set_filters(UIList):
-    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
-        if self.layout_type in {'DEFAULT', 'COMPACT'}:
-            layout.prop(item, "name", text="", emboss=False, icon_value=icon)
-            layout.prop(item, "mute", text="", emboss=False)
-        elif self.layout_type in {'GRID'}:
-            layout.alignment = 'CENTER'
-            layout.label(text="", icon_value=icon)
-
 
 class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
     bl_label = "Modifiers"
@@ -676,7 +667,6 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
 
     def MULTIRES(self, layout, ob, md):
         layout.row().prop(md, "subdivision_type", expand=True)
-        layout.row().prop(md, "use_opensubdiv")
 
         split = layout.split()
         col = split.column()
@@ -1069,8 +1059,6 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
             scene.cycles.feature_set == 'EXPERIMENTAL'
         )
         if show_adaptive_options:
-            col.label(text="View:")
-            col.prop(md, "levels", text="Levels")
             col.label(text="Render:")
             col.prop(ob.cycles, "use_adaptive_subdivision", text="Adaptive")
             if ob.cycles.use_adaptive_subdivision:
@@ -1084,10 +1072,11 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
             col.prop(md, "levels", text="Levels")
         else:
             col.label(text="Subdivisions:")
-            col.prop(md, "levels", text="View")
-            col.prop(md, "render_levels", text="Render")
-            if hasattr(md, "quality"):
-                col.prop(md, "quality")
+            sub = col.column(align=True)
+            sub.prop(md, "render_levels", text="Render")
+            sub.prop(md, "levels", text="Viewport")
+
+            col.prop(md, "quality")
 
         col = split.column()
         col.label(text="Options:")
@@ -2551,7 +2540,6 @@ class DATA_PT_gpencil_modifiers(ModifierButtonsPanel, Panel):
 
 
 classes = (
-    DATA_UL_level_set_filters,
     DATA_PT_modifiers,
     DATA_PT_gpencil_modifiers,
 )

@@ -223,61 +223,6 @@ void OpenVDBLevelSet::volume_to_mesh(OpenVDBVolumeToMeshData *mesh,
     out_points = this->get_out_points();
   }
 
-  // mesh topology improvement attempt
-  //convert to bmesh directly (make a new one)
-  //do the processing
-  //back to the vert / face representation
-  //find and remove those verts on this representation ?!
-  //3-pole, 5-pole... in how many faces is this vert index ?
-  //special topology constraints "around" a face 3 5 3 5
-  if (relax_disoriented_triangles && 0) {
-
-    std::vector<std::vector<openvdb::Index32>> quad_map;
-    std::vector<openvdb::Index32> offset_map(out_points_tmp.size(), 0);
-    std::vector<openvdb::Index32> quad_offset_map(out_quads_tmp.size(), 0);
-
-    //out_points.resize(out_points_tmp.size());
-    //out_quads.resize(out_quads_tmp.size());
-    quad_map.resize(out_quads.size() * 4);
-    int removedVerts = 0;
-    int removedQuads = 0;
-
-    openvdb::tools::BuildQuadMapOp bqop = openvdb::tools::BuildQuadMapOp(*this, quad_map);
-    tbb::blocked_range<size_t> range = tbb::blocked_range<size_t>(0, out_quads.size());
-    bqop(range);
-
-    openvdb::tools::FixPolesOp fpop = openvdb::tools::FixPolesOp(*this,
-                                                                out_points, quad_map, out_quads,
-                                                                offset_map, quad_offset_map,
-                                                                removedVerts,
-                                                                removedQuads);
-
-    tbb::blocked_range<size_t> range2 = tbb::blocked_range<size_t>(0, out_points.size());
-    fpop(range2);
-
-    std::vector<openvdb::Vec3s> finalVerts;
-    std::vector<openvdb::Vec4I> finalQuads;
-
-    finalVerts.resize(out_points.size() - removedVerts + 1);
-    finalQuads.resize(out_quads.size() - removedQuads + 1);
-
-    openvdb::tools::SmoothOp cqop = openvdb::tools::SmoothOp(*this,
-                                                            out_points,
-                                                            out_quads,
-                                                            offset_map,
-                                                            quad_map,
-                                                            quad_offset_map,
-                                                            finalVerts,
-                                                            finalQuads);
-    tbb::blocked_range<size_t> range3 = tbb::blocked_range<size_t>(0, out_quads.size());
-    cqop(range3);
-
-    this->set_out_points(finalVerts);
-    this->set_out_quads(finalQuads);
-    out_points = finalVerts;
-    out_quads = finalQuads;
-  }
-
   mesh->vertices = (float *)MEM_malloc_arrayN(
       out_points.size(), 3 * sizeof(float), "openvdb remesher out verts");
   mesh->quads = (unsigned int *)MEM_malloc_arrayN(
