@@ -1220,10 +1220,12 @@ static void init_meta(Depsgraph *depsgraph, PROCESS *process, Scene *scene, Obje
       if (bob == ob && (base->flag_legacy & OB_FROMDUPLI) == 0) {
         mb = ob->data;
 
-        if (mb->editelems)
+        if (mb->editelems) {
           ml = mb->editelems->first;
-        else
+        }
+        else {
           ml = mb->elems.first;
+        }
       }
       else {
         char name[MAX_ID_NAME];
@@ -1233,10 +1235,12 @@ static void init_meta(Depsgraph *depsgraph, PROCESS *process, Scene *scene, Obje
         if (STREQ(obname, name)) {
           mb = bob->data;
 
-          if (mb->editelems)
+          if (mb->editelems) {
             ml = mb->editelems->first;
-          else
+          }
+          else {
             ml = mb->elems.first;
+          }
         }
       }
 
@@ -1279,14 +1283,17 @@ static void init_meta(Depsgraph *depsgraph, PROCESS *process, Scene *scene, Obje
 
             /* too big stiffness seems only ugly due to linear interpolation
              * no need to have possibility for too big stiffness */
-            if (ml->s > 10.0f)
+            if (ml->s > 10.0f) {
               new_ml->s = 10.0f;
-            else
+            }
+            else {
               new_ml->s = ml->s;
+            }
 
             /* if metaball is negative, set stiffness negative */
-            if (new_ml->flag & MB_NEGATIVE)
+            if (new_ml->flag & MB_NEGATIVE) {
               new_ml->s = -new_ml->s;
+            }
 
             /* Translation of MetaElem */
             unit_m4(pos);
@@ -1297,8 +1304,14 @@ static void init_meta(Depsgraph *depsgraph, PROCESS *process, Scene *scene, Obje
             /* Rotation of MetaElem is stored in quat */
             quat_to_mat4(rot, ml->quat);
 
-            /* basis object space -> world -> ml object space -> position -> rotation -> ml local
-             * space */
+            /* Matrix multiply is as follows:
+             *   basis object space ->
+             *   world ->
+             *   ml object space ->
+             *   position ->
+             *   rotation ->
+             *   ml local space
+             */
             mul_m4_series((float(*)[4])new_ml->mat, obinv, bob->obmat, pos, rot);
             /* ml local space -> basis object space */
             invert_m4_m4((float(*)[4])new_ml->imat, (float(*)[4])new_ml->mat);
@@ -1331,8 +1344,8 @@ static void init_meta(Depsgraph *depsgraph, PROCESS *process, Scene *scene, Obje
             }
 
             /* untransformed Bounding Box of MetaElem */
-            /* TODO, its possible the elem type has been changed and the exp* values can use a
-             * fallback */
+            /* TODO, its possible the elem type has been changed and the exp*
+             * values can use a fallback. */
             copy_v3_fl3(new_ml->bb->vec[0], -expx, -expy, -expz); /* 0 */
             copy_v3_fl3(new_ml->bb->vec[1], +expx, -expy, -expz); /* 1 */
             copy_v3_fl3(new_ml->bb->vec[2], +expx, +expy, -expz); /* 2 */
@@ -1343,8 +1356,9 @@ static void init_meta(Depsgraph *depsgraph, PROCESS *process, Scene *scene, Obje
             copy_v3_fl3(new_ml->bb->vec[7], -expx, +expy, +expz); /* 7 */
 
             /* transformation of Metalem bb */
-            for (i = 0; i < 8; i++)
+            for (i = 0; i < 8; i++) {
               mul_m4_v3((float(*)[4])new_ml->mat, new_ml->bb->vec[i]);
+            }
 
             /* find max and min of transformed bb */
             INIT_MINMAX(tempmin, tempmax);
@@ -1373,8 +1387,9 @@ static void init_meta(Depsgraph *depsgraph, PROCESS *process, Scene *scene, Obje
   if (process->totelem > 0) {
     copy_v3_v3(process->allbb.min, process->mainb[0]->bb->vec[0]);
     copy_v3_v3(process->allbb.max, process->mainb[0]->bb->vec[6]);
-    for (i = 1; i < process->totelem; i++)
+    for (i = 1; i < process->totelem; i++) {
       make_box_union(process->mainb[i]->bb, &process->allbb, &process->allbb);
+    }
   }
 }
 
@@ -1390,14 +1405,18 @@ void BKE_mball_polygonize(Depsgraph *depsgraph, Scene *scene, Object *ob, ListBa
 
   process.thresh = mb->thresh;
 
-  if (process.thresh < 0.001f)
+  if (process.thresh < 0.001f) {
     process.converge_res = 16;
-  else if (process.thresh < 0.01f)
+  }
+  else if (process.thresh < 0.01f) {
     process.converge_res = 8;
-  else if (process.thresh < 0.1f)
+  }
+  else if (process.thresh < 0.1f) {
     process.converge_res = 4;
-  else
+  }
+  else {
     process.converge_res = 2;
+  }
 
   if (!is_render && (mb->flag == MB_UPDATE_NEVER)) {
     return;
@@ -1426,9 +1445,9 @@ void BKE_mball_polygonize(Depsgraph *depsgraph, Scene *scene, Object *ob, ListBa
   if (process.totelem > 0) {
     build_bvh_spatial(&process, &process.metaball_bvh, 0, process.totelem, &process.allbb);
 
-    /* don't polygonize metaballs with too high resolution (base mball to small)
-     * note: Eps was 0.0001f but this was giving problems for blood animation for durian, using
-     * 0.00001f */
+    /* Don't polygonize metaballs with too high resolution (base mball to small)
+     * note: Eps was 0.0001f but this was giving problems for blood animation for durian,
+     * using 0.00001f. */
     if (ob->scale[0] > 0.00001f * (process.allbb.max[0] - process.allbb.min[0]) ||
         ob->scale[1] > 0.00001f * (process.allbb.max[1] - process.allbb.min[1]) ||
         ob->scale[2] > 0.00001f * (process.allbb.max[2] - process.allbb.min[2])) {

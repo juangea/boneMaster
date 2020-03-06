@@ -1081,27 +1081,6 @@ void BlenderSync::sync_mesh_motion(BL::Depsgraph b_depsgraph,
     b_mesh = object_to_mesh(b_data, b_ob, b_depsgraph, false, Mesh::SUBDIVISION_NONE);
   }
 
-  if (!b_mesh) {
-    /* if we have no motion blur on this frame, but on other frames, copy */
-    if (numverts) {
-      /* triangles */
-      Attribute *attr_mP = mesh->attributes.find(ATTR_STD_MOTION_VERTEX_POSITION);
-
-      if (attr_mP) {
-        Attribute *attr_mN = mesh->attributes.find(ATTR_STD_MOTION_VERTEX_NORMAL);
-        Attribute *attr_N = mesh->attributes.find(ATTR_STD_VERTEX_NORMAL);
-        float3 *P = &mesh->verts[0];
-        float3 *N = (attr_N) ? attr_N->data_float3() : NULL;
-
-        memcpy(attr_mP->data_float3() + motion_step * numverts, P, sizeof(float3) * numverts);
-        if (attr_mN)
-          memcpy(attr_mN->data_float3() + motion_step * numverts, N, sizeof(float3) * numverts);
-      }
-    }
-
-    return;
-  }
-
   /* TODO(sergey): Perform preliminary check for number of vertices. */
   if (b_mesh) {
     /* Export deformed coordinates. */

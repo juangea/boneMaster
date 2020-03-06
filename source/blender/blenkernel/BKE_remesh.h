@@ -54,8 +54,4 @@ Mesh *BKE_remesh_voxel_ovdb_volume_to_mesh_nomain(struct OpenVDBLevelSet *level_
                                                   bool relax_disoriented_triangles,
                                                   struct OpenVDBLevelSet *mask);
 
-/* MLoopCol remapping based Reprojection for remesh modifier */
-MLoopCol *BKE_remesh_remap_loop_vertex_color_layer(Mesh *mesh);
-void BKE_remesh_voxel_reproject_remapped_vertex_paint(Mesh *target, Mesh *source, MLoopCol *remap);
-
 #endif /* __BKE_REMESH_H__ */

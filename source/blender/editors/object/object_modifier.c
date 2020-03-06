@@ -2665,6 +2665,7 @@ static int remesh_csg_remove_exec(bContext *C, wmOperator *op)
   CSGVolume_Object *vcob = (CSGVolume_Object *)BLI_findlink(&rmd->csg_operands, index);
   if (vcob) {
     BLI_remlink(&rmd->csg_operands, vcob);
+    MEM_freeN(vcob);
   }
 
   if (remesh_update_check(C, op)) {
