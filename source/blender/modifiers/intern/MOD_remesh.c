@@ -288,7 +288,7 @@ static Mesh *repolygonize(
   int defgrp_size = -1;
 
   if (rmd->size_defgrp_name[0]) {
-    defgrp_size = defgroup_name_index(ob, rmd->size_defgrp_name);
+    defgrp_size = BKE_object_defgroup_name_index(ob, rmd->size_defgrp_name);
     dvert = CustomData_get_layer(&derived->vdata, CD_MDEFORMVERT);
   }
 
@@ -375,7 +375,7 @@ static Mesh *repolygonize(
       orig_index[i] = index[i];
 
       if (dvert_new && dvert && defgrp_size > -1) {
-        defvert_add_index_notest(dvert_new + i, defgrp_size, 1.0f);
+        BKE_defvert_add_index_notest(dvert_new + i, defgrp_size, 1.0f);
       }
     }
 
@@ -391,7 +391,7 @@ static Mesh *repolygonize(
           w = dw[defgrp_size].weight;
         }
 
-        defvert_add_index_notest(dvert_new + i, defgrp_size, w);
+        BKE_defvert_add_index_notest(dvert_new + i, defgrp_size, w);
       }
     }
 
