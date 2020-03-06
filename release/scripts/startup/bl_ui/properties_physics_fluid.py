@@ -262,12 +262,16 @@ class PHYSICS_PT_settings(PhysicButtonsPanel, Panel):
             row = layout.row()
             row.prop(effector_settings, "effector_type")
 
-            flow = layout.grid_flow(row_major=True, columns=0, even_columns=True, even_rows=False, align=False)
+            grid = layout.grid_flow(row_major=True, columns=0, even_columns=True, even_rows=False, align=False)
 
-            col = flow.column()
-
-            col.prop(effector_settings, "use_plane_init", text="Is Planar")
+            col = grid.column()
+            col.prop(effector_settings, "subframes", text="Sampling Substeps")
             col.prop(effector_settings, "surface_distance", text="Surface Thickness")
+
+            col = grid.column()
+
+            col.prop(effector_settings, "use_effector", text="Use Effector")
+            col.prop(effector_settings, "use_plane_init", text="Is Planar")
             col.prop(effector_settings, "delete_in_obstacle", text="Delete In Obstacle")
 
             if effector_settings.effector_type == 'GUIDE':
@@ -956,6 +960,14 @@ class PHYSICS_PT_diffusion(PhysicButtonsPanel, Panel):
             return False
 
         return (context.engine in cls.COMPAT_ENGINES)
+
+    def draw_header(self, context):
+        md = context.fluid.domain_settings
+        domain = context.fluid.domain_settings
+        is_baking_any = domain.is_cache_baking_any
+        has_baked_any = domain.has_cache_baked_any
+        self.layout.enabled = not is_baking_any and not has_baked_any
+        self.layout.prop(md, "use_diffusion", text="")
 
     def draw_header_preset(self, _context):
         FLUID_PT_presets.draw_panel_header(self.layout)

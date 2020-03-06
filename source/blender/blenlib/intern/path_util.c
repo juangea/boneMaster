@@ -270,15 +270,6 @@ void BLI_cleanup_dir(const char *relabase, char *dir)
 }
 
 /**
- * Cleanup filepath ensuring no trailing slash.
- */
-void BLI_cleanup_file(const char *relabase, char *path)
-{
-  BLI_cleanup_path(relabase, path);
-  BLI_del_slash(path);
-}
-
-/**
  * Make given name safe to be used in paths.
  *
  * \return true if \a fname was changed, false otherwise.
@@ -717,7 +708,7 @@ bool BLI_parent_dir(char *path)
   char tmp[FILE_MAX + 4];
 
   BLI_join_dirfile(tmp, sizeof(tmp), path, parent_dir);
-  BLI_cleanup_dir(NULL, tmp); /* does all the work of normalizing the path for us */
+  BLI_cleanup_path(NULL, tmp); /* does all the work of normalizing the path for us */
 
   if (!BLI_path_extension_check(tmp, parent_dir)) {
     strcpy(path, tmp); /* We assume pardir is always shorter... */

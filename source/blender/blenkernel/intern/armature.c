@@ -1533,7 +1533,7 @@ static void armature_vert_task(void *__restrict userdata,
   }
 
   if (armature_def_nr != -1 && dvert) {
-    armature_weight = defvert_find_weight(dvert, armature_def_nr);
+    armature_weight = BKE_defvert_find_weight(dvert, armature_def_nr);
 
     if (data->invert_vgroup) {
       armature_weight = 1.0f - armature_weight;
@@ -1681,7 +1681,7 @@ void armature_deform_verts(Object *armOb,
   }
 
   /* get the def_nr for the overall armature vertex group if present */
-  armature_def_nr = defgroup_name_index(target, defgrp_name);
+  armature_def_nr = BKE_object_defgroup_name_index(target, defgrp_name);
 
   if (ELEM(target->type, OB_MESH, OB_LATTICE, OB_GPENCIL)) {
     defbase_tot = BLI_listbase_count(&target->defbase);
@@ -2442,8 +2442,10 @@ void vec_roll_to_mat3(const float vec[3], const float roll, float mat[3][3])
   vec_roll_to_mat3_normalized(nor, roll, mat);
 }
 
-/* recursive part, calculates restposition of entire tree of children */
-/* used by exiting editmode too */
+/**
+ * Recursive part, calculates rest-position of entire tree of children.
+ * \note Used when exiting edit-mode too.
+ */
 void BKE_armature_where_is_bone(Bone *bone, const Bone *bone_parent, const bool use_recursion)
 {
   float vec[3];
@@ -2914,7 +2916,7 @@ void BKE_pose_where_is(struct Depsgraph *depsgraph, Scene *scene, Object *ob)
 
   ctime = BKE_scene_frame_get(scene); /* not accurate... */
 
-  /* In editmode or restposition we read the data from the bones */
+  /* In edit-mode or rest-position we read the data from the bones. */
   if (arm->edbo || (arm->flag & ARM_RESTPOS)) {
     for (pchan = ob->pose->chanbase.first; pchan; pchan = pchan->next) {
       bone = pchan->bone;
