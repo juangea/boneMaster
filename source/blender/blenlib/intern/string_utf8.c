@@ -23,12 +23,12 @@
  * \ingroup bli
  */
 
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <wchar.h>
 #include <wctype.h>
 #include <wcwidth.h>
-#include <stdio.h>
-#include <stdlib.h>
 
 #include "BLI_utildefines.h"
 
@@ -286,22 +286,6 @@ size_t BLI_strncpy_utf8_rlen(char *__restrict dst, const char *__restrict src, s
   BLI_STR_UTF8_CPY(dst, src, maxncpy);
 
   return (size_t)(dst - r_dst);
-}
-
-char *BLI_strncat_utf8(char *__restrict dst, const char *__restrict src, size_t maxncpy)
-{
-  while (*dst && maxncpy > 0) {
-    dst++;
-    maxncpy--;
-  }
-
-#ifdef DEBUG_STRSIZE
-  memset(dst, 0xff, sizeof(*dst) * maxncpy);
-#endif
-
-  BLI_STR_UTF8_CPY(dst, src, maxncpy);
-
-  return dst;
 }
 
 #undef BLI_STR_UTF8_CPY

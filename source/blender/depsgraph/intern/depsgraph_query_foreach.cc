@@ -23,14 +23,11 @@
  * Implementation of Querying and Filtering API's
  */
 
-// TODO(sergey): Use some sort of wrapper.
-#include <deque>
-
 #include "MEM_guardedalloc.h"
 
 extern "C" {
-#include "BLI_utildefines.h"
 #include "BLI_ghash.h"
+#include "BLI_utildefines.h"
 } /* extern "C" */
 
 #include "DNA_object_types.h"
@@ -51,7 +48,7 @@ extern "C" {
 namespace DEG {
 namespace {
 
-typedef std::deque<OperationNode *> TraversalQueue;
+typedef deque<OperationNode *> TraversalQueue;
 enum {
   DEG_NODE_VISITED = (1 << 0),
 };

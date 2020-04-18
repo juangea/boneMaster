@@ -92,7 +92,7 @@ ccl_device_forceinline void kernel_branched_path_volume(KernelGlobals *kg,
   Ray volume_ray = *ray;
   volume_ray.t = (hit) ? isect->t : FLT_MAX;
 
-  bool heterogeneous = volume_stack_is_heterogeneous(kg, state->volume_stack);
+  float step_size = volume_stack_step_size(kg, state->volume_stack);
 
 #      ifdef __VOLUME_DECOUPLED__
   /* decoupled ray marching only supported on CPU */
@@ -101,7 +101,7 @@ ccl_device_forceinline void kernel_branched_path_volume(KernelGlobals *kg,
     VolumeSegment volume_segment;
 
     shader_setup_from_volume(kg, sd, &volume_ray);
-    kernel_volume_decoupled_record(kg, state, &volume_ray, sd, &volume_segment, heterogeneous);
+    kernel_volume_decoupled_record(kg, state, &volume_ray, sd, &volume_segment, step_size);
 
     /* direct light sampling */
     if (volume_segment.closure_flag & SD_SCATTER) {
@@ -174,7 +174,7 @@ ccl_device_forceinline void kernel_branched_path_volume(KernelGlobals *kg,
       path_state_branch(&ps, j, num_samples);
 
       VolumeIntegrateResult result = kernel_volume_integrate(
-          kg, &ps, buffer, sd, &volume_ray, L, &tp, heterogeneous);
+          kg, &ps, buffer, sd, &volume_ray, L, &tp, step_size);
 
 #      ifdef __VOLUME_SCATTER__
       if (result == VOLUME_PATH_SCATTERED) {
@@ -261,7 +261,7 @@ ccl_device_noinline_cpu void kernel_branched_path_surface_indirect_light(KernelG
       float shadow_transparency = L->shadow_transparency;
 #    endif
 
-      ps.rng_hash = path_rng_hash(state->rng_hash, i);
+      ps.rng_hash = cmj_hash(state->rng_hash, i);
 
       if (!kernel_branched_path_surface_bounce(
               kg, sd, sc, j, num_samples, &tp, &ps, &L->state, &bsdf_ray, sum_sample_weight)) {
@@ -306,7 +306,7 @@ ccl_device void kernel_branched_path_subsurface_scatter(KernelGlobals *kg,
     uint lcg_state = lcg_state_init(state, 0x68bc21eb);
     int num_samples = kernel_data.integrator.subsurface_samples * 3;
     float num_samples_inv = 1.0f / num_samples;
-    uint bssrdf_rng_hash = path_rng_hash(state->rng_hash, i);
+    uint bssrdf_rng_hash = cmj_hash(state->rng_hash, i);
 
     /* do subsurface scatter step with copy of shader data, this will
      * replace the BSSRDF with a diffuse BSDF closure */
@@ -542,6 +542,14 @@ ccl_device void kernel_branched_path_trace(
   int pass_stride = kernel_data.film.pass_stride;
 
   buffer += index * pass_stride;
+
+  if (kernel_data.film.pass_adaptive_aux_buffer) {
+    ccl_global float4 *aux = (ccl_global float4 *)(buffer +
+                                                   kernel_data.film.pass_adaptive_aux_buffer);
+    if (aux->w > 0.0f) {
+      return;
+    }
+  }
 
   /* initialize random numbers and ray */
   uint rng_hash;

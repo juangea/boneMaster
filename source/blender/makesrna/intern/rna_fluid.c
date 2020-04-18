@@ -18,31 +18,31 @@
  * \ingroup RNA
  */
 
-#include <stdlib.h>
 #include <limits.h>
+#include <stdlib.h>
 
-#include "BLI_utildefines.h"
 #include "BLI_path_util.h"
 #include "BLI_sys_types.h"
+#include "BLI_utildefines.h"
 
 #include "RNA_define.h"
 #include "RNA_enum_types.h"
 
 #include "rna_internal.h"
 
-#include "BKE_modifier.h"
 #include "BKE_fluid.h"
+#include "BKE_modifier.h"
 #include "BKE_pointcache.h"
 
+#include "DNA_fluid_types.h"
 #include "DNA_modifier_types.h"
 #include "DNA_object_force_types.h"
 #include "DNA_object_types.h"
-#include "DNA_scene_types.h"
-#include "DNA_fluid_types.h"
 #include "DNA_particle_types.h"
+#include "DNA_scene_types.h"
 
-#include "WM_types.h"
 #include "WM_api.h"
+#include "WM_types.h"
 
 #ifdef RNA_RUNTIME
 
@@ -391,6 +391,18 @@ static void rna_Fluid_combined_export_update(Main *bmain, Scene *scene, PointerR
   }
 }
 
+static void rna_Fluid_cache_startframe_set(struct PointerRNA *ptr, int value)
+{
+  FluidDomainSettings *settings = (FluidDomainSettings *)ptr->data;
+  BKE_fluid_cache_startframe_set(settings, value);
+}
+
+static void rna_Fluid_cache_endframe_set(struct PointerRNA *ptr, int value)
+{
+  FluidDomainSettings *settings = (FluidDomainSettings *)ptr->data;
+  BKE_fluid_cache_endframe_set(settings, value);
+}
+
 static void rna_Fluid_cachetype_mesh_set(struct PointerRNA *ptr, int value)
 {
   FluidDomainSettings *settings = (FluidDomainSettings *)ptr->data;
@@ -720,7 +732,7 @@ static void rna_FluidModifier_color_grid_get(PointerRNA *ptr, float *values)
         manta_smoke_turbulence_get_rgba(mds->fluid, values, 0);
       }
       else {
-        manta_smoke_turbulence_get_rgba_from_density(mds->fluid, mds->active_color, values, 0);
+        manta_smoke_turbulence_get_rgba_fixed_color(mds->fluid, mds->active_color, values, 0);
       }
     }
     else {
@@ -728,7 +740,7 @@ static void rna_FluidModifier_color_grid_get(PointerRNA *ptr, float *values)
         manta_smoke_get_rgba(mds->fluid, values, 0);
       }
       else {
-        manta_smoke_get_rgba_from_density(mds->fluid, mds->active_color, values, 0);
+        manta_smoke_get_rgba_fixed_color(mds->fluid, mds->active_color, values, 0);
       }
     }
   }
@@ -1258,9 +1270,12 @@ static void rna_def_fluid_domain_settings(BlenderRNA *brna)
   RNA_def_property_update(prop, NC_OBJECT | ND_MODIFIER, "rna_Fluid_resetCache");
 
   prop = RNA_def_property(srna, "adapt_threshold", PROP_FLOAT, PROP_NONE);
-  RNA_def_property_range(prop, 0.01, 0.5);
+  RNA_def_property_range(prop, 0.0, 1.0);
+  RNA_def_property_ui_range(prop, 0.0, 1.0, 0.02, 6);
   RNA_def_property_ui_text(
-      prop, "Threshold", "Maximum amount of fluid cell can contain before it is considered empty");
+      prop,
+      "Threshold",
+      "Minimum amount of fluid a cell can contain before it is considered empty");
   RNA_def_property_update(prop, NC_OBJECT | ND_MODIFIER, "rna_Fluid_resetCache");
 
   prop = RNA_def_property(srna, "use_adaptive_domain", PROP_BOOLEAN, PROP_NONE);
@@ -1329,6 +1344,11 @@ static void rna_def_fluid_domain_settings(BlenderRNA *brna)
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Fluid_flip_parts_update");
 
+  prop = RNA_def_property(srna, "delete_in_obstacle", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flags", FLUID_DOMAIN_DELETE_IN_OBSTACLE);
+  RNA_def_property_ui_text(prop, "Clear In Obstacle", "Delete fluid inside obstacles");
+  RNA_def_property_update(prop, NC_OBJECT | ND_MODIFIER, "rna_Fluid_reset");
+
   /* smoke domain options */
 
   prop = RNA_def_property(srna, "alpha", PROP_FLOAT, PROP_NONE);
@@ -1358,7 +1378,7 @@ static void rna_def_fluid_domain_settings(BlenderRNA *brna)
   RNA_def_property_ui_text(
       prop,
       "Dissolve Speed",
-      "Determine how quickly the smoke dissolves (higher value makes smoke disappear faster)");
+      "Determine how quickly the smoke dissolves (lower value makes smoke disappear faster)");
   RNA_def_property_update(prop, NC_OBJECT | ND_MODIFIER, "rna_Fluid_resetCache");
 
   prop = RNA_def_property(srna, "vorticity", PROP_FLOAT, PROP_NONE);
@@ -1562,6 +1582,13 @@ static void rna_def_fluid_domain_settings(BlenderRNA *brna)
   RNA_def_property_update(prop, NC_OBJECT | ND_MODIFIER, "rna_Fluid_resetCache");
 
   /*  diffusion options */
+
+  prop = RNA_def_property(srna, "use_diffusion", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flags", FLUID_DOMAIN_USE_DIFFUSION);
+  RNA_def_property_ui_text(
+      prop, "Use Diffusion", "Enable fluid diffusion settings (e.g. viscosity, surface tension)");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_update(prop, NC_OBJECT | ND_MODIFIER, "rna_Fluid_reset");
 
   prop = RNA_def_property(srna, "surface_tension", PROP_FLOAT, PROP_NONE);
   RNA_def_property_range(prop, 0.0, 100.0);
@@ -1910,12 +1937,13 @@ static void rna_def_fluid_domain_settings(BlenderRNA *brna)
   prop = RNA_def_property(srna, "cache_frame_start", PROP_INT, PROP_TIME);
   RNA_def_property_int_sdna(prop, NULL, "cache_frame_start");
   RNA_def_property_range(prop, -MAXFRAME, MAXFRAME);
-  RNA_def_property_ui_range(prop, 1, MAXFRAME, 1, 1);
+  RNA_def_property_int_funcs(prop, NULL, "rna_Fluid_cache_startframe_set", NULL);
   RNA_def_property_ui_text(prop, "Start", "Frame on which the simulation starts");
 
   prop = RNA_def_property(srna, "cache_frame_end", PROP_INT, PROP_TIME);
   RNA_def_property_int_sdna(prop, NULL, "cache_frame_end");
-  RNA_def_property_range(prop, 1, MAXFRAME);
+  RNA_def_property_range(prop, -MAXFRAME, MAXFRAME);
+  RNA_def_property_int_funcs(prop, NULL, "rna_Fluid_cache_endframe_set", NULL);
   RNA_def_property_ui_text(prop, "End", "Frame on which the simulation stops");
 
   prop = RNA_def_property(srna, "cache_frame_pause_data", PROP_INT, PROP_TIME);
@@ -2199,11 +2227,11 @@ static void rna_def_fluid_domain_settings(BlenderRNA *brna)
   prop = RNA_def_property(srna, "clipping", PROP_FLOAT, PROP_NONE);
   RNA_def_property_float_sdna(prop, NULL, "clipping");
   RNA_def_property_range(prop, 0.0, 1.0);
-  RNA_def_property_ui_range(prop, 0.0, 1.0, 0.1, 3);
+  RNA_def_property_ui_range(prop, 0.0, 1.0, 0.1, 6);
   RNA_def_property_ui_text(
       prop,
       "Clipping",
-      "Value under which voxels are considered empty space to optimize caching and rendering");
+      "Value under which voxels are considered empty space to optimize rendering");
   RNA_def_property_update(prop, NC_OBJECT | ND_MODIFIER, NULL);
 
   /* -- Deprecated / unsed options (below)-- */
@@ -2243,7 +2271,7 @@ static void rna_def_fluid_flow_settings(BlenderRNA *brna)
   StructRNA *srna;
   PropertyRNA *prop;
 
-  static const EnumPropertyItem flow_types[] = {
+  static const EnumPropertyItem flow_type_items[] = {
       {FLUID_FLOW_TYPE_SMOKE, "SMOKE", 0, "Smoke", "Add smoke"},
       {FLUID_FLOW_TYPE_SMOKEFIRE, "BOTH", 0, "Fire + Smoke", "Add fire and smoke"},
       {FLUID_FLOW_TYPE_FIRE, "FIRE", 0, "Fire", "Add fire"},
@@ -2251,7 +2279,7 @@ static void rna_def_fluid_flow_settings(BlenderRNA *brna)
       {0, NULL, 0, NULL, NULL},
   };
 
-  static EnumPropertyItem flow_behaviors[] = {
+  static EnumPropertyItem flow_behavior_items[] = {
       {FLUID_FLOW_BEHAVIOR_INFLOW, "INFLOW", 0, "Inflow", "Add fluid to simulation"},
       {FLUID_FLOW_BEHAVIOR_OUTFLOW, "OUTFLOW", 0, "Outflow", "Delete fluid from simulation"},
       {FLUID_FLOW_BEHAVIOR_GEOMETRY,
@@ -2318,14 +2346,14 @@ static void rna_def_fluid_flow_settings(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "flow_type", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, NULL, "type");
-  RNA_def_property_enum_items(prop, flow_types);
+  RNA_def_property_enum_items(prop, flow_type_items);
   RNA_def_property_enum_funcs(prop, NULL, "rna_Fluid_flowtype_set", NULL);
   RNA_def_property_ui_text(prop, "Flow Type", "Change type of fluid in the simulation");
   RNA_def_property_update(prop, NC_OBJECT | ND_MODIFIER, "rna_Fluid_reset");
 
   prop = RNA_def_property(srna, "flow_behavior", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, NULL, "behavior");
-  RNA_def_property_enum_items(prop, flow_behaviors);
+  RNA_def_property_enum_items(prop, flow_behavior_items);
   RNA_def_property_ui_text(prop, "Flow Behavior", "Change flow behavior in the simulation");
   RNA_def_property_update(prop, NC_OBJECT | ND_MODIFIER, "rna_Fluid_reset");
 
@@ -2531,11 +2559,11 @@ static void rna_def_fluid_effector_settings(BlenderRNA *brna)
   RNA_def_property_range(prop, 0.0, 10.0);
   RNA_def_property_ui_range(prop, 0.0, 10.0, 0.05, 5);
   RNA_def_property_ui_text(
-      prop, "Surface", "Distance around mesh surface to consider as effector");
+      prop, "Surface", "Additional distance around mesh surface to consider as effector");
   RNA_def_property_update(prop, NC_OBJECT | ND_MODIFIER, "rna_Fluid_reset");
 
   prop = RNA_def_property(srna, "use_plane_init", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, NULL, "flags", FLUID_FLOW_USE_PLANE_INIT);
+  RNA_def_property_boolean_sdna(prop, NULL, "flags", FLUID_EFFECTOR_USE_PLANE_INIT);
   RNA_def_property_ui_text(prop, "Is Planar", "Treat this object as a planar, unclosed mesh");
   RNA_def_property_update(prop, NC_OBJECT | ND_MODIFIER, "rna_Fluid_reset");
 
@@ -2550,6 +2578,20 @@ static void rna_def_fluid_effector_settings(BlenderRNA *brna)
   RNA_def_property_enum_items(prop, fluid_guide_mode_items);
   RNA_def_property_ui_text(prop, "Guiding mode", "How to create guiding velocities");
   RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Fluid_update");
+
+  prop = RNA_def_property(srna, "use_effector", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flags", FLUID_EFFECTOR_USE_EFFEC);
+  RNA_def_property_ui_text(prop, "Enabled", "Control when to apply the effector");
+  RNA_def_property_update(prop, NC_OBJECT | ND_MODIFIER, "rna_Fluid_reset");
+
+  prop = RNA_def_property(srna, "subframes", PROP_INT, PROP_NONE);
+  RNA_def_property_range(prop, 0, 200);
+  RNA_def_property_ui_range(prop, 0, 10, 1, -1);
+  RNA_def_property_ui_text(prop,
+                           "Subframes",
+                           "Number of additional samples to take between frames to improve "
+                           "quality of fast moving effector objects");
+  RNA_def_property_update(prop, NC_OBJECT | ND_MODIFIER, "rna_Fluid_reset");
 }
 
 void RNA_def_fluid(BlenderRNA *brna)

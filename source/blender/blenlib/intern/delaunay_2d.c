@@ -1992,25 +1992,25 @@ typedef struct EdgeVertLambda {
 /* For sorting first by edge id, then by lambda, then by vert id. */
 static int evl_cmp(const void *a, const void *b)
 {
-  const EdgeVertLambda *sa = a;
+  const EdgeVertLambda *area = a;
   const EdgeVertLambda *sb = b;
 
-  if (sa->e_id < sb->e_id) {
+  if (area->e_id < sb->e_id) {
     return -1;
   }
-  else if (sa->e_id > sb->e_id) {
+  else if (area->e_id > sb->e_id) {
     return 1;
   }
-  else if (sa->lambda < sb->lambda) {
+  else if (area->lambda < sb->lambda) {
     return -1;
   }
-  else if (sa->lambda > sb->lambda) {
+  else if (area->lambda > sb->lambda) {
     return 1;
   }
-  else if (sa->v_id < sb->v_id) {
+  else if (area->v_id < sb->v_id) {
     return -1;
   }
-  else if (sa->v_id > sb->v_id) {
+  else if (area->v_id > sb->v_id) {
     return 1;
   }
   return 0;
@@ -2226,7 +2226,7 @@ static const CDT_input *modify_input_for_near_edge_ends(const CDT_input *input, 
     }
 
     /* Allocate new CDT_input, now we know sizes needed (perhaps overestimated a bit).
-     * Caller will be reponsible for freeing it and its arrays.
+     * Caller will be responsible for freeing it and its arrays.
      */
     new_input = MEM_callocN(sizeof(CDT_input), __func__);
     new_input->epsilon = input->epsilon;
@@ -2965,6 +2965,13 @@ static CDT_result *cdt_get_output(CDT_state *cdt,
   SymEdge *se, *se_start;
   CDTEdge *e;
   CDTFace *f;
+#ifdef DEBUG_CDT
+  int dbg_level = 0;
+
+  if (dbg_level > 0) {
+    fprintf(stderr, "\nCDT_GET_OUTPUT\n\n");
+  }
+#endif
 
   prepare_cdt_for_output(cdt, output_type);
 
@@ -2972,6 +2979,12 @@ static CDT_result *cdt_get_output(CDT_state *cdt,
   if (cdt->vert_array_len == 0) {
     return result;
   }
+
+#ifdef DEBUG_CDT
+  if (dbg_level > 1) {
+    dump_cdt(cdt, "cdt to output");
+  }
+#endif
 
   /* All verts without a merge_to_index will be output.
    * vert_to_output_map[i] will hold the output vertex index
@@ -3112,7 +3125,7 @@ static CDT_result *cdt_get_output(CDT_state *cdt,
         result->faces_start_table[i] = j;
         se = se_start = f->symedge;
         do {
-          result->faces[j++] = se->vert->index;
+          result->faces[j++] = vert_to_output_map[se->vert->index];
           se = se->next;
         } while (se != se_start);
         result->faces_len_table[i] = j - result->faces_start_table[i];
@@ -3216,7 +3229,7 @@ CDT_result *BLI_delaunay_2d_cdt_calc(const CDT_input *input, const CDT_output_ty
     ne = input->edges_len;
     nf = input->faces_len;
 #ifdef DEBUG_CDT
-    if (dbg_level > 4) {
+    if (dbg_level > 0) {
       fprintf(stderr, "input modified for near ends; now ne=%d\n", ne);
     }
 #endif

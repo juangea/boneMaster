@@ -180,6 +180,14 @@ option(WITH_BULLET        "Enable Bullet (Physics Engine)" ON)
 option(WITH_SYSTEM_BULLET "Use the systems bullet library (currently unsupported due to missing features in upstream!)" )
 mark_as_advanced(WITH_SYSTEM_BULLET)
 option(WITH_OPENCOLORIO   "Enable OpenColorIO color management" ON)
+if(APPLE)
+  # There's no OpenXR runtime in sight for macOS, neither is code well
+  # tested there -> disable it by default.
+  option(WITH_XR_OPENXR   "Enable VR features through the OpenXR specification" OFF)
+  mark_as_advanced(WITH_XR_OPENXR)
+else()
+  option(WITH_XR_OPENXR   "Enable VR features through the OpenXR specification" ON)
+endif()
 
 # Compositor
 option(WITH_COMPOSITOR         "Enable the tile based nodal compositor" ON)
@@ -310,6 +318,10 @@ mark_as_advanced(WITH_SYSTEM_GLOG)
 
 # Freestyle
 option(WITH_FREESTYLE     "Enable Freestyle (advanced edges rendering)" ON)
+
+# New object types
+option(WITH_NEW_OBJECT_TYPES "Enable new hair and pointcloud objects (use for development only, don't save in files)" OFF)
+mark_as_advanced(WITH_NEW_OBJECT_TYPES)
 
 # Misc
 if(WIN32)
@@ -621,9 +633,10 @@ set_and_warn_dependency(WITH_BOOST WITH_OPENVDB        OFF)
 set_and_warn_dependency(WITH_BOOST WITH_OPENCOLORIO    OFF)
 set_and_warn_dependency(WITH_BOOST WITH_QUADRIFLOW     OFF)
 set_and_warn_dependency(WITH_BOOST WITH_USD            OFF)
+set_and_warn_dependency(WITH_BOOST WITH_ALEMBIC        OFF)
 
 if(WITH_BOOST AND NOT (WITH_CYCLES OR WITH_OPENIMAGEIO OR WITH_INTERNATIONAL OR
-   WITH_OPENVDB OR WITH_OPENCOLORIO OR WITH_USD))
+   WITH_OPENVDB OR WITH_OPENCOLORIO OR WITH_USD OR WITH_ALEMBIC))
   message(STATUS "No dependencies need 'WITH_BOOST' forcing WITH_BOOST=OFF")
   set(WITH_BOOST OFF)
 endif()
@@ -632,6 +645,9 @@ set_and_warn_dependency(WITH_TBB WITH_USD               OFF)
 set_and_warn_dependency(WITH_TBB WITH_OPENIMAGEDENOISE  OFF)
 set_and_warn_dependency(WITH_TBB WITH_OPENVDB           OFF)
 set_and_warn_dependency(WITH_TBB WITH_MOD_FLUID         OFF)
+
+# OpenVDB uses 'half' type from OpenEXR & fails to link without OpenEXR enabled.
+set_and_warn_dependency(WITH_IMAGE_OPENEXR WITH_OPENVDB OFF)
 
 # auto enable openimageio for cycles
 if(WITH_CYCLES)
@@ -669,6 +685,7 @@ if(WITH_GHOST_SDL OR WITH_HEADLESS)
   set(WITH_X11_ALPHA     OFF)
   set(WITH_GHOST_XDND    OFF)
   set(WITH_INPUT_IME     OFF)
+  set(WITH_XR_OPENXR     OFF)
 endif()
 
 if(WITH_CPU_SSE)
@@ -1695,6 +1712,7 @@ if(FIRST_RUN)
   info_cfg_option(WITH_CYCLES)
   info_cfg_option(WITH_FREESTYLE)
   info_cfg_option(WITH_OPENCOLORIO)
+  info_cfg_option(WITH_XR_OPENXR)
   info_cfg_option(WITH_OPENIMAGEDENOISE)
   info_cfg_option(WITH_OPENVDB)
   info_cfg_option(WITH_ALEMBIC)

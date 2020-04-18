@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <stdlib.h>
 #include <sstream>
+#include <stdlib.h>
 
 #include "device/device.h"
 #include "device/device_intern.h"
@@ -181,6 +181,14 @@ class MultiDevice : public Device {
         return false;
 
     return true;
+  }
+
+  virtual void *osl_memory()
+  {
+    if (devices.size() > 1) {
+      return NULL;
+    }
+    return devices.front().device->osl_memory();
   }
 
   void mem_alloc(device_memory &mem)

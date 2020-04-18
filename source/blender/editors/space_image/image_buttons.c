@@ -21,8 +21,8 @@
  * \ingroup spimage
  */
 
-#include <string.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "DNA_node_types.h"
 #include "DNA_scene_types.h"
@@ -37,8 +37,8 @@
 #include "BKE_context.h"
 #include "BKE_image.h"
 #include "BKE_node.h"
-#include "BKE_screen.h"
 #include "BKE_scene.h"
+#include "BKE_screen.h"
 
 #include "RE_pipeline.h"
 
@@ -47,8 +47,8 @@
 #include "IMB_imbuf_types.h"
 
 #include "ED_gpencil.h"
-#include "ED_screen.h"
 #include "ED_image.h"
+#include "ED_screen.h"
 
 #include "RNA_access.h"
 
@@ -1276,7 +1276,7 @@ void uiTemplateImageInfo(uiLayout *layout, bContext *C, Image *ima, ImageUser *i
     }
     else if (ima->source == IMA_SRC_SEQUENCE && ibuf) {
       /* Image sequence frame number + filename */
-      const char *filename = BLI_last_slash(ibuf->name);
+      const char *filename = BLI_path_slash_rfind(ibuf->name);
       filename = (filename == NULL) ? ibuf->name : filename + 1;
       BLI_snprintf(str, MAX_IMAGE_INFO_LEN, TIP_("Frame %d: %s"), framenr, filename);
     }

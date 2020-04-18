@@ -45,7 +45,7 @@ class Integrator : public Node {
   int ao_bounces;
 
   int volume_max_steps;
-  float volume_step_size;
+  float volume_step_rate;
 
   bool caustics_reflective;
   bool caustics_refractive;
@@ -76,6 +76,9 @@ class Integrator : public Node {
   float light_sampling_threshold;
 
   uint background_lightgroups;
+
+  int adaptive_min_samples;
+  float adaptive_threshold;
 
   enum Method {
     BRANCHED_PATH = 0,

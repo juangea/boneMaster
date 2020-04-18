@@ -25,15 +25,13 @@
 
 #include "intern/eval/deg_eval_flush.h"
 
-// TODO(sergey): Use some sort of wrapper.
-#include <deque>
 #include <cmath>
 
-#include "BLI_utildefines.h"
+#include "BLI_ghash.h"
 #include "BLI_listbase.h"
 #include "BLI_math_vector.h"
 #include "BLI_task.h"
-#include "BLI_ghash.h"
+#include "BLI_utildefines.h"
 
 #include "BKE_object.h"
 #include "BKE_scene.h"
@@ -50,6 +48,7 @@ extern "C" {
 #include "intern/debug/deg_debug.h"
 #include "intern/depsgraph.h"
 #include "intern/depsgraph_relation.h"
+#include "intern/depsgraph_type.h"
 #include "intern/depsgraph_update.h"
 #include "intern/node/deg_node.h"
 #include "intern/node/deg_node_component.h"
@@ -84,7 +83,7 @@ enum {
   COMPONENT_STATE_DONE = 2,
 };
 
-typedef std::deque<OperationNode *> FlushQueue;
+typedef deque<OperationNode *> FlushQueue;
 
 namespace {
 
@@ -173,15 +172,16 @@ BLI_INLINE void flush_handle_component_node(IDNode *id_node,
  */
 BLI_INLINE OperationNode *flush_schedule_children(OperationNode *op_node, FlushQueue *queue)
 {
+  if (op_node->flag & DEPSOP_FLAG_USER_MODIFIED) {
+    IDNode *id_node = op_node->owner->owner;
+    id_node->is_user_modified = true;
+  }
+
   OperationNode *result = nullptr;
   for (Relation *rel : op_node->outlinks) {
     /* Flush is forbidden, completely. */
     if (rel->flag & RELATION_FLAG_NO_FLUSH) {
       continue;
-    }
-    if (op_node->flag & DEPSOP_FLAG_USER_MODIFIED) {
-      IDNode *id_node = op_node->owner->owner;
-      id_node->is_user_modified = true;
     }
     /* Relation only allows flushes on user changes, but the node was not
      * affected by user. */

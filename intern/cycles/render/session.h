@@ -17,8 +17,8 @@
 #ifndef __SESSION_H__
 #define __SESSION_H__
 
-#include "render/buffers.h"
 #include "device/device.h"
+#include "render/buffers.h"
 #include "render/shader.h"
 #include "render/stats.h"
 #include "render/tile.h"
@@ -56,6 +56,7 @@ class SessionParams {
   int denoising_start_sample;
   int pixel_size;
   int threads;
+  bool adaptive_sampling;
 
   bool use_profiling;
 
@@ -90,6 +91,7 @@ class SessionParams {
     denoising_start_sample = 0;
     pixel_size = 1;
     threads = 0;
+    adaptive_sampling = false;
 
     use_profiling = false;
 
@@ -120,6 +122,7 @@ class SessionParams {
              progressive == params.progressive && experimental == params.experimental &&
              tile_size == params.tile_size && start_resolution == params.start_resolution &&
              pixel_size == params.pixel_size && threads == params.threads &&
+             adaptive_sampling == params.adaptive_sampling &&
              use_profiling == params.use_profiling &&
              display_buffer_linear == params.display_buffer_linear &&
              cancel_timeout == params.cancel_timeout && reset_timeout == params.reset_timeout &&

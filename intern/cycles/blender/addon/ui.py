@@ -189,7 +189,6 @@ class CYCLES_RENDER_PT_sampling(CyclesButtonsPanel, Panel):
             col = layout.column(align=True)
             col.prop(cscene, "aa_samples", text="Render")
             col.prop(cscene, "preview_aa_samples", text="Viewport")
-
         # Viewport denoising is currently only supported with OptiX
         if show_optix_denoising(context):
             col = layout.column()
@@ -230,6 +229,32 @@ class CYCLES_RENDER_PT_sampling_sub_samples(CyclesButtonsPanel, Panel):
         draw_samples_info(layout, context)
 
 
+class CYCLES_RENDER_PT_sampling_adaptive(CyclesButtonsPanel, Panel):
+    bl_label = "Adaptive Sampling"
+    bl_parent_id = "CYCLES_RENDER_PT_sampling"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    def draw_header(self, context):
+        layout = self.layout
+        scene = context.scene
+        cscene = scene.cycles
+
+        layout.prop(cscene, "use_adaptive_sampling", text="")
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+
+        scene = context.scene
+        cscene = scene.cycles
+
+        layout.active = cscene.use_adaptive_sampling
+
+        col = layout.column(align=True)
+        col.prop(cscene, "adaptive_threshold", text="Noise Threshold")
+        col.prop(cscene, "adaptive_min_samples", text="Min Samples")
+
 class CYCLES_RENDER_PT_sampling_advanced(CyclesButtonsPanel, Panel):
     bl_label = "Advanced"
     bl_parent_id = "CYCLES_RENDER_PT_sampling"
@@ -247,8 +272,10 @@ class CYCLES_RENDER_PT_sampling_advanced(CyclesButtonsPanel, Panel):
         row.prop(cscene, "seed")
         row.prop(cscene, "use_animated_seed", text="", icon='TIME')
 
-        layout.prop(cscene, "sampling_pattern", text="Pattern")
-        layout.prop(cscene, "scrambling_distance")
+        col = layout.column(align=True)
+        col.active = not(cscene.use_adaptive_sampling)
+        col.prop(cscene, "sampling_pattern", text="Pattern")
+        col.prop(cscene, "scrambling_distance")
 
         layout.prop(cscene, "use_square_samples")
 
@@ -1699,6 +1726,9 @@ class CYCLES_WORLD_PT_settings_volume(CyclesButtonsPanel, Panel):
         sub.prop(cworld, "volume_sampling", text="Sampling")
         col.prop(cworld, "volume_interpolation", text="Interpolation")
         col.prop(cworld, "homogeneous_volume", text="Homogeneous")
+        sub = col.column()
+        sub.active = not cworld.homogeneous_volume
+        sub.prop(cworld, "volume_step_size")
 
 
 class CYCLES_MATERIAL_PT_preview(CyclesButtonsPanel, Panel):
@@ -1830,6 +1860,9 @@ class CYCLES_MATERIAL_PT_settings_volume(CyclesButtonsPanel, Panel):
         sub.prop(cmat, "volume_sampling", text="Sampling")
         col.prop(cmat, "volume_interpolation", text="Interpolation")
         col.prop(cmat, "homogeneous_volume", text="Homogeneous")
+        sub = col.column()
+        sub.active = not cmat.homogeneous_volume
+        sub.prop(cmat, "volume_step_rate")
 
     def draw(self, context):
         self.draw_shared(self, context, context.material)
@@ -2082,7 +2115,7 @@ class CYCLES_RENDER_PT_simplify_viewport(CyclesButtonsPanel, Panel):
         col.prop(rd, "simplify_child_particles", text="Child Particles")
         col.prop(cscene, "texture_limit", text="Texture Limit")
         col.prop(cscene, "ao_bounces", text="AO Bounces")
-        col.prop(rd, "use_simplify_smoke_highres")
+
 
 class CYCLES_RENDER_PT_simplify_render(CyclesButtonsPanel, Panel):
     bl_label = "Render"
@@ -2271,6 +2304,7 @@ classes = (
     CYCLES_PT_integrator_presets,
     CYCLES_RENDER_PT_sampling,
     CYCLES_RENDER_PT_sampling_sub_samples,
+    CYCLES_RENDER_PT_sampling_adaptive,
     CYCLES_RENDER_PT_sampling_advanced,
     CYCLES_RENDER_PT_light_paths,
     CYCLES_RENDER_PT_light_paths_max_bounces,
