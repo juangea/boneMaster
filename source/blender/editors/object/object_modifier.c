@@ -142,10 +142,11 @@ static void object_force_modifier_bind_simple_options(Depsgraph *depsgraph,
   md_eval->mode = mode;
 }
 
-/** Add a modifier to given object, including relevant extra processing needed by some physics
- * types (particles, simulations...).
+/**
+ * Add a modifier to given object, including relevant extra processing needed by some physics types
+ * (particles, simulations...).
  *
- * \param scene is only used to set current frame in some cases, and may be NULL.
+ * \param scene: is only used to set current frame in some cases, and may be NULL.
  */
 ModifierData *ED_object_modifier_add(
     ReportList *reports, Main *bmain, Scene *scene, Object *ob, const char *name, int type)
@@ -2455,7 +2456,7 @@ static int ocean_bake_exec(bContext *C, wmOperator *op)
      * No drivers or other modifier parameters. */
     /* TODO(sergey): This operates on an original data, so no flush is needed. However, baking
      * usually should happen on an evaluated objects, so this seems to be deeper issue here. */
-    BKE_animsys_evaluate_animdata(scene, (ID *)ob, ob->adt, f, ADT_RECALC_ANIM, false);
+    BKE_animsys_evaluate_animdata((ID *)ob, ob->adt, f, ADT_RECALC_ANIM, false);
 
     och->time[i] = omd->time;
     i++;

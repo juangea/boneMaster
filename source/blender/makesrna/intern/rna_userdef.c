@@ -6063,10 +6063,6 @@ static void rna_def_userdef_experimental(BlenderRNA *brna)
       prop,
       "Undo Legacy",
       "Use legacy undo (slower than the new default one, but may be more stable in some cases)");
-
-  prop = RNA_def_property(srna, "use_menu_search", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, NULL, "use_menu_search", 1);
-  RNA_def_property_ui_text(prop, "Menu Search", "Search actions by menus instead of operators");
 }
 
 static void rna_def_userdef_addon_collection(BlenderRNA *brna, PropertyRNA *cprop)

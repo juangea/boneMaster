@@ -29,6 +29,7 @@ from bpy.app.translations import (
 )
 from bl_ui.properties_grease_pencil_common import (
     AnnotationDataPanel,
+    AnnotationOnionSkin,
 )
 from bl_ui.space_toolsystem_common import (
     ToolActivePanelHelper,
@@ -1687,18 +1688,15 @@ class SEQUENCER_PT_adjust_transform(SequencerButtonsPanel, Panel):
         layout = self.layout
         strip = act_strip(context)
 
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+
         layout.active = not strip.mute
 
-        split = layout.split()
-
-        col = split.column()
-        col.alignment = 'RIGHT'
-        col.label(text="Mirror")
-
-        col = split.column()
-        row = col.row(align=True)
-        row.prop(strip, "use_flip_x", text="X", toggle=True)
-        row.prop(strip, "use_flip_y", text="Y", toggle=True)
+        row = layout.row(heading="Mirror")
+        sub = row.row(align=True)
+        sub.prop(strip, "use_flip_x", text="X", toggle=True)
+        sub.prop(strip, "use_flip_y", text="Y", toggle=True)
 
 
 class SEQUENCER_PT_adjust_video(SequencerButtonsPanel, Panel):
@@ -1802,12 +1800,12 @@ class SEQUENCER_PT_cache_settings(SequencerButtonsPanel, Panel):
 
         ed = context.scene.sequence_editor
 
-        col = layout.column()
+        col = layout.column(heading="Cache", align=True)
 
-        col.prop(ed, "use_cache_raw")
-        col.prop(ed, "use_cache_preprocessed")
-        col.prop(ed, "use_cache_composite")
-        col.prop(ed, "use_cache_final")
+        col.prop(ed, "use_cache_raw", text="Raw")
+        col.prop(ed, "use_cache_preprocessed", text="Pre-Processed")
+        col.prop(ed, "use_cache_composite", text="Composite")
+        col.prop(ed, "use_cache_final", text="Final")
         col.separator()
         col.prop(ed, "recycle_max_cost")
 
@@ -1871,21 +1869,19 @@ class SEQUENCER_PT_strip_proxy(SequencerButtonsPanel, Panel):
 
             flow = layout.column_flow()
             if ed.proxy_storage == 'PER_STRIP':
-                flow.prop(proxy, "use_proxy_custom_directory")
-                flow.prop(proxy, "use_proxy_custom_file")
-
+                col = layout.column(heading="Custom Proxy")
+                col.prop(proxy, "use_proxy_custom_directory", text="Directory")
                 if proxy.use_proxy_custom_directory and not proxy.use_proxy_custom_file:
-                    flow.prop(proxy, "directory")
+                    col.prop(proxy, "directory")
+                col.prop(proxy, "use_proxy_custom_file", text="File")
                 if proxy.use_proxy_custom_file:
-                    flow.prop(proxy, "filepath")
+                    col.prop(proxy, "filepath")
 
-            box = layout.box()
-            row = box.row(align=True)
-            row.prop(strip.proxy, "build_25")
-            row.prop(strip.proxy, "build_75")
-            row = box.row(align=True)
-            row.prop(strip.proxy, "build_50")
-            row.prop(strip.proxy, "build_100")
+            row = layout.row(heading="Resolutions", align=True)
+            row.prop(strip.proxy, "build_25", toggle=True)
+            row.prop(strip.proxy, "build_75", toggle=True)
+            row.prop(strip.proxy, "build_50", toggle=True)
+            row.prop(strip.proxy, "build_100", toggle=True)
 
             layout.use_property_split = True
             layout.use_property_decorate = False
@@ -1926,10 +1922,10 @@ class SEQUENCER_PT_strip_cache(SequencerButtonsPanel, Panel):
         strip = act_strip(context)
         layout.active = strip.override_cache_settings
 
-        col = layout.column()
-        col.prop(strip, "use_cache_raw")
-        col.prop(strip, "use_cache_preprocessed")
-        col.prop(strip, "use_cache_composite")
+        col = layout.column(heading="Cache")
+        col.prop(strip, "use_cache_raw", text="Raw")
+        col.prop(strip, "use_cache_preprocessed", text="Pre-Processed")
+        col.prop(strip, "use_cache_composite", text="Composite")
 
 
 class SEQUENCER_PT_preview(SequencerButtonsPanel_Output, Panel):
@@ -2162,6 +2158,33 @@ class SEQUENCER_PT_annotation(AnnotationDataPanel, SequencerButtonsPanel_Output,
     # But, it should only show up when there are images in the preview region
 
 
+class SEQUENCER_PT_annotation_onion(AnnotationOnionSkin, SequencerButtonsPanel_Output, Panel):
+    bl_space_type = 'SEQUENCE_EDITOR'
+    bl_region_type = 'UI'
+    bl_category = "View"
+
+    @staticmethod
+    def has_preview(context):
+        st = context.space_data
+        return st.view_type in {'PREVIEW', 'SEQUENCER_PREVIEW'}
+
+    @classmethod
+    def poll(cls, context):
+        if context.annotation_data_owner is None:
+            return False
+        elif type(context.annotation_data_owner) is bpy.types.Object:
+            return False
+        else:
+            gpl = context.active_annotation_layer
+            if gpl is None:
+                return False
+
+        return cls.has_preview(context)
+
+    # NOTE: this is just a wrapper around the generic GP Panel
+    # But, it should only show up when there are images in the preview region
+
+
 class SEQUENCER_PT_custom_props(SequencerButtonsPanel, PropertyPanel, Panel):
     COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
     _context_path = "scene.sequence_editor.active_strip"
@@ -2235,6 +2258,7 @@ classes = (
     SEQUENCER_PT_view_safe_areas_center_cut,
 
     SEQUENCER_PT_annotation,
+    SEQUENCER_PT_annotation_onion,
 )
 
 if __name__ == "__main__":  # only for live edit.
