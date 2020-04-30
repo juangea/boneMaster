@@ -39,6 +39,7 @@
 #include "DNA_pointcloud_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_sequence_types.h"
+#include "DNA_simulation_types.h"
 #include "DNA_volume_types.h"
 #include "DNA_world_types.h"
 
@@ -160,6 +161,7 @@ static void set_operation_types(SpaceOutliner *soops,
           case ID_HA:
           case ID_PT:
           case ID_VO:
+          case ID_SIM:
             is_standard_id = true;
             break;
           case ID_WM:
@@ -564,9 +566,7 @@ static void merged_element_search_call_cb(struct bContext *C, void *UNUSED(arg1)
   outliner_item_select(soops, te, false, false);
   outliner_item_do_activate_from_tree_element(C, te, te->store_elem, false, false);
 
-  if (soops->flag & SO_SYNC_SELECT) {
-    ED_outliner_select_sync_from_outliner(C, soops);
-  }
+  ED_outliner_select_sync_from_outliner(C, soops);
 }
 
 /**
@@ -673,13 +673,10 @@ static void object_deselect_cb(bContext *C,
   }
 }
 
-static void object_delete_cb(bContext *C,
-                             ReportList *reports,
-                             Scene *scene,
-                             TreeElement *UNUSED(te),
-                             TreeStoreElem *UNUSED(tsep),
-                             TreeStoreElem *tselem,
-                             void *UNUSED(user_data))
+static void outliner_object_delete(bContext *C,
+                                   ReportList *reports,
+                                   Scene *scene,
+                                   TreeStoreElem *tselem)
 {
   Object *ob = (Object *)tselem->id;
   if (ob) {
@@ -1316,7 +1313,6 @@ enum {
   OL_OP_SELECT = 1,
   OL_OP_DESELECT,
   OL_OP_SELECT_HIERARCHY,
-  OL_OP_DELETE,
   OL_OP_DELETE_HIERARCHY,
   OL_OP_REMAP,
   OL_OP_LOCALIZED, /* disabled, see below */
@@ -1332,7 +1328,6 @@ static const EnumPropertyItem prop_object_op_types[] = {
     {OL_OP_SELECT, "SELECT", ICON_RESTRICT_SELECT_OFF, "Select", ""},
     {OL_OP_DESELECT, "DESELECT", 0, "Deselect", ""},
     {OL_OP_SELECT_HIERARCHY, "SELECT_HIERARCHY", 0, "Select Hierarchy", ""},
-    {OL_OP_DELETE, "DELETE", ICON_X, "Delete", ""},
     {OL_OP_DELETE_HIERARCHY, "DELETE_HIERARCHY", 0, "Delete Hierarchy", ""},
     {OL_OP_REMAP,
      "REMAP",
@@ -1354,6 +1349,7 @@ static int outliner_object_operation_exec(bContext *C, wmOperator *op)
   SpaceOutliner *soops = CTX_wm_space_outliner(C);
   int event;
   const char *str = NULL;
+  bool selection_changed = false;
 
   /* check for invalid states */
   if (soops == NULL) {
@@ -1370,8 +1366,7 @@ static int outliner_object_operation_exec(bContext *C, wmOperator *op)
     }
 
     str = "Select Objects";
-    DEG_id_tag_update(&scene->id, ID_RECALC_SELECT);
-    WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, scene);
+    selection_changed = true;
   }
   else if (event == OL_OP_SELECT_HIERARCHY) {
     Scene *sce = scene;  // to be able to delete, scenes are set...
@@ -1381,36 +1376,12 @@ static int outliner_object_operation_exec(bContext *C, wmOperator *op)
       WM_window_set_active_scene(bmain, C, win, sce);
     }
     str = "Select Object Hierarchy";
-    DEG_id_tag_update(&scene->id, ID_RECALC_SELECT);
-    WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, scene);
+    selection_changed = true;
   }
   else if (event == OL_OP_DESELECT) {
     outliner_do_object_operation(C, op->reports, scene, soops, &soops->tree, object_deselect_cb);
     str = "Deselect Objects";
-    DEG_id_tag_update(&scene->id, ID_RECALC_SELECT);
-    WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, scene);
-  }
-  else if (event == OL_OP_DELETE) {
-    ViewLayer *view_layer = CTX_data_view_layer(C);
-    const Base *basact_prev = BASACT(view_layer);
-
-    outliner_do_object_operation(C, op->reports, scene, soops, &soops->tree, object_delete_cb);
-
-    /* XXX: tree management normally happens from draw_outliner(), but when
-     *      you're clicking to fast on Delete object from context menu in
-     *      outliner several mouse events can be handled in one cycle without
-     *      handling notifiers/redraw which leads to deleting the same object twice.
-     *      cleanup tree here to prevent such cases. */
-    outliner_cleanup_tree(soops);
-
-    DEG_relations_tag_update(bmain);
-    str = "Delete Objects";
-    DEG_id_tag_update(&scene->id, ID_RECALC_SELECT);
-    WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, scene);
-    if (basact_prev != BASACT(view_layer)) {
-      WM_event_add_notifier(C, NC_SCENE | ND_OB_ACTIVE, scene);
-      WM_msg_publish_rna_prop(mbus, &scene->id, view_layer, LayerObjects, active);
-    }
+    selection_changed = true;
   }
   else if (event == OL_OP_DELETE_HIERARCHY) {
     ViewLayer *view_layer = CTX_data_view_layer(C);
@@ -1436,7 +1407,7 @@ static int outliner_object_operation_exec(bContext *C, wmOperator *op)
       BKE_id_multi_tagged_delete(bmain);
     }
 
-    /* XXX: See OL_OP_DELETE comment above. */
+    /* XXX: See outliner_delete_exec comment below. */
     outliner_cleanup_tree(soops);
 
     DEG_relations_tag_update(bmain);
@@ -1447,6 +1418,7 @@ static int outliner_object_operation_exec(bContext *C, wmOperator *op)
       WM_event_add_notifier(C, NC_SCENE | ND_OB_ACTIVE, scene);
       WM_msg_publish_rna_prop(mbus, &scene->id, view_layer, LayerObjects, active);
     }
+    selection_changed = true;
   }
   else if (event == OL_OP_REMAP) {
     outliner_do_libdata_operation(C, op->reports, scene, soops, &soops->tree, id_remap_cb, NULL);
@@ -1475,6 +1447,12 @@ static int outliner_object_operation_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
+  if (selection_changed) {
+    DEG_id_tag_update(&scene->id, ID_RECALC_SELECT);
+    WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, scene);
+    ED_outliner_select_sync_from_object_tag(C);
+  }
+
   ED_undo_push(C, str);
 
   return OPERATOR_FINISHED;
@@ -1494,6 +1472,74 @@ void OUTLINER_OT_object_operation(wmOperatorType *ot)
   ot->flag = 0;
 
   ot->prop = RNA_def_enum(ot->srna, "type", prop_object_op_types, 0, "Object Operation", "");
+}
+
+static void outliner_objects_delete(
+    bContext *C, Scene *scene, SpaceOutliner *soops, ReportList *reports, ListBase *lb)
+{
+  LISTBASE_FOREACH (TreeElement *, te, lb) {
+    TreeStoreElem *tselem = TREESTORE(te);
+
+    if (tselem->flag & TSE_SELECTED) {
+      if (tselem->type == 0 && te->idcode == ID_OB) {
+        outliner_object_delete(C, reports, scene, tselem);
+      }
+    }
+
+    if (TSELEM_OPEN(tselem, soops)) {
+      outliner_objects_delete(C, scene, soops, reports, &te->subtree);
+    }
+  }
+}
+
+static int outliner_delete_exec(bContext *C, wmOperator *op)
+{
+  Main *bmain = CTX_data_main(C);
+  Scene *scene = CTX_data_scene(C);
+  SpaceOutliner *soops = CTX_wm_space_outliner(C);
+  struct wmMsgBus *mbus = CTX_wm_message_bus(C);
+
+  ViewLayer *view_layer = CTX_data_view_layer(C);
+  const Base *basact_prev = BASACT(view_layer);
+
+  outliner_collection_delete(C, bmain, scene, op->reports, false);
+  outliner_objects_delete(C, scene, soops, op->reports, &soops->tree);
+
+  /* Tree management normally happens from draw_outliner(), but when
+   * you're clicking too fast on Delete object from context menu in
+   * outliner several mouse events can be handled in one cycle without
+   * handling notifiers/redraw which leads to deleting the same object twice.
+   * cleanup tree here to prevent such cases. */
+  outliner_cleanup_tree(soops);
+
+  DEG_id_tag_update(&scene->id, ID_RECALC_COPY_ON_WRITE);
+  DEG_relations_tag_update(bmain);
+
+  if (basact_prev != BASACT(view_layer)) {
+    WM_event_add_notifier(C, NC_SCENE | ND_OB_ACTIVE, scene);
+    WM_msg_publish_rna_prop(mbus, &scene->id, view_layer, LayerObjects, active);
+  }
+
+  DEG_id_tag_update(&scene->id, ID_RECALC_SELECT);
+  WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, scene);
+  ED_outliner_select_sync_from_object_tag(C);
+
+  return OPERATOR_FINISHED;
+}
+
+void OUTLINER_OT_delete(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Delete";
+  ot->idname = "OUTLINER_OT_delete";
+  ot->description = "Delete selected objects and collections";
+
+  /* callbacks */
+  ot->exec = outliner_delete_exec;
+  ot->poll = ED_operator_outliner_active;
+
+  /* flags */
+  ot->flag |= OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
 /* **************************************** */
@@ -1727,6 +1773,7 @@ static int outliner_id_operation_exec(bContext *C, wmOperator *op)
     }
     case OUTLINER_IDOP_PASTE: {
       WM_operator_name_call(C, "OUTLINER_OT_id_paste", WM_OP_INVOKE_DEFAULT, NULL);
+      ED_outliner_select_sync_from_all_tag(C);
       ED_undo_push(C, "Paste");
       break;
     }
@@ -1760,6 +1807,7 @@ static int outliner_id_operation_exec(bContext *C, wmOperator *op)
     case OUTLINER_IDOP_SELECT_LINKED:
       outliner_do_libdata_operation(
           C, op->reports, scene, soops, &soops->tree, id_select_linked_cb, NULL);
+      ED_outliner_select_sync_from_all_tag(C);
       ED_undo_push(C, "Select");
       break;
 

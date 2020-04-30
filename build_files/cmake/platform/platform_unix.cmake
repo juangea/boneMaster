@@ -504,6 +504,26 @@ if(WITH_SYSTEM_AUDASPACE)
   endif()
 endif()
 
+if(WITH_GHOST_WAYLAND)
+  find_package(PkgConfig)
+  pkg_check_modules(wayland-client REQUIRED wayland-client>=1.12)
+  pkg_check_modules(wayland-egl REQUIRED wayland-egl)
+  pkg_check_modules(wayland-scanner REQUIRED wayland-scanner)
+  pkg_check_modules(xkbcommon REQUIRED xkbcommon)
+  pkg_check_modules(wayland-cursor REQUIRED wayland-cursor)
+
+  set(WITH_GL_EGL ON)
+
+  if(WITH_GHOST_WAYLAND)
+    list(APPEND PLATFORM_LINKLIBS
+      ${wayland-client_LIBRARIES}
+      ${wayland-egl_LIBRARIES}
+      ${xkbcommon_LIBRARIES}
+      ${wayland-cursor_LIBRARIES}
+    )
+  endif()
+endif()
+
 if(WITH_X11)
   find_package(X11 REQUIRED)
 
@@ -571,6 +591,19 @@ if(CMAKE_COMPILER_IS_GNUCC)
       set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fuse-ld=gold")
     else()
       message(STATUS "GNU gold linker isn't available, using the default system linker.")
+    endif()
+    unset(LD_VERSION)
+  endif()
+
+  if(WITH_LINKER_LLD)
+    execute_process(
+      COMMAND ${CMAKE_C_COMPILER} -fuse-ld=lld -Wl,--version
+      ERROR_QUIET OUTPUT_VARIABLE LD_VERSION)
+    if("${LD_VERSION}" MATCHES "LLD")
+      set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fuse-ld=lld")
+      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fuse-ld=lld")
+    else()
+      message(STATUS "LLD linker isn't available, using the default system linker.")
     endif()
     unset(LD_VERSION)
   endif()

@@ -138,7 +138,7 @@ typedef struct ReshapeConstGridElement {
   float mask;
 } ReshapeConstGridElement;
 
-/* ================================================================================================
+/* --------------------------------------------------------------------
  * Construct/destruct reshape context.
  */
 
@@ -166,9 +166,10 @@ bool multires_reshape_context_create_from_subdivide(MultiresReshapeContext *resh
                                                     struct MultiresModifierData *mmd,
                                                     int top_level);
 
+void multires_reshape_free_original_grids(MultiresReshapeContext *reshape_context);
 void multires_reshape_context_free(MultiresReshapeContext *reshape_context);
 
-/* ================================================================================================
+/* --------------------------------------------------------------------
  * Helper accessors.
  */
 
@@ -213,7 +214,7 @@ ReshapeGridElement multires_reshape_grid_element_for_ptex_coord(
 ReshapeConstGridElement multires_reshape_orig_grid_element_for_grid_coord(
     const MultiresReshapeContext *reshape_context, const GridCoord *grid_coord);
 
-/* ================================================================================================
+/* --------------------------------------------------------------------
  * Sample limit surface of the base mesh.
  */
 
@@ -224,14 +225,14 @@ void multires_reshape_evaluate_limit_at_grid(const MultiresReshapeContext *resha
                                              float r_P[3],
                                              float r_tangent_matrix[3][3]);
 
-/* ================================================================================================
+/* --------------------------------------------------------------------
  * Custom data preparation.
  */
 
 /* Make sure custom data is allocated for the given level. */
 void multires_reshape_ensure_grids(struct Mesh *mesh, const int level);
 
-/* ================================================================================================
+/* --------------------------------------------------------------------
  * Functions specific to reshaping from a set of vertices in a object position.
  */
 
@@ -244,7 +245,7 @@ bool multires_reshape_assign_final_coords_from_vertcos(
     const float (*vert_coords)[3],
     const int num_vert_coords);
 
-/* ================================================================================================
+/* --------------------------------------------------------------------
  * Functions specific to reshaping from CCG.
  */
 
@@ -254,7 +255,7 @@ bool multires_reshape_assign_final_coords_from_vertcos(
 bool multires_reshape_assign_final_coords_from_ccg(const MultiresReshapeContext *reshape_context,
                                                    struct SubdivCCG *subdiv_ccg);
 
-/* ================================================================================================
+/* --------------------------------------------------------------------
  * Functions specific to reshaping from MDISPS.
  */
 
@@ -266,7 +267,7 @@ void multires_reshape_assign_final_coords_from_mdisps(
 void multires_reshape_assign_final_coords_from_orig_mdisps(
     const MultiresReshapeContext *reshape_context);
 
-/* ================================================================================================
+/* --------------------------------------------------------------------
  * Displacement smooth.
  */
 
@@ -285,7 +286,7 @@ void multires_reshape_smooth_object_grids_with_details(
  */
 void multires_reshape_smooth_object_grids(const MultiresReshapeContext *reshape_context);
 
-/* ================================================================================================
+/* --------------------------------------------------------------------
  * Displacement, space conversion.
  */
 
@@ -296,7 +297,7 @@ void multires_reshape_store_original_grids(MultiresReshapeContext *reshape_conte
 void multires_reshape_object_grids_to_tangent_displacement(
     const MultiresReshapeContext *reshape_context);
 
-/* ================================================================================================
+/* --------------------------------------------------------------------
  * Apply base.
  */
 

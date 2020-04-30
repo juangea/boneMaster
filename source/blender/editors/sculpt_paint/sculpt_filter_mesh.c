@@ -112,10 +112,10 @@ void SCULPT_filter_cache_init(Object *ob, Sculpt *sd)
       .nodes = ss->filter_cache->nodes,
   };
 
-  PBVHParallelSettings settings;
+  TaskParallelSettings settings;
   BKE_pbvh_parallel_range_settings(
       &settings, (sd->flags & SCULPT_USE_OPENMP), ss->filter_cache->totnode);
-  BKE_pbvh_parallel_range(
+  BLI_task_parallel_range(
       0, ss->filter_cache->totnode, &data, filter_cache_init_task_cb, &settings);
 }
 
@@ -223,7 +223,16 @@ static void mesh_filter_task_cb(void *__restrict userdata,
 
     if (ss->filter_cache->active_face_set != SCULPT_FACE_SET_NONE) {
       if (!SCULPT_vertex_has_face_set(ss, vd.index, ss->filter_cache->active_face_set)) {
-        continue;
+        /* Surface Smooth can't skip the loop for this vertex as it needs to calculate its
+         * laplacian_disp. This value is accessed from the vertex neighbors when deforming the
+         * vertices, so it is needed for all vertices even if they are not going to be displaced.
+         */
+        if (filter_type == MESH_FILTER_SURFACE_SMOOTH) {
+          fade = 0.0f;
+        }
+        else {
+          continue;
+        }
       }
       /* Skip the edges of the face set when relaxing or smoothing.
        * There is a relax face set option to relax the boundaries independently. */
@@ -429,6 +438,13 @@ static void mesh_filter_surface_smooth_displace_task_cb(
     if (fade == 0.0f) {
       continue;
     }
+
+    if (ss->filter_cache->active_face_set != SCULPT_FACE_SET_NONE) {
+      if (!SCULPT_vertex_has_face_set(ss, vd.index, ss->filter_cache->active_face_set)) {
+        continue;
+      }
+    }
+
     SCULPT_surface_smooth_displace_step(ss,
                                         vd.co,
                                         ss->filter_cache->surface_smooth_laplacian_disp,
@@ -480,13 +496,13 @@ static int sculpt_mesh_filter_modal(bContext *C, wmOperator *op, const wmEvent *
       .filter_strength = filter_strength,
   };
 
-  PBVHParallelSettings settings;
+  TaskParallelSettings settings;
   BKE_pbvh_parallel_range_settings(
       &settings, (sd->flags & SCULPT_USE_OPENMP), ss->filter_cache->totnode);
-  BKE_pbvh_parallel_range(0, ss->filter_cache->totnode, &data, mesh_filter_task_cb, &settings);
+  BLI_task_parallel_range(0, ss->filter_cache->totnode, &data, mesh_filter_task_cb, &settings);
 
   if (filter_type == MESH_FILTER_SURFACE_SMOOTH) {
-    BKE_pbvh_parallel_range(0,
+    BLI_task_parallel_range(0,
                             ss->filter_cache->totnode,
                             &data,
                             mesh_filter_surface_smooth_displace_task_cb,

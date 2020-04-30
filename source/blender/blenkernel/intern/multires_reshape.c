@@ -42,9 +42,9 @@
 
 #include "multires_reshape.h"
 
-/* ================================================================================================
- * Reshape from object.
- */
+/* -------------------------------------------------------------------- */
+/** \name Reshape from object
+ * \{ */
 
 bool multiresModifier_reshapeFromVertcos(struct Depsgraph *depsgraph,
                                          struct Object *object,
@@ -93,9 +93,11 @@ bool multiresModifier_reshapeFromObject(struct Depsgraph *depsgraph,
   return result;
 }
 
-/* ================================================================================================
- * Reshape from modifier.
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Reshape from modifier
+ * \{ */
 
 bool multiresModifier_reshapeFromDeformModifier(struct Depsgraph *depsgraph,
                                                 struct Object *object,
@@ -133,9 +135,11 @@ bool multiresModifier_reshapeFromDeformModifier(struct Depsgraph *depsgraph,
   return result;
 }
 
-/* ================================================================================================
- * Reshape from grids.
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Reshape from grids
+ * \{ */
 
 bool multiresModifier_reshapeFromCCG(const int tot_level,
                                      Mesh *coarse_mesh,
@@ -161,9 +165,11 @@ bool multiresModifier_reshapeFromCCG(const int tot_level,
   return true;
 }
 
-/* ================================================================================================
- * Subdivision.
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Subdivision
+ * \{ */
 
 void multiresModifier_subdivide(Object *object, MultiresModifierData *mmd)
 {
@@ -202,16 +208,24 @@ void multiresModifier_subdivide_to_level(struct Object *object,
   multires_reshape_store_original_grids(&reshape_context);
   multires_reshape_ensure_grids(coarse_mesh, reshape_context.top.level);
   multires_reshape_assign_final_coords_from_orig_mdisps(&reshape_context);
-  multires_reshape_smooth_object_grids(&reshape_context);
+
+  /* Free original grids which makes it so smoothing with details thinks all the details were
+   * added against base mesh's limit surface. This is similar behavior to as if we've done all
+   * displacement in sculpt mode at the old top level and then propagated to the new top level. */
+  multires_reshape_free_original_grids(&reshape_context);
+
+  multires_reshape_smooth_object_grids_with_details(&reshape_context);
   multires_reshape_object_grids_to_tangent_displacement(&reshape_context);
   multires_reshape_context_free(&reshape_context);
 
   multires_set_tot_level(object, mmd, top_level);
 }
 
-/* ================================================================================================
- * Apply base.
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Apply base
+ * \{ */
 
 void multiresModifier_base_apply(struct Depsgraph *depsgraph,
                                  Object *object,
@@ -257,3 +271,5 @@ void multiresModifier_base_apply(struct Depsgraph *depsgraph,
 
   multires_reshape_context_free(&reshape_context);
 }
+
+/** \} */
