@@ -30,13 +30,16 @@ class VOXEL_MESHER_UL_csg(UIList):
             layout.prop(item, "enabled", text="")
 
             if _index == 0:
-                layout.label(text="Self Object")
+                layout.label(text="Self Object")    
             else:
-                row = layout.row(align=True)
-                row.prop(item, "object", text="")
-                row.prop(item, "operation", text="")
+                sp = layout.split(factor=0.1, align=True)
+                sp.separator()
+                s = sp.split(factor=0.66, align=True)
+                s.prop(item, "object", text="")
+                s.prop(item, "operation", text="")
 
             layout.prop(item, "input", text="")
+            
 
         elif self.layout_type == 'GRID':
             layout.alignment = 'CENTER'

@@ -2786,7 +2786,7 @@ static int voxelmesher_csg_remove_exec(bContext *C, wmOperator *op)
   }
 
   CSGVolume_Object *vcob = (CSGVolume_Object *)BLI_findlink(&vmd->csg_operands, index);
-  remove_allowed = vcob && vcob->object && vcob->object != ob && index > 0;
+  remove_allowed = (vcob && !vcob->object && index > 0) || (vcob && vcob->object && vcob->object != ob && index > 0);
   if (!remove_allowed) {
     return OPERATOR_CANCELLED;
   }
