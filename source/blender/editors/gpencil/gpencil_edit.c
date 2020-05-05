@@ -77,6 +77,7 @@
 
 #include "ED_gpencil.h"
 #include "ED_object.h"
+#include "ED_outliner.h"
 #include "ED_screen.h"
 #include "ED_select_utils.h"
 #include "ED_space_api.h"
@@ -3185,6 +3186,7 @@ static void gpencil_flip_stroke(bGPDstroke *gps)
 
 /* Helper: copy point between strokes */
 static void gpencil_stroke_copy_point(bGPDstroke *gps,
+                                      MDeformVert *dvert,
                                       bGPDspoint *point,
                                       int idx,
                                       const float delta[3],
@@ -3198,6 +3200,13 @@ static void gpencil_stroke_copy_point(bGPDstroke *gps,
   if (gps->dvert != NULL) {
     gps->dvert = MEM_reallocN(gps->dvert, sizeof(MDeformVert) * (gps->totpoints + 1));
   }
+  else {
+    /* If destination has weight add weight to origin. */
+    if (dvert != NULL) {
+      gps->dvert = MEM_callocN(sizeof(MDeformVert) * (gps->totpoints + 1), __func__);
+    }
+  }
+
   gps->totpoints++;
   newpoint = &gps->points[gps->totpoints - 1];
 
@@ -3211,11 +3220,16 @@ static void gpencil_stroke_copy_point(bGPDstroke *gps,
   copy_v4_v4(newpoint->vert_color, point->vert_color);
 
   if (gps->dvert != NULL) {
-    MDeformVert *dvert = &gps->dvert[idx];
     MDeformVert *newdvert = &gps->dvert[gps->totpoints - 1];
 
-    newdvert->totweight = dvert->totweight;
-    newdvert->dw = MEM_dupallocN(dvert->dw);
+    if (dvert != NULL) {
+      newdvert->totweight = dvert->totweight;
+      newdvert->dw = MEM_dupallocN(dvert->dw);
+    }
+    else {
+      newdvert->totweight = 0;
+      newdvert->dw = NULL;
+    }
   }
 }
 
@@ -3266,16 +3280,18 @@ static void gpencil_stroke_join_strokes(bGPDstroke *gps_a,
     /* 1st: add one tail point to start invisible area */
     point = gps_a->points[gps_a->totpoints - 1];
     deltatime = point.time;
-    gpencil_stroke_copy_point(gps_a, &point, gps_a->totpoints - 1, delta, 0.0f, 0.0f, 0.0f);
+
+    gpencil_stroke_copy_point(gps_a, NULL, &point, gps_a->totpoints - 1, delta, 0.0f, 0.0f, 0.0f);
 
     /* 2nd: add one head point to finish invisible area */
     point = gps_b->points[0];
-    gpencil_stroke_copy_point(gps_a, &point, 0, delta, 0.0f, 0.0f, deltatime);
+    gpencil_stroke_copy_point(gps_a, NULL, &point, 0, delta, 0.0f, 0.0f, deltatime);
   }
 
   /* 3rd: add all points */
   for (i = 0, pt = gps_b->points; i < gps_b->totpoints && pt; i++, pt++) {
-    gpencil_stroke_copy_point(gps_a, pt, i, delta, pt->pressure, pt->strength, deltatime);
+    MDeformVert *dvert = (gps_b->dvert) ? &gps_b->dvert[i] : NULL;
+    gpencil_stroke_copy_point(gps_a, dvert, pt, i, delta, pt->pressure, pt->strength, deltatime);
   }
 }
 
@@ -4365,6 +4381,7 @@ static int gp_stroke_separate_exec(bContext *C, wmOperator *op)
   WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, NULL);
   WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED, NULL);
   WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_SELECTED, NULL);
+  ED_outliner_select_sync_from_object_tag(C);
 
   return OPERATOR_FINISHED;
 }
@@ -4545,8 +4562,8 @@ void GPENCIL_OT_stroke_smooth(wmOperatorType *ot)
 /* smart stroke cutter for trimming stroke ends */
 struct GP_SelectLassoUserData {
   rcti rect;
-  const int (*mcords)[2];
-  int mcords_len;
+  const int (*mcoords)[2];
+  int mcoords_len;
 };
 
 static bool gpencil_test_lasso(bGPDstroke *gps,
@@ -4562,7 +4579,7 @@ static bool gpencil_test_lasso(bGPDstroke *gps,
   gp_point_to_xy(gsc, gps, &pt2, &x0, &y0);
   /* test if in lasso */
   return ((!ELEM(V2D_IS_CLIPPED, x0, y0)) && BLI_rcti_isect_pt(&data->rect, x0, y0) &&
-          BLI_lasso_is_point_inside(data->mcords, data->mcords_len, x0, y0, INT_MAX));
+          BLI_lasso_is_point_inside(data->mcoords, data->mcoords_len, x0, y0, INT_MAX));
 }
 
 typedef bool (*GPencilTestFn)(bGPDstroke *gps,
@@ -4740,19 +4757,19 @@ static int gpencil_cutter_exec(bContext *C, wmOperator *op)
   }
 
   struct GP_SelectLassoUserData data = {0};
-  data.mcords = WM_gesture_lasso_path_to_array(C, op, &data.mcords_len);
+  data.mcoords = WM_gesture_lasso_path_to_array(C, op, &data.mcoords_len);
 
   /* Sanity check. */
-  if (data.mcords == NULL) {
+  if (data.mcoords == NULL) {
     return OPERATOR_PASS_THROUGH;
   }
 
   /* Compute boundbox of lasso (for faster testing later). */
-  BLI_lasso_boundbox(&data.rect, data.mcords, data.mcords_len);
+  BLI_lasso_boundbox(&data.rect, data.mcoords, data.mcoords_len);
 
   gpencil_cutter_lasso_select(C, op, gpencil_test_lasso, &data);
 
-  MEM_freeN((void *)data.mcords);
+  MEM_freeN((void *)data.mcoords);
 
   return OPERATOR_FINISHED;
 }

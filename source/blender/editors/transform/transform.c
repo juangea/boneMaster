@@ -828,7 +828,6 @@ static void transform_event_xyz_constraint(TransInfo *t, short key_type, bool is
       if (ELEM(cmode, '\0', axis)) {
         /* Successive presses on existing axis, cycle orientation modes. */
         t->orientation.index = (t->orientation.index + 1) % ARRAY_SIZE(t->orientation.types);
-        BLI_assert(t->orientation.types[0] != V3D_ORIENT_CUSTOM_MATRIX);
         initTransformOrientation(t->context, t, t->orientation.types[t->orientation.index]);
       }
 
@@ -1746,11 +1745,9 @@ void saveTransform(bContext *C, TransInfo *t, wmOperator *op)
   }
 
   if ((prop = RNA_struct_find_property(op->ptr, "constraint_axis"))) {
-    if (t->con.mode & CON_APPLY) {
-      bool constraint_axis[3] = {false, false, false};
-      if (t->idx_max == 0) {
-        /* Only set if needed, so we can hide in the UI when nothing is set.
-         * See 'transform_poll_property'. */
+    bool constraint_axis[3] = {false, false, false};
+    if (t->idx_max == 0) {
+      if (t->con.mode & CON_APPLY) {
         if (t->con.mode & CON_AXIS0) {
           constraint_axis[0] = true;
         }
@@ -1760,16 +1757,17 @@ void saveTransform(bContext *C, TransInfo *t, wmOperator *op)
         if (t->con.mode & CON_AXIS2) {
           constraint_axis[2] = true;
         }
+        RNA_property_boolean_set_array(op->ptr, prop, constraint_axis);
       }
       else {
-        constraint_axis[0] = true;
-        constraint_axis[1] = true;
-        constraint_axis[2] = true;
+        RNA_property_unset(op->ptr, prop);
       }
-      RNA_property_boolean_set_array(op->ptr, prop, constraint_axis);
     }
     else {
-      RNA_property_unset(op->ptr, prop);
+      constraint_axis[0] = true;
+      constraint_axis[1] = true;
+      constraint_axis[2] = true;
+      RNA_property_boolean_set_array(op->ptr, prop, constraint_axis);
     }
   }
 
@@ -1896,9 +1894,12 @@ bool initTransform(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
 
   initTransInfo(C, t, op, event);
 
-  /* Although `t->orientation.index` can be different from 0, always init the
-   * default orientation so that in redo the contraint uses the `orient_matrix` */
-  initTransformOrientation(C, t, t->orientation.types[0]);
+  /* Use the custom orientation when it is set. */
+  short orientation = t->orientation.types[0] == V3D_ORIENT_CUSTOM_MATRIX ?
+                          V3D_ORIENT_CUSTOM_MATRIX :
+                          t->orientation.types[t->orientation.index];
+
+  initTransformOrientation(C, t, orientation);
 
   if (t->spacetype == SPACE_VIEW3D) {
     t->draw_handle_apply = ED_region_draw_cb_activate(

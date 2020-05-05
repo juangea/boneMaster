@@ -769,19 +769,6 @@ void wm_window_ghostwindows_ensure(wmWindowManager *wm)
      * in practice the window manager will likely move to the correct monitor */
     wm_init_state.start_x = 0;
     wm_init_state.start_y = 0;
-
-#ifdef WITH_X11 /* X11 */
-    /* X11, don't start maximized because we can't figure out the dimensions
-     * of a single display yet if there are multiple, due to lack of Xinerama
-     * handling in GHOST. */
-    wm_init_state.size_x = min_ii(wm_init_state.size_x, WM_WIN_INIT_SIZE_X);
-    wm_init_state.size_y = min_ii(wm_init_state.size_y, WM_WIN_INIT_SIZE_Y);
-    /* pad */
-    wm_init_state.start_x = WM_WIN_INIT_PAD;
-    wm_init_state.start_y = WM_WIN_INIT_PAD;
-    wm_init_state.size_x -= WM_WIN_INIT_PAD * 2;
-    wm_init_state.size_y -= WM_WIN_INIT_PAD * 2;
-#endif
   }
 
   LISTBASE_FOREACH (wmWindow *, win, &wm->windows) {
@@ -953,7 +940,8 @@ wmWindow *WM_window_open_temp(bContext *C,
 
   /* make window active, and validate/resize */
   CTX_wm_window_set(C, win);
-  if (!win->ghostwin) {
+  const bool new_window = (win->ghostwin == NULL);
+  if (new_window) {
     wm_window_ghostwindow_ensure(wm, win, dialog);
   }
   WM_check(C);
@@ -972,7 +960,7 @@ wmWindow *WM_window_open_temp(bContext *C,
 
   ED_screen_change(C, screen);
 
-  if (win->ghostwin) {
+  if (!new_window) {
     /* Set size in GHOST window and then update size and position from GHOST,
      * in case they where changed by GHOST to fit the monitor/screen. */
     wm_window_set_size(win, win->sizex, win->sizey);

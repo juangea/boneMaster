@@ -69,6 +69,7 @@
 
 #include "ED_mesh.h"
 #include "ED_object.h"
+#include "ED_outliner.h"
 #include "ED_screen.h"
 #include "ED_transform.h"
 #include "ED_uvedit.h"
@@ -4404,6 +4405,7 @@ static int edbm_separate_exec(bContext *C, wmOperator *op)
     /* delay depsgraph recalc until all objects are duplicated */
     DEG_relations_tag_update(bmain);
     WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, NULL);
+    ED_outliner_select_sync_from_object_tag(C);
 
     return OPERATOR_FINISHED;
   }
@@ -4630,6 +4632,9 @@ static bool edbm_fill_grid_prepare(BMesh *bm, int offset, int *span_p, const boo
       v_act = v_act_link->data;
       BLI_listbase_rotate_first(verts, v_act_link);
     }
+
+    /* Run again to update the edge order from the rotated vertex list. */
+    BM_edgeloop_edges_get(el_store, edges);
 
     if (span_calc) {
       /* calculate the span by finding the next corner in 'verts'
