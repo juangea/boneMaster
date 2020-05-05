@@ -182,6 +182,11 @@ const EnumPropertyItem rna_enum_object_modifier_type_items[] = {
      ICON_MOD_TRIANGULATE,
      "Triangulate",
      "Convert all polygons to triangles"},
+    {eModifierType_VoxelMesher,
+     "VOXEL_MESHER",
+     ICON_MOD_REMESH,
+     "Voxel Mesher",
+     "Generate new mesh from other meshes or particles"},
     {eModifierType_Weld,
      "WELD",
      ICON_AUTOMERGE_OFF,
@@ -581,6 +586,8 @@ const EnumPropertyItem rna_enum_axis_flag_xyz_items[] = {
 #  include "DNA_fluid_types.h"
 #  include "DNA_particle_types.h"
 
+#  include "BLI_listbase.h"
+
 #  include "BKE_cachefile.h"
 #  include "BKE_context.h"
 #  include "BKE_mesh_runtime.h"
@@ -597,6 +604,12 @@ const EnumPropertyItem rna_enum_axis_flag_xyz_items[] = {
 #  ifdef WITH_ALEMBIC
 #    include "ABC_alembic.h"
 #  endif
+
+static bool rna_CSG_object_poll(PointerRNA *UNUSED(ptr), PointerRNA value)
+{
+  int type = ((Object *)value.owner_id)->type;
+  return type == OB_MESH || type == OB_CURVE || type == OB_FONT || type == OB_SURF;
+}
 
 static void rna_UVProject_projectors_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
 {
@@ -716,6 +729,8 @@ static StructRNA *rna_Modifier_refine(struct PointerRNA *ptr)
       return &RNA_SurfaceDeformModifier;
     case eModifierType_WeightedNormal:
       return &RNA_WeightedNormalModifier;
+    case eModifierType_VoxelMesher:
+      return &RNA_VoxelMesherModifier;
     /* Default */
     case eModifierType_Fluidsim: /* deprecated */
     case eModifierType_None:
@@ -757,16 +772,37 @@ static char *rna_Modifier_path(PointerRNA *ptr)
   return BLI_sprintfN("modifiers[\"%s\"]", name_esc);
 }
 
+static bool rna_Modifier_update_check(PointerRNA *ptr)
+{
+  ModifierData *md = ptr->data;
+  bool do_update = true;
+
+  if (md->type == eModifierType_VoxelMesher) {
+    VoxelMesherModifierData *vmd = (VoxelMesherModifierData *)md;
+    if (vmd->mode == MOD_VOXELMESHER_VOXEL) {
+      if (((vmd->flag & MOD_VOXELMESHER_LIVE_REMESH) == 0) && vmd->mesh_cached) {
+        do_update = false;
+      }
+    }
+  }
+
+  return do_update;
+}
+
 static void rna_Modifier_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
 {
-  DEG_id_tag_update(ptr->owner_id, ID_RECALC_GEOMETRY);
-  WM_main_add_notifier(NC_OBJECT | ND_MODIFIER, ptr->owner_id);
+  if (rna_Modifier_update_check(ptr)) {
+    DEG_id_tag_update(ptr->owner_id, ID_RECALC_GEOMETRY);
+    WM_main_add_notifier(NC_OBJECT | ND_MODIFIER, ptr->owner_id);
+  }
 }
 
 static void rna_Modifier_dependency_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
-  rna_Modifier_update(bmain, scene, ptr);
-  DEG_relations_tag_update(bmain);
+  if (rna_Modifier_update_check(ptr)) {
+    rna_Modifier_update(bmain, scene, ptr);
+    DEG_relations_tag_update(bmain);
+  }
 }
 
 /* Vertex Groups */
@@ -793,6 +829,7 @@ RNA_MOD_VGROUP_NAME_SET(Lattice, name);
 RNA_MOD_VGROUP_NAME_SET(Mask, vgroup);
 RNA_MOD_VGROUP_NAME_SET(MeshDeform, defgrp_name);
 RNA_MOD_VGROUP_NAME_SET(NormalEdit, defgrp_name);
+RNA_MOD_VGROUP_NAME_SET(VoxelMesher, size_defgrp_name);
 RNA_MOD_VGROUP_NAME_SET(Shrinkwrap, vgroup_name);
 RNA_MOD_VGROUP_NAME_SET(SimpleDeform, vgroup_name);
 RNA_MOD_VGROUP_NAME_SET(Smooth, defgrp_name);
@@ -1024,6 +1061,39 @@ static void rna_UVProjector_object_set(PointerRNA *ptr,
   Object *ob = (Object *)value.data;
   id_lib_extern((ID *)ob);
   *ob_p = ob;
+}
+
+static PointerRNA rna_CSGVolume_object_get(PointerRNA *ptr)
+{
+  CSGVolume_Object *vcob = (CSGVolume_Object *)ptr->data;
+  return rna_pointer_inherit_refine(ptr, &RNA_Object, vcob->object);
+}
+
+static void rna_CSGVolume_object_set(PointerRNA *ptr,
+                                     PointerRNA value,
+                                     ReportList *UNUSED(reports))
+{
+  CSGVolume_Object *vcob = (CSGVolume_Object *)ptr->data;
+  Object *ob = (Object *)value.data;
+  id_lib_extern((ID *)ob);
+  vcob->object = ob;
+  if (ob) {
+    DEG_id_tag_update(&ob->id, ID_RECALC_TRANSFORM);
+    WM_main_add_notifier(NC_OBJECT | ND_DRAW, ob);
+  }
+}
+
+static void rna_VoxelMesherModifier_voxel_size_set(PointerRNA *ptr, float value)
+{
+  VoxelMesherModifierData *vmd = (VoxelMesherModifierData *)ptr->data;
+  CSGVolume_Object *vcob;
+
+  vmd->voxel_size = value;
+  for (vcob = vmd->csg_operands.first; vcob; vcob = vcob->next) {
+    if (vcob->flag & MOD_VOXELMESHER_CSG_SYNC_VOXEL_SIZE) {
+      vcob->voxel_size = value;
+    }
+  }
 }
 
 #  undef RNA_MOD_OBJECT_SET
@@ -5252,6 +5322,425 @@ static void rna_def_modifier_remesh(BlenderRNA *brna)
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 }
 
+static void rna_def_modifier_voxelmesher(BlenderRNA *brna)
+{
+  static const EnumPropertyItem filter_type_items[] = {
+      {VOXEL_FILTER_NONE, "NONE", 0, "None", "No Filter"},
+      {VOXEL_FILTER_GAUSSIAN, "GAUSSIAN", 0, "Gaussian", "Gaussian Filter"},
+      {VOXEL_FILTER_MEAN, "MEAN", 0, "Mean", "Mean Filter"},
+      {VOXEL_FILTER_MEDIAN, "MEDIAN", 0, "Median", "Median Filter"},
+      {VOXEL_FILTER_MEAN_CURVATURE,
+       "MEAN_CURVATURE",
+       0,
+       "Mean Curvature",
+       "Mean Curvature Filter"},
+      {VOXEL_FILTER_LAPLACIAN, "LAPLACIAN", 0, "Laplacian", "Laplacian Filter"},
+      {VOXEL_FILTER_DILATE, "DILATE", 0, "Dilate", "Dilate Filter"},
+      {VOXEL_FILTER_ERODE, "ERODE", 0, "Erode", "Erode Filter"},
+      {0, NULL, 0, NULL, NULL},
+  };
+
+  static const EnumPropertyItem filter_bias_items[] = {
+      {VOXEL_BIAS_FIRST, "FIRST", 0, "First", "First bias"},
+      {VOXEL_BIAS_SECOND, "SECOND", 0, "Second", "Second bias"},
+      {VOXEL_BIAS_THIRD, "THIRD", 0, "Third", "Third bias"},
+      {VOXEL_BIAS_WENO5, "WENO5", 0, "Weno5", "Weno5 bias"},
+      {VOXEL_BIAS_HJWENO5, "HJWENO5", 0, "HjWeno5", "HjWeno5 bias"},
+      {0, NULL, 0, NULL, NULL},
+  };
+
+  static const EnumPropertyItem prop_operation_items[] = {
+      {eVoxelMesherModifierOp_Union, "UNION", 0, "Union", "Combine two meshes in an additive way"},
+      {eVoxelMesherModifierOp_Difference,
+       "DIFFERENCE",
+       0,
+       "Difference",
+       "Combine two meshes in a subtractive way"},
+      {eVoxelMesherModifierOp_Intersect,
+       "INTERSECT",
+       0,
+       "Intersect",
+       "Keep the part of the mesh that intersects with the other selected object"},
+      {0, NULL, 0, NULL, NULL},
+  };
+
+  static const EnumPropertyItem prop_sampler_items[] = {
+      {eVoxelMesherModifierSampler_None,
+       "None",
+       0,
+       "None",
+       "Do not resample to match grid transforms."},
+      {eVoxelMesherModifierSampler_Point,
+       "POINT",
+       0,
+       "Point",
+       "Use OpenVDBs point sampler to match grid transforms."},
+      {eVoxelMesherModifierSampler_Box,
+       "BOX",
+       0,
+       "Box",
+       "Use OpenVDBs box sampler to match grid transforms."},
+      {eVoxelMesherModifierSampler_Quadratic,
+       "QUADRATIC",
+       0,
+       "Quadratic",
+       "Use OpenVDBs quadratic sampler to match grid transforms."},
+      {0, NULL, 0, NULL, NULL},
+  };
+
+  static const EnumPropertyItem mesh_items[] = {
+      {MOD_VOXELMESHER_VERTICES,
+       "MESH",
+       ICON_MESH_DATA,
+       "Mesh",
+       "Output a metaball or voxel mesh using mesh input data"},
+      {MOD_VOXELMESHER_PARTICLES,
+       "PARTICLES",
+       ICON_PARTICLE_DATA,
+       "Particles",
+       "Output a metaball or voxel mesh using particle input data"},
+      {0, NULL, 0, NULL, NULL}};
+
+  static const EnumPropertyItem filter_items[] = {
+      {eVoxelMesherFlag_Alive,
+       "ALIVE",
+       0,
+       "Alive",
+       "Output a metaball surface using alive particle input data"},
+      {eVoxelMesherFlag_Dead,
+       "DEAD",
+       0,
+       "Dead",
+       "Output a metaball surface using dead particle input data"},
+      {eVoxelMesherFlag_Unborn,
+       "UNBORN",
+       0,
+       "Unborn",
+       "Output a metaball surface using unborn particle input data"},
+      {eVoxelMesherFlag_Size,
+       "SIZE",
+       0,
+       "Size",
+       "Override metaball size by individual particle size"},
+      {eVoxelMesherFlag_Verts, "VERTS", 0, "Verts", "Only output a vertex per particle"},
+      {0, NULL, 0, NULL, NULL}};
+
+  static const EnumPropertyItem mode_items[] = {
+      {MOD_VOXELMESHER_METABALL,
+       "METABALL",
+       0,
+       "Metaball",
+       "Output a surface that consists of metaballs based from the vertices or particles of the "
+       "input mesh"},
+      {MOD_VOXELMESHER_VOXEL,
+       "VOXEL",
+       0,
+       "Voxel",
+       "Invokes the OpenVDB voxel mesher and generates quad meshes"},
+      {0, NULL, 0, NULL, NULL},
+  };
+
+  StructRNA *srna;
+  PropertyRNA *prop;
+
+  srna = RNA_def_struct(brna, "VoxelMesherModifier", "Modifier");
+  RNA_def_struct_ui_text(
+      srna, "Voxel Mesher Modifier", "Generate new mesh from other meshes or particles");
+  RNA_def_struct_sdna(srna, "VoxelMesherModifierData");
+  RNA_def_struct_ui_icon(srna, ICON_MOD_REMESH);
+
+  prop = RNA_def_property(srna, "mode", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, mode_items);
+  RNA_def_property_ui_text(prop, "Mode", "");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "use_smooth_shade", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", MOD_VOXELMESHER_SMOOTH_SHADING);
+  RNA_def_property_ui_text(
+      prop, "Smooth Shading", "Output faces with smooth shading rather than flat shaded");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  /* Metaball */
+
+  prop = RNA_def_property(srna, "mball_resolution", PROP_FLOAT, PROP_DISTANCE);
+  RNA_def_property_float_sdna(prop, NULL, "wiresize");
+  RNA_def_property_range(prop, 0.0001f, 10000.0f);
+  RNA_def_property_ui_range(prop, 0.05f, 1000.0f, 2.5f, 3);
+  RNA_def_property_ui_text(prop, "Wire Size", "Polygonization resolution in the 3D viewport");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "mball_render_resolution", PROP_FLOAT, PROP_DISTANCE);
+  RNA_def_property_float_sdna(prop, NULL, "rendersize");
+  RNA_def_property_range(prop, 0.0001f, 10000.0f);
+  RNA_def_property_ui_range(prop, 0.025f, 1000.0f, 2.5f, 3);
+  RNA_def_property_ui_text(prop, "Render Size", "Polygonization resolution in rendering");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "mball_threshold", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_float_sdna(prop, NULL, "thresh");
+  RNA_def_property_range(prop, 0.0f, 100.0f);
+  RNA_def_property_ui_text(prop, "Threshold", "Influence of meta elements");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "mball_size", PROP_FLOAT, PROP_XYZ);
+  RNA_def_property_float_sdna(prop, NULL, "basesize");
+  RNA_def_property_ui_range(prop, 0.0001f, 10.0f, 0.1f, 3);
+  RNA_def_property_range(prop, 0.001f, 100.0f);
+  RNA_def_property_array(prop, 3);
+  RNA_def_property_ui_text(prop, "Size", "The base size of each metaball element");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "input", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, mesh_items);
+  RNA_def_property_flag(prop, PROP_ENUM_FLAG);
+  RNA_def_property_ui_text(prop, "Input", "Which input source to consider for meshing");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "psys", PROP_INT, PROP_NONE);
+  RNA_def_property_int_sdna(prop, NULL, "psys");
+  RNA_def_property_range(prop, 1, SHRT_MAX);
+  RNA_def_property_ui_text(
+      prop, "Particle System Index", "Index of the input particle system to use");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "filter", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, NULL, "pflag");
+  RNA_def_property_enum_items(prop, filter_items);
+  RNA_def_property_flag(prop, PROP_ENUM_FLAG);
+  RNA_def_property_ui_text(prop, "Filter", "Which particles to consider in meshing");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "size_vertex_group", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_sdna(prop, NULL, "size_defgrp_name");
+  RNA_def_property_ui_text(
+      prop, "Size Vertex Group", "Vertex group name which optionally defines metaball size");
+  RNA_def_property_string_funcs(prop, NULL, NULL, "rna_VoxelMesherModifier_size_defgrp_name_set");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  /* Voxel */
+
+  prop = RNA_def_property(srna, "voxel_size", PROP_FLOAT, PROP_UNSIGNED);
+  RNA_def_property_float_funcs(prop, NULL, "rna_VoxelMesherModifier_voxel_size_set", NULL);
+  RNA_def_property_range(prop, 0.001, 1000.0);
+  RNA_def_property_float_default(prop, 0.1f);
+  RNA_def_property_ui_range(prop, 0.0001, 1, 0.01, 4);
+  RNA_def_property_ui_text(prop, "Voxel Size", "Voxel size used for volume evaluation");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "smooth_normals", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", MOD_VOXELMESHER_SMOOTH_NORMALS);
+  RNA_def_property_ui_text(prop, "Smooth Normals", "Smooth normals on the resulting mesh");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "isovalue", PROP_FLOAT, PROP_UNSIGNED);
+  RNA_def_property_range(prop, 0.0, 1.0);
+  RNA_def_property_float_default(prop, 0.1f);
+  RNA_def_property_ui_range(prop, 0.0, 1, 0.01, 4);
+  RNA_def_property_ui_text(prop, "Isovalue", "Isovalue used for mesher");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "adaptivity", PROP_FLOAT, PROP_UNSIGNED);
+  RNA_def_property_range(prop, 0.0, 1.0);
+  RNA_def_property_float_default(prop, 0.1f);
+  RNA_def_property_ui_range(prop, 0.0, 1, 0.01, 4);
+  RNA_def_property_ui_text(prop, "Adaptivity", "Voxel Adaptivity used for mesher");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "relax_triangles", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", MOD_VOXELMESHER_RELAX_TRIANGLES);
+  RNA_def_property_ui_text(
+      prop, "Relax Triangles", "Relax disoriented Triangles on the resulting mesh");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "filter_type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, filter_type_items);
+  RNA_def_property_ui_text(prop, "Filter Type", "OpenVDB Levelset Filter Type");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "filter_bias", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, filter_bias_items);
+  RNA_def_property_ui_text(prop, "Filter Bias", "OpenVDB Levelset Filter Bias");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "filter_width", PROP_INT, PROP_UNSIGNED);
+  RNA_def_property_int_sdna(prop, NULL, "filter_width");
+  RNA_def_property_range(prop, 0, INT_MAX);
+  RNA_def_property_ui_text(prop, "Filter Width", "OpenVDB Levelset Filter Width");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "filter_distance", PROP_FLOAT, PROP_UNSIGNED);
+  RNA_def_property_float_sdna(prop, NULL, "filter_distance");
+  RNA_def_property_range(prop, 0, FLT_MAX);
+  RNA_def_property_ui_text(prop, "Filter Distance", "OpenVDB Levelset Filter Distance");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "filter_iterations", PROP_INT, PROP_UNSIGNED);
+  RNA_def_property_int_sdna(prop, NULL, "filter_iterations");
+  RNA_def_property_range(prop, 0, INT_MAX);
+  RNA_def_property_ui_text(prop, "Filter Iterations", "OpenVDB Levelset Filter Iterations");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "filter_sigma", PROP_FLOAT, PROP_UNSIGNED);
+  RNA_def_property_float_sdna(prop, NULL, "filter_sigma");
+  RNA_def_property_range(prop, 0.001, FLT_MAX);
+  RNA_def_property_ui_text(prop, "Filter Sigma", "OpenVDB Levelset Filter Sigma");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "sharpen_features", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", MOD_VOXELMESHER_SHARPEN_FEATURES);
+  RNA_def_property_ui_text(
+      prop,
+      "Sharpen Features",
+      "Try to enhance the quality of the meshed result to match the original better");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "edge_tolerance", PROP_FLOAT, PROP_UNSIGNED);
+  RNA_def_property_float_sdna(prop, NULL, "edge_tolerance");
+  RNA_def_property_range(prop, 0.0, 1.0);
+  RNA_def_property_ui_text(prop, "Edge Tolerance", "OpenVDB sharpen features edge tolerance");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "reproject_data", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", MOD_VOXELMESHER_REPROJECT_DATA);
+  RNA_def_property_ui_text(prop, "Reproject Data", "Keep the current data on the new mesh");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "live_remesh", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", MOD_VOXELMESHER_LIVE_REMESH);
+  RNA_def_property_ui_text(
+      prop,
+      "Live Remesh",
+      "Perform remesh on every modifier update, otherwise return cached mesh");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "accumulate", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", MOD_VOXELMESHER_ACCUMULATE);
+  RNA_def_property_ui_text(
+      prop,
+      "Accumulate",
+      "Accumulate the mesh changes over time by re-using and updating the cached mesh");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "fix_poles", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", MOD_VOXELMESHER_FIX_POLES);
+  RNA_def_property_ui_text(prop, "Fix Poles", "Produces less poles and a better topology flow");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  // necessary for the UI list in python
+  prop = RNA_def_property(srna, "active_index", PROP_INT, PROP_UNSIGNED);
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  //RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Active CSG Object Index", "Active index in csg object array");
+
+  prop = RNA_def_property(srna, "csg_operands", PROP_COLLECTION, PROP_NONE);
+  RNA_def_property_struct_type(prop, "CSGVolume_Object");
+  RNA_def_property_collection_sdna(prop, NULL, "csg_operands", NULL);
+  RNA_def_property_ui_text(prop, "CSG Volume Operands", "");
+
+
+  srna = RNA_def_struct(brna, "CSGVolume_Object", NULL);
+  RNA_def_struct_ui_text(
+      srna, "CSG Volume Object", "CSG Volume Object used by the Voxel Mesher modifier");
+
+  prop = RNA_def_property(srna, "object", PROP_POINTER, PROP_NONE);
+  RNA_def_property_struct_type(prop, "Object");
+  RNA_def_property_pointer_sdna(prop, NULL, "object");
+  RNA_def_property_pointer_funcs(
+      prop, "rna_CSGVolume_object_get", "rna_CSGVolume_object_set", NULL, "rna_CSG_object_poll");
+  RNA_def_property_flag(prop, PROP_EDITABLE | PROP_ID_SELF_CHECK);
+  RNA_def_property_ui_text(prop, "Object", "Object to use csg operand");
+  RNA_def_property_update(prop, 0, "rna_Modifier_dependency_update");
+
+  prop = RNA_def_property(srna, "operation", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, prop_operation_items);
+  RNA_def_property_enum_default(prop, eVoxelMesherModifierOp_Difference);
+  RNA_def_property_ui_text(prop, "Operation", "");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "voxel_size", PROP_FLOAT, PROP_UNSIGNED);
+  RNA_def_property_range(prop, 0.001, 1.0);
+  RNA_def_property_float_default(prop, 0.1f);
+  RNA_def_property_ui_range(prop, 0.0001, 1, 0.01, 4);
+  RNA_def_property_ui_text(prop, "Voxel Size", "Voxel size used for volume evaluation");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "voxel_percentage", PROP_FLOAT, PROP_PERCENTAGE);
+  RNA_def_property_range(prop, 1.0, 100.0);
+  RNA_def_property_float_default(prop, 100.0);
+  RNA_def_property_ui_range(prop, 1.0, 100.0, 0.1, 1);
+  RNA_def_property_ui_text(prop, "Voxel Percentage", "Voxel percentage multiplier");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "enabled", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", MOD_VOXELMESHER_CSG_OBJECT_ENABLED);
+  RNA_def_property_ui_text(prop, "Enabled", "Consider this object as part of the csg operations");
+  RNA_def_property_update(prop, 0, "rna_Modifier_dependency_update");
+
+  prop = RNA_def_property(srna, "use_voxel_percentage", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", MOD_VOXELMESHER_CSG_VOXEL_PERCENTAGE);
+  RNA_def_property_ui_text(prop, "Percentage", "Use Voxel percentage multiplier");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "sync_voxel_size", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", MOD_VOXELMESHER_CSG_SYNC_VOXEL_SIZE);
+  RNA_def_property_ui_text(prop, "Sync Voxel Size", "Keep voxel size in sync");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "sampler", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, prop_sampler_items);
+  RNA_def_property_enum_default(prop, eVoxelMesherModifierSampler_Point);
+  RNA_def_property_ui_text(prop, "Sampler", "Method to resample grids to match the transforms");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  /* voxel mesh, particle mode parameters*/
+  prop = RNA_def_property(srna, "part_min_radius", PROP_FLOAT, PROP_UNSIGNED);
+  RNA_def_property_range(prop, 0.001, FLT_MAX);
+  RNA_def_property_float_default(prop, 1.0f);
+  RNA_def_property_ui_range(prop, 0.0, 1, 0.01, 3);
+  RNA_def_property_ui_text(
+      prop, "Minimal Radius", "Particle minimal radius to take int account when meshing");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "part_scale_factor", PROP_FLOAT, PROP_UNSIGNED);
+  RNA_def_property_range(prop, 0.001, FLT_MAX);
+  RNA_def_property_float_default(prop, 1.0f);
+  RNA_def_property_ui_range(prop, 0.0, 1, 0.01, 3);
+  RNA_def_property_ui_text(prop, "Scale Factor", "Particle Scale Factor");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "part_vel_factor", PROP_FLOAT, PROP_UNSIGNED);
+  RNA_def_property_range(prop, 0.0001, FLT_MAX);
+  RNA_def_property_float_default(prop, 1.0f);
+  RNA_def_property_ui_range(prop, 0.0, 1, 0.01, 3);
+  RNA_def_property_ui_text(prop, "Velocity Factor", "Particle Velocity Factor");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "part_trail_size", PROP_FLOAT, PROP_UNSIGNED);
+  RNA_def_property_range(prop, 0.001, FLT_MAX);
+  RNA_def_property_float_default(prop, 0.1f);
+  RNA_def_property_ui_range(prop, 0.0, 1, 0.01, 3);
+  RNA_def_property_ui_text(prop, "Trail Size", "Particle Trail Size");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "part_trail", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "part_trail", 0);
+  RNA_def_property_ui_text(prop, "Particle Trail", "Generate a particle trail");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "input", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, mesh_items);
+  RNA_def_property_flag(prop, PROP_ENUM_FLAG);
+  RNA_def_property_ui_text(prop, "Input", "Which input source to consider for meshing");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "psys", PROP_INT, PROP_NONE);
+  RNA_def_property_int_sdna(prop, NULL, "psys");
+  RNA_def_property_range(prop, 1, SHRT_MAX);
+  RNA_def_property_ui_text(
+      prop, "Particle System Index", "Index of the input particle system to use");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+}
+
 static void rna_def_modifier_ocean(BlenderRNA *brna)
 {
   StructRNA *srna;
@@ -6659,6 +7148,7 @@ void RNA_def_modifier(BlenderRNA *brna)
   rna_def_modifier_dynamic_paint(brna);
   rna_def_modifier_ocean(brna);
   rna_def_modifier_remesh(brna);
+  rna_def_modifier_voxelmesher(brna);
   rna_def_modifier_skin(brna);
   rna_def_modifier_laplaciansmooth(brna);
   rna_def_modifier_triangulate(brna);

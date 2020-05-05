@@ -941,6 +941,61 @@ static void sync_mesh_fluid_motion(BL::Object &b_ob, Scene *scene, Mesh *mesh)
   }
 }
 
+static bool sync_mesh_precalculated_motion(
+    BL::Mesh &b_mesh, BL::Object &b_ob, BL::Scene &b_scene, Scene *scene, Mesh *mesh)
+{
+  if (scene->need_motion() == Scene::MOTION_NONE)
+    return false;
+
+  BL::VoxelMesherModifier b_voxelmesher = object_metaball_voxel_voxelmesher_find(b_ob);
+  if (!(b_voxelmesher))
+    return false;
+
+  /* Find or add attribute */
+  float3 *P = &mesh->verts[0];
+  Attribute *attr_mP = mesh->attributes.find(ATTR_STD_MOTION_VERTEX_POSITION);
+
+  if (!attr_mP) {
+    attr_mP = mesh->attributes.add(ATTR_STD_MOTION_VERTEX_POSITION);
+  }
+
+  /* Only export previous and next frame, we don't have any in between data. */
+  float motion_times[2] = {-1.0f, 1.0f};
+  for (int step = 0; step < 2; step++) {
+    /* those are TIMES, but treated like Frames ? makes too high values, so take fps into account*/
+    float relative_time = motion_times[step] * scene->motion_shutter_time() * 0.5f /
+                          b_scene.render().fps();
+    float3 *mP = attr_mP->data_float3() + step * mesh->verts.size();
+
+    int i = 0;
+
+    {
+      BL::MeshVertexFloatPropertyLayer vlX = b_mesh.vertex_layers_float[std::string("velX")];
+      BL::MeshVertexFloatPropertyLayer vlY = b_mesh.vertex_layers_float[std::string("velY")];
+      BL::MeshVertexFloatPropertyLayer vlZ = b_mesh.vertex_layers_float[std::string("velZ")];
+
+      BL::Pointer ptrX = (BL::Pointer)vlX;
+      BL::Pointer ptrY = (BL::Pointer)vlY;
+      BL::Pointer ptrZ = (BL::Pointer)vlZ;
+
+      if (!ptrX || !ptrY || !ptrZ || vlX.data.length() != mesh->verts.size()) {
+        return false;
+      }
+
+      for (i = 0; i < mesh->verts.size(); i++) {
+        float x = vlX.data[i].value();
+        float y = vlY.data[i].value();
+        float z = vlZ.data[i].value();
+
+        ccl::float3 p = make_float3(x, y, z);
+        mP[i] = P[i] + p * relative_time;
+      }
+    }
+  }
+
+  return true;
+}
+
 void BlenderSync::sync_mesh(BL::Depsgraph b_depsgraph,
                             BL::Object b_ob,
                             Mesh *mesh,
@@ -978,6 +1033,9 @@ void BlenderSync::sync_mesh(BL::Depsgraph b_depsgraph,
       else
         create_mesh(scene, mesh, b_mesh, mesh->used_shaders, false);
 
+      /*sync other precalculated motion if any*/
+      sync_mesh_precalculated_motion(b_mesh, b_ob, b_scene, scene, mesh);
+
       free_object_to_mesh(b_data, b_ob, b_mesh);
     }
   }
@@ -1012,6 +1070,12 @@ void BlenderSync::sync_mesh_motion(BL::Depsgraph b_depsgraph,
   /* Skip objects without deforming modifiers. this is not totally reliable,
    * would need a more extensive check to see which objects are animated. */
   BL::Mesh b_mesh(PointerRNA_NULL);
+
+  /* other precalculated motion (metaball voxelmesher for now only) */
+  BL::VoxelMesherModifier b_voxelmesher = object_metaball_voxel_voxelmesher_find(b_ob);
+  if (b_voxelmesher)
+    return;
+
   if (ccl::BKE_object_is_deform_modified(b_ob, b_scene, preview)) {
     /* get derived mesh */
     b_mesh = object_to_mesh(b_data, b_ob, b_depsgraph, false, Mesh::SUBDIVISION_NONE);

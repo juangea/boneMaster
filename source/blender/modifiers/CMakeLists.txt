@@ -91,6 +91,7 @@ set(SRC
   intern/MOD_util.c
   intern/MOD_uvproject.c
   intern/MOD_uvwarp.c
+  intern/MOD_voxelmesher.c
   intern/MOD_warp.c
   intern/MOD_wave.c
   intern/MOD_weighted_normal.c
@@ -155,6 +156,18 @@ endif()
 if(WITH_INTERNATIONAL)
   add_definitions(-DWITH_INTERNATIONAL)
 endif()
+
+if(WITH_OPENVDB)
+  list(APPEND INC
+     ../../../intern/openvdb
+  )
+  list(APPEND LIB
+    bf_intern_openvdb
+    ${OPENVDB_LIBRARIES}
+  )
+  add_definitions(-DWITH_OPENVDB ${OPENVDB_DEFINITIONS})
+endif()
+
 
 # So we can have special tricks in modifier system.
 add_definitions(${GL_DEFINITIONS})

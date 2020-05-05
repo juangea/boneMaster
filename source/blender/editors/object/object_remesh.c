@@ -153,7 +153,7 @@ static int voxel_remesh_exec(bContext *C, wmOperator *op)
   }
 
   if (mesh->flag & ME_REMESH_FIX_POLES && mesh->remesh_voxel_adaptivity <= 0.0f) {
-    new_mesh = BKE_mesh_remesh_voxel_fix_poles(new_mesh);
+    new_mesh = BKE_mesh_remesh_voxel_fix_poles(new_mesh, true);
     BKE_mesh_calc_normals(new_mesh);
   }
 
