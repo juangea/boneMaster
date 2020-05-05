@@ -214,9 +214,11 @@ bool DeviceSplitKernel::path_trace(DeviceTask *task,
     /* initial guess to start rolling average */
     const int initial_num_samples = 1;
     /* approx number of samples per second */
-    const int samples_per_second = (avg_time_per_sample > 0.0) ?
-                                       int(double(time_multiplier) / avg_time_per_sample) + 1 :
-                                       initial_num_samples;
+    //const int samples_per_second = (avg_time_per_sample > 0.0) ?
+    //                                   int(double(time_multiplier) / avg_time_per_sample) + 1 :
+    //                                   initial_num_samples;
+
+    int samples_per_second = 4352;                                       
 
     RenderTile subtile = tile;
     subtile.start_sample = tile.sample;

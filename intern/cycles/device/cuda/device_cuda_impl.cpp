@@ -1838,9 +1838,6 @@ void CUDADevice::path_trace(DeviceTask &task,
   }
 
   uint step_samples = divide_up(min_blocks * num_threads_per_block, wtile->w * wtile->h);
-  if (task.adaptive_sampling.use) {
-    step_samples = task.adaptive_sampling.align_static_samples(step_samples);
-  }
 
   /* Render all samples. */
   int start_sample = rtile.start_sample;
@@ -1851,6 +1848,12 @@ void CUDADevice::path_trace(DeviceTask &task,
   {
       step_samples = 4352;
   }
+
+  if (task.adaptive_sampling.use) {
+    step_samples = task.adaptive_sampling.align_static_samples(step_samples);
+  }
+
+
 
   for (int sample = start_sample; sample < end_sample; sample += step_samples) {
     /* Setup and copy work tile to device. */
