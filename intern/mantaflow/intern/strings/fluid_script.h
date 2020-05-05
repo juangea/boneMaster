@@ -261,7 +261,7 @@ const std::string fluid_alloc_obstacle =
     "\n\
 mantaMsg('Allocating obstacle data')\n\
 numObs_s$ID$     = s$ID$.create(RealGrid)\n\
-phiObsSIn_s$ID$  = s$ID$.create(LevelsetGrid) # helper for static obstacles\n\
+phiObsSIn_s$ID$  = s$ID$.create(LevelsetGrid) # helper for static obstacle objects\n\
 phiObsIn_s$ID$   = s$ID$.create(LevelsetGrid)\n\
 obvel_s$ID$      = s$ID$.create(MACGrid)\n\
 obvelC_s$ID$     = s$ID$.create(Vec3Grid)\n\
@@ -311,7 +311,15 @@ z_invel_s$ID$ = s$ID$.create(RealGrid)\n";
 const std::string fluid_alloc_outflow =
     "\n\
 mantaMsg('Allocating outflow data')\n\
-phiOutIn_s$ID$ = s$ID$.create(LevelsetGrid)\n";
+phiOutSIn_s$ID$ = s$ID$.create(LevelsetGrid) # helper for static outflow objects\n\
+phiOutIn_s$ID$  = s$ID$.create(LevelsetGrid)\n\
+\n\
+# Set some initial values\n\
+phiOutSIn_s$ID$.setConst(9999)\n\
+phiOutIn_s$ID$.setConst(9999)\n\
+\n\
+if 'fluid_data_dict_resume_s$ID$' in globals():\n\
+    fluid_data_dict_resume_s$ID$.update(phiOutIn=phiOutIn_s$ID$)\n";
 
 //////////////////////////////////////////////////////////////////////
 // PRE / POST STEP
@@ -527,7 +535,6 @@ def bake_noise_process_$ID$(framenr, format_data, format_noise, path_data, path_
     sn$ID$.timestep = frameLength_s$ID$ # no adaptive timestep for noise\n\
     \n\
     smoke_step_noise_$ID$(framenr)\n\
-    smoke_save_noise_$ID$(path_noise, framenr, format_noise, resumable)\n\
 \n\
 def bake_noise_$ID$(path_data, path_noise, framenr, format_data, format_noise, resumable):\n\
     if not withMPBake or isWindows:\n\

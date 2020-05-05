@@ -1235,7 +1235,7 @@ static void rna_def_gpencil_stroke(BlenderRNA *brna)
   RNA_def_property_float_sdna(prop, NULL, "uv_translation");
   RNA_def_property_array(prop, 2);
   RNA_def_property_float_default(prop, 0.0f);
-  RNA_def_property_ui_text(prop, "UV Translation", "Translation of default UV postion");
+  RNA_def_property_ui_text(prop, "UV Translation", "Translation of default UV position");
   RNA_def_parameter_clear_flags(prop, PROP_ANIMATABLE, 0);
   RNA_def_property_update(prop, NC_GPENCIL | ND_DATA, "rna_GPencil_uv_update");
 
@@ -1471,7 +1471,7 @@ static void rna_def_gpencil_layer(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Info", "Layer name");
   RNA_def_property_string_funcs(prop, NULL, NULL, "rna_GPencilLayer_info_set");
   RNA_def_struct_name_property(srna, prop);
-  RNA_def_property_update(prop, NC_GPENCIL | ND_DATA | NA_RENAME, NULL);
+  RNA_def_property_update(prop, NC_GPENCIL | ND_DATA | NA_RENAME, "rna_GPencil_update");
 
   /* Frames */
   prop = RNA_def_property(srna, "frames", PROP_COLLECTION, PROP_NONE);

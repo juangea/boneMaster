@@ -88,6 +88,9 @@ struct GPUTexture {
 
   int fb_attachment[GPU_TEX_MAX_FBO_ATTACHED];
   GPUFrameBuffer *fb[GPU_TEX_MAX_FBO_ATTACHED];
+  /* Legacy workaround for texture copy. */
+  GLuint copy_fb;
+  GPUContext *copy_fb_ctx;
 };
 
 static uint gpu_get_bytesize(eGPUTextureFormat data_type);
@@ -1719,6 +1722,94 @@ void GPU_texture_generate_mipmap(GPUTexture *tex)
   gpu_texture_memory_footprint_add(tex);
 }
 
+static GLenum gpu_texture_default_attachment(GPUTexture *tex)
+{
+  return !GPU_texture_depth(tex) ?
+             GL_COLOR_ATTACHMENT0 :
+             (GPU_texture_stencil(tex) ? GL_DEPTH_STENCIL_ATTACHMENT : GL_DEPTH_ATTACHMENT);
+}
+
+static void gpu_texture_framebuffer_ensure(GPUTexture *tex)
+{
+  if (tex->copy_fb == 0) {
+    tex->copy_fb = GPU_fbo_alloc();
+    tex->copy_fb_ctx = GPU_context_active_get();
+
+    GLenum attachment = gpu_texture_default_attachment(tex);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, tex->copy_fb);
+    glFramebufferTexture(GL_FRAMEBUFFER, attachment, tex->bindcode, 0);
+    if (!GPU_texture_depth(tex)) {
+      glReadBuffer(GL_COLOR_ATTACHMENT0);
+      glDrawBuffer(GL_COLOR_ATTACHMENT0);
+    }
+    BLI_assert(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  }
+}
+
+/* Copy a texture content to a similar texture. Only Mip 0 is copied. */
+void GPU_texture_copy(GPUTexture *dst, GPUTexture *src)
+{
+  BLI_assert(dst->target == src->target);
+  BLI_assert(dst->w == src->w);
+  BLI_assert(dst->h == src->h);
+  BLI_assert(!GPU_texture_cube(src) && !GPU_texture_cube(dst));
+  /* TODO support array / 3D textures. */
+  BLI_assert(dst->d == 0);
+  BLI_assert(dst->format == src->format);
+
+  if (GLEW_ARB_copy_image) {
+    /* Opengl 4.3 */
+    glCopyImageSubData(src->bindcode,
+                       src->target,
+                       0,
+                       0,
+                       0,
+                       0,
+                       dst->bindcode,
+                       dst->target,
+                       0,
+                       0,
+                       0,
+                       0,
+                       src->w,
+                       src->h,
+                       1);
+  }
+  else {
+    /* Fallback for older GL. */
+    GPUFrameBuffer *prev_fb = GPU_framebuffer_active_get();
+
+    gpu_texture_framebuffer_ensure(src);
+    gpu_texture_framebuffer_ensure(dst);
+
+    /* This means that this function can only be used in one context for each texture. */
+    BLI_assert(src->copy_fb_ctx == GPU_context_active_get());
+    BLI_assert(dst->copy_fb_ctx == GPU_context_active_get());
+
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, src->copy_fb);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, dst->copy_fb);
+
+    GLbitfield mask = 0;
+    if (GPU_texture_stencil(src)) {
+      mask |= GL_STENCIL_BUFFER_BIT;
+    }
+    if (GPU_texture_depth(src)) {
+      mask |= GL_DEPTH_BUFFER_BIT;
+    }
+    else {
+      mask |= GL_COLOR_BUFFER_BIT;
+    }
+
+    glBlitFramebuffer(0, 0, src->w, src->h, 0, 0, src->w, src->h, mask, GL_NEAREST);
+
+    if (prev_fb) {
+      GPU_framebuffer_bind(prev_fb);
+    }
+  }
+}
+
 void GPU_texture_compare_mode(GPUTexture *tex, bool use_compare)
 {
   WARN_NOT_BOUND(tex);
@@ -1837,6 +1928,9 @@ void GPU_texture_free(GPUTexture *tex)
 
     if (tex->bindcode) {
       GPU_tex_free(tex->bindcode);
+    }
+    if (tex->copy_fb) {
+      GPU_fbo_free(tex->copy_fb, tex->copy_fb_ctx);
     }
 
     gpu_texture_memory_footprint_remove(tex);

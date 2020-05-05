@@ -334,6 +334,14 @@ void BKE_fluid_reallocate_copy_fluid(FluidDomainSettings *mds,
   manta_free(fluid_old);
 }
 
+void BKE_fluid_cache_free_all(FluidDomainSettings *mds, Object *ob)
+{
+  int cache_map = (FLUID_DOMAIN_OUTDATED_DATA | FLUID_DOMAIN_OUTDATED_NOISE |
+                   FLUID_DOMAIN_OUTDATED_MESH | FLUID_DOMAIN_OUTDATED_PARTICLES |
+                   FLUID_DOMAIN_OUTDATED_GUIDE);
+  BKE_fluid_cache_free(mds, ob, cache_map);
+}
+
 void BKE_fluid_cache_free(FluidDomainSettings *mds, Object *ob, int cache_map)
 {
   char temp_dir[FILE_MAX];
@@ -481,22 +489,25 @@ static void manta_set_domain_from_mesh(FluidDomainSettings *mds,
 
 static void manta_set_domain_gravity(Scene *scene, FluidDomainSettings *mds)
 {
-  float gravity[3] = {0.0f, 0.0f, -1.0f};
-  float gravity_mag;
+  const float normalization_factor = 1.0f / 9.81f;
 
   /* Use global gravity if enabled. */
   if (scene->physics_settings.flag & PHYS_GLOBAL_GRAVITY) {
+    float gravity[3];
     copy_v3_v3(gravity, scene->physics_settings.gravity);
     /* Map default value to 1.0. */
-    mul_v3_fl(gravity, 1.0f / 9.810f);
+    mul_v3_fl(gravity, normalization_factor);
 
     /* Convert gravity to domain space. */
-    gravity_mag = len_v3(gravity);
+    float gravity_mag = len_v3(gravity);
     mul_mat3_m4_v3(mds->imat, gravity);
     normalize_v3(gravity);
     mul_v3_fl(gravity, gravity_mag);
 
     copy_v3_v3(mds->gravity, gravity);
+  }
+  else {
+    mul_v3_fl(mds->gravity, normalization_factor);
   }
 
   mul_v3_fl(mds->gravity, mds->effector_weights->global_gravity);
@@ -1130,6 +1141,16 @@ static void obstacles_from_mesh(Object *coll_ob,
   }
 }
 
+static void ensure_obstaclefields(FluidDomainSettings *mds)
+{
+  if (mds->active_fields & FLUID_DOMAIN_ACTIVE_OBSTACLE) {
+    manta_ensure_obstacle(mds->fluid, mds->mmd);
+  }
+  if (mds->active_fields & FLUID_DOMAIN_ACTIVE_GUIDE) {
+    manta_ensure_guiding(mds->fluid, mds->mmd);
+  }
+}
+
 static void update_obstacleflags(FluidDomainSettings *mds,
                                  Object **coll_ob_array,
                                  int coll_ob_array_len)
@@ -1157,6 +1178,10 @@ static void update_obstacleflags(FluidDomainSettings *mds,
       if (!mes) {
         break;
       }
+      if (mes->flags & FLUID_EFFECTOR_NEEDS_UPDATE) {
+        mes->flags &= ~FLUID_EFFECTOR_NEEDS_UPDATE;
+        mds->cache_flag |= FLUID_DOMAIN_OUTDATED_DATA;
+      }
       if (mes->type == FLUID_EFFECTOR_TYPE_COLLISION) {
         active_fields |= FLUID_DOMAIN_ACTIVE_OBSTACLE;
       }
@@ -1165,41 +1190,53 @@ static void update_obstacleflags(FluidDomainSettings *mds,
       }
     }
   }
-  /* Finally, initialize new data fields if any */
-  if (active_fields & FLUID_DOMAIN_ACTIVE_OBSTACLE) {
-    manta_ensure_obstacle(mds->fluid, mds->mmd);
-  }
-  if (active_fields & FLUID_DOMAIN_ACTIVE_GUIDE) {
-    manta_ensure_guiding(mds->fluid, mds->mmd);
-  }
   mds->active_fields = active_fields;
 }
 
-static void update_obstacles(Depsgraph *depsgraph,
-                             Scene *scene,
-                             Object *ob,
-                             FluidDomainSettings *mds,
-                             float time_per_frame,
-                             float frame_length,
-                             int frame,
-                             float dt)
+static bool escape_effectorobject(Object *flowobj,
+                                  FluidDomainSettings *mds,
+                                  FluidEffectorSettings *mes,
+                                  int frame)
 {
-  FluidObjectBB *bb_maps = NULL;
-  Object **effecobjs = NULL;
-  uint numeffecobjs = 0, effec_index = 0;
+  bool is_static = is_static_object(flowobj);
+
+  bool use_effector = (mes->flags & FLUID_EFFECTOR_USE_EFFEC);
+
+  bool is_resume = (mds->cache_frame_pause_data == frame);
+  bool is_adaptive = (mds->flags & FLUID_DOMAIN_USE_ADAPTIVE_DOMAIN);
   bool is_first_frame = (frame == mds->cache_frame_start);
 
-  effecobjs = BKE_collision_objects_create(
-      depsgraph, ob, mds->effector_group, &numeffecobjs, eModifierType_Fluid);
+  /* Cannot use static mode with adaptive domain.
+   * The adaptive domain might expand and only later discover the static object. */
+  if (is_adaptive) {
+    is_static = false;
+  }
+  /* Skip flow objects with disabled inflow flag. */
+  if (!use_effector) {
+    return true;
+  }
+  /* Skip static effector objects after initial frame. */
+  if (is_static && !is_first_frame && !is_resume) {
+    return true;
+  }
+  return false;
+}
 
-  /* Update all effector related flags and ensure that corresponding grids get initialized. */
-  update_obstacleflags(mds, effecobjs, numeffecobjs);
-
-  /* Initialize effector maps for each flow. */
-  bb_maps = MEM_callocN(sizeof(struct FluidObjectBB) * numeffecobjs, "fluid_effector_bb_maps");
+static void compute_obstaclesemission(Scene *scene,
+                                      FluidObjectBB *bb_maps,
+                                      struct Depsgraph *depsgraph,
+                                      float dt,
+                                      Object **effecobjs,
+                                      int frame,
+                                      float frame_length,
+                                      FluidDomainSettings *mds,
+                                      uint numeffecobjs,
+                                      float time_per_frame)
+{
+  bool is_first_frame = (frame == mds->cache_frame_start);
 
   /* Prepare effector maps. */
-  for (effec_index = 0; effec_index < numeffecobjs; effec_index++) {
+  for (int effec_index = 0; effec_index < numeffecobjs; effec_index++) {
     Object *effecobj = effecobjs[effec_index];
     FluidModifierData *mmd2 = (FluidModifierData *)modifiers_findByType(effecobj,
                                                                         eModifierType_Fluid);
@@ -1215,20 +1252,8 @@ static void update_obstacles(Depsgraph *depsgraph,
       int subframes = mes->subframes;
       FluidObjectBB *bb = &bb_maps[effec_index];
 
-      bool is_static = is_static_object(effecobj);
-      /* Cannot use static mode with adaptive domain.
-       * The adaptive domain might expand and only later in the simulations discover the static
-       * object. */
-      if (mds->flags & FLUID_DOMAIN_USE_ADAPTIVE_DOMAIN) {
-        is_static = false;
-      }
-
-      /* Optimization: Static objects don't need emission computation after first frame. */
-      if (is_static && !is_first_frame) {
-        continue;
-      }
-      /* Optimization: Skip effector objects with disabled effec flag. */
-      if ((mes->flags & FLUID_EFFECTOR_USE_EFFEC) == 0) {
+      /* Optimization: Skip this object under certain conditions. */
+      if (escape_effectorobject(effecobj, mds, mes, frame)) {
         continue;
       }
 
@@ -1296,6 +1321,44 @@ static void update_obstacles(Depsgraph *depsgraph,
       }
     }
   }
+}
+
+static void update_obstacles(Depsgraph *depsgraph,
+                             Scene *scene,
+                             Object *ob,
+                             FluidDomainSettings *mds,
+                             float time_per_frame,
+                             float frame_length,
+                             int frame,
+                             float dt)
+{
+  FluidObjectBB *bb_maps = NULL;
+  Object **effecobjs = NULL;
+  uint numeffecobjs = 0;
+  bool is_resume = (mds->cache_frame_pause_data == frame);
+  bool is_first_frame = (frame == mds->cache_frame_start);
+
+  effecobjs = BKE_collision_objects_create(
+      depsgraph, ob, mds->effector_group, &numeffecobjs, eModifierType_Fluid);
+
+  /* Update all effector related flags and ensure that corresponding grids get initialized. */
+  update_obstacleflags(mds, effecobjs, numeffecobjs);
+  ensure_obstaclefields(mds);
+
+  /* Allocate effector map for each effector object. */
+  bb_maps = MEM_callocN(sizeof(struct FluidObjectBB) * numeffecobjs, "fluid_effector_bb_maps");
+
+  /* Initialize effector map for each effector object. */
+  compute_obstaclesemission(scene,
+                            bb_maps,
+                            depsgraph,
+                            dt,
+                            effecobjs,
+                            frame,
+                            frame_length,
+                            mds,
+                            numeffecobjs,
+                            time_per_frame);
 
   float *vel_x = manta_get_ob_velocity_x(mds->fluid);
   float *vel_y = manta_get_ob_velocity_y(mds->fluid);
@@ -1346,7 +1409,7 @@ static void update_obstacles(Depsgraph *depsgraph,
   }
 
   /* Prepare grids from effector objects. */
-  for (effec_index = 0; effec_index < numeffecobjs; effec_index++) {
+  for (int effec_index = 0; effec_index < numeffecobjs; effec_index++) {
     Object *effecobj = effecobjs[effec_index];
     FluidModifierData *mmd2 = (FluidModifierData *)modifiers_findByType(effecobj,
                                                                         eModifierType_Fluid);
@@ -1356,18 +1419,11 @@ static void update_obstacles(Depsgraph *depsgraph,
       continue;
     }
 
-    bool is_static = is_static_object(effecobj);
     /* Cannot use static mode with adaptive domain.
      * The adaptive domain might expand and only later in the simulations discover the static
      * object. */
-    if (mds->flags & FLUID_DOMAIN_USE_ADAPTIVE_DOMAIN) {
-      is_static = false;
-    }
-
-    /* Optimization: Static objects don't need emission application after first frame. */
-    if (is_static && !is_first_frame) {
-      continue;
-    }
+    bool is_static = is_static_object(effecobj) &&
+                     ((mds->flags & FLUID_DOMAIN_USE_ADAPTIVE_DOMAIN) == 0);
 
     /* Check for initialized effector object. */
     if ((mmd2->type & MOD_FLUID_TYPE_EFFEC) && mmd2->effector) {
@@ -1407,53 +1463,35 @@ static void update_obstacles(Depsgraph *depsgraph,
               continue;
             }
 
-            /* Apply static effectors to obstacle grid. */
-            if (is_static && is_first_frame) {
-              if (mes->type == FLUID_EFFECTOR_TYPE_COLLISION) {
-                apply_effector_fields(mes,
-                                      d_index,
-                                      distance_map[e_index],
-                                      phi_obsstatic_in,
-                                      numobjs_map[e_index],
-                                      num_obstacles,
-                                      0.0f,
-                                      NULL,
-                                      0.0f,
-                                      NULL,
-                                      0.0f,
-                                      NULL);
-              }
+            if (mes->type == FLUID_EFFECTOR_TYPE_COLLISION) {
+              float *levelset = ((is_first_frame || is_resume) && is_static) ? phi_obsstatic_in :
+                                                                               phi_obs_in;
+              apply_effector_fields(mes,
+                                    d_index,
+                                    distance_map[e_index],
+                                    levelset,
+                                    numobjs_map[e_index],
+                                    num_obstacles,
+                                    velocity_map[e_index * 3],
+                                    vel_x,
+                                    velocity_map[e_index * 3 + 1],
+                                    vel_y,
+                                    velocity_map[e_index * 3 + 2],
+                                    vel_z);
             }
-            /* Apply moving effectors to obstacle grid. */
-            else if (!is_static) {
-              if (mes->type == FLUID_EFFECTOR_TYPE_COLLISION) {
-                apply_effector_fields(mes,
-                                      d_index,
-                                      distance_map[e_index],
-                                      phi_obs_in,
-                                      numobjs_map[e_index],
-                                      num_obstacles,
-                                      velocity_map[e_index * 3],
-                                      vel_x,
-                                      velocity_map[e_index * 3 + 1],
-                                      vel_y,
-                                      velocity_map[e_index * 3 + 2],
-                                      vel_z);
-              }
-              if (mes->type == FLUID_EFFECTOR_TYPE_GUIDE) {
-                apply_effector_fields(mes,
-                                      d_index,
-                                      distance_map[e_index],
-                                      phi_guide_in,
-                                      numobjs_map[e_index],
-                                      num_guides,
-                                      velocity_map[e_index * 3],
-                                      vel_x_guide,
-                                      velocity_map[e_index * 3 + 1],
-                                      vel_y_guide,
-                                      velocity_map[e_index * 3 + 2],
-                                      vel_z_guide);
-              }
+            if (mes->type == FLUID_EFFECTOR_TYPE_GUIDE) {
+              apply_effector_fields(mes,
+                                    d_index,
+                                    distance_map[e_index],
+                                    phi_guide_in,
+                                    numobjs_map[e_index],
+                                    num_guides,
+                                    velocity_map[e_index * 3],
+                                    vel_x_guide,
+                                    velocity_map[e_index * 3 + 1],
+                                    vel_y_guide,
+                                    velocity_map[e_index * 3 + 2],
+                                    vel_z_guide);
             }
           }
         }
@@ -2450,12 +2488,13 @@ BLI_INLINE void apply_outflow_fields(int index,
                                      float *color_b,
                                      float *phiout)
 {
-  /* determine outflow cells - phiout used in smoke and liquids */
+  /* Set levelset value for liquid inflow.
+   * Ensure that distance value is "joined" into the levelset. */
   if (phiout) {
-    phiout[index] = distance_value;
+    phiout[index] = MIN2(distance_value, phiout[index]);
   }
 
-  /* set smoke outflow */
+  /* Set smoke outflow, i.e. reset cell to zero. */
   if (density) {
     density[index] = 0.0f;
   }
@@ -2573,6 +2612,32 @@ BLI_INLINE void apply_inflow_fields(FluidFlowSettings *mfs,
   }
 }
 
+static void ensure_flowsfields(FluidDomainSettings *mds)
+{
+  if (mds->active_fields & FLUID_DOMAIN_ACTIVE_INVEL) {
+    manta_ensure_invelocity(mds->fluid, mds->mmd);
+  }
+  if (mds->active_fields & FLUID_DOMAIN_ACTIVE_OUTFLOW) {
+    manta_ensure_outflow(mds->fluid, mds->mmd);
+  }
+  if (mds->active_fields & FLUID_DOMAIN_ACTIVE_HEAT) {
+    manta_smoke_ensure_heat(mds->fluid, mds->mmd);
+  }
+  if (mds->active_fields & FLUID_DOMAIN_ACTIVE_FIRE) {
+    manta_smoke_ensure_fire(mds->fluid, mds->mmd);
+  }
+  if (mds->active_fields & FLUID_DOMAIN_ACTIVE_COLORS) {
+    /* initialize all smoke with "active_color" */
+    manta_smoke_ensure_colors(mds->fluid, mds->mmd);
+  }
+  if (mds->type == FLUID_DOMAIN_TYPE_LIQUID &&
+      (mds->particle_type & FLUID_DOMAIN_PARTICLE_SPRAY ||
+       mds->particle_type & FLUID_DOMAIN_PARTICLE_FOAM ||
+       mds->particle_type & FLUID_DOMAIN_PARTICLE_TRACER)) {
+    manta_liquid_ensure_sndparts(mds->fluid, mds->mmd);
+  }
+}
+
 static void update_flowsflags(FluidDomainSettings *mds, Object **flowobjs, int numflowobj)
 {
   int active_fields = mds->active_fields;
@@ -2580,14 +2645,13 @@ static void update_flowsflags(FluidDomainSettings *mds, Object **flowobjs, int n
 
   /* First, remove all flags that we want to update. */
   int prev_flags = (FLUID_DOMAIN_ACTIVE_INVEL | FLUID_DOMAIN_ACTIVE_OUTFLOW |
-                    FLUID_DOMAIN_ACTIVE_HEAT | FLUID_DOMAIN_ACTIVE_FIRE |
-                    FLUID_DOMAIN_ACTIVE_COLOR_SET | FLUID_DOMAIN_ACTIVE_COLORS);
+                    FLUID_DOMAIN_ACTIVE_HEAT | FLUID_DOMAIN_ACTIVE_FIRE);
   active_fields &= ~prev_flags;
 
   /* Monitor active fields based on flow settings */
   for (flow_index = 0; flow_index < numflowobj; flow_index++) {
-    Object *coll_ob = flowobjs[flow_index];
-    FluidModifierData *mmd2 = (FluidModifierData *)modifiers_findByType(coll_ob,
+    Object *flow_ob = flowobjs[flow_index];
+    FluidModifierData *mmd2 = (FluidModifierData *)modifiers_findByType(flow_ob,
                                                                         eModifierType_Fluid);
 
     /* Sanity check. */
@@ -2599,6 +2663,10 @@ static void update_flowsflags(FluidDomainSettings *mds, Object **flowobjs, int n
       FluidFlowSettings *mfs = mmd2->flow;
       if (!mfs) {
         break;
+      }
+      if (mfs->flags & FLUID_FLOW_NEEDS_UPDATE) {
+        mfs->flags &= ~FLUID_FLOW_NEEDS_UPDATE;
+        mds->cache_flag |= FLUID_DOMAIN_OUTDATED_DATA;
       }
       if (mfs->flags & FLUID_FLOW_INITVELOCITY) {
         active_fields |= FLUID_DOMAIN_ACTIVE_INVEL;
@@ -2648,57 +2716,71 @@ static void update_flowsflags(FluidDomainSettings *mds, Object **flowobjs, int n
       active_fields |= FLUID_DOMAIN_ACTIVE_COLORS;
     }
   }
-  /* Finally, initialize new data fields if any */
-  if (active_fields & FLUID_DOMAIN_ACTIVE_INVEL) {
-    manta_ensure_invelocity(mds->fluid, mds->mmd);
-  }
-  if (active_fields & FLUID_DOMAIN_ACTIVE_OUTFLOW) {
-    manta_ensure_outflow(mds->fluid, mds->mmd);
-  }
-  if (active_fields & FLUID_DOMAIN_ACTIVE_HEAT) {
-    manta_smoke_ensure_heat(mds->fluid, mds->mmd);
-  }
-  if (active_fields & FLUID_DOMAIN_ACTIVE_FIRE) {
-    manta_smoke_ensure_fire(mds->fluid, mds->mmd);
-  }
-  if (active_fields & FLUID_DOMAIN_ACTIVE_COLORS) {
-    /* initialize all smoke with "active_color" */
-    manta_smoke_ensure_colors(mds->fluid, mds->mmd);
-  }
-  if (mds->type == FLUID_DOMAIN_TYPE_LIQUID &&
-      (mds->particle_type & FLUID_DOMAIN_PARTICLE_SPRAY ||
-       mds->particle_type & FLUID_DOMAIN_PARTICLE_FOAM ||
-       mds->particle_type & FLUID_DOMAIN_PARTICLE_TRACER)) {
-    manta_liquid_ensure_sndparts(mds->fluid, mds->mmd);
-  }
   mds->active_fields = active_fields;
 }
 
-static void update_flowsfluids(struct Depsgraph *depsgraph,
-                               Scene *scene,
-                               Object *ob,
+static bool escape_flowsobject(Object *flowobj,
                                FluidDomainSettings *mds,
-                               float time_per_frame,
-                               float frame_length,
-                               int frame,
-                               float dt)
+                               FluidFlowSettings *mfs,
+                               int frame)
 {
-  FluidObjectBB *bb_maps = NULL;
-  Object **flowobjs = NULL;
-  uint numflowobj = 0, flow_index = 0;
+  bool use_velocity = (mfs->flags & FLUID_FLOW_INITVELOCITY);
+  bool is_static = is_static_object(flowobj);
+
+  bool liquid_flow = mfs->type == FLUID_FLOW_TYPE_LIQUID;
+  bool gas_flow = (mfs->type == FLUID_FLOW_TYPE_SMOKE || mfs->type == FLUID_FLOW_TYPE_FIRE ||
+                   mfs->type == FLUID_FLOW_TYPE_SMOKEFIRE);
+  bool is_geometry = (mfs->behavior == FLUID_FLOW_BEHAVIOR_GEOMETRY);
+  bool is_inflow = (mfs->behavior == FLUID_FLOW_BEHAVIOR_INFLOW);
+  bool is_outflow = (mfs->behavior == FLUID_FLOW_BEHAVIOR_OUTFLOW);
+  bool use_flow = (mfs->flags & FLUID_FLOW_USE_INFLOW);
+
+  bool liquid_domain = mds->type == FLUID_DOMAIN_TYPE_LIQUID;
+  bool gas_domain = mds->type == FLUID_DOMAIN_TYPE_GAS;
+  bool is_adaptive = (mds->flags & FLUID_DOMAIN_USE_ADAPTIVE_DOMAIN);
+  bool is_resume = (mds->cache_frame_pause_data == frame);
+  bool is_first_frame = (mds->cache_frame_start == frame);
+
+  /* Cannot use static mode with adaptive domain.
+   * The adaptive domain might expand and only later discover the static object. */
+  if (is_adaptive) {
+    is_static = false;
+  }
+  /* Skip flow objects with disabled inflow flag. */
+  if ((is_inflow || is_outflow) && !use_flow) {
+    return true;
+  }
+  /* No need to compute emission value if it won't be applied. */
+  if (liquid_flow && is_geometry && !is_first_frame) {
+    return true;
+  }
+  /* Skip flow object if it does not "belong" to this domain type. */
+  if ((liquid_flow && gas_domain) || (gas_flow && liquid_domain)) {
+    return true;
+  }
+  /* Optimization: Static liquid flow objects don't need emission after first frame.
+   * TODO (sebbas): Also do not use static mode if initial velocities are enabled. */
+  if (liquid_flow && is_static && !is_first_frame && !is_resume && !use_velocity) {
+    return true;
+  }
+  return false;
+}
+
+static void compute_flowsemission(Scene *scene,
+                                  FluidObjectBB *bb_maps,
+                                  struct Depsgraph *depsgraph,
+                                  float dt,
+                                  Object **flowobjs,
+                                  int frame,
+                                  float frame_length,
+                                  FluidDomainSettings *mds,
+                                  uint numflowobjs,
+                                  float time_per_frame)
+{
   bool is_first_frame = (frame == mds->cache_frame_start);
 
-  flowobjs = BKE_collision_objects_create(
-      depsgraph, ob, mds->fluid_group, &numflowobj, eModifierType_Fluid);
-
-  /* Update all flow related flags and ensure that corresponding grids get initialized. */
-  update_flowsflags(mds, flowobjs, numflowobj);
-
-  /* Initialize emission maps for each flow. */
-  bb_maps = MEM_callocN(sizeof(struct FluidObjectBB) * numflowobj, "fluid_flow_bb_maps");
-
   /* Prepare flow emission maps. */
-  for (flow_index = 0; flow_index < numflowobj; flow_index++) {
+  for (int flow_index = 0; flow_index < numflowobjs; flow_index++) {
     Object *flowobj = flowobjs[flow_index];
     FluidModifierData *mmd2 = (FluidModifierData *)modifiers_findByType(flowobj,
                                                                         eModifierType_Fluid);
@@ -2714,37 +2796,8 @@ static void update_flowsfluids(struct Depsgraph *depsgraph,
       int subframes = mfs->subframes;
       FluidObjectBB *bb = &bb_maps[flow_index];
 
-      bool use_velocity = mfs->flags & FLUID_FLOW_INITVELOCITY;
-      bool is_static = is_static_object(flowobj);
-      /* Cannot use static mode with adaptive domain.
-       * The adaptive domain might expand and only later in the simulations discover the static
-       * object. */
-      if (mds->flags & FLUID_DOMAIN_USE_ADAPTIVE_DOMAIN) {
-        is_static = false;
-      }
-
-      /* Optimization: Skip flow objects with disabled inflow flag. */
-      if (mfs->behavior == FLUID_FLOW_BEHAVIOR_INFLOW &&
-          (mfs->flags & FLUID_FLOW_USE_INFLOW) == 0) {
-        continue;
-      }
-      /* Optimization: No need to compute emission value if it won't be applied. */
-      if (mfs->behavior == FLUID_FLOW_BEHAVIOR_GEOMETRY && !is_first_frame) {
-        continue;
-      }
-      /* Optimization: Skip flow object if it does not "belong" to this domain type. */
-      if (mfs->type == FLUID_FLOW_TYPE_LIQUID && mds->type == FLUID_DOMAIN_TYPE_GAS) {
-        continue;
-      }
-      if ((mfs->type == FLUID_FLOW_TYPE_SMOKE || mfs->type == FLUID_FLOW_TYPE_FIRE ||
-           mfs->type == FLUID_FLOW_TYPE_SMOKEFIRE) &&
-          mds->type == FLUID_DOMAIN_TYPE_LIQUID) {
-        continue;
-      }
-      /* Optimization: Static liquid flow objects don't need emission computation after first
-       * frame.
-       * TODO (sebbas): Also do not use static mode if initial velocities are enabled. */
-      if (mfs->type == FLUID_FLOW_TYPE_LIQUID && is_static && !is_first_frame && !use_velocity) {
+      /* Optimization: Skip this object under certain conditions. */
+      if (escape_flowsobject(flowobj, mds, mfs, frame)) {
         continue;
       }
 
@@ -2833,15 +2886,55 @@ static void update_flowsfluids(struct Depsgraph *depsgraph,
          frame_length,
          dt);
 #  endif
+}
+
+static void update_flowsfluids(struct Depsgraph *depsgraph,
+                               Scene *scene,
+                               Object *ob,
+                               FluidDomainSettings *mds,
+                               float time_per_frame,
+                               float frame_length,
+                               int frame,
+                               float dt)
+{
+  FluidObjectBB *bb_maps = NULL;
+  Object **flowobjs = NULL;
+  uint numflowobjs = 0;
+  bool is_resume = (mds->cache_frame_pause_data == frame);
+  bool is_first_frame = (mds->cache_frame_start == frame);
+
+  flowobjs = BKE_collision_objects_create(
+      depsgraph, ob, mds->fluid_group, &numflowobjs, eModifierType_Fluid);
+
+  /* Update all flow related flags and ensure that corresponding grids get initialized. */
+  update_flowsflags(mds, flowobjs, numflowobjs);
+  ensure_flowsfields(mds);
+
+  /* Allocate emission map for each flow object. */
+  bb_maps = MEM_callocN(sizeof(struct FluidObjectBB) * numflowobjs, "fluid_flow_bb_maps");
+
+  /* Initialize emission map for each flow object. */
+  compute_flowsemission(scene,
+                        bb_maps,
+                        depsgraph,
+                        dt,
+                        flowobjs,
+                        frame,
+                        frame_length,
+                        mds,
+                        numflowobjs,
+                        time_per_frame);
 
   /* Adjust domain size if needed. Only do this once for every frame. */
   if (mds->type == FLUID_DOMAIN_TYPE_GAS && mds->flags & FLUID_DOMAIN_USE_ADAPTIVE_DOMAIN) {
-    adaptive_domain_adjust(mds, ob, bb_maps, numflowobj, dt);
+    adaptive_domain_adjust(mds, ob, bb_maps, numflowobjs, dt);
   }
 
   float *phi_in = manta_get_phi_in(mds->fluid);
   float *phistatic_in = manta_get_phistatic_in(mds->fluid);
   float *phiout_in = manta_get_phiout_in(mds->fluid);
+  float *phioutstatic_in = manta_get_phioutstatic_in(mds->fluid);
+
   float *density = manta_smoke_get_density(mds->fluid);
   float *color_r = manta_smoke_get_color_r(mds->fluid);
   float *color_g = manta_smoke_get_color_g(mds->fluid);
@@ -2864,16 +2957,18 @@ static void update_flowsfluids(struct Depsgraph *depsgraph,
   float *velz_initial = manta_get_in_velocity_z(mds->fluid);
   uint z;
 
-  bool use_adaptivedomain = (mds->flags & FLUID_DOMAIN_USE_ADAPTIVE_DOMAIN);
-
   /* Grid reset before writing again. */
   for (z = 0; z < mds->res[0] * mds->res[1] * mds->res[2]; z++) {
+    /* Only reset static phi on first frame, dynamic phi gets reset every time. */
+    if (phistatic_in && is_first_frame) {
+      phistatic_in[z] = PHI_MAX;
+    }
     if (phi_in) {
       phi_in[z] = PHI_MAX;
     }
-    /* Only reset static inflow on first frame. Only use static inflow without adaptive domains. */
-    if (phistatic_in && (is_first_frame || use_adaptivedomain)) {
-      phistatic_in[z] = PHI_MAX;
+    /* Only reset static phi on first frame, dynamic phi gets reset every time. */
+    if (phioutstatic_in && is_first_frame) {
+      phioutstatic_in[z] = PHI_MAX;
     }
     if (phiout_in) {
       phiout_in[z] = PHI_MAX;
@@ -2905,7 +3000,7 @@ static void update_flowsfluids(struct Depsgraph *depsgraph,
   }
 
   /* Apply emission data for every flow object. */
-  for (flow_index = 0; flow_index < numflowobj; flow_index++) {
+  for (int flow_index = 0; flow_index < numflowobjs; flow_index++) {
     Object *flowobj = flowobjs[flow_index];
     FluidModifierData *mmd2 = (FluidModifierData *)modifiers_findByType(flowobj,
                                                                         eModifierType_Fluid);
@@ -2919,38 +3014,11 @@ static void update_flowsfluids(struct Depsgraph *depsgraph,
     if ((mmd2->type & MOD_FLUID_TYPE_FLOW) && mmd2->flow) {
       FluidFlowSettings *mfs = mmd2->flow;
 
-      bool use_velocity = mfs->flags & FLUID_FLOW_INITVELOCITY;
-      bool use_inflow = (mfs->flags & FLUID_FLOW_USE_INFLOW);
-      bool is_liquid = (mfs->type == FLUID_FLOW_TYPE_LIQUID);
       bool is_inflow = (mfs->behavior == FLUID_FLOW_BEHAVIOR_INFLOW);
       bool is_geometry = (mfs->behavior == FLUID_FLOW_BEHAVIOR_GEOMETRY);
       bool is_outflow = (mfs->behavior == FLUID_FLOW_BEHAVIOR_OUTFLOW);
-
-      bool is_static = is_static_object(flowobj);
-      /* Cannot use static mode with adaptive domain.
-       * The adaptive domain might expand and only later in the simulations discover the static
-       * object. */
-      if (mds->flags & FLUID_DOMAIN_USE_ADAPTIVE_DOMAIN) {
-        is_static = false;
-      }
-
-      /* Optimization: Skip flow objects with disabled flow flag. */
-      if (is_inflow && !use_inflow) {
-        continue;
-      }
-      /* Optimization: Liquid objects don't always need emission application after first frame. */
-      if (is_liquid && !is_first_frame) {
-
-        /* Skip static liquid objects that are not on the first frame.
-         * TODO (sebbas): Also do not use static mode if initial velocities are enabled. */
-        if (is_static && !use_velocity) {
-          continue;
-        }
-        /* Liquid geometry objects don't need emission application after first frame. */
-        if (is_geometry) {
-          continue;
-        }
-      }
+      bool is_static = is_static_object(flowobj) &&
+                       ((mds->flags & FLUID_DOMAIN_USE_ADAPTIVE_DOMAIN) == 0);
 
       FluidObjectBB *bb = &bb_maps[flow_index];
       float *velocity_map = bb->velocity;
@@ -2983,6 +3051,8 @@ static void update_flowsfluids(struct Depsgraph *depsgraph,
 
             /* Delete fluid in outflow regions. */
             if (is_outflow) {
+              float *levelset = ((is_first_frame || is_resume) && is_static) ? phioutstatic_in :
+                                                                               phiout_in;
               apply_outflow_fields(d_index,
                                    distance_map[e_index],
                                    density_in,
@@ -2992,7 +3062,7 @@ static void update_flowsfluids(struct Depsgraph *depsgraph,
                                    color_r_in,
                                    color_g_in,
                                    color_b_in,
-                                   phiout_in);
+                                   levelset);
             }
             /* Do not apply inflow after the first frame when in geometry mode. */
             else if (is_geometry && !is_first_frame) {
@@ -3017,31 +3087,11 @@ static void update_flowsfluids(struct Depsgraph *depsgraph,
                                   phi_in,
                                   emission_in);
             }
-            /* Static liquid objects need inflow application onto static phi grid. */
-            else if (is_inflow && is_liquid && is_static && is_first_frame) {
-              apply_inflow_fields(mfs,
-                                  0.0f,
-                                  distance_map[e_index],
-                                  d_index,
-                                  NULL,
-                                  NULL,
-                                  NULL,
-                                  NULL,
-                                  NULL,
-                                  NULL,
-                                  NULL,
-                                  NULL,
-                                  NULL,
-                                  NULL,
-                                  NULL,
-                                  NULL,
-                                  NULL,
-                                  NULL,
-                                  phistatic_in,
-                                  NULL);
-            }
             /* Main inflow application. */
             else if (is_geometry || is_inflow) {
+              float *levelset = ((is_first_frame || is_resume) && is_static && !is_geometry) ?
+                                    phistatic_in :
+                                    phi_in;
               apply_inflow_fields(mfs,
                                   emission_map[e_index],
                                   distance_map[e_index],
@@ -3060,12 +3110,22 @@ static void update_flowsfluids(struct Depsgraph *depsgraph,
                                   color_g,
                                   color_b_in,
                                   color_b,
-                                  phi_in,
+                                  levelset,
                                   emission_in);
               if (mfs->flags & FLUID_FLOW_INITVELOCITY) {
-                velx_initial[d_index] = velocity_map[e_index * 3];
-                vely_initial[d_index] = velocity_map[e_index * 3 + 1];
-                velz_initial[d_index] = velocity_map[e_index * 3 + 2];
+                /* Use the initial velocity from the inflow object with the highest velocity for
+                 * now. */
+                float vel_initial[3];
+                vel_initial[0] = velx_initial[d_index];
+                vel_initial[1] = vely_initial[d_index];
+                vel_initial[2] = velz_initial[d_index];
+                float vel_initial_strength = len_squared_v3(vel_initial);
+                float vel_map_strength = len_squared_v3(velocity_map + 3 * e_index);
+                if (vel_map_strength > vel_initial_strength) {
+                  velx_initial[d_index] = velocity_map[e_index * 3];
+                  vely_initial[d_index] = velocity_map[e_index * 3 + 1];
+                  velz_initial[d_index] = velocity_map[e_index * 3 + 2];
+                }
               }
             }
           }
@@ -3566,6 +3626,7 @@ static int manta_step(
       break;
     }
 
+    /* Only bake if the domain is bigger than one cell (important for adaptive domain). */
     if (mds->total_cells > 1) {
       update_effectors(depsgraph, scene, ob, mds, dt);
       manta_bake_data(mds->fluid, mmd, frame);
@@ -3577,15 +3638,9 @@ static int manta_step(
 
     mds->time_per_frame = time_per_frame;
     mds->time_total = time_total;
-
-    /* If user requested stop, quit baking */
-    if (G.is_break && !mode_replay) {
-      result = 0;
-      break;
-    }
   }
 
-  if (mds->type == FLUID_DOMAIN_TYPE_GAS) {
+  if (mds->type == FLUID_DOMAIN_TYPE_GAS && result) {
     manta_smoke_calc_transparency(mds, DEG_get_evaluated_view_layer(depsgraph));
   }
   BLI_mutex_unlock(&object_update_lock);
@@ -3684,14 +3739,41 @@ static void BKE_fluid_modifier_processDomain(FluidModifierData *mmd,
     return;
   }
 
-  /* Reset fluid if no fluid present. */
+  /* Reset fluid if no fluid present. Also resets active fields. */
   if (!mds->fluid) {
     BKE_fluid_modifier_reset_ex(mmd, false);
+  }
 
-    /* Fluid domain init must not fail in order to continue modifier evaluation. */
-    if (!BKE_fluid_modifier_init(mmd, depsgraph, ob, scene, me)) {
-      return;
-    }
+  /* Ensure cache directory is not relative. */
+  const char *relbase = modifier_path_relbase_from_global(ob);
+  BLI_path_abs(mds->cache_directory, relbase);
+
+  /* Ensure that all flags are up to date before doing any baking and/or cache reading. */
+  objs = BKE_collision_objects_create(
+      depsgraph, ob, mds->fluid_group, &numobj, eModifierType_Fluid);
+  update_flowsflags(mds, objs, numobj);
+  if (objs) {
+    MEM_freeN(objs);
+  }
+  objs = BKE_collision_objects_create(
+      depsgraph, ob, mds->effector_group, &numobj, eModifierType_Fluid);
+  update_obstacleflags(mds, objs, numobj);
+  if (objs) {
+    MEM_freeN(objs);
+  }
+
+  /* If the just updated flags now carry the 'outdated' flag, reset the cache here!
+   * Plus sanity check: Do not clear cache on file load. */
+  if (mds->cache_flag & FLUID_DOMAIN_OUTDATED_DATA &&
+      ((mds->flags & FLUID_DOMAIN_FILE_LOAD) == 0)) {
+    mds->cache_flag &= ~FLUID_DOMAIN_OUTDATED_DATA;
+    BKE_fluid_cache_free_all(mds, ob);
+    BKE_fluid_modifier_reset_ex(mmd, false);
+  }
+
+  /* Fluid domain init must not fail in order to continue modifier evaluation. */
+  if (!mds->fluid && !BKE_fluid_modifier_init(mmd, depsgraph, ob, scene, me)) {
+    return;
   }
   BLI_assert(mds->fluid);
 
@@ -3712,23 +3794,10 @@ static void BKE_fluid_modifier_processDomain(FluidModifierData *mmd,
   /* Get distance between cache start and current frame for total time. */
   mds->time_total = abs(scene_framenr - mds->cache_frame_start) * mds->frame_length;
 
-  objs = BKE_collision_objects_create(
-      depsgraph, ob, mds->fluid_group, &numobj, eModifierType_Fluid);
-  update_flowsflags(mds, objs, numobj);
-  if (objs) {
-    MEM_freeN(objs);
-  }
-
-  objs = BKE_collision_objects_create(
-      depsgraph, ob, mds->effector_group, &numobj, eModifierType_Fluid);
-  update_obstacleflags(mds, objs, numobj);
-  if (objs) {
-    MEM_freeN(objs);
-  }
-
-  /* Ensure cache directory is not relative. */
-  const char *relbase = modifier_path_relbase_from_global(ob);
-  BLI_path_abs(mds->cache_directory, relbase);
+  int next_frame = scene_framenr + 1;
+  int prev_frame = scene_framenr - 1;
+  /* Ensure positivity of previous frame. */
+  CLAMP(prev_frame, mds->cache_frame_start, prev_frame);
 
   int data_frame = scene_framenr, noise_frame = scene_framenr;
   int mesh_frame = scene_framenr, particles_frame = scene_framenr, guide_frame = scene_framenr;
@@ -3751,17 +3820,18 @@ static void BKE_fluid_modifier_processDomain(FluidModifierData *mmd,
   with_particles = drops || bubble || floater;
 
   bool has_data, has_noise, has_mesh, has_particles, has_guide;
-  has_data = has_noise = has_mesh = has_particles = has_guide = false;
+  has_data = manta_has_data(mds->fluid, mmd, scene_framenr);
+  has_noise = manta_has_noise(mds->fluid, mmd, scene_framenr);
+  has_mesh = manta_has_mesh(mds->fluid, mmd, scene_framenr);
+  has_particles = manta_has_particles(mds->fluid, mmd, scene_framenr);
+  has_guide = manta_has_guiding(mds->fluid, mmd, scene_framenr, guide_parent);
 
-  bool baking_data, baking_noise, baking_mesh, baking_particles, baking_guide, bake_outdated;
+  bool baking_data, baking_noise, baking_mesh, baking_particles, baking_guide;
   baking_data = mds->cache_flag & FLUID_DOMAIN_BAKING_DATA;
   baking_noise = mds->cache_flag & FLUID_DOMAIN_BAKING_NOISE;
   baking_mesh = mds->cache_flag & FLUID_DOMAIN_BAKING_MESH;
   baking_particles = mds->cache_flag & FLUID_DOMAIN_BAKING_PARTICLES;
   baking_guide = mds->cache_flag & FLUID_DOMAIN_BAKING_GUIDE;
-  bake_outdated = mds->cache_flag & (FLUID_DOMAIN_OUTDATED_DATA | FLUID_DOMAIN_OUTDATED_NOISE |
-                                     FLUID_DOMAIN_OUTDATED_MESH | FLUID_DOMAIN_OUTDATED_PARTICLES |
-                                     FLUID_DOMAIN_OUTDATED_GUIDE);
 
   bool resume_data, resume_noise, resume_mesh, resume_particles, resume_guide;
   resume_data = (!is_startframe) && (mds->cache_frame_pause_data == scene_framenr);
@@ -3775,35 +3845,27 @@ static void BKE_fluid_modifier_processDomain(FluidModifierData *mmd,
   bake_cache = baking_data || baking_noise || baking_mesh || baking_particles || baking_guide;
 
   bool next_data, next_noise, next_mesh, next_particles, next_guide;
-  next_data = manta_has_data(mds->fluid, mmd, scene_framenr + 1);
-  next_noise = manta_has_noise(mds->fluid, mmd, scene_framenr + 1);
-  next_mesh = manta_has_mesh(mds->fluid, mmd, scene_framenr + 1);
-  next_particles = manta_has_particles(mds->fluid, mmd, scene_framenr + 1);
-  next_guide = manta_has_guiding(mds->fluid, mmd, scene_framenr + 1, guide_parent);
+  next_data = manta_has_data(mds->fluid, mmd, next_frame);
+  next_noise = manta_has_noise(mds->fluid, mmd, next_frame);
+  next_mesh = manta_has_mesh(mds->fluid, mmd, next_frame);
+  next_particles = manta_has_particles(mds->fluid, mmd, next_frame);
+  next_guide = manta_has_guiding(mds->fluid, mmd, next_frame, guide_parent);
 
   bool prev_data, prev_noise, prev_mesh, prev_particles, prev_guide;
-  prev_data = manta_has_data(mds->fluid, mmd, scene_framenr - 1);
-  prev_noise = manta_has_noise(mds->fluid, mmd, scene_framenr - 1);
-  prev_mesh = manta_has_mesh(mds->fluid, mmd, scene_framenr - 1);
-  prev_particles = manta_has_particles(mds->fluid, mmd, scene_framenr - 1);
-  prev_guide = manta_has_guiding(mds->fluid, mmd, scene_framenr - 1, guide_parent);
+  prev_data = manta_has_data(mds->fluid, mmd, prev_frame);
+  prev_noise = manta_has_noise(mds->fluid, mmd, prev_frame);
+  prev_mesh = manta_has_mesh(mds->fluid, mmd, prev_frame);
+  prev_particles = manta_has_particles(mds->fluid, mmd, prev_frame);
+  prev_guide = manta_has_guiding(mds->fluid, mmd, prev_frame, guide_parent);
 
-  /* Unused for now, but needed for proper caching. */
-  UNUSED_VARS(prev_guide);
-  UNUSED_VARS(next_noise);
-  UNUSED_VARS(next_mesh);
-  UNUSED_VARS(next_particles);
-  UNUSED_VARS(next_guide);
+  /* Unused for now. */
+  UNUSED_VARS(has_guide, prev_guide, next_mesh, next_guide);
 
   bool with_gdomain;
   with_gdomain = (mds->guide_source == FLUID_DOMAIN_GUIDE_SRC_DOMAIN);
 
   int o_res[3], o_min[3], o_max[3], o_shift[3];
   int mode = mds->cache_type;
-  int prev_frame = scene_framenr - 1;
-
-  /* Ensure positivity of previous frame. */
-  CLAMP(prev_frame, 1, prev_frame);
 
   /* Cache mode specific settings. */
   switch (mode) {
@@ -3851,19 +3913,21 @@ static void BKE_fluid_modifier_processDomain(FluidModifierData *mmd,
       break;
     case FLUID_DOMAIN_CACHE_REPLAY:
     default:
+      baking_data = !has_data && (is_startframe || prev_data);
+      if (with_smoke && with_noise) {
+        baking_noise = !has_noise && (is_startframe || prev_noise);
+      }
+      if (with_liquid && with_mesh) {
+        baking_mesh = !has_mesh && (is_startframe || prev_mesh);
+      }
+      if (with_liquid && with_particles) {
+        baking_particles = !has_particles && (is_startframe || prev_particles);
+      }
+
       /* Always trying to read the cache in replay mode. */
       read_cache = true;
       bake_cache = false;
       break;
-  }
-
-  /* Cache outdated? If so reset, don't read, and then just rebake.
-   * Note: Only do this in replay mode! */
-  bool mode_replay = (mode == FLUID_DOMAIN_CACHE_REPLAY);
-  if (bake_outdated && mode_replay) {
-    read_cache = false;
-    bake_cache = true;
-    BKE_fluid_cache_free(mds, ob, mds->cache_flag);
   }
 
   /* Try to read from cache and keep track of read success. */
@@ -3877,7 +3941,7 @@ static void BKE_fluid_modifier_processDomain(FluidModifierData *mmd,
 
     /* Read particles cache. */
     if (with_liquid && with_particles) {
-      if (!baking_data && !baking_particles && !mode_replay) {
+      if (!baking_data && !baking_particles && next_particles) {
         /* Update particle data from file is faster than via Python (manta_read_particles()). */
         has_particles = manta_update_particle_structures(mds->fluid, mmd, particles_frame);
       }
@@ -3901,8 +3965,8 @@ static void BKE_fluid_modifier_processDomain(FluidModifierData *mmd,
           manta_needs_realloc(mds->fluid, mmd)) {
         BKE_fluid_reallocate_fluid(mds, mds->res, 1);
       }
-      if (!baking_data && !baking_noise && !mode_replay) {
-        has_data = manta_update_noise_structures(mds->fluid, mmd, noise_frame);
+      if (!baking_data && !baking_noise && next_noise) {
+        has_noise = manta_update_noise_structures(mds->fluid, mmd, noise_frame);
       }
       else {
         has_noise = manta_read_noise(mds->fluid, mmd, noise_frame);
@@ -3921,8 +3985,9 @@ static void BKE_fluid_modifier_processDomain(FluidModifierData *mmd,
               mds, o_res, mds->res, o_min, mds->res_min, o_max, o_shift, mds->shift);
         }
       }
-      if (!baking_data && !baking_noise && !mode_replay) {
-        /* TODO (sebbas): Confirm if this read call is really needed or not. */
+      if (!baking_data && !baking_noise && next_data && next_noise) {
+        /* TODO (sebbas): Confirm if this read call is really needed or not.
+         * Currently only important to load the shadow grid. */
         has_data = manta_update_smoke_structures(mds->fluid, mmd, data_frame);
       }
       else {
@@ -3946,7 +4011,7 @@ static void BKE_fluid_modifier_processDomain(FluidModifierData *mmd,
         }
       }
       if (with_liquid) {
-        if (!baking_data && !baking_particles && !baking_mesh && !mode_replay) {
+        if (!baking_data && !baking_particles && !baking_mesh && next_data) {
           has_data = manta_update_liquid_structures(mds->fluid, mmd, data_frame);
         }
         else {
@@ -3960,6 +4025,9 @@ static void BKE_fluid_modifier_processDomain(FluidModifierData *mmd,
   switch (mode) {
     case FLUID_DOMAIN_CACHE_FINAL:
     case FLUID_DOMAIN_CACHE_MODULAR:
+      if (!baking_data && !baking_noise && !baking_mesh && !baking_particles && !baking_guide) {
+        bake_cache = false;
+      }
       break;
     case FLUID_DOMAIN_CACHE_REPLAY:
     default:
@@ -4022,6 +4090,8 @@ static void BKE_fluid_modifier_processDomain(FluidModifierData *mmd,
       }
     }
   }
+
+  mds->flags &= ~FLUID_DOMAIN_FILE_LOAD;
   mmd->time = scene_framenr;
 }
 
@@ -4103,6 +4173,7 @@ struct Mesh *BKE_fluid_modifier_do(
     mmd->domain->cache_flag &= ~FLUID_DOMAIN_OUTDATED_PARTICLES;
     mmd->domain->cache_flag &= ~FLUID_DOMAIN_OUTDATED_GUIDE;
   }
+
   if (!result) {
     result = BKE_mesh_copy_for_eval(me, false);
   }
@@ -4651,6 +4722,7 @@ static void BKE_fluid_modifier_freeFlow(FluidModifierData *mmd)
     }
     mmd->flow->verts_old = NULL;
     mmd->flow->numverts = 0;
+    mmd->flow->flags &= ~FLUID_FLOW_NEEDS_UPDATE;
 
     MEM_freeN(mmd->flow);
     mmd->flow = NULL;
@@ -4670,6 +4742,7 @@ static void BKE_fluid_modifier_freeEffector(FluidModifierData *mmd)
     }
     mmd->effector->verts_old = NULL;
     mmd->effector->numverts = 0;
+    mmd->effector->flags &= ~FLUID_EFFECTOR_NEEDS_UPDATE;
 
     MEM_freeN(mmd->effector);
     mmd->effector = NULL;
@@ -4708,6 +4781,7 @@ static void BKE_fluid_modifier_reset_ex(struct FluidModifierData *mmd, bool need
     }
     mmd->flow->verts_old = NULL;
     mmd->flow->numverts = 0;
+    mmd->flow->flags &= ~FLUID_FLOW_NEEDS_UPDATE;
   }
   else if (mmd->effector) {
     if (mmd->effector->verts_old) {
@@ -4715,6 +4789,7 @@ static void BKE_fluid_modifier_reset_ex(struct FluidModifierData *mmd, bool need
     }
     mmd->effector->verts_old = NULL;
     mmd->effector->numverts = 0;
+    mmd->effector->flags &= ~FLUID_EFFECTOR_NEEDS_UPDATE;
   }
 }
 
@@ -4767,7 +4842,7 @@ void BKE_fluid_modifier_create_type_data(struct FluidModifierData *mmd)
     mmd->domain->flags = FLUID_DOMAIN_USE_DISSOLVE_LOG | FLUID_DOMAIN_USE_ADAPTIVE_TIME;
     mmd->domain->gravity[0] = 0.0f;
     mmd->domain->gravity[1] = 0.0f;
-    mmd->domain->gravity[2] = -1.0f;
+    mmd->domain->gravity[2] = -9.81f;
     mmd->domain->active_fields = 0;
     mmd->domain->type = FLUID_DOMAIN_TYPE_GAS;
     mmd->domain->boundary_width = 1;
@@ -4814,7 +4889,6 @@ void BKE_fluid_modifier_create_type_data(struct FluidModifierData *mmd)
     mmd->domain->surface_tension = 0.0f;
     mmd->domain->viscosity_base = 1.0f;
     mmd->domain->viscosity_exponent = 6.0f;
-    mmd->domain->domain_size = 0.5f;
 
     /* mesh options */
     mmd->domain->mesh_velocities = NULL;
@@ -5058,7 +5132,6 @@ void BKE_fluid_modifier_copy(const struct FluidModifierData *mmd,
     tmds->surface_tension = mds->surface_tension;
     tmds->viscosity_base = mds->viscosity_base;
     tmds->viscosity_exponent = mds->viscosity_exponent;
-    tmds->domain_size = mds->domain_size;
 
     /* mesh options */
     if (mds->mesh_velocities) {

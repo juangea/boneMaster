@@ -87,8 +87,10 @@ def context_path_validate(context, data_path):
             # One of the items in the rna path is None, just ignore this
             value = Ellipsis
         else:
-            # We have a real error in the rna path, don't ignore that
-            raise
+            # Print invalid path, but don't show error to the users and fully
+            # break the UI if the operator is bound to an event like left click.
+            print("context_path_validate error: context.%s not found (invalid keymap entry?)" % data_path)
+            value = Ellipsis
 
     return value
 
@@ -1161,7 +1163,7 @@ rna_max = FloatProperty(
 
 rna_use_soft_limits = BoolProperty(
     name="Use Soft Limits",
-    description="Limits the Property Value slider to a range, values outside the range must be inputed numerically",
+    description="Limits the Property Value slider to a range, values outside the range must be inputted numerically",
 )
 
 rna_is_overridable_library = BoolProperty(

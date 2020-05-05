@@ -236,8 +236,8 @@ class PHYSICS_PT_settings(PhysicButtonsPanel, Panel):
 
             col = grid.column()
             col.prop(flow, "flow_behavior", expand=False)
-            if flow.flow_behavior in {'INFLOW'}:
-                col.prop(flow, "use_inflow", text="Use Inflow")
+            if flow.flow_behavior in {'INFLOW', 'OUTFLOW'}:
+                col.prop(flow, "use_inflow", text="Use Flow")
 
             col.prop(flow, "subframes", text="Sampling Substeps")
 
@@ -988,6 +988,7 @@ class PHYSICS_PT_diffusion(PhysicButtonsPanel, Panel):
         layout.use_property_split = True
 
         domain = context.fluid.domain_settings
+        layout.active = domain.use_diffusion
 
         is_baking_any = domain.is_cache_baking_any
         has_baked_any = domain.has_cache_baked_any
@@ -1001,7 +1002,6 @@ class PHYSICS_PT_diffusion(PhysicButtonsPanel, Panel):
         col.prop(domain, "viscosity_exponent", text="Exponent", slider=True)
 
         col = flow.column()
-        col.prop(domain, "domain_size", text="Real World Size")
         col.prop(domain, "surface_tension", text="Surface Tension")
 
 

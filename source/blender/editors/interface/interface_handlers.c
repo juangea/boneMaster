@@ -335,12 +335,7 @@ typedef struct uiHandleButtonData {
   int maxlen;
   /* Button text selection:
    * extension direction, selextend, inside ui_do_but_TEX */
-  enum {
-    EXTEND_NONE = 0,
-    EXTEND_LEFT = 1,
-    EXTEND_RIGHT = 2,
-  } selextend;
-  float selstartx;
+  int sel_pos_init;
   /* allow to realloc str/editstr and use 'maxlen' to track alloc size (maxlen + 1) */
   bool is_str_dynamic;
 
@@ -1282,7 +1277,7 @@ static void ui_multibut_states_create(uiBut *but_active, uiHandleButtonData *dat
    * note: if we mix buttons which are proportional and others which are not,
    * this may work a bit strangely */
   if ((but_active->rnaprop && (RNA_property_flag(but_active->rnaprop) & PROP_PROPORTIONAL)) ||
-      ELEM(but_active->unit_type, PROP_UNIT_LENGTH)) {
+      ELEM(but_active->unit_type, RNA_SUBTYPE_UNIT_VALUE(PROP_UNIT_LENGTH))) {
     if (data->origvalue != 0.0) {
       data->multi_data.is_proportional = true;
     }
@@ -2942,7 +2937,7 @@ static void ui_textedit_set_cursor_pos(uiBut *but, uiHandleButtonData *data, con
       if (but->pos <= 0) {
         break;
       }
-      if (BLI_str_cursor_step_prev_utf8(str, but->ofs, &pos_i)) {
+      if (BLI_str_cursor_step_prev_utf8(str + but->ofs, but->ofs, &pos_i)) {
         but->pos = pos_i;
         str_last = &str[but->pos + but->ofs];
       }
@@ -2965,20 +2960,12 @@ static void ui_textedit_set_cursor_pos(uiBut *but, uiHandleButtonData *data, con
 
 static void ui_textedit_set_cursor_select(uiBut *but, uiHandleButtonData *data, const float x)
 {
-  if (x > data->selstartx) {
-    data->selextend = EXTEND_RIGHT;
-  }
-  else if (x < data->selstartx) {
-    data->selextend = EXTEND_LEFT;
-  }
-
   ui_textedit_set_cursor_pos(but, data, x);
 
-  if (data->selextend == EXTEND_RIGHT) {
-    but->selend = but->pos;
-  }
-  else if (data->selextend == EXTEND_LEFT) {
-    but->selsta = but->pos;
+  but->selsta = but->pos;
+  but->selend = data->sel_pos_init;
+  if (but->selend < but->selsta) {
+    SWAP(short, but->selsta, but->selend);
   }
 
   ui_but_update(but);
@@ -3074,7 +3061,7 @@ static void ui_textedit_move(uiBut *but,
         but->pos = but->selend = but->selsta;
       }
     }
-    data->selextend = EXTEND_NONE;
+    data->sel_pos_init = but->pos;
   }
   else {
     int pos_i = but->pos;
@@ -3082,48 +3069,14 @@ static void ui_textedit_move(uiBut *but,
     but->pos = pos_i;
 
     if (select) {
-      /* existing selection */
-      if (has_sel) {
-
-        if (data->selextend == EXTEND_NONE) {
-          data->selextend = EXTEND_RIGHT;
-        }
-
-        if (direction) {
-          if (data->selextend == EXTEND_RIGHT) {
-            but->selend = but->pos;
-          }
-          else {
-            but->selsta = but->pos;
-          }
-        }
-        else {
-          if (data->selextend == EXTEND_LEFT) {
-            but->selsta = but->pos;
-          }
-          else {
-            but->selend = but->pos;
-          }
-        }
-
-        if (but->selend < but->selsta) {
-          SWAP(short, but->selsta, but->selend);
-          data->selextend = (data->selextend == EXTEND_RIGHT) ? EXTEND_LEFT : EXTEND_RIGHT;
-        }
-
-      } /* new selection */
-      else {
-        if (direction) {
-          data->selextend = EXTEND_RIGHT;
-          but->selend = but->pos;
-          but->selsta = pos_prev;
-        }
-        else {
-          data->selextend = EXTEND_LEFT;
-          but->selend = pos_prev;
-          but->selsta = but->pos;
-        }
+      if (has_sel == false) {
+        data->sel_pos_init = pos_prev;
       }
+      but->selsta = but->pos;
+      but->selend = data->sel_pos_init;
+    }
+    if (but->selend < but->selsta) {
+      SWAP(short, but->selsta, but->selend);
     }
   }
 }
@@ -3353,8 +3306,7 @@ static void ui_textedit_begin(bContext *C, uiBut *but, uiHandleButtonData *data)
   len = strlen(data->str);
 
   data->origstr = BLI_strdupn(data->str, len);
-  data->selextend = EXTEND_NONE;
-  data->selstartx = 0.0f;
+  data->sel_pos_init = 0;
 
   /* set cursor pos to the end of the text */
   but->editstr = data->str;
@@ -3560,7 +3512,7 @@ static void ui_do_but_textedit(
         if (ui_but_contains_pt(but, mx, my)) {
           ui_textedit_set_cursor_pos(but, data, event->x);
           but->selsta = but->selend = but->pos;
-          data->selstartx = event->x;
+          data->sel_pos_init = but->pos;
 
           button_activate_state(C, but, BUTTON_STATE_TEXT_SELECTING);
           retval = WM_UI_HANDLER_BREAK;

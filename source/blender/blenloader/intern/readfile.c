@@ -5316,6 +5316,12 @@ static void lib_link_object(FileData *fd, Main *bmain, Object *ob)
       /* Flag for refreshing the simulation after loading */
       mmd->domain->flags |= FLUID_DOMAIN_FILE_LOAD;
     }
+    else if (mmd && (mmd->type == MOD_FLUID_TYPE_FLOW) && mmd->flow) {
+      mmd->flow->flags &= ~FLUID_FLOW_NEEDS_UPDATE;
+    }
+    else if (mmd && (mmd->type == MOD_FLUID_TYPE_EFFEC) && mmd->effector) {
+      mmd->effector->flags &= ~FLUID_EFFECTOR_NEEDS_UPDATE;
+    }
   }
 
   /* texture field */
@@ -9581,6 +9587,15 @@ static void read_libblock_undo_restore_at_old_address(FileData *fd, Main *main, 
 
   const short idcode = GS(id->name);
 
+  /* XXX 3DCursor (witch is UI data and as such should not be affected by undo) is stored in
+   * Scene... So this requires some special handling, previously done in `blo_lib_link_restore()`,
+   * but this cannot work anymore when we overwrite existing memory... */
+  if (idcode == ID_SCE) {
+    Scene *scene_old = (Scene *)id_old;
+    Scene *scene = (Scene *)id;
+    SWAP(View3DCursor, scene_old->cursor, scene->cursor);
+  }
+
   Main *old_bmain = fd->old_mainlist->first;
   ListBase *old_lb = which_libbase(old_bmain, idcode);
   ListBase *new_lb = which_libbase(main, idcode);
@@ -9644,13 +9659,15 @@ static bool read_libblock_undo_restore(
     /* Do not add LIB_TAG_NEW here, this should not be needed/used in undo case anyway (as
      * this is only for do_version-like code), but for sake of consistency, and also because
      * it will tell us which ID is re-used from old Main, and which one is actually new. */
-    const int id_tag = tag | LIB_TAG_NEED_LINK | LIB_TAG_UNDO_OLD_ID_REUSED;
+    /* Also do not add LIB_TAG_NEED_LINK, those IDs will never be re-liblinked, hence that tag will
+     * never be cleared, leading to critical issue in link/appemd code. */
+    const int id_tag = tag | LIB_TAG_UNDO_OLD_ID_REUSED;
     read_libblock_undo_restore_identical(fd, main, id, id_old, id_tag);
 
-    /* Insert into library map for lookup by newly read datablocks (with pointer
-     * value bhead->old) or existing datablocks in memory (pointer value id_old). */
+    /* Insert into library map for lookup by newly read datablocks (with pointer value bhead->old).
+     * Note that existing datablocks in memory (which pointer value would be id_old) are not
+     * remapped anymore, so no need to store this info here. */
     oldnewmap_insert(fd->libmap, bhead->old, id_old, bhead->code);
-    oldnewmap_insert(fd->libmap, id_old, id_old, bhead->code);
 
     *r_id_old = id_old;
     return true;
@@ -9721,11 +9738,11 @@ static BHead *read_libblock(FileData *fd,
    * direct_link_library() may remove it from there in case of duplicates. */
   BLI_addtail(lb, id);
 
-  /* Insert into library map for lookup by newly read datablocks (with pointer
-   * value bhead->old) or existing datablocks in memory (pointer value id_old). */
+  /* Insert into library map for lookup by newly read datablocks (with pointer value bhead->old).
+   * Note that existing datablocks in memory (which pointer value would be id_old) are not remapped
+   * remapped anymore, so no need to store this info here. */
   ID *id_target = id_old ? id_old : id;
   oldnewmap_insert(fd->libmap, bhead->old, id_target, bhead->code);
-  oldnewmap_insert(fd->libmap, id_old, id_target, bhead->code);
 
   if (r_id) {
     *r_id = id_target;
@@ -10120,6 +10137,15 @@ static void lib_link_all(FileData *fd, Main *bmain)
      * 'permanently' in our data structures... */
     BKE_main_collections_parent_relations_rebuild(bmain);
   }
+
+#ifndef NDEBUG
+  /* Double check we do not have any 'need link' tag remaining, this should never be the case once
+   * this function has run. */
+  FOREACH_MAIN_ID_BEGIN (bmain, id) {
+    BLI_assert((id->tag & LIB_TAG_NEED_LINK) == 0);
+  }
+  FOREACH_MAIN_ID_END;
+#endif
 }
 
 /** \} */
