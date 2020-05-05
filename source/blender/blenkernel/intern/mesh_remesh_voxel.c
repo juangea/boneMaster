@@ -406,7 +406,7 @@ void BKE_remesh_reproject_sculpt_face_sets(Mesh *target, Mesh *source)
   free_bvhtree_from_mesh(&bvhtree);
 }
 
-struct Mesh *BKE_mesh_remesh_voxel_fix_poles(struct Mesh *mesh, bool UNUSED(smooth))
+struct Mesh *BKE_mesh_remesh_voxel_fix_poles(struct Mesh *mesh, bool smooth)
 {
   const BMAllocTemplate allocsize = BMALLOC_TEMPLATE_FROM_ME(mesh);
   BMesh *bm;
@@ -482,17 +482,20 @@ struct Mesh *BKE_mesh_remesh_voxel_fix_poles(struct Mesh *mesh, bool UNUSED(smoo
   }
   BM_mesh_edgenet(bm, false, true);
 
-  /* Smooth the result */
-  for (int i = 0; i < 4; i++) {
-    BM_ITER_MESH (v, &iter_a, bm, BM_VERTS_OF_MESH) {
-      float co[3];
-      zero_v3(co);
-      BM_ITER_ELEM (ed, &iter_b, v, BM_EDGES_OF_VERT) {
-        BMVert *vert = BM_edge_other_vert(ed, v);
-        add_v3_v3(co, vert->co);
+  /* Smooth the result , but NOT ALWAYS!!!!
+   Voxel remesher + sharp edges doesnt need this, it is counter-productive even there !*/
+  if (smooth) {
+    for (int i = 0; i < 4; i++) {
+      BM_ITER_MESH (v, &iter_a, bm, BM_VERTS_OF_MESH) {
+        float co[3];
+        zero_v3(co);
+        BM_ITER_ELEM (ed, &iter_b, v, BM_EDGES_OF_VERT) {
+          BMVert *vert = BM_edge_other_vert(ed, v);
+          add_v3_v3(co, vert->co);
+        }
+        mul_v3_fl(co, 1.0f / (float)BM_vert_edge_count(v));
+        mid_v3_v3v3(v->co, v->co, co);
       }
-      mul_v3_fl(co, 1.0f / (float)BM_vert_edge_count(v));
-      mid_v3_v3v3(v->co, v->co, co);
     }
   }
 
