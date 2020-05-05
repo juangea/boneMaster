@@ -1731,8 +1731,8 @@ typedef struct CSGVolume_Object {
 
   char input;
   char pflag;
-  char psys;
-  char _pad[2];
+  char _pad;
+  short psys;
 
   float part_trail_size;
   float part_min_radius;
@@ -1772,11 +1772,14 @@ typedef struct VoxelMesherModifierData {
   float basesize[3];
   int input;
   int pflag;
-  int psys;
-  char size_defgrp_name[64]; /* MAX_VGROUP_NAME */
-
+  
   short flag;
   short mode;
+  short psys;
+  short _pad3;
+
+  char size_defgrp_name[64]; /* MAX_VGROUP_NAME */
+  
 } VoxelMesherModifierData;
 
 /* Skin modifier */

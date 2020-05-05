@@ -90,6 +90,7 @@ static void initData(ModifierData *md)
   vmd->filter_iterations = 1;
   vmd->filter_sigma = 1.0f;
   vmd->edge_tolerance = 0.1f;
+  vmd->psys = 1;
 
     /* since initData has no Object parameter (sigh) we have to check the initial condition of the
      self object being present in the operand list in each applyModifier call */
@@ -1103,6 +1104,8 @@ static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mes
 
     return mesh;
   }
+  
+  return mesh;
 }
 
 #else /* !WITH_MOD_REMESH */
