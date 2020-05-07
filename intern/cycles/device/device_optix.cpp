@@ -636,7 +636,7 @@ class OptiXDevice : public CUDADevice {
 
     const int end_sample = rtile.start_sample + rtile.num_samples;
     // Keep this number reasonable to avoid running into TDRs
-    int step_samples = (info.display_device ? 8 : 32);
+    int step_samples = (info.display_device ? 2 : 4);
     if (task.adaptive_sampling.use) {
       step_samples = task.adaptive_sampling.align_static_samples(step_samples);
     }
