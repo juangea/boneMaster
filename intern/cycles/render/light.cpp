@@ -183,6 +183,7 @@ bool Light::has_contribution(Scene *scene)
 LightManager::LightManager()
 {
   need_update = true;
+  need_update_background = true;
   use_light_visibility = false;
 }
 
@@ -905,7 +906,7 @@ void LightManager::device_update(Device *device,
 
   VLOG(1) << "Total " << scene->lights.size() << " lights.";
 
-  device_free(device, dscene);
+  device_free(device, dscene, need_update_background);
 
   use_light_visibility = false;
 
@@ -919,9 +920,11 @@ void LightManager::device_update(Device *device,
   if (progress.get_cancel())
     return;
 
-  device_update_background(device, dscene, scene, progress);
-  if (progress.get_cancel())
-    return;
+  if (need_update_background) {
+    device_update_background(device, dscene, scene, progress);
+    if (progress.get_cancel())
+      return;
+  }
 
   device_update_ies(dscene);
   if (progress.get_cancel())
@@ -933,14 +936,17 @@ void LightManager::device_update(Device *device,
   }
 
   need_update = false;
+  need_update_background = false;
 }
 
-void LightManager::device_free(Device *, DeviceScene *dscene)
+void LightManager::device_free(Device *, DeviceScene *dscene, const bool free_background)
 {
   dscene->light_distribution.free();
   dscene->lights.free();
-  dscene->light_background_marginal_cdf.free();
-  dscene->light_background_conditional_cdf.free();
+  if (free_background) {
+    dscene->light_background_marginal_cdf.free();
+    dscene->light_background_conditional_cdf.free();
+  }
   dscene->ies_lights.free();
 }
 
@@ -993,6 +999,7 @@ int LightManager::add_ies(const string &content)
   ies_slots[slot]->hash = hash;
 
   need_update = true;
+  need_update_background = true;
 
   return slot;
 }
@@ -1011,6 +1018,7 @@ void LightManager::remove_ies(int slot)
 
   /* If the slot has no more users, update the device to remove it. */
   need_update |= (ies_slots[slot]->users == 0);
+  need_update_background |= need_update;
 }
 
 void LightManager::device_update_ies(DeviceScene *dscene)

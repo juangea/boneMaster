@@ -93,6 +93,7 @@ class RenderBuffers {
       const string &name, float exposure, int sample, int components, float *pixels);
   bool get_denoising_pass_rect(
       int offset, float exposure, int sample, int components, float *pixels);
+  bool set_pass_rect(PassType type, int components, float *pixels);
 };
 
 /* Display Buffer
@@ -138,7 +139,7 @@ class DisplayBuffer {
 
 class RenderTile {
  public:
-  typedef enum { PATH_TRACE = (1 << 0), DENOISE = (1 << 1) } Task;
+  typedef enum { PATH_TRACE = (1 << 0), BAKE = (1 << 1), DENOISE = (1 << 2) } Task;
 
   Task task;
   int x, y, w, h;

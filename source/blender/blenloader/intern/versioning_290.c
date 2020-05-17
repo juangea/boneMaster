@@ -23,10 +23,13 @@
 #include "BLI_listbase.h"
 #include "BLI_utildefines.h"
 
+#include "DNA_brush_types.h"
 #include "DNA_genfile.h"
 #include "DNA_screen_types.h"
 
 #include "BKE_collection.h"
+#include "BKE_colortools.h"
+#include "BKE_lib_id.h"
 #include "BKE_main.h"
 
 #include "BLO_readfile.h"
@@ -38,17 +41,16 @@
 void blo_do_versions_290(FileData *fd, Library *UNUSED(lib), Main *bmain)
 {
   UNUSED_VARS(fd);
-  /**
-   * Versioning code until next subversion bump goes here.
-   *
-   * \note Be sure to check when bumping the version:
-   * - "versioning_userdef.c", #BLO_version_defaults_userpref_blend
-   * - "versioning_userdef.c", #do_versions_theme
-   *
-   * \note Keep this message at the bottom of the function.
-   */
-  {
-    /* Keep this block, even when empty. */
+
+  /** Repair files from duplicate brushes added to blend files, see: T76738. */
+  if (!MAIN_VERSION_ATLEAST(bmain, 290, 2)) {
+    {
+      short id_codes[] = {ID_BR, ID_PAL};
+      for (int i = 0; i < ARRAY_SIZE(id_codes); i++) {
+        ListBase *lb = which_libbase(bmain, id_codes[i]);
+        BKE_main_id_repair_duplicate_names_listbase(lb);
+      }
+    }
 
     if (!DNA_struct_elem_find(fd->filesdna, "SpaceImage", "float", "uv_opacity")) {
       for (bScreen *screen = bmain->screens.first; screen; screen = screen->id.next) {
@@ -62,5 +64,37 @@ void blo_do_versions_290(FileData *fd, Library *UNUSED(lib), Main *bmain)
         }
       }
     }
+
+    /* Init Grease Pencil new random curves. */
+    if (!DNA_struct_elem_find(fd->filesdna, "BrushGpencilSettings", "float", "random_hue")) {
+      LISTBASE_FOREACH (Brush *, brush, &bmain->brushes) {
+        if ((brush->gpencil_settings) && (brush->gpencil_settings->curve_rand_pressure == NULL)) {
+          brush->gpencil_settings->curve_rand_pressure = BKE_curvemapping_add(
+              1, 0.0f, 0.0f, 1.0f, 1.0f);
+          brush->gpencil_settings->curve_rand_strength = BKE_curvemapping_add(
+              1, 0.0f, 0.0f, 1.0f, 1.0f);
+          brush->gpencil_settings->curve_rand_uv = BKE_curvemapping_add(1, 0.0f, 0.0f, 1.0f, 1.0f);
+          brush->gpencil_settings->curve_rand_hue = BKE_curvemapping_add(
+              1, 0.0f, 0.0f, 1.0f, 1.0f);
+          brush->gpencil_settings->curve_rand_saturation = BKE_curvemapping_add(
+              1, 0.0f, 0.0f, 1.0f, 1.0f);
+          brush->gpencil_settings->curve_rand_value = BKE_curvemapping_add(
+              1, 0.0f, 0.0f, 1.0f, 1.0f);
+        }
+      }
+    }
+  }
+
+  /**
+   * Versioning code until next subversion bump goes here.
+   *
+   * \note Be sure to check when bumping the version:
+   * - "versioning_userdef.c", #BLO_version_defaults_userpref_blend
+   * - "versioning_userdef.c", #do_versions_theme
+   *
+   * \note Keep this message at the bottom of the function.
+   */
+  {
+    /* Keep this block, even when empty. */
   }
 }

@@ -38,6 +38,7 @@
 #include "BLI_ghash.h"
 #include "BLI_linklist.h"
 #include "BLI_listbase.h"
+#include "BLI_math_matrix.h"
 #include "BLI_memarena.h"
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
@@ -137,6 +138,12 @@ struct MenuSearch_Data {
   ListBase items;
   /** Use for all small allocations. */
   MemArena *memarena;
+
+  /** Use for context menu, to fake a button to create a context menu. */
+  struct {
+    uiBut but;
+    uiBlock block;
+  } context_menu_data;
 };
 
 static int menu_item_sort_by_drawstr_full(const void *menu_item_a_v, const void *menu_item_b_v)
@@ -208,7 +215,8 @@ static bool menu_items_from_ui_create_item_from_button(struct MenuSearch_Data *d
     /* Handle shared settings. */
     item->drawstr = strdup_memarena(memarena, but->drawstr);
     item->icon = ui_but_icon(but);
-    item->state = (but->flag & (UI_BUT_DISABLED | UI_BUT_INACTIVE | UI_BUT_REDALERT));
+    item->state = (but->flag &
+                   (UI_BUT_DISABLED | UI_BUT_INACTIVE | UI_BUT_REDALERT | UI_BUT_HAS_SEP_CHAR));
     item->mt = mt;
     item->drawstr_submenu = drawstr_submenu ? strdup_memarena(memarena, drawstr_submenu) : NULL;
 
@@ -219,6 +227,51 @@ static bool menu_items_from_ui_create_item_from_button(struct MenuSearch_Data *d
   }
 
   return false;
+}
+
+/**
+ * Populate a fake button from a menu item (use for context menu).
+ */
+static bool menu_items_to_ui_button(struct MenuSearch_Item *item, uiBut *but)
+{
+  bool changed = false;
+  switch (item->type) {
+    case MENU_SEARCH_TYPE_OP: {
+      but->optype = item->op.type;
+      but->opcontext = item->op.opcontext;
+      but->context = item->op.context;
+      but->opptr = item->op.opptr;
+      changed = true;
+      break;
+    }
+    case MENU_SEARCH_TYPE_RNA: {
+      const int prop_type = RNA_property_type(item->rna.prop);
+
+      but->rnapoin = item->rna.ptr;
+      but->rnaprop = item->rna.prop;
+      but->rnaindex = item->rna.index;
+
+      if (prop_type == PROP_ENUM) {
+        but->hardmax = item->rna.enum_value;
+      }
+      changed = true;
+      break;
+    }
+  }
+
+  if (changed) {
+    STRNCPY(but->drawstr, item->drawstr);
+    char *drawstr_sep = (item->state & UI_BUT_HAS_SEP_CHAR) ? strrchr(but->drawstr, UI_SEP_CHAR) :
+                                                              NULL;
+    if (drawstr_sep) {
+      *drawstr_sep = '\0';
+    }
+
+    but->icon = item->icon;
+    but->str = but->strdata;
+  }
+
+  return changed;
 }
 
 /**
@@ -308,7 +361,7 @@ static void menu_items_from_all_operators(bContext *C, struct MenuSearch_Data *d
       item->type = MENU_SEARCH_TYPE_OP;
 
       item->op.type = ot;
-      item->op.opcontext = WM_OP_EXEC_DEFAULT;
+      item->op.opcontext = WM_OP_INVOKE_DEFAULT;
       item->op.context = NULL;
 
       char idname_as_py[OP_MAX_TYPENAME];
@@ -318,6 +371,7 @@ static void menu_items_from_all_operators(bContext *C, struct MenuSearch_Data *d
       SNPRINTF(uiname, "%s " MENU_SEP "%s", idname_as_py, ot_ui_name);
 
       item->drawwstr_full = strdup_memarena(memarena, uiname);
+      item->drawstr = ot_ui_name;
 
       item->wm_context = NULL;
 
@@ -779,7 +833,7 @@ static struct MenuSearch_Data *menu_items_from_ui_create(
   return data;
 }
 
-static void menu_items_from_ui_destroy(void *data_v)
+static void menu_search_arg_free_fn(void *data_v)
 {
   struct MenuSearch_Data *data = data_v;
   LISTBASE_FOREACH (struct MenuSearch_Item *, item, &data->items) {
@@ -801,7 +855,7 @@ static void menu_items_from_ui_destroy(void *data_v)
   MEM_freeN(data);
 }
 
-static void menu_call_fn(bContext *C, void *UNUSED(arg1), void *arg2)
+static void menu_search_exec_fn(bContext *C, void *UNUSED(arg1), void *arg2)
 {
   struct MenuSearch_Item *item = arg2;
   if (item == NULL) {
@@ -863,10 +917,10 @@ static void menu_call_fn(bContext *C, void *UNUSED(arg1), void *arg2)
   }
 }
 
-static void menu_search_cb(const bContext *UNUSED(C),
-                           void *arg,
-                           const char *str,
-                           uiSearchItems *items)
+static void menu_search_update_fn(const bContext *UNUSED(C),
+                                  void *arg,
+                                  const char *str,
+                                  uiSearchItems *items)
 {
   struct MenuSearch_Data *data = arg;
   const size_t str_len = strlen(str);
@@ -896,6 +950,108 @@ static void menu_search_cb(const bContext *UNUSED(C),
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Context Menu
+ *
+ * This uses a fake button to create a context menu,
+ * if this ever causes hard to solve bugs we may need to create
+ * a separate context menu just for the search, however this is fairly involved.
+ * \{ */
+
+static bool ui_search_menu_create_context_menu(struct bContext *C,
+                                               void *arg,
+                                               void *active,
+                                               const struct wmEvent *UNUSED(event))
+{
+  struct MenuSearch_Data *data = arg;
+  struct MenuSearch_Item *item = active;
+  bool has_menu = false;
+
+  memset(&data->context_menu_data, 0x0, sizeof(data->context_menu_data));
+  uiBut *but = &data->context_menu_data.but;
+  uiBlock *block = &data->context_menu_data.block;
+
+  but->block = block;
+
+  if (menu_items_to_ui_button(item, but)) {
+    ScrArea *area_prev = CTX_wm_area(C);
+    ARegion *region_prev = CTX_wm_region(C);
+
+    if (item->wm_context != NULL) {
+      CTX_wm_area_set(C, item->wm_context->area);
+      CTX_wm_region_set(C, item->wm_context->region);
+    }
+
+    if (ui_popup_context_menu_for_button(C, but)) {
+      has_menu = true;
+    }
+
+    if (item->wm_context != NULL) {
+      CTX_wm_area_set(C, area_prev);
+      CTX_wm_region_set(C, region_prev);
+    }
+  }
+
+  return has_menu;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Tooltip
+ * \{ */
+
+static struct ARegion *ui_search_menu_create_tooltip(struct bContext *C,
+                                                     struct ARegion *region,
+                                                     void *arg,
+                                                     void *active)
+{
+  struct MenuSearch_Data *data = arg;
+  struct MenuSearch_Item *item = active;
+
+  memset(&data->context_menu_data, 0x0, sizeof(data->context_menu_data));
+  uiBut *but = &data->context_menu_data.but;
+  uiBlock *block = &data->context_menu_data.block;
+  unit_m4(block->winmat);
+  block->aspect = 1;
+
+  but->block = block;
+
+  /* Place the fake button at the cursor so the tool-tip is places properly. */
+  float tip_init[2];
+  const wmEvent *event = CTX_wm_window(C)->eventstate;
+  tip_init[0] = event->x;
+  tip_init[1] = event->y - (UI_UNIT_Y / 2);
+  ui_window_to_block_fl(region, block, &tip_init[0], &tip_init[1]);
+
+  but->rect.xmin = tip_init[0];
+  but->rect.xmax = tip_init[0];
+  but->rect.ymin = tip_init[1];
+  but->rect.ymax = tip_init[1];
+
+  if (menu_items_to_ui_button(item, but)) {
+    ScrArea *area_prev = CTX_wm_area(C);
+    ARegion *region_prev = CTX_wm_region(C);
+
+    if (item->wm_context != NULL) {
+      CTX_wm_area_set(C, item->wm_context->area);
+      CTX_wm_region_set(C, item->wm_context->region);
+    }
+
+    ARegion *region_tip = UI_tooltip_create_from_button(C, region, but, false);
+
+    if (item->wm_context != NULL) {
+      CTX_wm_area_set(C, area_prev);
+      CTX_wm_region_set(C, region_prev);
+    }
+    return region_tip;
+  }
+
+  return NULL;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Menu Search Template Public API
  * \{ */
 
@@ -910,13 +1066,17 @@ void UI_but_func_menu_search(uiBut *but)
   struct MenuSearch_Data *data = menu_items_from_ui_create(
       C, win, area, region, include_all_areas);
   UI_but_func_search_set(but,
+                         /* Generic callback. */
                          ui_searchbox_create_menu,
-                         menu_search_cb,
+                         menu_search_update_fn,
                          data,
-                         menu_items_from_ui_destroy,
-                         menu_call_fn,
-                         MENU_SEP,
+                         menu_search_arg_free_fn,
+                         menu_search_exec_fn,
                          NULL);
+
+  UI_but_func_search_set_context_menu(but, ui_search_menu_create_context_menu);
+  UI_but_func_search_set_tooltip(but, ui_search_menu_create_tooltip);
+  UI_but_func_search_set_sep_string(but, MENU_SEP);
 }
 
 void uiTemplateMenuSearch(uiLayout *layout)

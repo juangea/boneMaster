@@ -155,6 +155,9 @@ static void scene_init_data(ID *id)
   scene->unit.mass_unit = (uchar)bUnit_GetBaseUnitOfType(USER_UNIT_METRIC, B_UNIT_MASS);
   scene->unit.time_unit = (uchar)bUnit_GetBaseUnitOfType(USER_UNIT_METRIC, B_UNIT_TIME);
 
+  /* Anti-aliasing threshold. */
+  scene->grease_pencil_settings.smaa_threshold = 1.0f;
+
   {
     ParticleEditSettings *pset;
     pset = &scene->toolsettings->particle;
@@ -346,6 +349,11 @@ static void scene_free_data(ID *id)
   }
 
   if (scene->rigidbody_world) {
+    /* Prevent rigidbody freeing code to follow other IDs pointers, this should never be allowed
+     * nor necessary from here, and with new undo code, those pointers may be fully invalid or
+     * worse, pointing to data actually belonging to new BMain! */
+    scene->rigidbody_world->constraints = NULL;
+    scene->rigidbody_world->group = NULL;
     BKE_rigidbody_free_world(scene);
   }
 
@@ -2102,7 +2110,7 @@ static Depsgraph **scene_get_depsgraph_p(Main *bmain,
       if (allocate_depsgraph) {
         *depsgraph_ptr = DEG_graph_new(bmain, scene, view_layer, DAG_EVAL_VIEWPORT);
         /* TODO(sergey): Would be cool to avoid string format print,
-         * but is a bit tricky because we can't know in advance  whether
+         * but is a bit tricky because we can't know in advance whether
          * we will ever enable debug messages for this depsgraph.
          */
         char name[1024];

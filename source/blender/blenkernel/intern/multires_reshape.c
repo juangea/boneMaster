@@ -10,7 +10,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software  Foundation,
+ * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  *
  * The Original Code is Copyright (C) 2020 Blender Foundation.
@@ -121,7 +121,7 @@ bool multiresModifier_reshapeFromDeformModifier(struct Depsgraph *depsgraph,
       .object = object,
       .flag = MOD_APPLY_USECACHE | MOD_APPLY_IGNORE_SIMPLIFY,
   };
-  modwrap_deformVerts(
+  BKE_modifier_deform_verts(
       deform_md, &modifier_ctx, multires_mesh, deformed_verts, multires_mesh->totvert);
   BKE_id_free(NULL, multires_mesh);
 
@@ -216,19 +216,20 @@ void multiresModifier_subdivide_to_level(struct Object *object,
 
   multires_reshape_store_original_grids(&reshape_context);
   multires_reshape_ensure_grids(coarse_mesh, reshape_context.top.level);
-  multires_reshape_assign_final_coords_from_orig_mdisps(&reshape_context);
+  multires_reshape_assign_final_elements_from_orig_mdisps(&reshape_context);
+
+  /* Free original grids which makes it so smoothing with details thinks all the details were
+   * added against base mesh's limit surface. This is similar behavior to as if we've done all
+   * displacement in sculpt mode at the old top level and then propagated to the new top level.*/
+  multires_reshape_free_original_grids(&reshape_context);
 
   if (ELEM(mode, MULTIRES_SUBDIVIDE_LINEAR, MULTIRES_SUBDIVIDE_SIMPLE)) {
     multires_reshape_smooth_object_grids(&reshape_context, mode);
   }
   else {
-    /* Free original grids which makes it so smoothing with details thinks all the details were
-     * added against base mesh's limit surface. This is similar behavior to as if we've done all
-     * displacement in sculpt mode at the old top level and then propagated to the new top level.*/
-    multires_reshape_free_original_grids(&reshape_context);
-
     multires_reshape_smooth_object_grids_with_details(&reshape_context);
   }
+
   multires_reshape_object_grids_to_tangent_displacement(&reshape_context);
   multires_reshape_context_free(&reshape_context);
 

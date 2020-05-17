@@ -19,10 +19,10 @@
 /* For constants. */
 #include "BLI_math_base.h"
 
-#include "DNA_userdef_types.h"
+#include "DNA_anim_types.h"
 #include "DNA_curve_types.h"
 #include "DNA_space_types.h"
-#include "DNA_anim_types.h"
+#include "DNA_userdef_types.h"
 
 #include "BLI_math_rotation.h"
 
@@ -226,6 +226,8 @@ const UserDef U_default = {
     .sequencer_disk_cache_compression = 0,
     .sequencer_disk_cache_size_limit = 100,
     .sequencer_disk_cache_flag = 0,
+
+    .collection_instance_empty_size = 1.0f,
 
     .runtime =
         {

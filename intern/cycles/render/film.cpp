@@ -199,6 +199,10 @@ void Pass::add(PassType type, vector<Pass> &passes, const char *name)
       pass.components = 4;
       pass.exposure = true;
       break;
+    case PASS_BAKE_PRIMITIVE:
+    case PASS_BAKE_DIFFERENTIAL:
+      pass.components = 4;
+      break;
     default:
       assert(false);
       break;
@@ -390,10 +394,12 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
     if (pass.type <= PASS_CATEGORY_MAIN_END) {
       kfilm->pass_flag |= pass_flag;
     }
-    else {
-      assert(pass.type <= PASS_CATEGORY_LIGHT_END);
+    else if (pass.type <= PASS_CATEGORY_LIGHT_END) {
       kfilm->use_light_pass = 1;
       kfilm->light_pass_flag |= pass_flag;
+    }
+    else {
+      assert(pass.type <= PASS_CATEGORY_BAKE_END);
     }
 
     switch (pass.type) {
@@ -473,6 +479,13 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
         break;
       case PASS_VOLUME_DIRECT:
         kfilm->pass_volume_direct = kfilm->pass_stride;
+        break;
+
+      case PASS_BAKE_PRIMITIVE:
+        kfilm->pass_bake_primitive = kfilm->pass_stride;
+        break;
+      case PASS_BAKE_DIFFERENTIAL:
+        kfilm->pass_bake_differential = kfilm->pass_stride;
         break;
 
 #ifdef WITH_CYCLES_DEBUG
