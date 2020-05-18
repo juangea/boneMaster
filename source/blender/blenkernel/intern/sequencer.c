@@ -1538,7 +1538,10 @@ static bool video_seq_is_rendered(Sequence *seq)
   return (seq && !(seq->flag & SEQ_MUTE) && seq->type != SEQ_TYPE_SOUND_RAM);
 }
 
-static int get_shown_sequences(ListBase *seqbasep, int cfra, int chanshown, Sequence **seq_arr_out)
+int BKE_sequencer_get_shown_sequences(ListBase *seqbasep,
+                                      int cfra,
+                                      int chanshown,
+                                      Sequence **seq_arr_out)
 {
   Sequence *seq_arr[MAXSEQ + 1];
   int b = chanshown;
@@ -1907,9 +1910,10 @@ static bool seq_proxy_get_fname(Editing *ed,
 static ImBuf *seq_proxy_fetch(const SeqRenderData *context, Sequence *seq, int cfra)
 {
   char name[PROXY_MAXFILE];
-  IMB_Proxy_Size psize = seq_rendersize_to_proxysize(context->preview_render_size);
-  int size_flags;
   StripProxy *proxy = seq->strip->proxy;
+  const eSpaceSeq_Proxy_RenderSize psize = context->preview_render_size;
+  const IMB_Proxy_Size psize_flag = seq_rendersize_to_proxysize(psize);
+  int size_flags;
   Editing *ed = context->scene->ed;
   StripAnim *sanim;
 
@@ -1920,7 +1924,7 @@ static ImBuf *seq_proxy_fetch(const SeqRenderData *context, Sequence *seq, int c
   size_flags = proxy->build_size_flags;
 
   /* only use proxies, if they are enabled (even if present!) */
-  if (psize == IMB_PROXY_NONE || (size_flags & psize) == 0) {
+  if (psize_flag == IMB_PROXY_NONE || (size_flags & psize_flag) == 0) {
     return NULL;
   }
 
@@ -3973,7 +3977,7 @@ static ImBuf *seq_render_strip_stack(const SeqRenderData *context,
   ImBuf *out = NULL;
   clock_t begin;
 
-  count = get_shown_sequences(seqbasep, cfra, chanshown, (Sequence **)&seq_arr);
+  count = BKE_sequencer_get_shown_sequences(seqbasep, cfra, chanshown, (Sequence **)&seq_arr);
 
   if (count == 0) {
     return NULL;
@@ -4081,7 +4085,7 @@ ImBuf *BKE_sequencer_give_ibuf(const SeqRenderData *context, float cfra, int cha
   Sequence *seq_arr[MAXSEQ + 1];
   int count;
 
-  count = get_shown_sequences(seqbasep, cfra, chanshown, seq_arr);
+  count = BKE_sequencer_get_shown_sequences(seqbasep, cfra, chanshown, seq_arr);
 
   if (count) {
     out = BKE_sequencer_cache_get(

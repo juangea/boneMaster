@@ -339,7 +339,7 @@ bool ED_operator_console_active(bContext *C)
   return ed_spacetype_test(C, SPACE_CONSOLE);
 }
 
-static bool ed_object_hidden(Object *ob)
+static bool ed_object_hidden(const Object *ob)
 {
   /* if hidden but in edit mode, we still display, can happen with animation */
   return ((ob->restrictflag & OB_RESTRICT_VIEWPORT) && !(ob->mode & OB_MODE_EDIT));
@@ -351,10 +351,15 @@ bool ED_operator_object_active(bContext *C)
   return ((ob != NULL) && !ed_object_hidden(ob));
 }
 
+bool ED_operator_object_active_editable_ex(bContext *UNUSED(C), const Object *ob)
+{
+  return ((ob != NULL) && !ID_IS_LINKED(ob) && !ed_object_hidden(ob));
+}
+
 bool ED_operator_object_active_editable(bContext *C)
 {
   Object *ob = ED_object_active_context(C);
-  return ((ob != NULL) && !ID_IS_LINKED(ob) && !ed_object_hidden(ob));
+  return ED_operator_object_active_editable_ex(C, ob);
 }
 
 bool ED_operator_object_active_editable_mesh(bContext *C)
@@ -1741,8 +1746,7 @@ static void area_move_apply_do(const bContext *C,
   /* only redraw if we actually moved a screen vert, for AREAGRID */
   if (doredraw) {
     bool redraw_all = false;
-    ED_screen_areas_iter(win, screen, area)
-    {
+    ED_screen_areas_iter (win, screen, area) {
       if (area->v1->editflag || area->v2->editflag || area->v3->editflag || area->v4->editflag) {
         if (ED_area_is_global(area)) {
           /* Snap to minimum or maximum for global areas. */
@@ -1761,8 +1765,7 @@ static void area_move_apply_do(const bContext *C,
       }
     }
     if (redraw_all) {
-      ED_screen_areas_iter(win, screen, area)
-      {
+      ED_screen_areas_iter (win, screen, area) {
         ED_area_tag_redraw(area);
       }
     }
@@ -3871,6 +3874,10 @@ static int region_quadview_exec(bContext *C, wmOperator *op)
       rv3d->viewlock_quad = RV3D_VIEWLOCK_INIT;
       rv3d->viewlock = 0;
       rv3d->rflag &= ~RV3D_CLIPPING;
+
+      /* FIXME: This fixes missing update to workbench TAA. (see T76216)
+       * However, it would be nice if the tagging should be done in a more conventional way. */
+      rv3d->rflag |= RV3D_GPULIGHT_UPDATE;
 
       /* Accumulate locks, in case they're mixed. */
       for (region_iter = area->regionbase.first; region_iter; region_iter = region_iter->next) {
