@@ -222,7 +222,7 @@ class USERPREF_PT_interface_text(InterfacePanel, CenterAlignMixIn, Panel):
 
         flow = layout.grid_flow(row_major=False, columns=0, even_columns=True, even_rows=False, align=False)
 
-        flow.prop(view, "use_text_antialiasing", text="Anti-aliasing")
+        flow.prop(view, "use_text_antialiasing", text="Anti-Aliasing")
         sub = flow.column()
         sub.active = view.use_text_antialiasing
         sub.prop(view, "text_hinting", text="Hinting")
@@ -1631,7 +1631,6 @@ class USERPREF_PT_ndof_settings(Panel):
         layout.use_property_decorate = False  # No animation.
 
         input_prefs = context.preferences.inputs
-
         is_view3d = context.space_data.type == 'VIEW_3D'
         self.draw_settings(layout, input_prefs, is_view3d)
 

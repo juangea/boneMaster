@@ -431,7 +431,7 @@ class _draw_tool_settings_context_mode:
 
             row.prop(gp_settings, "use_material_pin", text="")
 
-            if brush.gpencil_tool in {'DRAW', 'FILL'} and ma:
+            if brush.gpencil_tool in {'DRAW', 'FILL'}:
                 row.separator(factor=1.0)
                 subrow = row.row(align=True)
                 row.prop_enum(settings, "color_mode", 'MATERIAL', text="", icon='MATERIAL')
@@ -736,7 +736,12 @@ class VIEW3D_HT_header(Header):
                 row.prop(tool_settings, "use_gpencil_vertex_select_mask_stroke", text="")
                 row.prop(tool_settings, "use_gpencil_vertex_select_mask_segment", text="")
 
-            if gpd.use_stroke_edit_mode or gpd.is_stroke_sculpt_mode or gpd.is_stroke_weight_mode or gpd.is_stroke_vertex_mode:
+            if (
+                    gpd.use_stroke_edit_mode or
+                    gpd.is_stroke_sculpt_mode or
+                    gpd.is_stroke_weight_mode or
+                    gpd.is_stroke_vertex_mode
+            ):
                 row = layout.row(align=True)
                 row.prop(gpd, "use_multiedit", text="", icon='GP_MULTIFRAME_EDITING')
 
@@ -3761,6 +3766,11 @@ class VIEW3D_MT_edit_mesh_context_menu(Menu):
 
             col.separator()
 
+            col.operator("mesh.mark_seam").clear = False
+            col.operator("mesh.mark_seam", text="Clear Seam").clear = True
+
+            col.separator()
+
             col.operator("mesh.mark_sharp")
             col.operator("mesh.mark_sharp", text="Clear Sharp").clear = True
 
@@ -4003,6 +4013,11 @@ class VIEW3D_MT_edit_mesh_edges(Menu):
 
         layout.operator("transform.edge_crease")
         layout.operator("transform.edge_bevelweight")
+
+        layout.separator()
+
+        layout.operator("mesh.mark_seam").clear = False
+        layout.operator("mesh.mark_seam", text="Clear Seam").clear = True
 
         layout.separator()
 
@@ -6369,7 +6384,7 @@ class VIEW3D_PT_overlay_edit_curve(Panel):
         col.active = display_all
 
         row = col.row()
-        row.prop(overlay, "show_curve_handles", text="Handles")
+        row.prop(overlay, "display_handle", text="Handles")
 
         row = col.row()
         row.prop(overlay, "show_curve_normals", text="")
