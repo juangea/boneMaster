@@ -337,10 +337,6 @@ static int gpencil_paintmode_toggle_exec(bContext *C, wmOperator *op)
   /* set mode */
   if (gpd->flag & GP_DATA_STROKE_PAINTMODE) {
     mode = OB_MODE_PAINT_GPENCIL;
-    BKE_brush_gpencil_paint_presets(bmain, ts, false);
-
-    /* Ensure Palette by default. */
-    BKE_gpencil_palette_ensure(bmain, CTX_data_scene(C));
   }
   else {
     mode = OB_MODE_OBJECT;
@@ -356,8 +352,16 @@ static int gpencil_paintmode_toggle_exec(bContext *C, wmOperator *op)
   }
 
   if (mode == OB_MODE_PAINT_GPENCIL) {
-    /* be sure we have brushes */
+    /* Be sure we have brushes and Paint settings.
+     * Need Draw and Vertex (used for Tint). */
     BKE_paint_ensure(ts, (Paint **)&ts->gp_paint);
+    BKE_paint_ensure(ts, (Paint **)&ts->gp_vertexpaint);
+
+    BKE_brush_gpencil_paint_presets(bmain, ts, false);
+
+    /* Ensure Palette by default. */
+    BKE_gpencil_palette_ensure(bmain, CTX_data_scene(C));
+
     Paint *paint = &ts->gp_paint->paint;
     /* if not exist, create a new one */
     if ((paint->brush == NULL) || (paint->brush->gpencil_settings == NULL)) {
@@ -445,7 +449,6 @@ static int gpencil_sculptmode_toggle_exec(bContext *C, wmOperator *op)
   /* set mode */
   if (gpd->flag & GP_DATA_STROKE_SCULPTMODE) {
     mode = OB_MODE_SCULPT_GPENCIL;
-    BKE_brush_gpencil_sculpt_presets(bmain, ts, false);
   }
   else {
     mode = OB_MODE_OBJECT;
@@ -461,8 +464,12 @@ static int gpencil_sculptmode_toggle_exec(bContext *C, wmOperator *op)
   }
 
   if (mode == OB_MODE_SCULPT_GPENCIL) {
-    /* be sure we have brushes */
+    /* Be sure we have brushes. */
     BKE_paint_ensure(ts, (Paint **)&ts->gp_sculptpaint);
+
+    const bool reset_mode = (ts->gp_sculptpaint->paint.brush == NULL);
+    BKE_brush_gpencil_sculpt_presets(bmain, ts, reset_mode);
+
     BKE_paint_toolslots_brush_validate(bmain, &ts->gp_sculptpaint->paint);
   }
 
@@ -545,7 +552,6 @@ static int gpencil_weightmode_toggle_exec(bContext *C, wmOperator *op)
   /* set mode */
   if (gpd->flag & GP_DATA_STROKE_WEIGHTMODE) {
     mode = OB_MODE_WEIGHT_GPENCIL;
-    BKE_brush_gpencil_weight_presets(bmain, ts, false);
   }
   else {
     mode = OB_MODE_OBJECT;
@@ -561,8 +567,12 @@ static int gpencil_weightmode_toggle_exec(bContext *C, wmOperator *op)
   }
 
   if (mode == OB_MODE_WEIGHT_GPENCIL) {
-    /* be sure we have brushes */
+    /* Be sure we have brushes. */
     BKE_paint_ensure(ts, (Paint **)&ts->gp_weightpaint);
+
+    const bool reset_mode = (ts->gp_weightpaint->paint.brush == NULL);
+    BKE_brush_gpencil_weight_presets(bmain, ts, reset_mode);
+
     BKE_paint_toolslots_brush_validate(bmain, &ts->gp_weightpaint->paint);
   }
 
@@ -644,10 +654,6 @@ static int gpencil_vertexmode_toggle_exec(bContext *C, wmOperator *op)
   /* set mode */
   if (gpd->flag & GP_DATA_STROKE_VERTEXMODE) {
     mode = OB_MODE_VERTEX_GPENCIL;
-    BKE_brush_gpencil_vertex_presets(bmain, ts, false);
-
-    /* Ensure Palette by default. */
-    BKE_gpencil_palette_ensure(bmain, CTX_data_scene(C));
   }
   else {
     mode = OB_MODE_OBJECT;
@@ -663,9 +669,16 @@ static int gpencil_vertexmode_toggle_exec(bContext *C, wmOperator *op)
   }
 
   if (mode == OB_MODE_VERTEX_GPENCIL) {
-    /* be sure we have brushes */
+    /* Be sure we have brushes. */
     BKE_paint_ensure(ts, (Paint **)&ts->gp_vertexpaint);
+
+    const bool reset_mode = (ts->gp_vertexpaint->paint.brush == NULL);
+    BKE_brush_gpencil_vertex_presets(bmain, ts, reset_mode);
+
     BKE_paint_toolslots_brush_validate(bmain, &ts->gp_vertexpaint->paint);
+
+    /* Ensure Palette by default. */
+    BKE_gpencil_palette_ensure(bmain, CTX_data_scene(C));
   }
 
   /* setup other modes */
