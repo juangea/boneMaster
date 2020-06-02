@@ -1253,8 +1253,8 @@ typedef struct KernelFilm {
   int pass_aov_color;
   int pass_aov_value;
   int pass_aov_color_num;
-  int pass_aov_value_num;  
-  int pad1,pad2,pad3;
+  int pass_aov_value_num;
+  int pad1;//, pad2, pad3;
 
   /* XYZ to rendering color space transform. float4 instead of float3 to
    * ensure consistent padding/alignment across devices. */
@@ -1297,7 +1297,6 @@ typedef struct KernelBackground {
   float ao_factor;
   float ao_distance;
   float ao_bounces_factor;
-  //float ao_pad;
 } KernelBackground;
 static_assert_align(KernelBackground, 16);
 
@@ -1383,7 +1382,7 @@ typedef struct KernelIntegrator {
 
   uint background_lightgroups;
 
-  int pad1,pad2; //I added Scramble and dither_size, with this we need 3 pads
+  int pad1,pad2;
 } KernelIntegrator;
 static_assert_align(KernelIntegrator, 16);
 
@@ -1498,7 +1497,8 @@ typedef struct KernelObject {
   float cryptomatte_object;
   float cryptomatte_asset;
 
-  int pad[3];
+  float shadow_terminator_offset;
+  float pad1, pad2;
 } KernelObject;
 static_assert_align(KernelObject, 16);
 

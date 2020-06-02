@@ -31,6 +31,7 @@
 #include "BLI_assert.h"
 #include "BLI_linklist.h"
 #include "BLI_memblock.h"
+#include "BLI_task.h"
 #include "BLI_threads.h"
 
 #include "GPU_batch.h"
@@ -278,8 +279,11 @@ typedef enum {
   DRW_UNIFORM_TEXTURE,
   DRW_UNIFORM_TEXTURE_PERSIST,
   DRW_UNIFORM_TEXTURE_REF,
+  DRW_UNIFORM_TEXTURE_REF_PERSIST,
   DRW_UNIFORM_BLOCK,
   DRW_UNIFORM_BLOCK_PERSIST,
+  DRW_UNIFORM_BLOCK_REF,
+  DRW_UNIFORM_BLOCK_REF_PERSIST,
   DRW_UNIFORM_TFEEDBACK_TARGET,
   /** Per drawcall uniforms/UBO */
   DRW_UNIFORM_BLOCK_OBMATS,
@@ -307,7 +311,6 @@ struct DRWUniform {
   uint32_t type : 5;      /* DRWUniformType */
   uint32_t length : 5;    /* cannot be more than 16 */
   uint32_t arraysize : 5; /* cannot be more than 16 too */
-  uint32_t name_ofs : 17; /* name offset in name buffer. */
 };
 
 struct DRWShadingGroup {
@@ -341,6 +344,13 @@ struct DRWPass {
     DRWShadingGroup *first;
     DRWShadingGroup *last;
   } shgroups;
+
+  /* Draw the shgroups of this pass instead.
+   * This avoid duplicating drawcalls/shgroups
+   * for similar passes. */
+  DRWPass *original;
+  /* Link list of additional passes to render. */
+  DRWPass *next;
 
   DRWResourceHandle handle;
   DRWState state;
@@ -525,6 +535,8 @@ typedef struct DRWManager {
   uint select_id;
 #endif
 
+  struct TaskGraph *task_graph;
+
   /* ---------- Nothing after this point is cleared after use ----------- */
 
   /* gl_context serves as the offset for clearing only
@@ -556,12 +568,6 @@ typedef struct DRWManager {
     DRWDebugLine *lines;
     DRWDebugSphere *spheres;
   } debug;
-
-  struct {
-    char *buffer;
-    uint buffer_len;
-    uint buffer_ofs;
-  } uniform_names;
 } DRWManager;
 
 extern DRWManager DST; /* TODO: get rid of this and allow multi-threaded rendering. */
