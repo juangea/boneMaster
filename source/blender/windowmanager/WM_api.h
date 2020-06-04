@@ -106,6 +106,17 @@ void WM_reinit_gizmomap_all(struct Main *bmain);
 
 void WM_script_tag_reload(void);
 
+bool WM_window_find_under_cursor(const wmWindowManager *wm,
+                                 const wmWindow *win_ignore,
+                                 const wmWindow *win,
+                                 const int mval[2],
+                                 wmWindow **r_win,
+                                 int r_mval[2]);
+void WM_window_pixel_sample_read(const wmWindowManager *wm,
+                                 const wmWindow *win,
+                                 const int pos[2],
+                                 float r_col[3]);
+
 uint *WM_window_pixels_read(struct wmWindowManager *wm, struct wmWindow *win, int r_size[2]);
 
 int WM_window_pixels_x(const struct wmWindow *win);
@@ -198,14 +209,13 @@ void WM_cursor_grab_disable(struct wmWindow *win, const int mouse_ungrab_xy[2]);
 void WM_cursor_time(struct wmWindow *win, int nr);
 
 struct wmPaintCursor *WM_paint_cursor_activate(
-    struct wmWindowManager *wm,
     short space_type,
     short region_type,
     bool (*poll)(struct bContext *C),
     void (*draw)(struct bContext *C, int, int, void *customdata),
     void *customdata);
 
-bool WM_paint_cursor_end(struct wmWindowManager *wm, struct wmPaintCursor *handle);
+bool WM_paint_cursor_end(struct wmPaintCursor *handle);
 void WM_paint_cursor_tag_redraw(struct wmWindow *win, struct ARegion *region);
 
 void WM_cursor_warp(struct wmWindow *win, int x, int y);
