@@ -770,7 +770,7 @@ static void write_previews(BlendWriter *writer, const PreviewImage *prv_orig)
       prv.h[1] = 0;
       prv.rect[1] = NULL;
     }
-    writestruct_at_address(writer->wd, DATA, PreviewImage, 1, prv_orig, &prv);
+    BLO_write_struct_at_address(writer, PreviewImage, prv_orig, &prv);
     if (prv.rect[0]) {
       BLO_write_uint32_array(writer, prv.w[0] * prv.h[0], prv.rect[0]);
     }
@@ -892,22 +892,22 @@ static void write_action(BlendWriter *writer, bAction *act, const void *id_addre
   }
 }
 
-static void write_keyingsets(WriteData *wd, ListBase *list)
+static void write_keyingsets(BlendWriter *writer, ListBase *list)
 {
   KeyingSet *ks;
   KS_Path *ksp;
 
   for (ks = list->first; ks; ks = ks->next) {
     /* KeyingSet */
-    writestruct(wd, DATA, KeyingSet, 1, ks);
+    BLO_write_struct(writer, KeyingSet, ks);
 
     /* Paths */
     for (ksp = ks->paths.first; ksp; ksp = ksp->next) {
       /* Path */
-      writestruct(wd, DATA, KS_Path, 1, ksp);
+      BLO_write_struct(writer, KS_Path, ksp);
 
       if (ksp->rna_path) {
-        writedata(wd, DATA, strlen(ksp->rna_path) + 1, ksp->rna_path);
+        BLO_write_string(writer, ksp->rna_path);
       }
     }
   }
@@ -2191,7 +2191,7 @@ static void write_customdata(BlendWriter *writer,
     CustomData_external_write(data, id, cddata_mask, count, 0);
   }
 
-  writestruct_at_address(writer->wd, DATA, CustomDataLayer, data->totlayer, data->layers, layers);
+  BLO_write_struct_array_at_address(writer, CustomDataLayer, data->totlayer, data->layers, layers);
 
   for (i = 0; i < data->totlayer; i++) {
     CustomDataLayer *layer = &layers[i];
@@ -2622,7 +2622,7 @@ static void write_scene(BlendWriter *writer, Scene *sce, const void *id_address)
   if (sce->adt) {
     write_animdata(writer, sce->adt);
   }
-  write_keyingsets(writer->wd, &sce->keyingsets);
+  write_keyingsets(writer, &sce->keyingsets);
 
   /* direct data */
   ToolSettings *tos = sce->toolsettings;
@@ -2953,14 +2953,14 @@ static void write_soops(BlendWriter *writer, SpaceOutliner *so)
 
       BLO_write_struct(writer, SpaceOutliner, so);
 
-      writestruct_at_address(writer->wd, DATA, TreeStore, 1, ts, &ts_flat);
-      writestruct_at_address(writer->wd, DATA, TreeStoreElem, elems, data_addr, data);
+      BLO_write_struct_at_address(writer, TreeStore, ts, &ts_flat);
+      BLO_write_struct_array_at_address(writer, TreeStoreElem, elems, data_addr, data);
 
       MEM_freeN(data);
     }
     else {
       so_flat.treestore = NULL;
-      writestruct_at_address(writer->wd, DATA, SpaceOutliner, 1, so, &so_flat);
+      BLO_write_struct_at_address(writer, SpaceOutliner, so, &so_flat);
     }
   }
   else {
@@ -3382,42 +3382,41 @@ static void write_paintcurve(BlendWriter *writer, PaintCurve *pc, const void *id
   }
 }
 
-static void write_movieTracks(WriteData *wd, ListBase *tracks)
+static void write_movieTracks(BlendWriter *writer, ListBase *tracks)
 {
   MovieTrackingTrack *track;
 
   track = tracks->first;
   while (track) {
-    writestruct(wd, DATA, MovieTrackingTrack, 1, track);
+    BLO_write_struct(writer, MovieTrackingTrack, track);
 
     if (track->markers) {
-      writestruct(wd, DATA, MovieTrackingMarker, track->markersnr, track->markers);
+      BLO_write_struct_array(writer, MovieTrackingMarker, track->markersnr, track->markers);
     }
 
     track = track->next;
   }
 }
 
-static void write_moviePlaneTracks(WriteData *wd, ListBase *plane_tracks_base)
+static void write_moviePlaneTracks(BlendWriter *writer, ListBase *plane_tracks_base)
 {
   MovieTrackingPlaneTrack *plane_track;
 
   for (plane_track = plane_tracks_base->first; plane_track; plane_track = plane_track->next) {
-    writestruct(wd, DATA, MovieTrackingPlaneTrack, 1, plane_track);
+    BLO_write_struct(writer, MovieTrackingPlaneTrack, plane_track);
 
-    writedata(wd,
-              DATA,
-              sizeof(MovieTrackingTrack *) * plane_track->point_tracksnr,
-              plane_track->point_tracks);
-    writestruct(wd, DATA, MovieTrackingPlaneMarker, plane_track->markersnr, plane_track->markers);
+    BLO_write_pointer_array(writer, plane_track->point_tracksnr, plane_track->point_tracks);
+    BLO_write_struct_array(
+        writer, MovieTrackingPlaneMarker, plane_track->markersnr, plane_track->markers);
   }
 }
 
-static void write_movieReconstruction(WriteData *wd, MovieTrackingReconstruction *reconstruction)
+static void write_movieReconstruction(BlendWriter *writer,
+                                      MovieTrackingReconstruction *reconstruction)
 {
   if (reconstruction->camnr) {
-    writestruct(
-        wd, DATA, MovieReconstructedCamera, reconstruction->camnr, reconstruction->cameras);
+    BLO_write_struct_array(
+        writer, MovieReconstructedCamera, reconstruction->camnr, reconstruction->cameras);
   }
 }
 
@@ -3439,17 +3438,17 @@ static void write_movieclip(BlendWriter *writer, MovieClip *clip, const void *id
       write_animdata(writer, clip->adt);
     }
 
-    write_movieTracks(writer->wd, &tracking->tracks);
-    write_moviePlaneTracks(writer->wd, &tracking->plane_tracks);
-    write_movieReconstruction(writer->wd, &tracking->reconstruction);
+    write_movieTracks(writer, &tracking->tracks);
+    write_moviePlaneTracks(writer, &tracking->plane_tracks);
+    write_movieReconstruction(writer, &tracking->reconstruction);
 
     object = tracking->objects.first;
     while (object) {
       BLO_write_struct(writer, MovieTrackingObject, object);
 
-      write_movieTracks(writer->wd, &object->tracks);
-      write_moviePlaneTracks(writer->wd, &object->plane_tracks);
-      write_movieReconstruction(writer->wd, &object->reconstruction);
+      write_movieTracks(writer, &object->tracks);
+      write_moviePlaneTracks(writer, &object->plane_tracks);
+      write_movieReconstruction(writer, &object->reconstruction);
 
       object = object->next;
     }
@@ -4542,12 +4541,26 @@ void BLO_write_struct_by_id(BlendWriter *writer, int struct_id, const void *data
   writestruct_nr(writer->wd, DATA, struct_id, 1, data_ptr);
 }
 
+void BLO_write_struct_at_address_by_id(BlendWriter *writer,
+                                       int struct_id,
+                                       const void *address,
+                                       const void *data_ptr)
+{
+  writestruct_at_address_nr(writer->wd, DATA, struct_id, 1, address, data_ptr);
+}
+
 void BLO_write_struct_array_by_id(BlendWriter *writer,
                                   int struct_id,
                                   int array_size,
                                   const void *data_ptr)
 {
   writestruct_nr(writer->wd, DATA, struct_id, array_size, data_ptr);
+}
+
+void BLO_write_struct_array_at_address_by_id(
+    BlendWriter *writer, int struct_id, int array_size, const void *address, const void *data_ptr)
+{
+  writestruct_at_address_nr(writer->wd, DATA, struct_id, array_size, address, data_ptr);
 }
 
 void BLO_write_struct_list_by_id(BlendWriter *writer, int struct_id, ListBase *list)
