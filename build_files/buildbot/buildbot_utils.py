@@ -40,8 +40,8 @@ class Builder:
 
         # Buildbot runs from build/ directory
         self.blender_dir = os.path.abspath(os.path.join('..', 'blender.git'))
-        self.build_dir = os.path.abspath(os.path.join('..', 'build', name))
-        self.install_dir = os.path.abspath(os.path.join('..', 'install', name))
+        self.build_dir = os.path.abspath(os.path.join('..', 'build'))
+        self.install_dir = os.path.abspath(os.path.join('..', 'install'))
         self.upload_dir = os.path.abspath(os.path.join('..', 'install'))
 
         # Detect platform
@@ -51,7 +51,7 @@ class Builder:
         elif name.startswith('linux'):
             self.platform = 'linux'
             if is_tool('scl'):
-                self.command_prefix =  ['scl', 'enable', 'devtoolset-6', '--']
+                self.command_prefix =  ['scl', 'enable', 'devtoolset-9', '--']
             else:
                 self.command_prefix =  []
         elif name.startswith('win'):

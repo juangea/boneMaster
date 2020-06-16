@@ -585,7 +585,7 @@ static bool ui_but_dragedit_update_mval(uiHandleButtonData *data, int mx)
   return true;
 }
 
-static void ui_rna_update_preferences_dirty(PointerRNA *ptr, PropertyRNA *prop)
+static bool ui_rna_is_userdef(PointerRNA *ptr, PropertyRNA *prop)
 {
   /* Not very elegant, but ensures preference changes force re-save. */
   bool tag = false;
@@ -598,8 +598,18 @@ static void ui_rna_update_preferences_dirty(PointerRNA *ptr, PropertyRNA *prop)
       tag = true;
     }
   }
+  return tag;
+}
 
-  if (tag) {
+bool UI_but_is_userdef(const uiBut *but)
+{
+  /* This is read-only, RNA API isn't using const when it could. */
+  return ui_rna_is_userdef((PointerRNA *)&but->rnapoin, but->rnaprop);
+}
+
+static void ui_rna_update_preferences_dirty(PointerRNA *ptr, PropertyRNA *prop)
+{
+  if (ui_rna_is_userdef(ptr, prop)) {
     U.runtime.is_dirty = true;
     WM_main_add_notifier(NC_WINDOW, NULL);
   }
@@ -10882,7 +10892,7 @@ static void ui_popup_handler_remove(bContext *C, void *userdata)
   /* More correct would be to expect UI_RETURN_CANCEL here, but not wanting to
    * cancel when removing handlers because of file exit is a rare exception.
    * So instead of setting cancel flag for all menus before removing handlers,
-   * just explicitly flag menu with UI_RETURN_OK to avoid cancelling it. */
+   * just explicitly flag menu with UI_RETURN_OK to avoid canceling it. */
   if ((menu->menuretval & UI_RETURN_OK) == 0 && menu->cancel_func) {
     menu->cancel_func(C, menu->popup_arg);
   }

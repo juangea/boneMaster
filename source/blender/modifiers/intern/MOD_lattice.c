@@ -113,14 +113,14 @@ static void deformVerts(ModifierData *md,
 
   MOD_previous_vcos_store(md, vertexCos); /* if next modifier needs original vertices */
 
-  lattice_deform_verts(lmd->object,
-                       ctx->object,
-                       mesh_src,
-                       vertexCos,
-                       numVerts,
-                       lmd->flag,
-                       lmd->name,
-                       lmd->strength);
+  BKE_lattice_deform_coords_with_mesh(lmd->object,
+                                      ctx->object,
+                                      vertexCos,
+                                      numVerts,
+                                      lmd->flag,
+                                      lmd->name,
+                                      lmd->strength,
+                                      mesh_src);
 
   if (!ELEM(mesh_src, NULL, mesh)) {
     BKE_id_free(NULL, mesh_src);
@@ -130,23 +130,16 @@ static void deformVerts(ModifierData *md,
 static void deformVertsEM(ModifierData *md,
                           const ModifierEvalContext *ctx,
                           struct BMEditMesh *em,
-                          struct Mesh *mesh,
+                          struct Mesh *UNUSED(mesh),
                           float (*vertexCos)[3],
                           int numVerts)
 {
-  struct Mesh *mesh_src = MOD_deform_mesh_eval_get(
-      ctx->object, em, mesh, NULL, numVerts, false, false);
+  LatticeModifierData *lmd = (LatticeModifierData *)md;
 
-  /* TODO(Campbell): use edit-mode data only (remove this line). */
-  if (mesh_src != NULL) {
-    BKE_mesh_wrapper_ensure_mdata(mesh_src);
-  }
+  MOD_previous_vcos_store(md, vertexCos); /* if next modifier needs original vertices */
 
-  deformVerts(md, ctx, mesh_src, vertexCos, numVerts);
-
-  if (!ELEM(mesh_src, NULL, mesh)) {
-    BKE_id_free(NULL, mesh_src);
-  }
+  BKE_lattice_deform_coords_with_editmesh(
+      lmd->object, ctx->object, vertexCos, numVerts, lmd->flag, lmd->name, lmd->strength, em);
 }
 
 static void panel_draw(const bContext *C, Panel *panel)
@@ -204,4 +197,6 @@ ModifierTypeInfo modifierType_Lattice = {
     /* foreachTexLink */ NULL,
     /* freeRuntimeData */ NULL,
     /* panelRegister */ panelRegister,
+    /* blendWrite */ NULL,
+    /* blendRead */ NULL,
 };

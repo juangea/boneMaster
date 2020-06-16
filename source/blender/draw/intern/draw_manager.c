@@ -132,11 +132,17 @@ static void drw_task_graph_init(void)
 {
   BLI_assert(DST.task_graph == NULL);
   DST.task_graph = BLI_task_graph_create();
+  DST.delayed_extraction = BLI_gset_ptr_new(__func__);
 }
 
 static void drw_task_graph_deinit(void)
 {
   BLI_task_graph_work_and_wait(DST.task_graph);
+
+  BLI_gset_free(DST.delayed_extraction, (void (*)(void *key))drw_batch_cache_generate_requested);
+  DST.delayed_extraction = NULL;
+  BLI_task_graph_work_and_wait(DST.task_graph);
+
   BLI_task_graph_free(DST.task_graph);
   DST.task_graph = NULL;
 }
@@ -1467,6 +1473,7 @@ void DRW_draw_render_loop_ex(struct Depsgraph *depsgraph,
 
     /* Only iterate over objects for internal engines or when overlays are enabled */
     if (do_populate_loop) {
+      DST.dupli_origin = NULL;
       DEG_OBJECT_ITER_FOR_RENDER_ENGINE_BEGIN (depsgraph, ob) {
         if ((object_type_exclude_viewport & (1 << ob->type)) != 0) {
           continue;
@@ -1485,6 +1492,7 @@ void DRW_draw_render_loop_ex(struct Depsgraph *depsgraph,
     drw_duplidata_free();
     drw_engines_cache_finish();
 
+    drw_task_graph_deinit();
     DRW_render_instance_buffer_finish();
 
 #ifdef USE_PROFILE
@@ -1493,7 +1501,6 @@ void DRW_draw_render_loop_ex(struct Depsgraph *depsgraph,
 #endif
   }
 
-  drw_task_graph_deinit();
   DRW_stats_begin();
 
   GPU_framebuffer_bind(DST.default_framebuffer);
@@ -1864,6 +1871,7 @@ void DRW_render_object_iter(
   const int object_type_exclude_viewport = draw_ctx->v3d ?
                                                draw_ctx->v3d->object_type_exclude_viewport :
                                                0;
+  DST.dupli_origin = NULL;
   DEG_OBJECT_ITER_FOR_RENDER_ENGINE_BEGIN (depsgraph, ob) {
     if ((object_type_exclude_viewport & (1 << ob->type)) == 0) {
       DST.dupli_parent = data_.dupli_parent;
@@ -2121,6 +2129,7 @@ void DRW_draw_select_loop(struct Depsgraph *depsgraph,
       const int object_type_exclude_select = (v3d->object_type_exclude_viewport |
                                               v3d->object_type_exclude_select);
       bool filter_exclude = false;
+      DST.dupli_origin = NULL;
       DEG_OBJECT_ITER_FOR_RENDER_ENGINE_BEGIN (depsgraph, ob) {
         if (!BKE_object_is_visible_in_viewport(v3d, ob)) {
           continue;
@@ -2271,6 +2280,7 @@ static void drw_draw_depth_loop_imp(struct Depsgraph *depsgraph,
     drw_engines_world_update(DST.draw_ctx.scene);
 
     const int object_type_exclude_viewport = v3d->object_type_exclude_viewport;
+    DST.dupli_origin = NULL;
     DEG_OBJECT_ITER_FOR_RENDER_ENGINE_BEGIN (DST.draw_ctx.depsgraph, ob) {
       if ((object_type_exclude_viewport & (1 << ob->type)) != 0) {
         continue;
@@ -2288,9 +2298,9 @@ static void drw_draw_depth_loop_imp(struct Depsgraph *depsgraph,
     drw_duplidata_free();
     drw_engines_cache_finish();
 
+    drw_task_graph_deinit();
     DRW_render_instance_buffer_finish();
   }
-  drw_task_graph_deinit();
 
   /* Start Drawing */
   DRW_state_reset();
@@ -2407,6 +2417,7 @@ void DRW_draw_select_id(Depsgraph *depsgraph, ARegion *region, View3D *v3d, cons
 
     drw_engines_cache_finish();
 
+    drw_task_graph_deinit();
 #if 0 /* This is a workaround to a nasty bug that seems to be a nasty driver bug. (See T69377) */
     DRW_render_instance_buffer_finish();
 #else
@@ -2415,7 +2426,6 @@ void DRW_draw_select_id(Depsgraph *depsgraph, ARegion *region, View3D *v3d, cons
     drw_resource_buffer_finish(DST.vmempool);
 #endif
   }
-  drw_task_graph_deinit();
 
   /* Start Drawing */
   DRW_state_reset();

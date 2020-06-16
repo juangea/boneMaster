@@ -45,7 +45,6 @@
 #include "ED_keyframing.h"
 #include "ED_node.h"
 #include "ED_screen.h"
-#include "ED_sculpt.h"
 #include "ED_space_api.h"
 
 #include "WM_api.h"
@@ -1767,10 +1766,6 @@ void saveTransform(bContext *C, TransInfo *t, wmOperator *op)
     }
   }
 
-  if ((t->options & CTX_SCULPT) && !(t->options & CTX_PAINT_CURVE)) {
-    ED_sculpt_end_transform(C);
-  }
-
   if ((prop = RNA_struct_find_property(op->ptr, "correct_uv"))) {
     RNA_property_boolean_set(
         op->ptr, prop, (t->settings->uvcalc_flag & UVCALC_TRANSFORM_CORRECT) != 0);
@@ -1851,13 +1846,6 @@ bool initTransform(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
     }
   }
 
-  if (CTX_wm_view3d(C) != NULL) {
-    Object *ob = CTX_data_active_object(C);
-    if (ob && ob->mode == OB_MODE_SCULPT && ob->sculpt) {
-      options |= CTX_SCULPT;
-    }
-  }
-
   t->options = options;
 
   t->mode = mode;
@@ -1924,13 +1912,30 @@ bool initTransform(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
 
   createTransData(C, t);  // make TransData structs from selection
 
-  if ((t->options & CTX_SCULPT) && !(t->options & CTX_PAINT_CURVE)) {
-    ED_sculpt_init_transform(C);
-  }
-
   if (t->data_len_all == 0) {
     postTrans(C, t);
     return 0;
+  }
+
+  /* When proportional editing is enabled, data_len_all can be non zero when
+   * nothing is selected, if this is the case we can end the transform early.
+   *
+   * By definition transform-data has selected items in beginning,
+   * so only the first item in each container needs to be checked
+   * when looking  for the presence of selected data. */
+  if (t->flag & T_PROP_EDIT) {
+    bool has_selected_any = false;
+    FOREACH_TRANS_DATA_CONTAINER (t, tc) {
+      if (tc->data->flag & TD_SELECTED) {
+        has_selected_any = true;
+        break;
+      }
+    }
+
+    if (!has_selected_any) {
+      postTrans(C, t);
+      return 0;
+    }
   }
 
   if (event) {
@@ -2104,14 +2109,6 @@ int transformEnd(bContext *C, TransInfo *t)
   if (t->state != TRANS_STARTING && t->state != TRANS_RUNNING) {
     /* handle restoring objects */
     if (t->state == TRANS_CANCEL) {
-      /* exception, edge slide transformed UVs too */
-      if (t->mode == TFM_EDGE_SLIDE) {
-        doEdgeSlide(t, 0.0f);
-      }
-      else if (t->mode == TFM_VERT_SLIDE) {
-        doVertSlide(t, 0.0f);
-      }
-
       exit_code = OPERATOR_CANCELLED;
       restoreTransObjects(t);  // calls recalcData()
     }

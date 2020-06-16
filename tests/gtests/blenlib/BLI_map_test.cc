@@ -99,6 +99,25 @@ TEST(map, PopTry)
   EXPECT_EQ(map.size(), 0);
 }
 
+TEST(map, PopDefault)
+{
+  Map<int, int> map;
+  map.add(1, 4);
+  map.add(2, 7);
+  map.add(3, 8);
+  EXPECT_EQ(map.size(), 3);
+  EXPECT_EQ(map.pop_default(4, 10), 10);
+  EXPECT_EQ(map.size(), 3);
+  EXPECT_EQ(map.pop_default(1, 10), 4);
+  EXPECT_EQ(map.size(), 2);
+  EXPECT_EQ(map.pop_default(2, 20), 7);
+  EXPECT_EQ(map.size(), 1);
+  EXPECT_EQ(map.pop_default(2, 20), 20);
+  EXPECT_EQ(map.size(), 1);
+  EXPECT_EQ(map.pop_default(3, 0), 8);
+  EXPECT_EQ(map.size(), 0);
+}
+
 TEST(map, PopItemMany)
 {
   Map<int, int> map;
@@ -166,7 +185,8 @@ TEST(map, ItemIterator)
   blender::Set<float> values;
 
   uint iterations = 0;
-  for (auto item : map.items()) {
+  const Map<int, float> &const_map = map;
+  for (auto item : const_map.items()) {
     keys.add(item.key);
     values.add(item.value);
     iterations++;
@@ -207,6 +227,26 @@ TEST(map, MutableItemIterator)
 
   EXPECT_EQ(map.lookup(3), 9.0f);
   EXPECT_EQ(map.lookup(2), 3.0f);
+}
+
+TEST(map, MutableItemToItemConversion)
+{
+  Map<int, int> map;
+  map.add(3, 6);
+  map.add(2, 1);
+
+  Vector<int> keys, values;
+  for (Map<int, int>::Item item : map.items()) {
+    keys.append(item.key);
+    values.append(item.value);
+  }
+
+  EXPECT_EQ(keys.size(), 2);
+  EXPECT_EQ(values.size(), 2);
+  EXPECT_TRUE(keys.contains(3));
+  EXPECT_TRUE(keys.contains(2));
+  EXPECT_TRUE(values.contains(6));
+  EXPECT_TRUE(values.contains(1));
 }
 
 static float return_42()
@@ -373,6 +413,7 @@ TEST(map, UniquePtrValue)
   map.add(6, std::unique_ptr<int>(new int()));
   map.add_overwrite(7, std::unique_ptr<int>(new int()));
   map.lookup_or_add(8, std::unique_ptr<int>(new int()));
+  map.pop_default(9, std::unique_ptr<int>(new int()));
 
   EXPECT_EQ(map.lookup(1).get(), value1_ptr);
   EXPECT_EQ(map.lookup_ptr(100), nullptr);
@@ -406,6 +447,34 @@ TEST(map, PointerKeys)
   EXPECT_TRUE(map.remove(&b));
   EXPECT_TRUE(map.remove(&c));
   EXPECT_TRUE(map.is_empty());
+}
+
+TEST(map, ConstKeysAndValues)
+{
+  Map<const std::string, const std::string> map;
+  map.reserve(10);
+  map.add("45", "643");
+  EXPECT_TRUE(map.contains("45"));
+  EXPECT_FALSE(map.contains("54"));
+}
+
+TEST(map, ForeachItem)
+{
+  Map<int, int> map;
+  map.add(3, 4);
+  map.add(1, 8);
+
+  Vector<int> keys;
+  Vector<int> values;
+  map.foreach_item([&](int key, int value) {
+    keys.append(key);
+    values.append(value);
+  });
+
+  EXPECT_EQ(keys.size(), 2);
+  EXPECT_EQ(values.size(), 2);
+  EXPECT_EQ(keys.first_index_of(3), values.first_index_of(4));
+  EXPECT_EQ(keys.first_index_of(1), values.first_index_of(8));
 }
 
 /**

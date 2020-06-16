@@ -376,7 +376,7 @@ USE_CXX11=true
 
 CLANG_FORMAT_VERSION_MIN="6.0"
 
-PYTHON_VERSION="3.7.4"
+PYTHON_VERSION="3.7.7"
 PYTHON_VERSION_MIN="3.7"
 PYTHON_VERSION_INSTALLED=$PYTHON_VERSION_MIN
 PYTHON_FORCE_BUILD=false
@@ -459,7 +459,7 @@ ALEMBIC_FORCE_BUILD=false
 ALEMBIC_FORCE_REBUILD=false
 ALEMBIC_SKIP=false
 
-USD_VERSION="19.11"
+USD_VERSION="20.02"
 USD_FORCE_BUILD=false
 USD_FORCE_REBUILD=false
 USD_SKIP=false
@@ -1574,7 +1574,7 @@ compile_TBB() {
   if [ ! -d $_inst ]; then
     INFO "Building TBB-$TBB_VERSION$TBB_VERSION_UPDATE"
     _is_building=true
-    
+
     # Rebuild dependencies as well!
     _update_deps_tbb
 
@@ -1691,7 +1691,7 @@ compile_OCIO() {
   if [ ! -d $_inst ]; then
     INFO "Building OpenColorIO-$OCIO_VERSION"
     _is_building=true
-    
+
     # Rebuild dependencies as well!
     _update_deps_ocio
 
@@ -3428,7 +3428,7 @@ compile_XR_OpenXR_SDK() {
 # Install on DEB-like
 
 get_package_version_DEB() {
-    dpkg-query -W -f '${Version}' $1 | sed -r 's/([0-9]+:)?(([0-9]+\.?){$2}([0-9]+)).*/\2/'
+    dpkg-query -W -f '${Version}' $1 | sed -r 's/([0-9]+:)?(([0-9]+\.?)+([0-9]+)).*/\2/'
 }
 
 check_package_DEB() {
@@ -3631,7 +3631,7 @@ install_DEB() {
   # Check cmake/glew versions and disable features for older distros.
   # This is so Blender can at least compile.
   PRINT ""
-  _cmake=`get_package_version_DEB cmake 3`
+  _cmake=`get_package_version_DEB cmake`
   version_ge $_cmake "2.8.10"
   if [ $? -eq 1 ]; then
     version_ge $_cmake "2.8.8"
@@ -3646,7 +3646,7 @@ install_DEB() {
   fi
 
   PRINT ""
-  _glew=`get_package_version_DEB libglew-dev 3`
+  _glew=`get_package_version_DEB libglew-dev`
   if [ -z $_glew ]; then
     # Stupid virtual package in Ubuntu 12.04 doesn't show version number...
     _glew=`apt-cache showpkg libglew-dev|tail -n1|awk '{print $2}'|sed 's/-.*//'`
@@ -3678,8 +3678,7 @@ install_DEB() {
     check_package_version_ge_DEB python3-dev $PYTHON_VERSION_MIN
     if [ $? -eq 0 ]; then
       PYTHON_VERSION_INSTALLED=$(echo `get_package_version_DEB python3-dev` | sed -r 's/^([0-9]+\.[0-9]+).*/\1/')
-      PRINT $(echo `get_package_version_DEB python3-dev` | sed -r 's/^([0-9]+\.[0-9]+).*/\1/')
-      
+
       install_packages_DEB python3-dev
       clean_Python
       PRINT ""
@@ -3893,7 +3892,6 @@ install_DEB() {
     INFO "Forced Alembic building, as requested..."
     compile_ALEMBIC
   else
-    # No package currently, only HDF5!
     compile_ALEMBIC
   fi
 
@@ -4302,8 +4300,7 @@ install_RPM() {
   else
     check_package_version_ge_RPM python3-devel $PYTHON_VERSION_MIN
     if [ $? -eq 0 ]; then
-      get_package_version_RPM python3-devel
-      PYTHON_VERSION_INSTALLED=`echo $? | sed -r 's/([0-9]+:)?(([0-9]+\.?)?([0-9]+)).*/\2/'`
+      PYTHON_VERSION_INSTALLED=$(echo `get_package_version_RPM python3-devel` | sed -r 's/^([0-9]+\.[0-9]+).*/\1/')
 
       install_packages_RPM python3-devel
       clean_Python
@@ -4828,8 +4825,7 @@ install_ARCH() {
   else
     check_package_version_ge_ARCH python $PYTHON_VERSION_MIN
     if [ $? -eq 0 ]; then
-      get_package_version_ARCH python
-      PYTHON_VERSION_INSTALLED=`echo $? | sed -r 's/([0-9]+:)?(([0-9]+\.?)?([0-9]+)).*/\2/'`
+      PYTHON_VERSION_INSTALLED=$(echo `get_package_version_ARCH python` | sed -r 's/^([0-9]+\.[0-9]+).*/\1/')
 
       install_packages_ARCH python
       clean_Python

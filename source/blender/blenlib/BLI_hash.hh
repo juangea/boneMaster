@@ -65,7 +65,7 @@
  *
  * - When you want to provide a different hash function for a type that already has a default hash
  *   function: Implement a struct like the one below and pass it as template parameter to the hash
- *   table explicitely.
+ *   table explicitly.
  *
  *     struct MyCustomHash {
  *       uint32_t operator()(const TheType &value) const {
@@ -94,6 +94,16 @@ template<typename T> struct DefaultHash {
   uint32_t operator()(const T &value) const
   {
     return value.hash();
+  }
+};
+
+/**
+ * Use the same hash function for const and non const variants of a type.
+ */
+template<typename T> struct DefaultHash<const T> {
+  uint32_t operator()(const T &value) const
+  {
+    return DefaultHash<T>{}(value);
   }
 };
 

@@ -542,7 +542,7 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *
   }
 
   if (psys->lattice_deform_data) {
-    end_latt_deform(psys->lattice_deform_data);
+    BKE_lattice_deform_data_destroy(psys->lattice_deform_data);
     psys->lattice_deform_data = NULL;
   }
 
@@ -711,4 +711,6 @@ ModifierTypeInfo modifierType_ParticleInstance = {
     /* foreachTexLink */ NULL,
     /* freeRuntimeData */ NULL,
     /* panelRegister */ panelRegister,
+    /* blendWrite */ NULL,
+    /* blendRead */ NULL,
 };

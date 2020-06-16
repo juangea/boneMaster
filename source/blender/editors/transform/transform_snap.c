@@ -28,7 +28,6 @@
 
 #include "PIL_time.h"
 
-#include "DNA_meshdata_types.h" /* Temporary, for snapping to other unselected meshes */
 #include "DNA_node_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
@@ -45,10 +44,8 @@
 #include "GPU_state.h"
 
 #include "BKE_context.h"
-#include "BKE_duplilist.h"
 #include "BKE_editmesh.h"
 #include "BKE_layer.h"
-#include "BKE_main.h"
 #include "BKE_object.h"
 #include "BKE_sequencer.h"
 
@@ -57,14 +54,11 @@
 #include "WM_types.h"
 
 #include "ED_gizmo_library.h"
-#include "ED_image.h"
 #include "ED_markers.h"
 #include "ED_node.h"
 #include "ED_transform_snap_object_context.h"
 #include "ED_uvedit.h"
 #include "ED_view3d.h"
-
-#include "DEG_depsgraph.h"
 
 #include "UI_resources.h"
 #include "UI_view2d.h"
@@ -634,12 +628,15 @@ static void initSnappingMode(TransInfo *t)
       t->tsnap.object_context = ED_transform_snap_object_context_create_view3d(
           t->scene, 0, t->region, t->view);
 
-      ED_transform_snap_object_context_set_editmesh_callbacks(
-          t->tsnap.object_context,
-          (bool (*)(BMVert *, void *))BM_elem_cb_check_hflag_disabled,
-          bm_edge_is_snap_target,
-          bm_face_is_snap_target,
-          POINTER_FROM_UINT((BM_ELEM_SELECT | BM_ELEM_HIDDEN)));
+      if (t->data_type == TC_MESH_VERTS) {
+        /* Ignore elements being transformed. */
+        ED_transform_snap_object_context_set_editmesh_callbacks(
+            t->tsnap.object_context,
+            (bool (*)(BMVert *, void *))BM_elem_cb_check_hflag_disabled,
+            bm_edge_is_snap_target,
+            bm_face_is_snap_target,
+            POINTER_FROM_UINT((BM_ELEM_SELECT | BM_ELEM_HIDDEN)));
+      }
     }
   }
 }

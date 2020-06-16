@@ -91,7 +91,7 @@ template<
      * that (unlike vector) initializing a set has a O(n) cost in the number of slots.
      *
      * When Key is large, the small buffer optimization is disabled by default to avoid large
-     * unexpected allocations on the stack. It can still be enabled explicitely though.
+     * unexpected allocations on the stack. It can still be enabled explicitly though.
      */
     uint32_t InlineBufferCapacity = (sizeof(Key) < 100) ? 4 : 0,
     /**
@@ -410,7 +410,7 @@ class Set {
   void print_stats(StringRef name = "") const
   {
     HashTableStats stats(*this, *this);
-    stats.print();
+    stats.print(name);
   }
 
   /**
@@ -433,7 +433,7 @@ class Set {
 
   /**
    * Creates a new slot array and reinserts all keys inside of that. This method can be used to get
-   * rid of dummy slots. Also this is useful for benchmarking the grow function.
+   * rid of removed slots. Also this is useful for benchmarking the grow function.
    */
   void rehash()
   {

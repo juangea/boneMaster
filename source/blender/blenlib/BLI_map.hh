@@ -94,7 +94,7 @@ template<
      * that (unlike vector) initializing a map has a O(n) cost in the number of slots.
      *
      * When Key or Value are large, the small buffer optimization is disabled by default to avoid
-     * large unexpected allocations on the stack. It can still be enabled explicitely though.
+     * large unexpected allocations on the stack. It can still be enabled explicitly though.
      */
     uint32_t InlineBufferCapacity = (sizeof(Key) + sizeof(Value) < 100) ? 4 : 0,
     /**
@@ -406,6 +406,28 @@ class Map {
   }
 
   /**
+   * Get the value that corresponds to the given key and remove it from the map. If the key is not
+   * in the map, return the given default value instead.
+   */
+  Value pop_default(const Key &key, const Value &default_value)
+  {
+    return this->pop_default_as(key, default_value);
+  }
+  Value pop_default(const Key &key, Value &&default_value)
+  {
+    return this->pop_default_as(key, std::move(default_value));
+  }
+
+  /**
+   * Same as `pop_default`, but accepts other key types that are supported by the hash function.
+   */
+  template<typename ForwardKey, typename ForwardValue>
+  Value pop_default_as(const ForwardKey &key, ForwardValue &&default_value)
+  {
+    return this->pop_default__impl(key, std::forward<ForwardValue>(default_value), m_hash(key));
+  }
+
+  /**
    * This method can be used to implement more complex custom behavior without having to do
    * multiple lookups
    *
@@ -448,7 +470,7 @@ class Map {
                         const ModifyValueF &modify_value) -> decltype(create_value(nullptr))
   {
     return this->add_or_modify__impl(
-        std::forward<Key>(key), create_value, modify_value, m_hash(key));
+        std::forward<ForwardKey>(key), create_value, modify_value, m_hash(key));
   }
 
   /**
@@ -619,7 +641,7 @@ class Map {
    */
   template<typename FuncT> void foreach_item(const FuncT &func) const
   {
-    uint32_t size = this->size();
+    uint32_t size = m_slots.size();
     for (uint32_t i = 0; i < size; i++) {
       const Slot &slot = m_slots[i];
       if (slot.is_occupied()) {
@@ -723,17 +745,27 @@ class Map {
     }
   };
 
+  struct Item {
+    const Key &key;
+    const Value &value;
+  };
+
+  struct MutableItem {
+    const Key &key;
+    Value &value;
+
+    operator Item() const
+    {
+      return Item{key, value};
+    }
+  };
+
   class ItemIterator final : public BaseIterator<ItemIterator> {
    public:
     ItemIterator(const Slot *slots, uint32_t total_slots, uint32_t current_slot)
         : BaseIterator<ItemIterator>(slots, total_slots, current_slot)
     {
     }
-
-    struct Item {
-      const Key &key;
-      const Value &value;
-    };
 
     Item operator*() const
     {
@@ -749,12 +781,7 @@ class Map {
     {
     }
 
-    struct Item {
-      const Key &key;
-      Value &value;
-    };
-
-    Item operator*() const
+    MutableItem operator*() const
     {
       Slot &slot = this->current_slot();
       return {*slot.key(), *slot.value()};
@@ -816,7 +843,7 @@ class Map {
   void print_stats(StringRef name = "") const
   {
     HashTableStats stats(*this, this->keys());
-    stats.print();
+    stats.print(name);
   }
 
   /**
@@ -867,7 +894,7 @@ class Map {
    */
   uint32_t size_in_bytes() const
   {
-    return sizeof(Slot) * m_slots.size();
+    return (uint32_t)(sizeof(Slot) * m_slots.size());
   }
 
   /**
@@ -1039,7 +1066,7 @@ class Map {
 
     MAP_SLOT_PROBING_BEGIN (hash, slot) {
       if (slot.contains(key, m_is_equal, hash)) {
-        Value value = *slot.value();
+        Value value = std::move(*slot.value());
         slot.remove();
         return value;
       }
@@ -1051,13 +1078,30 @@ class Map {
   {
     MAP_SLOT_PROBING_BEGIN (hash, slot) {
       if (slot.contains(key, m_is_equal, hash)) {
-        Optional<Value> value = *slot.value();
+        Optional<Value> value = std::move(*slot.value());
         slot.remove();
         m_removed_slots++;
         return value;
       }
       if (slot.is_empty()) {
         return {};
+      }
+    }
+    MAP_SLOT_PROBING_END();
+  }
+
+  template<typename ForwardKey, typename ForwardValue>
+  Value pop_default__impl(const ForwardKey &key, ForwardValue &&default_value, uint32_t hash)
+  {
+    MAP_SLOT_PROBING_BEGIN (hash, slot) {
+      if (slot.contains(key, m_is_equal, hash)) {
+        Value value = std::move(*slot.value());
+        slot.remove();
+        m_removed_slots++;
+        return value;
+      }
+      if (slot.is_empty()) {
+        return std::forward<ForwardValue>(default_value);
       }
     }
     MAP_SLOT_PROBING_END();
@@ -1131,7 +1175,7 @@ class Map {
   bool add_overwrite__impl(ForwardKey &&key, ForwardValue &&value, uint32_t hash)
   {
     auto create_func = [&](Value *ptr) {
-      new (ptr) Value(std::forward<ForwardValue>(value));
+      new ((void *)ptr) Value(std::forward<ForwardValue>(value));
       return true;
     };
     auto modify_func = [&](Value *ptr) {
