@@ -2136,7 +2136,7 @@ static const EnumPropertyItem convert_target_items[] = {
     {0, NULL, 0, NULL, NULL},
 };
 
-static void convert_ensure_curve_cache(Depsgraph *depsgraph, Scene *scene, Object *ob)
+static void object_data_convert_ensure_curve_cache(Depsgraph *depsgraph, Scene *scene, Object *ob)
 {
   if (ob->runtime.curve_cache == NULL) {
     /* Force creation. This is normally not needed but on operator
@@ -2155,7 +2155,7 @@ static void convert_ensure_curve_cache(Depsgraph *depsgraph, Scene *scene, Objec
   }
 }
 
-static void curvetomesh(Main *bmain, Depsgraph *depsgraph, Object *ob)
+static void object_data_convert_curve_to_mesh(Main *bmain, Depsgraph *depsgraph, Object *ob)
 {
   Object *object_eval = DEG_get_evaluated_object(depsgraph, ob);
   Curve *curve = ob->data;
@@ -2188,7 +2188,7 @@ static void curvetomesh(Main *bmain, Depsgraph *depsgraph, Object *ob)
   }
 }
 
-static bool convert_poll(bContext *C)
+static bool object_convert_poll(bContext *C)
 {
   Scene *scene = CTX_data_scene(C);
   Base *base_act = CTX_data_active_base(C);
@@ -2198,7 +2198,7 @@ static bool convert_poll(bContext *C)
           (base_act->flag & BASE_SELECTED) && !ID_IS_LINKED(obact));
 }
 
-/* Helper for convert_exec */
+/* Helper for object_convert_exec */
 static Base *duplibase_for_convert(
     Main *bmain, Depsgraph *depsgraph, Scene *scene, ViewLayer *view_layer, Base *base, Object *ob)
 {
@@ -2233,7 +2233,7 @@ static Base *duplibase_for_convert(
    * time we need to duplicate an object to convert it. Even worse, this is not 100% correct, since
    * we do not yet have duplicated obdata.
    * However, that is a safe solution for now. Proper, longer-term solution is to refactor
-   * convert_exec to:
+   * object_convert_exec to:
    *  - duplicate all data it needs to in a first loop.
    *  - do a single update.
    *  - convert data in a second loop. */
@@ -2251,7 +2251,7 @@ static Base *duplibase_for_convert(
   return basen;
 }
 
-static int convert_exec(bContext *C, wmOperator *op)
+static int object_convert_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
@@ -2528,7 +2528,7 @@ static int convert_exec(bContext *C, wmOperator *op)
       if (target == OB_MESH) {
         /* No assumption should be made that the resulting objects is a mesh, as conversion can
          * fail. */
-        curvetomesh(bmain, depsgraph, newob);
+        object_data_convert_curve_to_mesh(bmain, depsgraph, newob);
         /* meshes doesn't use displist */
         BKE_object_free_curve_cache(newob);
       }
@@ -2553,7 +2553,7 @@ static int convert_exec(bContext *C, wmOperator *op)
 
         /* No assumption should be made that the resulting objects is a mesh, as conversion can
          * fail. */
-        curvetomesh(bmain, depsgraph, newob);
+        object_data_convert_curve_to_mesh(bmain, depsgraph, newob);
         /* meshes doesn't use displist */
         BKE_object_free_curve_cache(newob);
       }
@@ -2607,7 +2607,7 @@ static int convert_exec(bContext *C, wmOperator *op)
           }
         }
 
-        convert_ensure_curve_cache(depsgraph, scene, baseob);
+        object_data_convert_ensure_curve_cache(depsgraph, scene, baseob);
         BKE_mesh_from_metaball(&baseob->runtime.curve_cache->disp, newob->data);
 
         if (obact->type == OB_MBALL) {
@@ -2710,7 +2710,7 @@ static int convert_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
-static void convert_ui(bContext *C, wmOperator *op)
+static void object_convert_ui(bContext *UNUSED(C), wmOperator *op)
 {
   uiLayout *layout = op->layout;
   PointerRNA ptr;
@@ -2739,9 +2739,9 @@ void OBJECT_OT_convert(wmOperatorType *ot)
 
   /* api callbacks */
   ot->invoke = WM_menu_invoke;
-  ot->exec = convert_exec;
-  ot->poll = convert_poll;
-  ot->ui = convert_ui;
+  ot->exec = object_convert_exec;
+  ot->poll = object_convert_poll;
+  ot->ui = object_convert_ui;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -2798,7 +2798,7 @@ void OBJECT_OT_convert(wmOperatorType *ot)
 /* leaves selection of base/object unaltered */
 /* Does set ID->newid pointers. */
 static Base *object_add_duplicate_internal(
-    Main *bmain, Scene *scene, ViewLayer *view_layer, Object *ob, int dupflag)
+    Main *bmain, Scene *scene, ViewLayer *view_layer, Object *ob, const eDupli_ID_Flags dupflag)
 {
   Base *base, *basen = NULL;
   Object *obn;
@@ -2846,7 +2846,7 @@ static Base *object_add_duplicate_internal(
  * note: caller must do DAG_relations_tag_update(bmain);
  *       this is not done automatic since we may duplicate many objects in a batch */
 Base *ED_object_add_duplicate(
-    Main *bmain, Scene *scene, ViewLayer *view_layer, Base *base, int dupflag)
+    Main *bmain, Scene *scene, ViewLayer *view_layer, Base *base, const eDupli_ID_Flags dupflag)
 {
   Base *basen;
   Object *ob;
@@ -2879,7 +2879,7 @@ static int duplicate_exec(bContext *C, wmOperator *op)
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   const bool linked = RNA_boolean_get(op->ptr, "linked");
-  int dupflag = (linked) ? 0 : U.dupflag;
+  const eDupli_ID_Flags dupflag = (linked) ? 0 : (eDupli_ID_Flags)U.dupflag;
 
   CTX_DATA_BEGIN (C, Base *, base, selected_bases) {
     Base *basen = object_add_duplicate_internal(bmain, scene, view_layer, base->object, dupflag);
@@ -2953,7 +2953,7 @@ void OBJECT_OT_duplicate(wmOperatorType *ot)
  * Use for drag & drop.
  * \{ */
 
-static int add_named_exec(bContext *C, wmOperator *op)
+static int object_add_named_exec(bContext *C, wmOperator *op)
 {
   wmWindow *win = CTX_wm_window(C);
   const wmEvent *event = win ? win->eventstate : NULL;
@@ -2963,7 +2963,7 @@ static int add_named_exec(bContext *C, wmOperator *op)
   Base *basen;
   Object *ob;
   const bool linked = RNA_boolean_get(op->ptr, "linked");
-  int dupflag = (linked) ? 0 : U.dupflag;
+  const eDupli_ID_Flags dupflag = (linked) ? 0 : (eDupli_ID_Flags)U.dupflag;
   char name[MAX_ID_NAME - 2];
 
   /* find object, create fake base */
@@ -3016,7 +3016,7 @@ void OBJECT_OT_add_named(wmOperatorType *ot)
   ot->idname = "OBJECT_OT_add_named";
 
   /* api callbacks */
-  ot->exec = add_named_exec;
+  ot->exec = object_add_named_exec;
   ot->poll = ED_operator_objectmode;
 
   /* flags */
@@ -3037,7 +3037,7 @@ void OBJECT_OT_add_named(wmOperatorType *ot)
  *
  * \{ */
 
-static bool join_poll(bContext *C)
+static bool object_join_poll(bContext *C)
 {
   Object *ob = CTX_data_active_object(C);
 
@@ -3053,7 +3053,7 @@ static bool join_poll(bContext *C)
   }
 }
 
-static int join_exec(bContext *C, wmOperator *op)
+static int object_join_exec(bContext *C, wmOperator *op)
 {
   Object *ob = CTX_data_active_object(C);
 
@@ -3074,13 +3074,13 @@ static int join_exec(bContext *C, wmOperator *op)
   }
 
   if (ob->type == OB_MESH) {
-    return join_mesh_exec(C, op);
+    return ED_mesh_join_objects_exec(C, op);
   }
   else if (ELEM(ob->type, OB_CURVE, OB_SURF)) {
-    return join_curve_exec(C, op);
+    return ED_curve_join_objects_exec(C, op);
   }
   else if (ob->type == OB_ARMATURE) {
-    return join_armature_exec(C, op);
+    return ED_armature_join_objects_exec(C, op);
   }
   else if (ob->type == OB_GPENCIL) {
     return ED_gpencil_join_objects_exec(C, op);
@@ -3097,8 +3097,8 @@ void OBJECT_OT_join(wmOperatorType *ot)
   ot->idname = "OBJECT_OT_join";
 
   /* api callbacks */
-  ot->exec = join_exec;
-  ot->poll = join_poll;
+  ot->exec = object_join_exec;
+  ot->poll = object_join_poll;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -3141,7 +3141,7 @@ static int join_shapes_exec(bContext *C, wmOperator *op)
   }
 
   if (ob->type == OB_MESH) {
-    return join_mesh_shapes_exec(C, op);
+    return ED_mesh_shapes_join_objects_exec(C, op);
   }
 
   return OPERATOR_CANCELLED;

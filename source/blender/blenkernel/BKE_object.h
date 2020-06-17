@@ -23,6 +23,7 @@
  */
 
 #include "BLI_compiler_attrs.h"
+#include "BLI_sys_types.h"
 
 #include "DNA_object_enums.h"
 
@@ -138,7 +139,7 @@ bool BKE_object_obdata_is_libdata(const struct Object *ob);
 
 struct Object *BKE_object_duplicate(struct Main *bmain,
                                     const struct Object *ob,
-                                    const int dupflag);
+                                    const uint dupflag);
 
 void BKE_object_obdata_size_init(struct Object *ob, const float scale);
 
