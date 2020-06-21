@@ -224,6 +224,7 @@ void GPENCIL_cache_init(void *ved)
     const bool is_fade_layer = ((!hide_overlay) && (!pd->is_render) &&
                                 (draw_ctx->v3d->gp_flag & V3D_GP_FADE_NOACTIVE_LAYERS));
     pd->fade_layer_opacity = (is_fade_layer) ? draw_ctx->v3d->overlay.gpencil_fade_layer : -1.0f;
+    pd->vertex_paint_opacity = draw_ctx->v3d->overlay.gpencil_vertex_paint_opacity;
     /* Fade GPencil Objects. */
     const bool is_fade_object = ((!hide_overlay) && (!pd->is_render) &&
                                  (draw_ctx->v3d->gp_flag & V3D_GP_FADE_OBJECTS) &&
@@ -492,8 +493,10 @@ static void gpencil_stroke_cache_populate(bGPDlayer *gpl,
                    (!iter->pd->simplify_fill) && ((gps->flag & GP_STROKE_NOFILL) == 0);
 
   bool only_lines = gpl && gpf && gpl->actframe != gpf && iter->pd->use_multiedit_lines_only;
+  bool hide_onion = gpl && gpf && gpf->runtime.onion_id != 0 &&
+                    ((gp_style->flag & GP_MATERIAL_HIDE_ONIONSKIN) != 0);
 
-  if (hide_material || (!show_stroke && !show_fill) || only_lines) {
+  if (hide_material || (!show_stroke && !show_fill) || only_lines || hide_onion) {
     return;
   }
 

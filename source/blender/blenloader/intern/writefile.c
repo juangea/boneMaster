@@ -4076,6 +4076,7 @@ static bool write_file_handle(Main *mainvar,
                               MemFile *compare,
                               MemFile *current,
                               int write_flags,
+                              bool use_userdef,
                               const BlendThumbnail *thumb)
 {
   BHead bhead;
@@ -4329,7 +4330,7 @@ static bool write_file_handle(Main *mainvar,
   /* So changes above don't cause a 'DNA1' to be detected as changed on undo. */
   mywrite_flush(wd);
 
-  if (write_flags & G_FILE_USERPREFS) {
+  if (use_userdef) {
     write_userdef(&writer, &U);
   }
 
@@ -4402,13 +4403,19 @@ static bool do_history(const char *name, ReportList *reports)
  */
 bool BLO_write_file(Main *mainvar,
                     const char *filepath,
-                    int write_flags,
-                    ReportList *reports,
-                    const BlendThumbnail *thumb)
+                    const int write_flags,
+                    const struct BlendFileWriteParams *params,
+                    ReportList *reports)
 {
   char tempname[FILE_MAX + 1];
   eWriteWrapType ww_type;
   WriteWrap ww;
+
+  eBLO_WritePathRemap remap_mode = params->remap_mode;
+  const bool use_save_versions = params->use_save_versions;
+  const bool use_save_as_copy = params->use_save_as_copy;
+  const bool use_userdef = params->use_userdef;
+  const BlendThumbnail *thumb = params->thumb;
 
   /* path backup/restore */
   void *path_list_backup = NULL;
@@ -4439,7 +4446,15 @@ bool BLO_write_file(Main *mainvar,
   }
 
   /* Remapping of relative paths to new file location. */
-  if (write_flags & G_FILE_RELATIVE_REMAP) {
+  if (remap_mode != BLO_WRITE_PATH_REMAP_NONE) {
+
+    if (remap_mode == BLO_WRITE_PATH_REMAP_RELATIVE) {
+      /* Make all relative as none of the existing paths can be relative in an unsaved document. */
+      if (G.relbase_valid == false) {
+        remap_mode = BLO_WRITE_PATH_REMAP_RELATIVE_ALL;
+      }
+    }
+
     char dir_src[FILE_MAX];
     char dir_dst[FILE_MAX];
     BLI_split_dir_part(mainvar->name, dir_src, sizeof(dir_src));
@@ -4449,29 +4464,49 @@ bool BLO_write_file(Main *mainvar,
     BLI_path_normalize(mainvar->name, dir_dst);
     BLI_path_normalize(mainvar->name, dir_src);
 
-    if (G.relbase_valid && (BLI_path_cmp(dir_dst, dir_src) == 0)) {
-      /* Saved to same path. Nothing to do. */
-      write_flags &= ~G_FILE_RELATIVE_REMAP;
+    /* Only for relative, not relative-all, as this means making existing paths relative. */
+    if (remap_mode == BLO_WRITE_PATH_REMAP_RELATIVE) {
+      if (G.relbase_valid && (BLI_path_cmp(dir_dst, dir_src) == 0)) {
+        /* Saved to same path. Nothing to do. */
+        remap_mode = BLO_WRITE_PATH_REMAP_NONE;
+      }
     }
-    else {
+    else if (remap_mode == BLO_WRITE_PATH_REMAP_ABSOLUTE) {
+      if (G.relbase_valid == false) {
+        /* Unsaved, all paths are absolute.Even if the user manages to set a relative path,
+         * there is no base-path that can be used to make it absolute. */
+        remap_mode = BLO_WRITE_PATH_REMAP_NONE;
+      }
+    }
+
+    if (remap_mode != BLO_WRITE_PATH_REMAP_NONE) {
       /* Check if we need to backup and restore paths. */
-      if (UNLIKELY(G_FILE_SAVE_COPY & write_flags)) {
+      if (UNLIKELY(use_save_as_copy)) {
         path_list_backup = BKE_bpath_list_backup(mainvar, path_list_flag);
       }
 
-      if (G.relbase_valid) {
-        /* Saved, make relative paths relative to new location (if possible). */
-        BKE_bpath_relative_rebase(mainvar, dir_src, dir_dst, NULL);
-      }
-      else {
-        /* Unsaved, make all relative. */
-        BKE_bpath_relative_convert(mainvar, dir_dst, NULL);
+      switch (remap_mode) {
+        case BLO_WRITE_PATH_REMAP_RELATIVE:
+          /* Saved, make relative paths relative to new location (if possible). */
+          BKE_bpath_relative_rebase(mainvar, dir_src, dir_dst, NULL);
+          break;
+        case BLO_WRITE_PATH_REMAP_RELATIVE_ALL:
+          /* Make all relative (when requested or unsaved). */
+          BKE_bpath_relative_convert(mainvar, dir_dst, NULL);
+          break;
+        case BLO_WRITE_PATH_REMAP_ABSOLUTE:
+          /* Make all absolute (when requested or unsaved). */
+          BKE_bpath_absolute_convert(mainvar, dir_src, NULL);
+          break;
+        case BLO_WRITE_PATH_REMAP_NONE:
+          BLI_assert(0); /* Unreachable. */
+          break;
       }
     }
   }
 
   /* actual file writing */
-  const bool err = write_file_handle(mainvar, &ww, NULL, NULL, write_flags, thumb);
+  const bool err = write_file_handle(mainvar, &ww, NULL, NULL, write_flags, use_userdef, thumb);
 
   ww.close(&ww);
 
@@ -4489,7 +4524,7 @@ bool BLO_write_file(Main *mainvar,
 
   /* file save to temporary file was successful */
   /* now do reverse file history (move .blend1 -> .blend2, .blend -> .blend1) */
-  if (write_flags & G_FILE_HISTORY) {
+  if (use_save_versions) {
     const bool err_hist = do_history(filepath, reports);
     if (err_hist) {
       BKE_report(reports, RPT_ERROR, "Version backup failed (file saved with @)");
@@ -4515,9 +4550,10 @@ bool BLO_write_file(Main *mainvar,
  */
 bool BLO_write_file_mem(Main *mainvar, MemFile *compare, MemFile *current, int write_flags)
 {
-  write_flags &= ~G_FILE_USERPREFS;
+  bool use_userdef = false;
 
-  const bool err = write_file_handle(mainvar, NULL, compare, current, write_flags, NULL);
+  const bool err = write_file_handle(
+      mainvar, NULL, compare, current, write_flags, use_userdef, NULL);
 
   return (err == 0);
 }

@@ -1302,6 +1302,24 @@ typedef struct KernelBackground {
   float ao_factor;
   float ao_distance;
   float ao_bounces_factor;
+
+  /* portal sampling */
+  float portal_weight;
+  int num_portals;
+  int portal_offset;
+
+  /* sun sampling */
+  float sun_weight;
+  /* xyz store direction, w the angle. float4 instead of float3 is used
+   * to ensure consistent padding/alignment across devices. */
+  float4 sun;
+
+  /* map sampling */
+  float map_weight;
+  int map_res_x;
+  int map_res_y;
+
+  int use_mis;
 } KernelBackground;
 static_assert_align(KernelBackground, 16);
 
