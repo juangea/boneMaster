@@ -919,8 +919,6 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine &b_engine,
   if (b_r.use_save_buffers())
     params.progressive_refine = false;
 
-  params.viewport_denoising_samples = get_int(cscene, "viewport_denoising_samples");
-
   if (background) {
     if (params.progressive_refine)
       params.progressive = true;
