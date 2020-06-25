@@ -109,7 +109,6 @@ Scene::Scene(const SceneParams &params_, Device *device)
   integrator = new Integrator();
   image_manager = new ImageManager(device->info);
   particle_system_manager = new ParticleSystemManager();
-  curve_system_manager = new CurveSystemManager();
   bake_manager = new BakeManager();
 
   /* OSL only works on the CPU */
@@ -157,7 +156,6 @@ void Scene::free_memory(bool final)
     light_manager->device_free(device, &dscene);
 
     particle_system_manager->device_free(device, &dscene);
-    curve_system_manager->device_free(device, &dscene);
 
     bake_manager->device_free(device, &dscene);
 
@@ -181,7 +179,6 @@ void Scene::free_memory(bool final)
     delete shader_manager;
     delete light_manager;
     delete particle_system_manager;
-    delete curve_system_manager;
     delete image_manager;
     delete bake_manager;
   }
@@ -230,12 +227,6 @@ void Scene::device_update(Device *device_, Progress &progress)
 
   progress.set_status("Updating Objects");
   object_manager->device_update(device, &dscene, this, progress);
-
-  if (progress.get_cancel() || device->have_error())
-    return;
-
-  progress.set_status("Updating Hair Systems");
-  curve_system_manager->device_update(device, &dscene, this, progress);
 
   if (progress.get_cancel() || device->have_error())
     return;
@@ -370,8 +361,7 @@ bool Scene::need_data_update()
   return (background->need_update || image_manager->need_update || object_manager->need_update ||
           geometry_manager->need_update || light_manager->need_update ||
           lookup_tables->need_update || integrator->need_update || shader_manager->need_update ||
-          particle_system_manager->need_update || curve_system_manager->need_update ||
-          bake_manager->need_update || film->need_update);
+          particle_system_manager->need_update || bake_manager->need_update || film->need_update);
 }
 
 bool Scene::need_reset()
@@ -394,7 +384,6 @@ void Scene::reset()
   geometry_manager->tag_update(this);
   light_manager->tag_update(this);
   particle_system_manager->tag_update(this);
-  curve_system_manager->tag_update(this);
 }
 
 void Scene::device_free()
