@@ -193,21 +193,57 @@ MFInputSocket &MFNetwork::add_output(StringRef name, MFDataType data_type)
   return this->add_dummy(name, {data_type}, {}, {name}, {}).input(0);
 }
 
+void MFNetwork::relink(MFOutputSocket &old_output, MFOutputSocket &new_output)
+{
+  BLI_assert(&old_output != &new_output);
+  for (MFInputSocket *input : old_output.targets()) {
+    input->m_origin = &new_output;
+  }
+  new_output.m_targets.extend(old_output.m_targets);
+  old_output.m_targets.clear();
+}
+
+void MFNetwork::remove(MFNode &node)
+{
+  for (MFInputSocket *socket : node.m_inputs) {
+    if (socket->m_origin != nullptr) {
+      socket->m_origin->m_targets.remove_first_occurrence_and_reorder(socket);
+    }
+    m_socket_or_null_by_id[socket->m_id] = nullptr;
+  }
+  for (MFOutputSocket *socket : node.m_outputs) {
+    for (MFInputSocket *other : socket->m_targets) {
+      other->m_origin = nullptr;
+    }
+    m_socket_or_null_by_id[socket->m_id] = nullptr;
+  }
+  node.destruct_sockets();
+  if (node.is_dummy()) {
+    MFDummyNode &dummy_node = node.as_dummy();
+    dummy_node.~MFDummyNode();
+    m_dummy_nodes.remove_contained(&dummy_node);
+  }
+  else {
+    MFFunctionNode &function_node = node.as_function();
+    function_node.~MFFunctionNode();
+    m_function_nodes.remove_contained(&function_node);
+  }
+  m_node_or_null_by_id[node.m_id] = nullptr;
+}
+
 std::string MFNetwork::to_dot() const
 {
-  namespace Dot = blender::DotExport;
+  dot::DirectedGraph digraph;
+  digraph.set_rankdir(dot::Attr_rankdir::LeftToRight);
 
-  Dot::DirectedGraph digraph;
-  digraph.set_rankdir(Dot::Attr_rankdir::LeftToRight);
-
-  Map<const MFNode *, Dot::NodeWithSocketsRef> dot_nodes;
+  Map<const MFNode *, dot::NodeWithSocketsRef> dot_nodes;
 
   Vector<const MFNode *> all_nodes;
   all_nodes.extend(m_function_nodes.as_span());
   all_nodes.extend(m_dummy_nodes.as_span());
 
   for (const MFNode *node : all_nodes) {
-    Dot::Node &dot_node = digraph.new_node("");
+    dot::Node &dot_node = digraph.new_node("");
 
     Vector<std::string> input_names, output_names;
     for (const MFInputSocket *socket : node->m_inputs) {
@@ -217,18 +253,18 @@ std::string MFNetwork::to_dot() const
       output_names.append(socket->name() + " (" + socket->data_type().to_string() + ")");
     }
 
-    Dot::NodeWithSocketsRef dot_node_ref{dot_node, node->name(), input_names, output_names};
+    dot::NodeWithSocketsRef dot_node_ref{dot_node, node->name(), input_names, output_names};
     dot_nodes.add_new(node, dot_node_ref);
   }
 
   for (const MFNode *to_node : all_nodes) {
-    Dot::NodeWithSocketsRef to_dot_node = dot_nodes.lookup(to_node);
+    dot::NodeWithSocketsRef to_dot_node = dot_nodes.lookup(to_node);
 
     for (const MFInputSocket *to_socket : to_node->m_inputs) {
       const MFOutputSocket *from_socket = to_socket->m_origin;
       if (from_socket != nullptr) {
         const MFNode *from_node = from_socket->m_node;
-        Dot::NodeWithSocketsRef from_dot_node = dot_nodes.lookup(from_node);
+        dot::NodeWithSocketsRef from_dot_node = dot_nodes.lookup(from_node);
         digraph.new_edge(from_dot_node.output(from_socket->m_index),
                          to_dot_node.input(to_socket->m_index));
       }

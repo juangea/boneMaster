@@ -361,10 +361,15 @@ static bool id_search_add(const bContext *C,
        * followed by ID_NAME-2 characters from id->name
        */
       char name_ui[MAX_ID_FULL_NAME_UI];
-      BKE_id_full_name_ui_prefix_get(name_ui, id, UI_SEP_CHAR);
-
       int iconid = ui_id_icon_get(C, id, template_ui->preview);
       bool has_sep_char = (id->lib != NULL);
+
+      /* When using previews, the library hint (linked, overriden, missing) is added with a
+       * character prefix, otherwise we can use a icon. */
+      BKE_id_full_name_ui_prefix_get(name_ui, id, template_ui->preview, UI_SEP_CHAR);
+      if (!template_ui->preview) {
+        iconid = UI_library_icon_get(id);
+      }
 
       if (!UI_search_item_add(
               items, name_ui, id, iconid, has_sep_char ? UI_BUT_HAS_SEP_CHAR : 0)) {
@@ -579,7 +584,7 @@ static void template_id_cb(bContext *C, void *arg_litem, void *arg_event)
       }
       break;
     case UI_ID_OVERRIDE:
-      if (id && id->override_library) {
+      if (id && ID_IS_OVERRIDE_LIBRARY(id)) {
         BKE_lib_override_library_free(&id->override_library, true);
         /* reassign to get get proper updates/notifiers */
         idptr = RNA_property_pointer_get(&template_ui->ptr, template_ui->prop);
@@ -1868,14 +1873,22 @@ void uiTemplateModifiers(uiLayout *UNUSED(layout), bContext *C)
     ModifierData *md = modifiers->first;
     for (int i = 0; md; i++, md = md->next) {
       const ModifierTypeInfo *mti = BKE_modifier_get_info(md->type);
-      if (mti->panelRegister) {
-        char panel_idname[MAX_NAME];
-        modifier_panel_id(md, panel_idname);
+      if (mti->panelRegister == NULL) {
+        continue;
+      }
 
-        Panel *new_panel = UI_panel_add_instanced(sa, region, &region->panels, panel_idname, i);
-        if (new_panel != NULL) {
-          UI_panel_set_expand_from_list_data(C, new_panel);
-        }
+      char panel_idname[MAX_NAME];
+      modifier_panel_id(md, panel_idname);
+
+      /* Create custom data RNA pointer. */
+      PointerRNA *md_ptr = MEM_mallocN(sizeof(PointerRNA), "panel customdata");
+      RNA_pointer_create(&ob->id, &RNA_Modifier, md, md_ptr);
+
+      Panel *new_panel = UI_panel_add_instanced(
+          sa, region, &region->panels, panel_idname, i, md_ptr);
+
+      if (new_panel != NULL) {
+        UI_panel_set_expand_from_list_data(C, new_panel);
       }
     }
   }
@@ -1884,6 +1897,27 @@ void uiTemplateModifiers(uiLayout *UNUSED(layout), bContext *C)
     LISTBASE_FOREACH (Panel *, panel, &region->panels) {
       if ((panel->type != NULL) && (panel->type->flag & PNL_INSTANCED))
         UI_panel_set_expand_from_list_data(C, panel);
+    }
+
+    /* Assuming there's only one group of instanced panels, update the custom data pointers. */
+    Panel *panel = region->panels.first;
+    LISTBASE_FOREACH (ModifierData *, md, modifiers) {
+      const ModifierTypeInfo *mti = BKE_modifier_get_info(md->type);
+      if (mti->panelRegister == NULL) {
+        continue;
+      }
+
+      /* Move to the next instanced panel corresponding to the next modifier. */
+      while ((panel->type == NULL) || !(panel->type->flag & PNL_INSTANCED)) {
+        panel = panel->next;
+        BLI_assert(panel != NULL); /* There shouldn't be fewer panels than modifiers with UIs. */
+      }
+
+      PointerRNA *md_ptr = MEM_mallocN(sizeof(PointerRNA), "panel customdata");
+      RNA_pointer_create(&ob->id, &RNA_Modifier, md, md_ptr);
+      UI_panel_custom_data_set(panel, md_ptr);
+
+      panel = panel->next;
     }
   }
 }
@@ -2021,9 +2055,11 @@ void uiTemplateConstraints(uiLayout *UNUSED(layout), bContext *C, bool use_bone_
       char panel_idname[MAX_NAME];
       panel_id_func(con, panel_idname);
 
-      Panel *new_panel = UI_panel_add_instanced(sa, region, &region->panels, panel_idname, i);
+      Panel *new_panel = UI_panel_add_instanced(
+          sa, region, &region->panels, panel_idname, i, NULL);
       if (new_panel) {
-        /* Set the list panel functionality function pointers since we don't do it with python. */
+        /* Set the list panel functionality function pointers since we don't do it with
+         * python. */
         new_panel->type->set_list_data_expand_flag = set_constraint_expand_flag;
         new_panel->type->get_list_data_expand_flag = get_constraint_expand_flag;
         new_panel->type->reorder = constraint_reorder;
@@ -2047,7 +2083,7 @@ void uiTemplateConstraints(uiLayout *UNUSED(layout), bContext *C, bool use_bone_
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Grease Pencil Modifier Template
+/** \name Grease Pencil Modifiers Template
  * \{ */
 
 /**
@@ -2073,14 +2109,22 @@ void uiTemplateGpencilModifiers(uiLayout *UNUSED(layout), bContext *C)
     GpencilModifierData *md = modifiers->first;
     for (int i = 0; md; i++, md = md->next) {
       const GpencilModifierTypeInfo *mti = BKE_gpencil_modifier_get_info(md->type);
-      if (mti->panelRegister) {
-        char panel_idname[MAX_NAME];
-        gpencil_modifier_panel_id(md, panel_idname);
+      if (mti->panelRegister == NULL) {
+        continue;
+      }
 
-        Panel *new_panel = UI_panel_add_instanced(sa, region, &region->panels, panel_idname, i);
-        if (new_panel != NULL) {
-          UI_panel_set_expand_from_list_data(C, new_panel);
-        }
+      char panel_idname[MAX_NAME];
+      gpencil_modifier_panel_id(md, panel_idname);
+
+      /* Create custom data RNA pointer. */
+      PointerRNA *md_ptr = MEM_mallocN(sizeof(PointerRNA), "panel customdata");
+      RNA_pointer_create(&ob->id, &RNA_GpencilModifier, md, md_ptr);
+
+      Panel *new_panel = UI_panel_add_instanced(
+          sa, region, &region->panels, panel_idname, i, md_ptr);
+
+      if (new_panel != NULL) {
+        UI_panel_set_expand_from_list_data(C, new_panel);
       }
     }
   }
@@ -2089,6 +2133,27 @@ void uiTemplateGpencilModifiers(uiLayout *UNUSED(layout), bContext *C)
     LISTBASE_FOREACH (Panel *, panel, &region->panels) {
       if ((panel->type != NULL) && (panel->type->flag & PNL_INSTANCED))
         UI_panel_set_expand_from_list_data(C, panel);
+    }
+
+    /* Assuming there's only one group of instanced panels, update the custom data pointers. */
+    Panel *panel = region->panels.first;
+    LISTBASE_FOREACH (ModifierData *, md, modifiers) {
+      const GpencilModifierTypeInfo *mti = BKE_gpencil_modifier_get_info(md->type);
+      if (mti->panelRegister == NULL) {
+        continue;
+      }
+
+      /* Move to the next instanced panel corresponding to the next modifier. */
+      while ((panel->type == NULL) || !(panel->type->flag & PNL_INSTANCED)) {
+        panel = panel->next;
+        BLI_assert(panel != NULL); /* There shouldn't be fewer panels than modifiers with UIs. */
+      }
+
+      PointerRNA *md_ptr = MEM_mallocN(sizeof(PointerRNA), "panel customdata");
+      RNA_pointer_create(&ob->id, &RNA_GpencilModifier, md, md_ptr);
+      UI_panel_custom_data_set(panel, md_ptr);
+
+      panel = panel->next;
     }
   }
 }
@@ -2102,7 +2167,8 @@ void uiTemplateGpencilModifiers(uiLayout *UNUSED(layout), bContext *C)
 /* -------------------------------------------------------------------- */
 /** \name ShaderFx Template
  *
- *  Template for building the panel layout for the active object's grease pencil shader effects.
+ *  Template for building the panel layout for the active object's grease pencil shader
+ * effects.
  * \{ */
 
 /**
@@ -2133,7 +2199,8 @@ void uiTemplateShaderFx(uiLayout *UNUSED(layout), bContext *C)
       char panel_idname[MAX_NAME];
       shaderfx_panel_id(fx, panel_idname);
 
-      Panel *new_panel = UI_panel_add_instanced(sa, region, &region->panels, panel_idname, i);
+      Panel *new_panel = UI_panel_add_instanced(
+          sa, region, &region->panels, panel_idname, i, NULL);
       if (new_panel != NULL) {
         UI_panel_set_expand_from_list_data(C, new_panel);
       }
@@ -7207,37 +7274,35 @@ void uiTemplateCacheFile(uiLayout *layout,
 
   SpaceProperties *sbuts = CTX_wm_space_properties(C);
 
-  uiLayout *row = uiLayoutRow(layout, false);
-  uiBlock *block = uiLayoutGetBlock(row);
-  uiDefBut(block, UI_BTYPE_LABEL, 0, IFACE_("File Path:"), 0, 19, 145, 19, NULL, 0, 0, 0, 0, "");
+  uiLayout *row, *sub, *subsub;
+
+  uiLayoutSetPropSep(layout, true);
+
+  row = uiLayoutRow(layout, true);
+  uiItemR(row, &fileptr, "filepath", 0, NULL, ICON_NONE);
+  sub = uiLayoutRow(row, true);
+  uiItemO(sub, "", ICON_FILE_REFRESH, "cachefile.reload");
 
   row = uiLayoutRow(layout, false);
-  uiLayout *split = uiLayoutSplit(row, 0.0f, false);
-  row = uiLayoutRow(split, true);
+  uiItemR(row, &fileptr, "is_sequence", 0, NULL, ICON_NONE);
 
-  uiItemR(row, &fileptr, "filepath", 0, "", ICON_NONE);
-  uiItemO(row, "", ICON_FILE_REFRESH, "cachefile.reload");
-
-  row = uiLayoutRow(layout, false);
-  uiItemR(row, &fileptr, "is_sequence", 0, "Is Sequence", ICON_NONE);
-
-  row = uiLayoutRow(layout, false);
-  uiItemR(row, &fileptr, "override_frame", 0, "Override Frame", ICON_NONE);
-
-  row = uiLayoutRow(layout, false);
-  uiLayoutSetActive(row, RNA_boolean_get(&fileptr, "override_frame"));
-  uiItemR(row, &fileptr, "frame", 0, "Frame", ICON_NONE);
+  row = uiLayoutRowWithHeading(layout, true, IFACE_("Override Frame"));
+  sub = uiLayoutRow(row, true);
+  uiLayoutSetPropDecorate(sub, false);
+  uiItemR(sub, &fileptr, "override_frame", 0, "", ICON_NONE);
+  subsub = uiLayoutRow(sub, true);
+  uiLayoutSetActive(subsub, RNA_boolean_get(&fileptr, "override_frame"));
+  uiItemR(subsub, &fileptr, "frame", 0, "", ICON_NONE);
+  uiItemDecoratorR(row, &fileptr, "frame", 0);
 
   row = uiLayoutRow(layout, false);
-  uiItemR(row, &fileptr, "frame_offset", 0, "Frame Offset", ICON_NONE);
+  uiItemR(row, &fileptr, "frame_offset", 0, NULL, ICON_NONE);
   uiLayoutSetActive(row, !RNA_boolean_get(&fileptr, "is_sequence"));
 
-  row = uiLayoutRow(layout, false);
-  uiItemL(row, IFACE_("Manual Transform:"), ICON_NONE);
-
-  row = uiLayoutRow(layout, false);
-  uiLayoutSetActive(row, (sbuts->mainb == BCONTEXT_CONSTRAINT));
-  uiItemR(row, &fileptr, "scale", 0, "Scale", ICON_NONE);
+  if (sbuts->mainb == BCONTEXT_CONSTRAINT) {
+    row = uiLayoutRow(layout, false);
+    uiItemR(row, &fileptr, "scale", 0, IFACE_("Manual Scale"), ICON_NONE);
+  }
 
   /* TODO: unused for now, so no need to expose. */
 #if 0

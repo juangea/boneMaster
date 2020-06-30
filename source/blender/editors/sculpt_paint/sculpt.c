@@ -74,6 +74,8 @@
 
 #include "DEG_depsgraph.h"
 
+#include "IMB_colormanagement.h"
+
 #include "WM_api.h"
 #include "WM_message.h"
 #include "WM_toolsystem.h"
@@ -194,6 +196,23 @@ void SCULPT_vertex_normal_get(SculptSession *ss, int index, float no[3])
       break;
     }
   }
+}
+
+const float *SCULPT_vertex_persistent_co_get(SculptSession *ss, int index)
+{
+  if (ss->persistent_base) {
+    return ss->persistent_base[index].co;
+  }
+  return SCULPT_vertex_co_get(ss, index);
+}
+
+void SCULPT_vertex_persistent_normal_get(SculptSession *ss, int index, float no[3])
+{
+  if (ss->persistent_base) {
+    copy_v3_v3(no, ss->persistent_base[index].no);
+    return;
+  }
+  SCULPT_vertex_normal_get(ss, index, no);
 }
 
 float SCULPT_vertex_mask_get(SculptSession *ss, int index)
@@ -649,6 +668,13 @@ static void sculpt_vertex_neighbors_get_faces(SculptSession *ss,
       }
     }
   }
+
+  if (ss->fake_neighbors.use_fake_neighbors) {
+    BLI_assert(ss->fake_neighbors.fake_neighbor_index != NULL);
+    if (ss->fake_neighbors.fake_neighbor_index[index] != FAKE_NEIGHBOR_NONE) {
+      sculpt_vertex_neighbor_add(iter, ss->fake_neighbors.fake_neighbor_index[index]);
+    }
+  }
 }
 
 static void sculpt_vertex_neighbors_get_grids(SculptSession *ss,
@@ -679,6 +705,13 @@ static void sculpt_vertex_neighbors_get_grids(SculptSession *ss,
     sculpt_vertex_neighbor_add(iter,
                                neighbors.coords[i].grid_index * key->grid_area +
                                    neighbors.coords[i].y * key->grid_size + neighbors.coords[i].x);
+  }
+
+  if (ss->fake_neighbors.use_fake_neighbors) {
+    BLI_assert(ss->fake_neighbors.fake_neighbor_index != NULL);
+    if (ss->fake_neighbors.fake_neighbor_index[index] != FAKE_NEIGHBOR_NONE) {
+      sculpt_vertex_neighbor_add(iter, ss->fake_neighbors.fake_neighbor_index[index]);
+    }
   }
 
   if (neighbors.coords != neighbors.coords_fixed) {
@@ -837,7 +870,7 @@ int SCULPT_nearest_vertex_get(
   nvtd.nearest_vertex_distance_squared = FLT_MAX;
 
   TaskParallelSettings settings;
-  BKE_pbvh_parallel_range_settings(&settings, (sd->flags & SCULPT_USE_OPENMP), totnode);
+  BKE_pbvh_parallel_range_settings(&settings, true, totnode);
   settings.func_reduce = nearest_vertex_get_reduce;
   settings.userdata_chunk = &nvtd;
   settings.userdata_chunk_size = sizeof(NearestVertexTLSData);
@@ -1311,7 +1344,7 @@ static void paint_mesh_restore_co(Sculpt *sd, Object *ob)
 
   /**
    * Disable OpenMP when dynamic-topology is enabled. Otherwise, new entries might be inserted by
-   * #sculpt_undo_push_node() into the GHash used internally by #BM_log_original_vert_co()
+   * #SCULPT_undo_push_node() into the #GHash used internally by #BM_log_original_vert_co()
    * by a different thread. See T33787. */
   SculptThreadedTaskData data = {
       .sd = sd,
@@ -1321,7 +1354,7 @@ static void paint_mesh_restore_co(Sculpt *sd, Object *ob)
   };
 
   TaskParallelSettings settings;
-  BKE_pbvh_parallel_range_settings(&settings, (sd->flags & SCULPT_USE_OPENMP) && !ss->bm, totnode);
+  BKE_pbvh_parallel_range_settings(&settings, true && !ss->bm, totnode);
   BLI_task_parallel_range(0, totnode, &data, paint_mesh_restore_co_task_cb, &settings);
 
   BKE_pbvh_node_color_buffer_free(ss->pbvh);
@@ -1952,7 +1985,7 @@ static void calc_area_center(
   AreaNormalCenterTLSData anctd = {{{0}}};
 
   TaskParallelSettings settings;
-  BKE_pbvh_parallel_range_settings(&settings, (sd->flags & SCULPT_USE_OPENMP), totnode);
+  BKE_pbvh_parallel_range_settings(&settings, true, totnode);
   settings.func_reduce = calc_area_normal_and_center_reduce;
   settings.userdata_chunk = &anctd;
   settings.userdata_chunk_size = sizeof(AreaNormalCenterTLSData);
@@ -1981,8 +2014,7 @@ void SCULPT_calc_area_normal(
     Sculpt *sd, Object *ob, PBVHNode **nodes, int totnode, float r_area_no[3])
 {
   const Brush *brush = BKE_paint_brush(&sd->paint);
-  bool use_threading = (sd->flags & SCULPT_USE_OPENMP);
-  SCULPT_pbvh_calc_area_normal(brush, ob, nodes, totnode, use_threading, r_area_no);
+  SCULPT_pbvh_calc_area_normal(brush, ob, nodes, totnode, true, r_area_no);
 }
 
 /* Expose 'calc_area_normal' externally. */
@@ -2052,7 +2084,7 @@ static void calc_area_normal_and_center(
   AreaNormalCenterTLSData anctd = {{{0}}};
 
   TaskParallelSettings settings;
-  BKE_pbvh_parallel_range_settings(&settings, (sd->flags & SCULPT_USE_OPENMP), totnode);
+  BKE_pbvh_parallel_range_settings(&settings, true, totnode);
   settings.func_reduce = calc_area_normal_and_center_reduce;
   settings.userdata_chunk = &anctd;
   settings.userdata_chunk_size = sizeof(AreaNormalCenterTLSData);
@@ -2148,8 +2180,7 @@ static float brush_strength(const Sculpt *sd,
       final_pressure = pressure * pressure;
       return final_pressure * overlap * feather;
     case SCULPT_TOOL_SMEAR:
-      final_pressure = pressure * pressure;
-      return final_pressure * overlap * feather;
+      return pressure * overlap * feather;
     case SCULPT_TOOL_CLAY_STRIPS:
       /* Clay Strips needs less strength to compensate the curve. */
       final_pressure = powf(pressure, 1.5f);
@@ -2718,7 +2749,7 @@ static void bmesh_topology_rake(
         .strength = factor,
     };
     TaskParallelSettings settings;
-    BKE_pbvh_parallel_range_settings(&settings, (sd->flags & SCULPT_USE_OPENMP), totnode);
+    BKE_pbvh_parallel_range_settings(&settings, true, totnode);
 
     BLI_task_parallel_range(0, totnode, &data, do_topology_rake_bmesh_task_cb_ex, &settings);
   }
@@ -2775,7 +2806,7 @@ static void do_mask_brush_draw(Sculpt *sd, Object *ob, PBVHNode **nodes, int tot
   };
 
   TaskParallelSettings settings;
-  BKE_pbvh_parallel_range_settings(&settings, (sd->flags & SCULPT_USE_OPENMP), totnode);
+  BKE_pbvh_parallel_range_settings(&settings, true, totnode);
   BLI_task_parallel_range(0, totnode, &data, do_mask_brush_draw_task_cb_ex, &settings);
 }
 
@@ -2863,7 +2894,7 @@ static void do_draw_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int totnode)
   };
 
   TaskParallelSettings settings;
-  BKE_pbvh_parallel_range_settings(&settings, (sd->flags & SCULPT_USE_OPENMP), totnode);
+  BKE_pbvh_parallel_range_settings(&settings, true, totnode);
   BLI_task_parallel_range(0, totnode, &data, do_draw_brush_task_cb_ex, &settings);
 }
 
@@ -2940,7 +2971,7 @@ static void do_draw_sharp_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int to
   };
 
   TaskParallelSettings settings;
-  BKE_pbvh_parallel_range_settings(&settings, (sd->flags & SCULPT_USE_OPENMP), totnode);
+  BKE_pbvh_parallel_range_settings(&settings, true, totnode);
   BLI_task_parallel_range(0, totnode, &data, do_draw_sharp_brush_task_cb_ex, &settings);
 }
 
@@ -3127,7 +3158,7 @@ static void do_slide_relax_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int t
   };
 
   TaskParallelSettings settings;
-  BKE_pbvh_parallel_range_settings(&settings, (sd->flags & SCULPT_USE_OPENMP), totnode);
+  BKE_pbvh_parallel_range_settings(&settings, true, totnode);
   if (ss->cache->alt_smooth) {
     for (int i = 0; i < 4; i++) {
       BLI_task_parallel_range(0, totnode, &data, do_topology_relax_task_cb_ex, &settings);
@@ -3337,7 +3368,7 @@ static void do_crease_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int totnod
   };
 
   TaskParallelSettings settings;
-  BKE_pbvh_parallel_range_settings(&settings, (sd->flags & SCULPT_USE_OPENMP), totnode);
+  BKE_pbvh_parallel_range_settings(&settings, true, totnode);
   BLI_task_parallel_range(0, totnode, &data, do_crease_brush_task_cb_ex, &settings);
 }
 
@@ -3451,7 +3482,7 @@ static void do_pinch_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int totnode
   };
 
   TaskParallelSettings settings;
-  BKE_pbvh_parallel_range_settings(&settings, (sd->flags & SCULPT_USE_OPENMP), totnode);
+  BKE_pbvh_parallel_range_settings(&settings, true, totnode);
   BLI_task_parallel_range(0, totnode, &data, do_pinch_brush_task_cb_ex, &settings);
 }
 
@@ -3524,7 +3555,7 @@ static void do_grab_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int totnode)
   };
 
   TaskParallelSettings settings;
-  BKE_pbvh_parallel_range_settings(&settings, (sd->flags & SCULPT_USE_OPENMP), totnode);
+  BKE_pbvh_parallel_range_settings(&settings, true, totnode);
   BLI_task_parallel_range(0, totnode, &data, do_grab_brush_task_cb_ex, &settings);
 }
 
@@ -3633,7 +3664,7 @@ static void do_elastic_deform_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, in
   };
 
   TaskParallelSettings settings;
-  BKE_pbvh_parallel_range_settings(&settings, (sd->flags & SCULPT_USE_OPENMP), totnode);
+  BKE_pbvh_parallel_range_settings(&settings, true, totnode);
   BLI_task_parallel_range(0, totnode, &data, do_elastic_deform_brush_task_cb_ex, &settings);
 }
 
@@ -3840,7 +3871,7 @@ static void do_nudge_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int totnode
   };
 
   TaskParallelSettings settings;
-  BKE_pbvh_parallel_range_settings(&settings, (sd->flags & SCULPT_USE_OPENMP), totnode);
+  BKE_pbvh_parallel_range_settings(&settings, true, totnode);
   BLI_task_parallel_range(0, totnode, &data, do_nudge_brush_task_cb_ex, &settings);
 }
 
@@ -3962,7 +3993,7 @@ static void do_snake_hook_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int to
   };
 
   TaskParallelSettings settings;
-  BKE_pbvh_parallel_range_settings(&settings, (sd->flags & SCULPT_USE_OPENMP), totnode);
+  BKE_pbvh_parallel_range_settings(&settings, true, totnode);
   BLI_task_parallel_range(0, totnode, &data, do_snake_hook_brush_task_cb_ex, &settings);
 }
 
@@ -4035,7 +4066,7 @@ static void do_thumb_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int totnode
   };
 
   TaskParallelSettings settings;
-  BKE_pbvh_parallel_range_settings(&settings, (sd->flags & SCULPT_USE_OPENMP), totnode);
+  BKE_pbvh_parallel_range_settings(&settings, true, totnode);
   BLI_task_parallel_range(0, totnode, &data, do_thumb_brush_task_cb_ex, &settings);
 }
 
@@ -4109,7 +4140,7 @@ static void do_rotate_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int totnod
   };
 
   TaskParallelSettings settings;
-  BKE_pbvh_parallel_range_settings(&settings, (sd->flags & SCULPT_USE_OPENMP), totnode);
+  BKE_pbvh_parallel_range_settings(&settings, true, totnode);
   BLI_task_parallel_range(0, totnode, &data, do_rotate_brush_task_cb_ex, &settings);
 }
 
@@ -4122,7 +4153,7 @@ static void do_layer_brush_task_cb_ex(void *__restrict userdata,
   Sculpt *sd = data->sd;
   const Brush *brush = data->brush;
 
-  const bool use_persistent_base = ss->layer_base && brush->flag & BRUSH_PERSISTENT;
+  const bool use_persistent_base = ss->persistent_base && brush->flag & BRUSH_PERSISTENT;
 
   PBVHVertexIter vd;
   SculptOrigVertData orig_data;
@@ -4152,7 +4183,7 @@ static void do_layer_brush_task_cb_ex(void *__restrict userdata,
       const int vi = vd.index;
       float *disp_factor;
       if (use_persistent_base) {
-        disp_factor = &ss->layer_base[vi].disp;
+        disp_factor = &ss->persistent_base[vi].disp;
       }
       else {
         disp_factor = &ss->cache->layer_displacement_factor[vi];
@@ -4182,9 +4213,9 @@ static void do_layer_brush_task_cb_ex(void *__restrict userdata,
       float normal[3];
 
       if (use_persistent_base) {
-        copy_v3_v3(normal, ss->layer_base[vi].no);
+        SCULPT_vertex_persistent_normal_get(ss, vi, normal);
         mul_v3_fl(normal, brush->height);
-        madd_v3_v3v3fl(final_co, ss->layer_base[vi].co, normal, *disp_factor);
+        madd_v3_v3v3fl(final_co, SCULPT_vertex_persistent_co_get(ss, vi), normal, *disp_factor);
       }
       else {
         normal_short_to_float_v3(normal, orig_data.no);
@@ -4225,7 +4256,7 @@ static void do_layer_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int totnode
   };
 
   TaskParallelSettings settings;
-  BKE_pbvh_parallel_range_settings(&settings, (sd->flags & SCULPT_USE_OPENMP), totnode);
+  BKE_pbvh_parallel_range_settings(&settings, true, totnode);
   BLI_task_parallel_range(0, totnode, &data, do_layer_brush_task_cb_ex, &settings);
 }
 
@@ -4292,7 +4323,7 @@ static void do_inflate_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int totno
   };
 
   TaskParallelSettings settings;
-  BKE_pbvh_parallel_range_settings(&settings, (sd->flags & SCULPT_USE_OPENMP), totnode);
+  BKE_pbvh_parallel_range_settings(&settings, true, totnode);
   BLI_task_parallel_range(0, totnode, &data, do_inflate_brush_task_cb_ex, &settings);
 }
 
@@ -4417,7 +4448,7 @@ static void do_flatten_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int totno
   };
 
   TaskParallelSettings settings;
-  BKE_pbvh_parallel_range_settings(&settings, (sd->flags & SCULPT_USE_OPENMP), totnode);
+  BKE_pbvh_parallel_range_settings(&settings, true, totnode);
   BLI_task_parallel_range(0, totnode, &data, do_flatten_brush_task_cb_ex, &settings);
 }
 
@@ -4568,7 +4599,7 @@ static void do_clay_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int totnode)
   ClaySampleData csd = {{0}};
 
   TaskParallelSettings sample_settings;
-  BKE_pbvh_parallel_range_settings(&sample_settings, (sd->flags & SCULPT_USE_OPENMP), totnode);
+  BKE_pbvh_parallel_range_settings(&sample_settings, true, totnode);
   sample_settings.func_reduce = calc_clay_surface_reduce;
   sample_settings.userdata_chunk = &csd;
   sample_settings.userdata_chunk_size = sizeof(ClaySampleData);
@@ -4599,7 +4630,7 @@ static void do_clay_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int totnode)
   };
 
   TaskParallelSettings settings;
-  BKE_pbvh_parallel_range_settings(&settings, (sd->flags & SCULPT_USE_OPENMP), totnode);
+  BKE_pbvh_parallel_range_settings(&settings, true, totnode);
   BLI_task_parallel_range(0, totnode, &data, do_clay_brush_task_cb_ex, &settings);
 }
 
@@ -4750,7 +4781,7 @@ static void do_clay_strips_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int t
   };
 
   TaskParallelSettings settings;
-  BKE_pbvh_parallel_range_settings(&settings, (sd->flags & SCULPT_USE_OPENMP), totnode);
+  BKE_pbvh_parallel_range_settings(&settings, true, totnode);
   BLI_task_parallel_range(0, totnode, &data, do_clay_strips_brush_task_cb_ex, &settings);
 }
 
@@ -4844,7 +4875,7 @@ static void do_fill_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int totnode)
   };
 
   TaskParallelSettings settings;
-  BKE_pbvh_parallel_range_settings(&settings, (sd->flags & SCULPT_USE_OPENMP), totnode);
+  BKE_pbvh_parallel_range_settings(&settings, true, totnode);
   BLI_task_parallel_range(0, totnode, &data, do_fill_brush_task_cb_ex, &settings);
 }
 
@@ -4937,7 +4968,7 @@ static void do_scrape_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int totnod
   };
 
   TaskParallelSettings settings;
-  BKE_pbvh_parallel_range_settings(&settings, (sd->flags & SCULPT_USE_OPENMP), totnode);
+  BKE_pbvh_parallel_range_settings(&settings, true, totnode);
   BLI_task_parallel_range(0, totnode, &data, do_scrape_brush_task_cb_ex, &settings);
 }
 
@@ -5110,7 +5141,7 @@ static void do_clay_thumb_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int to
   };
 
   TaskParallelSettings settings;
-  BKE_pbvh_parallel_range_settings(&settings, (sd->flags & SCULPT_USE_OPENMP), totnode);
+  BKE_pbvh_parallel_range_settings(&settings, true, totnode);
   BLI_task_parallel_range(0, totnode, &data, do_clay_thumb_brush_task_cb_ex, &settings);
 }
 
@@ -5182,7 +5213,7 @@ static void do_gravity(Sculpt *sd, Object *ob, PBVHNode **nodes, int totnode, fl
   };
 
   TaskParallelSettings settings;
-  BKE_pbvh_parallel_range_settings(&settings, (sd->flags & SCULPT_USE_OPENMP), totnode);
+  BKE_pbvh_parallel_range_settings(&settings, true, totnode);
   BLI_task_parallel_range(0, totnode, &data, do_gravity_task_cb_ex, &settings);
 }
 
@@ -5408,7 +5439,7 @@ static void do_brush_action(Sculpt *sd, Object *ob, Brush *brush, UnifiedPaintSe
     };
 
     TaskParallelSettings settings;
-    BKE_pbvh_parallel_range_settings(&settings, (sd->flags & SCULPT_USE_OPENMP), totnode);
+    BKE_pbvh_parallel_range_settings(&settings, true, totnode);
     BLI_task_parallel_range(0, totnode, &task_data, do_brush_action_task_cb, &settings);
 
     if (sculpt_brush_needs_normal(ss, brush)) {
@@ -5671,7 +5702,7 @@ static void sculpt_combine_proxies(Sculpt *sd, Object *ob)
     };
 
     TaskParallelSettings settings;
-    BKE_pbvh_parallel_range_settings(&settings, (sd->flags & SCULPT_USE_OPENMP), totnode);
+    BKE_pbvh_parallel_range_settings(&settings, true, totnode);
     BLI_task_parallel_range(0, totnode, &data, sculpt_combine_proxies_task_cb, &settings);
   }
 
@@ -5759,7 +5790,7 @@ void SCULPT_flush_stroke_deform(Sculpt *sd, Object *ob, bool is_proxy_used)
     };
 
     TaskParallelSettings settings;
-    BKE_pbvh_parallel_range_settings(&settings, (sd->flags & SCULPT_USE_OPENMP), totnode);
+    BKE_pbvh_parallel_range_settings(&settings, true, totnode);
     BLI_task_parallel_range(0, totnode, &data, SCULPT_flush_stroke_deform_task_cb, &settings);
 
     if (vertCos) {
@@ -7115,6 +7146,9 @@ void SCULPT_flush_update_done(const bContext *C, Object *ob, SculptUpdateType up
 
   if (update_flags & SCULPT_UPDATE_COORDS) {
     BKE_pbvh_update_bounds(ss->pbvh, PBVH_UpdateOriginalBB);
+
+    /* Coordinates were modified, so fake neighbors are not longer valid. */
+    SCULPT_fake_neighbors_free(ob);
   }
 
   if (update_flags & SCULPT_UPDATE_MASK) {
@@ -7440,16 +7474,16 @@ static int sculpt_set_persistent_base_exec(bContext *C, wmOperator *UNUSED(op))
     SCULPT_vertex_random_access_init(ss);
     BKE_sculpt_update_object_for_edit(depsgraph, ob, false, false, false);
 
-    MEM_SAFE_FREE(ss->layer_base);
+    MEM_SAFE_FREE(ss->persistent_base);
 
     const int totvert = SCULPT_vertex_count_get(ss);
-    ss->layer_base = MEM_mallocN(sizeof(SculptLayerPersistentBase) * totvert,
-                                 "layer persistent base");
+    ss->persistent_base = MEM_mallocN(sizeof(SculptPersistentBase) * totvert,
+                                      "layer persistent base");
 
     for (int i = 0; i < totvert; i++) {
-      copy_v3_v3(ss->layer_base[i].co, SCULPT_vertex_co_get(ss, i));
-      SCULPT_vertex_normal_get(ss, i, ss->layer_base[i].no);
-      ss->layer_base[i].disp = 0.0f;
+      copy_v3_v3(ss->persistent_base[i].co, SCULPT_vertex_co_get(ss, i));
+      SCULPT_vertex_normal_get(ss, i, ss->persistent_base[i].no);
+      ss->persistent_base[i].disp = 0.0f;
     }
   }
 
@@ -8109,6 +8143,7 @@ static int sculpt_sample_color_invoke(bContext *C,
                                       const wmEvent *UNUSED(e))
 {
   Sculpt *sd = CTX_data_tool_settings(C)->sculpt;
+  Scene *scene = CTX_data_scene(C);
   Object *ob = CTX_data_active_object(C);
   Brush *brush = BKE_paint_brush(&sd->paint);
   SculptSession *ss = ob->sculpt;
@@ -8117,10 +8152,15 @@ static int sculpt_sample_color_invoke(bContext *C,
   if (!active_vertex_color) {
     return OPERATOR_CANCELLED;
   }
-  brush->rgb[0] = active_vertex_color[0];
-  brush->rgb[1] = active_vertex_color[1];
-  brush->rgb[2] = active_vertex_color[2];
-  brush->alpha = active_vertex_color[3];
+
+  float color_srgb[3];
+  copy_v3_v3(color_srgb, active_vertex_color);
+  IMB_colormanagement_scene_linear_to_srgb_v3(color_srgb);
+  BKE_brush_color_set(scene, brush, color_srgb);
+  BKE_brush_alpha_set(scene, brush, active_vertex_color[3]);
+
+  WM_event_add_notifier(C, NC_BRUSH | NA_EDITED, brush);
+
   return OPERATOR_FINISHED;
 }
 
@@ -8136,6 +8176,251 @@ static void SCULPT_OT_sample_color(wmOperatorType *ot)
   ot->poll = SCULPT_mode_poll;
 
   ot->flag = OPTYPE_REGISTER;
+}
+
+/* Fake Neighbors. */
+/* This allows the sculpt tools to work on meshes with multiple connected components as they had
+ * only one connected component. When initialized and enabled, the sculpt API will return extra
+ * connectivity neighbors that are not in the real mesh. These neighbors are calculated for each
+ * vertex using the minimun distance to a vertex that is in a different connected component. */
+
+/* The fake neighbors first need to be ensured to be initialized.
+ * After that tools which needs fake neighbors functionality need to
+ * temporarily enable it:
+ *
+ *   void my_awesome_sculpt_tool() {
+ *     SCULPT_fake_neighbors_ensure(sd, object, brush->disconnected_distance_max);
+ *     SCULPT_fake_neighbors_enable(ob);
+ *
+ *     ... Logic of the tool ...
+ *     SCULPT_fake_neighbors_disable(ob);
+ *   }
+ *
+ * Such approach allows to keep all the connectivity information ready for reuse
+ * (withouy having lag prior to every stroke), but also makes it so the affect
+ * is localized to a specific brushes and tools only. */
+
+enum {
+  SCULPT_TOPOLOGY_ID_NONE,
+  SCULPT_TOPOLOGY_ID_DEFAULT,
+};
+
+static int SCULPT_vertex_get_connected_component(SculptSession *ss, int index)
+{
+  if (ss->vertex_info.connected_component) {
+    return ss->vertex_info.connected_component[index];
+  }
+  return SCULPT_TOPOLOGY_ID_DEFAULT;
+}
+
+static void SCULPT_fake_neighbor_init(SculptSession *ss, const float max_dist)
+{
+  const int totvert = SCULPT_vertex_count_get(ss);
+  ss->fake_neighbors.fake_neighbor_index = MEM_malloc_arrayN(
+      totvert, sizeof(int), "fake neighbor");
+  for (int i = 0; i < totvert; i++) {
+    ss->fake_neighbors.fake_neighbor_index[i] = FAKE_NEIGHBOR_NONE;
+  }
+
+  ss->fake_neighbors.current_max_distance = max_dist;
+}
+
+static void SCULPT_fake_neighbor_add(SculptSession *ss, int v_index_a, int v_index_b)
+{
+  if (ss->fake_neighbors.fake_neighbor_index[v_index_a] == FAKE_NEIGHBOR_NONE) {
+    ss->fake_neighbors.fake_neighbor_index[v_index_a] = v_index_b;
+    ss->fake_neighbors.fake_neighbor_index[v_index_b] = v_index_a;
+  }
+}
+
+static void sculpt_pose_fake_neighbors_free(SculptSession *ss)
+{
+  MEM_SAFE_FREE(ss->fake_neighbors.fake_neighbor_index);
+}
+
+typedef struct NearestVertexFakeNeighborTLSData {
+  int nearest_vertex_index;
+  float nearest_vertex_distance_squared;
+  int current_topology_id;
+} NearestVertexFakeNeighborTLSData;
+
+static void do_fake_neighbor_search_task_cb(void *__restrict userdata,
+                                            const int n,
+                                            const TaskParallelTLS *__restrict tls)
+{
+  SculptThreadedTaskData *data = userdata;
+  SculptSession *ss = data->ob->sculpt;
+  NearestVertexFakeNeighborTLSData *nvtd = tls->userdata_chunk;
+  PBVHVertexIter vd;
+
+  BKE_pbvh_vertex_iter_begin(ss->pbvh, data->nodes[n], vd, PBVH_ITER_UNIQUE)
+  {
+    int vd_topology_id = SCULPT_vertex_get_connected_component(ss, vd.index);
+    if (vd_topology_id != nvtd->current_topology_id &&
+        ss->fake_neighbors.fake_neighbor_index[vd.index] == FAKE_NEIGHBOR_NONE) {
+      float distance_squared = len_squared_v3v3(vd.co, data->nearest_vertex_search_co);
+      if (distance_squared < nvtd->nearest_vertex_distance_squared &&
+          distance_squared < data->max_distance_squared) {
+        nvtd->nearest_vertex_index = vd.index;
+        nvtd->nearest_vertex_distance_squared = distance_squared;
+      }
+    }
+  }
+  BKE_pbvh_vertex_iter_end;
+}
+
+static void fake_neighbor_search_reduce(const void *__restrict UNUSED(userdata),
+                                        void *__restrict chunk_join,
+                                        void *__restrict chunk)
+{
+  NearestVertexFakeNeighborTLSData *join = chunk_join;
+  NearestVertexFakeNeighborTLSData *nvtd = chunk;
+  if (join->nearest_vertex_index == -1) {
+    join->nearest_vertex_index = nvtd->nearest_vertex_index;
+    join->nearest_vertex_distance_squared = nvtd->nearest_vertex_distance_squared;
+  }
+  else if (nvtd->nearest_vertex_distance_squared < join->nearest_vertex_distance_squared) {
+    join->nearest_vertex_index = nvtd->nearest_vertex_index;
+    join->nearest_vertex_distance_squared = nvtd->nearest_vertex_distance_squared;
+  }
+}
+
+static int SCULPT_fake_neighbor_search(Sculpt *sd, Object *ob, const int index, float max_distance)
+{
+  SculptSession *ss = ob->sculpt;
+  PBVHNode **nodes = NULL;
+  int totnode;
+  SculptSearchSphereData data = {
+      .ss = ss,
+      .sd = sd,
+      .radius_squared = max_distance * max_distance,
+      .original = false,
+      .center = SCULPT_vertex_co_get(ss, index),
+  };
+  BKE_pbvh_search_gather(ss->pbvh, SCULPT_search_sphere_cb, &data, &nodes, &totnode);
+
+  if (totnode == 0) {
+    return -1;
+  }
+
+  SculptThreadedTaskData task_data = {
+      .sd = sd,
+      .ob = ob,
+      .nodes = nodes,
+      .max_distance_squared = max_distance * max_distance,
+  };
+
+  copy_v3_v3(task_data.nearest_vertex_search_co, SCULPT_vertex_co_get(ss, index));
+
+  NearestVertexFakeNeighborTLSData nvtd;
+  nvtd.nearest_vertex_index = -1;
+  nvtd.nearest_vertex_distance_squared = FLT_MAX;
+  nvtd.current_topology_id = SCULPT_vertex_get_connected_component(ss, index);
+
+  TaskParallelSettings settings;
+  BKE_pbvh_parallel_range_settings(&settings, true, totnode);
+  settings.func_reduce = fake_neighbor_search_reduce;
+  settings.userdata_chunk = &nvtd;
+  settings.userdata_chunk_size = sizeof(NearestVertexFakeNeighborTLSData);
+  BLI_task_parallel_range(0, totnode, &task_data, do_fake_neighbor_search_task_cb, &settings);
+
+  MEM_SAFE_FREE(nodes);
+
+  return nvtd.nearest_vertex_index;
+}
+
+typedef struct SculptTopologyIDFloodFillData {
+  int next_id;
+} SculptTopologyIDFloodFillData;
+
+static bool SCULPT_connected_components_floodfill_cb(
+    SculptSession *ss, int from_v, int to_v, bool UNUSED(is_duplicate), void *userdata)
+{
+  SculptTopologyIDFloodFillData *data = userdata;
+  ss->vertex_info.connected_component[from_v] = data->next_id;
+  ss->vertex_info.connected_component[to_v] = data->next_id;
+  return true;
+}
+
+void SCULPT_connected_components_ensure(Object *ob)
+{
+  SculptSession *ss = ob->sculpt;
+
+  /* Topology IDs already initialized. They only need to be recalculated when the PBVH is rebuild.
+   */
+  if (ss->vertex_info.connected_component) {
+    return;
+  }
+
+  const int totvert = SCULPT_vertex_count_get(ss);
+  ss->vertex_info.connected_component = MEM_malloc_arrayN(totvert, sizeof(int), "topology ID");
+
+  for (int i = 0; i < totvert; i++) {
+    ss->vertex_info.connected_component[i] = SCULPT_TOPOLOGY_ID_NONE;
+  }
+
+  int next_id = 0;
+  for (int i = 0; i < totvert; i++) {
+    if (ss->vertex_info.connected_component[i] == SCULPT_TOPOLOGY_ID_NONE) {
+      SculptFloodFill flood;
+      SCULPT_floodfill_init(ss, &flood);
+      SCULPT_floodfill_add_initial(&flood, i);
+      SculptTopologyIDFloodFillData data;
+      data.next_id = next_id;
+      SCULPT_floodfill_execute(ss, &flood, SCULPT_connected_components_floodfill_cb, &data);
+      SCULPT_floodfill_free(&flood);
+      next_id++;
+    }
+  }
+}
+
+void SCULPT_fake_neighbors_ensure(Sculpt *sd, Object *ob, const float max_dist)
+{
+  SculptSession *ss = ob->sculpt;
+  const int totvert = SCULPT_vertex_count_get(ss);
+
+  /* Fake neighbors were already initialized with the same distance, so no need to be recalculated.
+   */
+  if (ss->fake_neighbors.fake_neighbor_index &&
+      ss->fake_neighbors.current_max_distance == max_dist) {
+    return;
+  }
+
+  SCULPT_connected_components_ensure(ob);
+  SCULPT_fake_neighbor_init(ss, max_dist);
+
+  for (int i = 0; i < totvert; i++) {
+    const int from_v = i;
+
+    /* This vertex does not have a fake neighbor yet, seach one for it. */
+    if (ss->fake_neighbors.fake_neighbor_index[from_v] == FAKE_NEIGHBOR_NONE) {
+      const int to_v = SCULPT_fake_neighbor_search(sd, ob, from_v, max_dist);
+      if (to_v != -1) {
+        /* Add the fake neighbor if available. */
+        SCULPT_fake_neighbor_add(ss, from_v, to_v);
+      }
+    }
+  }
+}
+
+void SCULPT_fake_neighbors_enable(Object *ob)
+{
+  SculptSession *ss = ob->sculpt;
+  BLI_assert(ss->fake_neighbors.fake_neighbor_index != NULL);
+  ss->fake_neighbors.use_fake_neighbors = true;
+}
+
+void SCULPT_fake_neighbors_disable(Object *ob)
+{
+  SculptSession *ss = ob->sculpt;
+  BLI_assert(ss->fake_neighbors.fake_neighbor_index != NULL);
+  ss->fake_neighbors.use_fake_neighbors = false;
+}
+
+void SCULPT_fake_neighbors_free(Object *ob)
+{
+  SculptSession *ss = ob->sculpt;
+  sculpt_pose_fake_neighbors_free(ss);
 }
 
 void ED_operatortypes_sculpt(void)

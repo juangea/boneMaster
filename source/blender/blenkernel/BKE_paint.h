@@ -283,11 +283,27 @@ typedef struct SculptClothSimulation {
 
 } SculptClothSimulation;
 
-typedef struct SculptLayerPersistentBase {
+typedef struct SculptPersistentBase {
   float co[3];
   float no[3];
   float disp;
-} SculptLayerPersistentBase;
+} SculptPersistentBase;
+
+typedef struct SculptVertexInfo {
+  /* Idexed by vertex, stores and ID of its topologycally connected component. */
+  int *connected_component;
+} SculptVertexInfo;
+
+typedef struct SculptFakeNeighbors {
+  bool use_fake_neighbors;
+
+  /* Max distance used to calculate neighborhood information. */
+  float current_max_distance;
+
+  /* Idexed by vertex, stores the vertex index of its fake neighbor if available. */
+  int *fake_neighbor_index;
+
+} SculptFakeNeighbors;
 
 /* Session data (mode-specific) */
 
@@ -366,6 +382,7 @@ typedef struct SculptSession {
   /* TODO(jbakker): Replace rv3d adn v3d with ViewContext */
   struct RegionView3D *rv3d;
   struct View3D *v3d;
+  struct Scene *scene;
 
   /* Dynamic mesh preview */
   int *preview_vert_index_list;
@@ -375,9 +392,12 @@ typedef struct SculptSession {
   float pose_origin[3];
   SculptPoseIKChain *pose_ik_chain_preview;
 
-  /* Layer brush persistence between strokes */
+  /* Mesh State Persistence */
   /* This is freed with the PBVH, so it is always in sync with the mesh. */
-  SculptLayerPersistentBase *layer_base;
+  SculptPersistentBase *persistent_base;
+
+  SculptVertexInfo vertex_info;
+  SculptFakeNeighbors fake_neighbors;
 
   /* Transform operator */
   float pivot_pos[3];

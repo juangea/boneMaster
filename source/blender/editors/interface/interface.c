@@ -1504,7 +1504,7 @@ static void ui_menu_block_set_keymaps(const bContext *C, uiBlock *block)
 
 void ui_but_override_flag(uiBut *but)
 {
-  const int override_status = RNA_property_override_library_status(
+  const uint override_status = RNA_property_override_library_status(
       &but->rnapoin, but->rnaprop, but->rnaindex);
 
   if (override_status & RNA_OVERRIDE_STATUS_OVERRIDDEN) {
@@ -6422,7 +6422,7 @@ void UI_but_func_search_set_context_menu(uiBut *but, uiButSearchContextMenuFn co
 }
 
 /**
- * \param separator_string: when not NULL, this string is used as a separator,
+ * \param search_sep_string: when not NULL, this string is used as a separator,
  * showing the icon and highlighted text after the last instance of this string.
  */
 void UI_but_func_search_set_sep_string(uiBut *but, const char *search_sep_string)

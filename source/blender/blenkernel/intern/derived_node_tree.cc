@@ -20,12 +20,13 @@
 
 #define UNINITIALIZED_ID UINT32_MAX
 
-namespace BKE {
+namespace blender {
+namespace bke {
 
 static const NodeTreeRef &get_tree_ref(NodeTreeRefMap &node_tree_refs, bNodeTree *btree)
 {
-  return *node_tree_refs.lookup_or_add_cb(
-      btree, [&]() { return blender::make_unique<NodeTreeRef>(btree); });
+  return *node_tree_refs.lookup_or_add_cb(btree,
+                                          [&]() { return std::make_unique<NodeTreeRef>(btree); });
 }
 
 DerivedNodeTree::DerivedNodeTree(bNodeTree *btree, NodeTreeRefMap &node_tree_refs) : m_btree(btree)
@@ -173,7 +174,7 @@ BLI_NOINLINE void DerivedNodeTree::relink_group_inputs(const NodeTreeRef &group_
                                                        Span<DNode *> nodes_by_id,
                                                        DNode &group_node)
 {
-  Span<const NodeRef *> node_refs = group_ref.nodes_with_idname("NodeGroupInput");
+  Span<const NodeRef *> node_refs = group_ref.nodes_by_type("NodeGroupInput");
   if (node_refs.size() == 0) {
     return;
   }
@@ -220,7 +221,7 @@ BLI_NOINLINE void DerivedNodeTree::relink_group_outputs(const NodeTreeRef &group
                                                         Span<DNode *> nodes_by_id,
                                                         DNode &group_node)
 {
-  Span<const NodeRef *> node_refs = group_ref.nodes_with_idname("NodeGroupOutput");
+  Span<const NodeRef *> node_refs = group_ref.nodes_by_type("NodeGroupOutput");
   if (node_refs.size() == 0) {
     return;
   }
@@ -320,7 +321,8 @@ BLI_NOINLINE void DerivedNodeTree::store_in_this_and_init_ids(
     DNode *node = m_nodes_by_id[node_index];
     node->m_id = node_index;
 
-    m_nodes_by_idname.lookup_or_add_default(node->idname()).append(node);
+    const bNodeType *nodetype = node->m_node_ref->bnode()->typeinfo;
+    m_nodes_by_type.lookup_or_add_default(nodetype).append(node);
 
     for (DInputSocket *socket : node->m_inputs) {
       socket->m_id = m_sockets_by_id.append_and_get_index(socket);
@@ -356,19 +358,17 @@ DerivedNodeTree::~DerivedNodeTree()
   }
 }
 
-namespace Dot = blender::DotExport;
-
-static Dot::Cluster *get_cluster_for_parent(Dot::DirectedGraph &graph,
-                                            Map<const DParentNode *, Dot::Cluster *> &clusters,
+static dot::Cluster *get_cluster_for_parent(dot::DirectedGraph &graph,
+                                            Map<const DParentNode *, dot::Cluster *> &clusters,
                                             const DParentNode *parent)
 {
   if (parent == nullptr) {
     return nullptr;
   }
   return clusters.lookup_or_add_cb(parent, [&]() {
-    Dot::Cluster *parent_cluster = get_cluster_for_parent(graph, clusters, parent->parent());
+    dot::Cluster *parent_cluster = get_cluster_for_parent(graph, clusters, parent->parent());
     bNodeTree *btree = (bNodeTree *)parent->node_ref().bnode()->id;
-    Dot::Cluster *new_cluster = &graph.new_cluster(parent->node_ref().name() + " / " +
+    dot::Cluster *new_cluster = &graph.new_cluster(parent->node_ref().name() + " / " +
                                                    StringRef(btree->id.name + 2));
     new_cluster->set_parent_cluster(parent_cluster);
     return new_cluster;
@@ -377,15 +377,15 @@ static Dot::Cluster *get_cluster_for_parent(Dot::DirectedGraph &graph,
 
 std::string DerivedNodeTree::to_dot() const
 {
-  Dot::DirectedGraph digraph;
-  digraph.set_rankdir(Dot::Attr_rankdir::LeftToRight);
+  dot::DirectedGraph digraph;
+  digraph.set_rankdir(dot::Attr_rankdir::LeftToRight);
 
-  Map<const DNode *, Dot::NodeWithSocketsRef> dot_nodes;
-  Map<const DGroupInput *, Dot::NodeWithSocketsRef> dot_group_inputs;
-  Map<const DParentNode *, Dot::Cluster *> dot_clusters;
+  Map<const DNode *, dot::NodeWithSocketsRef> dot_nodes;
+  Map<const DGroupInput *, dot::NodeWithSocketsRef> dot_group_inputs;
+  Map<const DParentNode *, dot::Cluster *> dot_clusters;
 
   for (const DNode *node : m_nodes_by_id) {
-    Dot::Node &dot_node = digraph.new_node("");
+    dot::Node &dot_node = digraph.new_node("");
     dot_node.set_background_color("white");
 
     Vector<std::string> input_names;
@@ -398,37 +398,37 @@ std::string DerivedNodeTree::to_dot() const
     }
 
     dot_nodes.add_new(node,
-                      Dot::NodeWithSocketsRef(dot_node, node->name(), input_names, output_names));
+                      dot::NodeWithSocketsRef(dot_node, node->name(), input_names, output_names));
 
-    Dot::Cluster *cluster = get_cluster_for_parent(digraph, dot_clusters, node->parent());
+    dot::Cluster *cluster = get_cluster_for_parent(digraph, dot_clusters, node->parent());
     dot_node.set_parent_cluster(cluster);
   }
 
   for (const DGroupInput *group_input : m_group_inputs) {
-    Dot::Node &dot_node = digraph.new_node("");
+    dot::Node &dot_node = digraph.new_node("");
     dot_node.set_background_color("white");
 
     std::string group_input_name = group_input->name();
     dot_group_inputs.add_new(
-        group_input, Dot::NodeWithSocketsRef(dot_node, "Group Input", {}, {group_input_name}));
+        group_input, dot::NodeWithSocketsRef(dot_node, "Group Input", {}, {group_input_name}));
 
-    Dot::Cluster *cluster = get_cluster_for_parent(digraph, dot_clusters, group_input->parent());
+    dot::Cluster *cluster = get_cluster_for_parent(digraph, dot_clusters, group_input->parent());
     dot_node.set_parent_cluster(cluster);
   }
 
   for (const DNode *to_node : m_nodes_by_id) {
-    Dot::NodeWithSocketsRef &to_dot_node = dot_nodes.lookup(to_node);
+    dot::NodeWithSocketsRef &to_dot_node = dot_nodes.lookup(to_node);
 
     for (const DInputSocket *to_socket : to_node->inputs()) {
       for (const DOutputSocket *from_socket : to_socket->linked_sockets()) {
         const DNode *from_node = &from_socket->node();
-        Dot::NodeWithSocketsRef &from_dot_node = dot_nodes.lookup(from_node);
+        dot::NodeWithSocketsRef &from_dot_node = dot_nodes.lookup(from_node);
 
         digraph.new_edge(from_dot_node.output(from_socket->index()),
                          to_dot_node.input(to_socket->index()));
       }
       for (const DGroupInput *group_input : to_socket->linked_group_inputs()) {
-        Dot::NodeWithSocketsRef &from_dot_node = dot_group_inputs.lookup(group_input);
+        dot::NodeWithSocketsRef &from_dot_node = dot_group_inputs.lookup(group_input);
 
         digraph.new_edge(from_dot_node.output(0), to_dot_node.input(to_socket->index()));
       }
@@ -439,4 +439,5 @@ std::string DerivedNodeTree::to_dot() const
   return digraph.to_dot_string();
 }
 
-}  // namespace BKE
+}  // namespace bke
+}  // namespace blender
