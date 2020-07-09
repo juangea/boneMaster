@@ -43,7 +43,7 @@ class ABCGenericMeshWriter : public ABCAbstractWriter {
   Alembic::AbcGeom::OSubDSchema abc_subdiv_schema_;
 
   /* Determines whether a poly mesh or a subdivision surface is exported.
-   * The value is set by an export option but only true if there is a subsdivision modifier on the
+   * The value is set by an export option but only true if there is a subdivision modifier on the
    * exported object. */
   bool is_subd_;
   ModifierData *subsurf_modifier_;
@@ -56,7 +56,7 @@ class ABCGenericMeshWriter : public ABCAbstractWriter {
   virtual ~ABCGenericMeshWriter();
 
   virtual void create_alembic_objects(const HierarchyContext *context) override;
-  virtual const Alembic::Abc::OObject get_alembic_object() const;
+  virtual const Alembic::Abc::OObject get_alembic_object() const override;
 
  protected:
   virtual bool is_supported(const HierarchyContext *context) const override;

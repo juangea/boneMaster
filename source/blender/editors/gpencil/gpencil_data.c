@@ -176,13 +176,11 @@ static int gpencil_data_unlink_exec(bContext *C, wmOperator *op)
     BKE_report(op->reports, RPT_ERROR, "Nowhere for grease pencil data to go");
     return OPERATOR_CANCELLED;
   }
-  else {
-    /* just unlink datablock now, decreasing its user count */
-    bGPdata *gpd = (*gpd_ptr);
+  /* just unlink datablock now, decreasing its user count */
+  bGPdata *gpd = (*gpd_ptr);
 
-    id_us_min(&gpd->id);
-    *gpd_ptr = NULL;
-  }
+  id_us_min(&gpd->id);
+  *gpd_ptr = NULL;
 
   /* notifiers */
   WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED, NULL);
@@ -1125,9 +1123,7 @@ static int gpencil_isolate_layer_exec(bContext *C, wmOperator *op)
       if (gpl == layer) {
         continue;
       }
-      else {
-        gpl->flag |= flags;
-      }
+      gpl->flag |= flags;
     }
   }
   else {
@@ -2534,8 +2530,8 @@ static void gpencil_joined_fix_animdata_cb(ID *id, FCurve *fcu, void *user_data)
         if (dtar->id == src_id) {
           dtar->id = dst_id;
 
-          /* Also check on the subtarget...
-           * We duplicate the logic from drivers_path_rename_fix() here, with our own
+          /* Also check on the sub-target.
+           * We duplicate the logic from #drivers_path_rename_fix() here, with our own
            * little twists so that we know that it isn't going to clobber the wrong data
            */
           if (dtar->rna_path && strstr(dtar->rna_path, "layers[")) {
@@ -2913,9 +2909,7 @@ static int gpencil_material_isolate_exec(bContext *C, wmOperator *op)
       if (gp_style == active_color) {
         continue;
       }
-      else {
-        gp_style->flag |= flags;
-      }
+      gp_style->flag |= flags;
       DEG_id_tag_update(&ma->id, ID_RECALC_COPY_ON_WRITE);
     }
   }

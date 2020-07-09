@@ -183,6 +183,10 @@ bool SCULPT_vertex_any_face_set_visible_get(SculptSession *ss, int index);
 void SCULPT_face_sets_visibility_invert(SculptSession *ss);
 void SCULPT_face_sets_visibility_all_set(SculptSession *ss, bool visible);
 
+bool SCULPT_stroke_is_main_symmetry_pass(struct StrokeCache *cache);
+bool SCULPT_stroke_is_first_brush_step(struct StrokeCache *cache);
+bool SCULPT_stroke_is_first_brush_step_of_symmetry_pass(struct StrokeCache *cache);
+
 /* Sculpt Original Data */
 typedef struct {
   struct BMLog *bm_log;
@@ -628,6 +632,16 @@ typedef struct SculptThreadedTaskData {
   float dirty_mask_min;
   float dirty_mask_max;
   bool dirty_mask_dirty_only;
+
+  /* Mask By Color Tool */
+
+  float mask_by_color_threshold;
+  bool mask_by_color_invert;
+  bool mask_by_color_preserve_mask;
+
+  /* Index of the vertex that is going to be used as a reference for the colors. */
+  int mask_by_color_vertex;
+  float *mask_by_color_floodfill;
 
   int face_set;
   int filter_undo_type;

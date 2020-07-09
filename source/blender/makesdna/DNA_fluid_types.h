@@ -427,7 +427,7 @@ typedef struct FluidDomainSettings {
 
   /* -- Runtime-only fields (from here on). -- */
 
-  struct FluidModifierData *mmd; /* For fast RNA access. */
+  struct FluidModifierData *fmd; /* For fast RNA access. */
   struct MANTA *fluid;
   struct MANTA *fluid_old; /* Adaptive domain needs access to old fluid state. */
   void *fluid_mutex;
@@ -580,6 +580,7 @@ typedef struct FluidDomainSettings {
   int cache_frame_pause_mesh;
   int cache_frame_pause_particles;
   int cache_frame_pause_guide;
+  int cache_frame_offset;
   int cache_flag;
   char cache_mesh_format;
   char cache_data_format;
@@ -589,7 +590,7 @@ typedef struct FluidDomainSettings {
   char error[64]; /* Bake error description. */
   short cache_type;
   char cache_id[4]; /* Run-time only */
-  char _pad8[6];
+  char _pad8[2];
 
   /* Time options. */
   float dt;
@@ -688,7 +689,7 @@ typedef struct FluidFlowSettings {
   /* -- Runtime-only fields (from here on). -- */
 
   /* For fast RNA access. */
-  struct FluidModifierData *mmd;
+  struct FluidModifierData *fmd;
   struct Mesh *mesh;
   struct ParticleSystem *psys;
   struct Tex *noise_texture;
@@ -764,7 +765,7 @@ typedef struct FluidEffectorSettings {
   /* -- Runtime-only fields (from here on). -- */
 
   /* For fast RNA access. */
-  struct FluidModifierData *mmd;
+  struct FluidModifierData *fmd;
   struct Mesh *mesh;
   float *verts_old;
   int numverts;

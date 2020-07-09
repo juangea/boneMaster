@@ -526,8 +526,11 @@ static void viewRedrawPost(bContext *C, TransInfo *t)
     }
 
     /* redraw UV editor */
-    if (ELEM(t->mode, TFM_VERT_SLIDE, TFM_EDGE_SLIDE) &&
-        (t->settings->uvcalc_flag & UVCALC_TRANSFORM_CORRECT)) {
+    const char uvcalc_correct_flag = ELEM(t->mode, TFM_VERT_SLIDE, TFM_EDGE_SLIDE) ?
+                                         UVCALC_TRANSFORM_CORRECT_SLIDE :
+                                         UVCALC_TRANSFORM_CORRECT;
+
+    if ((t->data_type == TC_MESH_VERTS) && (t->settings->uvcalc_flag & uvcalc_correct_flag)) {
       WM_event_add_notifier(C, NC_GEOM | ND_DATA, NULL);
     }
 
@@ -670,10 +673,10 @@ static bool transform_modal_item_poll(const wmOperator *op, int value)
       if (t->spacetype != SPACE_VIEW3D) {
         return false;
       }
-      else if ((t->tsnap.mode & ~(SCE_SNAP_MODE_INCREMENT | SCE_SNAP_MODE_GRID)) == 0) {
+      if ((t->tsnap.mode & ~(SCE_SNAP_MODE_INCREMENT | SCE_SNAP_MODE_GRID)) == 0) {
         return false;
       }
-      else if (!validSnap(t)) {
+      if (!validSnap(t)) {
         return false;
       }
       break;
@@ -1414,9 +1417,7 @@ int transformEvent(TransInfo *t, const wmEvent *event)
   if (handled || t->redraw) {
     return 0;
   }
-  else {
-    return OPERATOR_PASS_THROUGH;
-  }
+  return OPERATOR_PASS_THROUGH;
 }
 
 bool calculateTransformCenter(bContext *C, int centerMode, float cent3d[3], float cent2d[2])
@@ -1784,7 +1785,7 @@ void saveTransform(bContext *C, TransInfo *t, wmOperator *op)
 
   if ((prop = RNA_struct_find_property(op->ptr, "correct_uv"))) {
     RNA_property_boolean_set(
-        op->ptr, prop, (t->settings->uvcalc_flag & UVCALC_TRANSFORM_CORRECT) != 0);
+        op->ptr, prop, (t->settings->uvcalc_flag & UVCALC_TRANSFORM_CORRECT_SLIDE) != 0);
   }
 }
 

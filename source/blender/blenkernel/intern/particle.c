@@ -3611,7 +3611,8 @@ void psys_mat_hair_to_global(
 /************************************************/
 /*          ParticleSettings handling           */
 /************************************************/
-ModifierData *object_add_particle_system(Main *bmain, Scene *scene, Object *ob, const char *name)
+static ModifierData *object_add_or_copy_particle_system(
+    Main *bmain, Scene *scene, Object *ob, const char *name, const ParticleSystem *psys_orig)
 {
   ParticleSystem *psys;
   ModifierData *md;
@@ -3622,7 +3623,7 @@ ModifierData *object_add_particle_system(Main *bmain, Scene *scene, Object *ob, 
   }
 
   if (name == NULL) {
-    name = DATA_("ParticleSettings");
+    name = (psys_orig != NULL) ? psys_orig->name : DATA_("ParticleSettings");
   }
 
   psys = ob->particlesystem.first;
@@ -3635,8 +3636,13 @@ ModifierData *object_add_particle_system(Main *bmain, Scene *scene, Object *ob, 
   BLI_addtail(&ob->particlesystem, psys);
   psys_unique_name(ob, psys, name);
 
-  psys->part = BKE_particlesettings_add(bmain, psys->name);
-
+  if (psys_orig != NULL) {
+    psys->part = psys_orig->part;
+    id_us_plus(&psys->part->id);
+  }
+  else {
+    psys->part = BKE_particlesettings_add(bmain, psys->name);
+  }
   md = BKE_modifier_new(eModifierType_ParticleSystem);
   BLI_strncpy(md->name, psys->name, sizeof(md->name));
   BKE_modifier_unique_name(&ob->modifiers, md);
@@ -3656,6 +3662,20 @@ ModifierData *object_add_particle_system(Main *bmain, Scene *scene, Object *ob, 
 
   return md;
 }
+
+ModifierData *object_add_particle_system(Main *bmain, Scene *scene, Object *ob, const char *name)
+{
+  return object_add_or_copy_particle_system(bmain, scene, ob, name, NULL);
+}
+
+ModifierData *object_copy_particle_system(Main *bmain,
+                                          Scene *scene,
+                                          Object *ob,
+                                          const ParticleSystem *psys_orig)
+{
+  return object_add_or_copy_particle_system(bmain, scene, ob, NULL, psys_orig);
+}
+
 void object_remove_particle_system(Main *bmain, Scene *UNUSED(scene), Object *ob)
 {
   ParticleSystem *psys = psys_get_current(ob);
@@ -3668,43 +3688,43 @@ void object_remove_particle_system(Main *bmain, Scene *UNUSED(scene), Object *ob
 
   /* Clear particle system in fluid modifier. */
   if ((md = BKE_modifiers_findby_type(ob, eModifierType_Fluid))) {
-    FluidModifierData *mmd = (FluidModifierData *)md;
+    FluidModifierData *fmd = (FluidModifierData *)md;
 
     /* Clear particle system pointer in flow settings. */
-    if ((mmd->type == MOD_FLUID_TYPE_FLOW) && mmd->flow && mmd->flow->psys) {
-      if (mmd->flow->psys == psys) {
-        mmd->flow->psys = NULL;
+    if ((fmd->type == MOD_FLUID_TYPE_FLOW) && fmd->flow && fmd->flow->psys) {
+      if (fmd->flow->psys == psys) {
+        fmd->flow->psys = NULL;
       }
     }
     /* Clear particle flag in domain settings when removing particle system manually. */
-    if (mmd->type == MOD_FLUID_TYPE_DOMAIN) {
+    if (fmd->type == MOD_FLUID_TYPE_DOMAIN) {
       if (psys->part->type == PART_FLUID_FLIP) {
-        mmd->domain->particle_type &= ~FLUID_DOMAIN_PARTICLE_FLIP;
+        fmd->domain->particle_type &= ~FLUID_DOMAIN_PARTICLE_FLIP;
       }
       if (psys->part->type == PART_FLUID_SPRAY || psys->part->type == PART_FLUID_SPRAYFOAM ||
           psys->part->type == PART_FLUID_SPRAYBUBBLE ||
           psys->part->type == PART_FLUID_SPRAYFOAMBUBBLE) {
-        mmd->domain->particle_type &= ~FLUID_DOMAIN_PARTICLE_SPRAY;
+        fmd->domain->particle_type &= ~FLUID_DOMAIN_PARTICLE_SPRAY;
       }
       if (psys->part->type == PART_FLUID_FOAM || psys->part->type == PART_FLUID_SPRAYFOAM ||
           psys->part->type == PART_FLUID_FOAMBUBBLE ||
           psys->part->type == PART_FLUID_SPRAYFOAMBUBBLE) {
-        mmd->domain->particle_type &= ~FLUID_DOMAIN_PARTICLE_FOAM;
+        fmd->domain->particle_type &= ~FLUID_DOMAIN_PARTICLE_FOAM;
       }
       if (psys->part->type == PART_FLUID_BUBBLE || psys->part->type == PART_FLUID_FOAMBUBBLE ||
           psys->part->type == PART_FLUID_SPRAYBUBBLE ||
           psys->part->type == PART_FLUID_SPRAYFOAMBUBBLE) {
-        mmd->domain->particle_type &= ~FLUID_DOMAIN_PARTICLE_BUBBLE;
+        fmd->domain->particle_type &= ~FLUID_DOMAIN_PARTICLE_BUBBLE;
       }
       if (psys->part->type == PART_FLUID_TRACER) {
-        mmd->domain->particle_type &= ~FLUID_DOMAIN_PARTICLE_TRACER;
+        fmd->domain->particle_type &= ~FLUID_DOMAIN_PARTICLE_TRACER;
       }
 
       /* Disable combined export if combined particle system was deleted. */
       if (psys->part->type == PART_FLUID_SPRAYFOAM || psys->part->type == PART_FLUID_SPRAYBUBBLE ||
           psys->part->type == PART_FLUID_FOAMBUBBLE ||
           psys->part->type == PART_FLUID_SPRAYFOAMBUBBLE) {
-        mmd->domain->sndparticle_combined_export = SNDPARTICLE_COMBINED_EXPORT_OFF;
+        fmd->domain->sndparticle_combined_export = SNDPARTICLE_COMBINED_EXPORT_OFF;
       }
     }
   }

@@ -670,12 +670,12 @@ static bool edit_constraint_poll_generic(bContext *C, StructRNA *rna_type)
 
   if (!ob) {
     CTX_wm_operator_poll_msg_set(C, "Context missing active object");
-    return 0;
+    return false;
   }
 
   if (ID_IS_LINKED(ob) || (ptr.owner_id && ID_IS_LINKED(ptr.owner_id))) {
     CTX_wm_operator_poll_msg_set(C, "Cannot edit library data");
-    return 0;
+    return false;
   }
 
   if (ID_IS_OVERRIDE_LIBRARY(ob) && ptr.data != NULL) {
@@ -683,7 +683,7 @@ static bool edit_constraint_poll_generic(bContext *C, StructRNA *rna_type)
     return (((bConstraint *)ptr.data)->flag & CONSTRAINT_OVERRIDE_LIBRARY_LOCAL) != 0;
   }
 
-  return 1;
+  return true;
 }
 
 static bool edit_constraint_poll(bContext *C)
@@ -702,7 +702,7 @@ static void edit_constraint_properties(wmOperatorType *ot)
   RNA_def_property_flag(prop, PROP_HIDDEN);
 }
 
-static int edit_constraint_invoke_properties(bContext *C, wmOperator *op)
+static bool edit_constraint_invoke_properties(bContext *C, wmOperator *op)
 {
   PointerRNA ptr = CTX_data_pointer_get_type(C, "constraint", &RNA_Constraint);
   Object *ob = (ptr.owner_id) ? (Object *)ptr.owner_id : ED_object_active_context(C);
@@ -711,7 +711,7 @@ static int edit_constraint_invoke_properties(bContext *C, wmOperator *op)
 
   if (RNA_struct_property_is_set(op->ptr, "constraint") &&
       RNA_struct_property_is_set(op->ptr, "owner")) {
-    return 1;
+    return true;
   }
 
   if (ptr.data) {
@@ -727,10 +727,10 @@ static int edit_constraint_invoke_properties(bContext *C, wmOperator *op)
       RNA_enum_set(op->ptr, "owner", EDIT_CONSTRAINT_OWNER_BONE);
     }
 
-    return 1;
+    return true;
   }
 
-  return 0;
+  return false;
 }
 
 static bConstraint *edit_constraint_property_get(wmOperator *op, Object *ob, int type)
@@ -816,9 +816,7 @@ static int stretchto_reset_invoke(bContext *C, wmOperator *op, const wmEvent *UN
   if (edit_constraint_invoke_properties(C, op)) {
     return stretchto_reset_exec(C, op);
   }
-  else {
-    return OPERATOR_CANCELLED;
-  }
+  return OPERATOR_CANCELLED;
 }
 
 void CONSTRAINT_OT_stretchto_reset(wmOperatorType *ot)
@@ -873,9 +871,7 @@ static int limitdistance_reset_invoke(bContext *C, wmOperator *op, const wmEvent
   if (edit_constraint_invoke_properties(C, op)) {
     return limitdistance_reset_exec(C, op);
   }
-  else {
-    return OPERATOR_CANCELLED;
-  }
+  return OPERATOR_CANCELLED;
 }
 
 void CONSTRAINT_OT_limitdistance_reset(wmOperatorType *ot)
@@ -953,9 +949,7 @@ static int childof_set_inverse_invoke(bContext *C, wmOperator *op, const wmEvent
   if (edit_constraint_invoke_properties(C, op)) {
     return childof_set_inverse_exec(C, op);
   }
-  else {
-    return OPERATOR_CANCELLED;
-  }
+  return OPERATOR_CANCELLED;
 }
 
 void CONSTRAINT_OT_childof_set_inverse(wmOperatorType *ot)
@@ -1004,9 +998,7 @@ static int childof_clear_inverse_invoke(bContext *C, wmOperator *op, const wmEve
   if (edit_constraint_invoke_properties(C, op)) {
     return childof_clear_inverse_exec(C, op);
   }
-  else {
-    return OPERATOR_CANCELLED;
-  }
+  return OPERATOR_CANCELLED;
 }
 
 void CONSTRAINT_OT_childof_clear_inverse(wmOperatorType *ot)
@@ -1131,9 +1123,7 @@ static int followpath_path_animate_invoke(bContext *C,
   if (edit_constraint_invoke_properties(C, op)) {
     return followpath_path_animate_exec(C, op);
   }
-  else {
-    return OPERATOR_CANCELLED;
-  }
+  return OPERATOR_CANCELLED;
 }
 
 void CONSTRAINT_OT_followpath_path_animate(wmOperatorType *ot)
@@ -1214,9 +1204,7 @@ static int objectsolver_set_inverse_invoke(bContext *C,
   if (edit_constraint_invoke_properties(C, op)) {
     return objectsolver_set_inverse_exec(C, op);
   }
-  else {
-    return OPERATOR_CANCELLED;
-  }
+  return OPERATOR_CANCELLED;
 }
 
 void CONSTRAINT_OT_objectsolver_set_inverse(wmOperatorType *ot)
@@ -1272,9 +1260,7 @@ static int objectsolver_clear_inverse_invoke(bContext *C,
   if (edit_constraint_invoke_properties(C, op)) {
     return objectsolver_clear_inverse_exec(C, op);
   }
-  else {
-    return OPERATOR_CANCELLED;
-  }
+  return OPERATOR_CANCELLED;
 }
 
 void CONSTRAINT_OT_objectsolver_clear_inverse(wmOperatorType *ot)
@@ -1423,10 +1409,8 @@ static int constraint_delete_exec(bContext *C, wmOperator *UNUSED(op))
 
     return OPERATOR_FINISHED;
   }
-  else {
-    /* couldn't remove due to some invalid data */
-    return OPERATOR_CANCELLED;
-  }
+  /* couldn't remove due to some invalid data */
+  return OPERATOR_CANCELLED;
 }
 
 void CONSTRAINT_OT_delete(wmOperatorType *ot)
@@ -1476,9 +1460,7 @@ static int constraint_move_down_invoke(bContext *C, wmOperator *op, const wmEven
   if (edit_constraint_invoke_properties(C, op)) {
     return constraint_move_down_exec(C, op);
   }
-  else {
-    return OPERATOR_CANCELLED;
-  }
+  return OPERATOR_CANCELLED;
 }
 
 void CONSTRAINT_OT_move_down(wmOperatorType *ot)
@@ -1532,9 +1514,7 @@ static int constraint_move_up_invoke(bContext *C, wmOperator *op, const wmEvent 
   if (edit_constraint_invoke_properties(C, op)) {
     return constraint_move_up_exec(C, op);
   }
-  else {
-    return OPERATOR_CANCELLED;
-  }
+  return OPERATOR_CANCELLED;
 }
 
 void CONSTRAINT_OT_move_up(wmOperatorType *ot)
@@ -1592,9 +1572,7 @@ static int constraint_move_to_index_invoke(bContext *C,
   if (edit_constraint_invoke_properties(C, op)) {
     return constraint_move_to_index_exec(C, op);
   }
-  else {
-    return OPERATOR_CANCELLED;
-  }
+  return OPERATOR_CANCELLED;
 }
 
 void CONSTRAINT_OT_move_to_index(wmOperatorType *ot)
@@ -1908,8 +1886,7 @@ static bool get_new_constraint_target(
 
           break;
         }
-        else if (((!only_curve) || (ob->type == OB_CURVE)) &&
-                 ((!only_mesh) || (ob->type == OB_MESH))) {
+        if (((!only_curve) || (ob->type == OB_CURVE)) && ((!only_mesh) || (ob->type == OB_MESH))) {
           /* set target */
           *tar_ob = ob;
           found = true;

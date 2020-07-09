@@ -794,11 +794,11 @@ void createTransEditVerts(TransInfo *t)
             t->depsgraph, scene_eval, obedit_eval, em_eval, &defmats, &defcos);
       }
 
-      /* if we still have more modifiers, also do crazyspace
-       * correction with quats, relative to the coordinates after
-       * the modifiers that support deform matrices (defcos) */
+      /* If we still have more modifiers, also do crazy-space
+       * correction with \a quats, relative to the coordinates after
+       * the modifiers that support deform matrices \a defcos. */
 
-#if 0 /* TODO, fix crazyspace+extrude so it can be enabled for general use - campbell */
+#if 0 /* TODO, fix crazy-space & extrude so it can be enabled for general use - campbell */
       if ((totleft > 0) || (totleft == -1))
 #else
       if (totleft > 0)
@@ -830,101 +830,100 @@ void createTransEditVerts(TransInfo *t)
       if (BM_elem_flag_test(eve, BM_ELEM_HIDDEN)) {
         continue;
       }
-      else {
-        int island_index = -1;
-        if (island_data.island_vert_map) {
-          const int connected_index = (dists_index && dists_index[a] != -1) ? dists_index[a] : a;
-          island_index = island_data.island_vert_map[connected_index];
+
+      int island_index = -1;
+      if (island_data.island_vert_map) {
+        const int connected_index = (dists_index && dists_index[a] != -1) ? dists_index[a] : a;
+        island_index = island_data.island_vert_map[connected_index];
+      }
+
+      if (mirror_data.vert_map && mirror_data.vert_map[a].index != -1) {
+        int elem_index = mirror_data.vert_map[a].index;
+        BMVert *v_src = BM_vert_at_index(bm, elem_index);
+
+        if (BM_elem_flag_test(eve, BM_ELEM_SELECT)) {
+          mirror_data.vert_map[a].flag |= TD_SELECTED;
         }
 
-        if (mirror_data.vert_map && mirror_data.vert_map[a].index != -1) {
-          int elem_index = mirror_data.vert_map[a].index;
-          BMVert *v_src = BM_vert_at_index(bm, elem_index);
+        td_mirror->extra = eve;
+        td_mirror->loc = eve->co;
+        copy_v3_v3(td_mirror->iloc, eve->co);
+        td_mirror->flag = mirror_data.vert_map[a].flag;
+        td_mirror->loc_src = v_src->co;
+        transdata_center_get(&island_data, island_index, td_mirror->iloc, td_mirror->center);
 
-          if (BM_elem_flag_test(eve, BM_ELEM_SELECT)) {
-            mirror_data.vert_map[a].flag |= TD_SELECTED;
-          }
+        td_mirror++;
+      }
+      else if (prop_mode || BM_elem_flag_test(eve, BM_ELEM_SELECT)) {
+        float *bweight = (cd_vert_bweight_offset != -1) ?
+                             BM_ELEM_CD_GET_VOID_P(eve, cd_vert_bweight_offset) :
+                             NULL;
 
-          td_mirror->extra = eve;
-          td_mirror->loc = eve->co;
-          copy_v3_v3(td_mirror->iloc, eve->co);
-          td_mirror->flag = mirror_data.vert_map[a].flag;
-          td_mirror->loc_src = v_src->co;
-          transdata_center_get(&island_data, island_index, td_mirror->iloc, td_mirror->center);
-
-          td_mirror++;
+        /* Do not use the island center in case we are using islands
+         * only to get axis for snap/rotate to normal... */
+        VertsToTransData(t, tob, tx, em, eve, bweight, &island_data, island_index);
+        if (tx) {
+          tx++;
         }
-        else if (prop_mode || BM_elem_flag_test(eve, BM_ELEM_SELECT)) {
-          float *bweight = (cd_vert_bweight_offset != -1) ?
-                               BM_ELEM_CD_GET_VOID_P(eve, cd_vert_bweight_offset) :
-                               NULL;
 
-          /* Do not use the island center in case we are using islands
-           * only to get axis for snap/rotate to normal... */
-          VertsToTransData(t, tob, tx, em, eve, bweight, &island_data, island_index);
-          if (tx) {
-            tx++;
-          }
+        /* selected */
+        if (BM_elem_flag_test(eve, BM_ELEM_SELECT)) {
+          tob->flag |= TD_SELECTED;
+        }
 
-          /* selected */
-          if (BM_elem_flag_test(eve, BM_ELEM_SELECT)) {
-            tob->flag |= TD_SELECTED;
-          }
-
-          if (prop_mode) {
-            if (prop_mode & T_PROP_CONNECTED) {
-              tob->dist = dists[a];
-            }
-            else {
-              tob->flag |= TD_NOTCONNECTED;
-              tob->dist = FLT_MAX;
-            }
-          }
-
-          /* CrazySpace */
-          const bool use_quats = quats && BM_elem_flag_test(eve, BM_ELEM_TAG);
-          if (use_quats || defmats) {
-            float mat[3][3], qmat[3][3], imat[3][3];
-
-            /* Use both or either quat and defmat correction. */
-            if (use_quats) {
-              quat_to_mat3(qmat, quats[BM_elem_index_get(eve)]);
-
-              if (defmats) {
-                mul_m3_series(mat, defmats[a], qmat, mtx);
-              }
-              else {
-                mul_m3_m3m3(mat, mtx, qmat);
-              }
-            }
-            else {
-              mul_m3_m3m3(mat, mtx, defmats[a]);
-            }
-
-            invert_m3_m3(imat, mat);
-
-            copy_m3_m3(tob->smtx, imat);
-            copy_m3_m3(tob->mtx, mat);
+        if (prop_mode) {
+          if (prop_mode & T_PROP_CONNECTED) {
+            tob->dist = dists[a];
           }
           else {
-            copy_m3_m3(tob->smtx, smtx);
-            copy_m3_m3(tob->mtx, mtx);
+            tob->flag |= TD_NOTCONNECTED;
+            tob->dist = FLT_MAX;
           }
-
-          if (tc->use_mirror_axis_any) {
-            if (tc->use_mirror_axis_x && fabsf(tob->loc[0]) < TRANSFORM_MAXDIST_MIRROR) {
-              tob->flag |= TD_MIRROR_EDGE_X;
-            }
-            if (tc->use_mirror_axis_y && fabsf(tob->loc[1]) < TRANSFORM_MAXDIST_MIRROR) {
-              tob->flag |= TD_MIRROR_EDGE_Y;
-            }
-            if (tc->use_mirror_axis_z && fabsf(tob->loc[2]) < TRANSFORM_MAXDIST_MIRROR) {
-              tob->flag |= TD_MIRROR_EDGE_Z;
-            }
-          }
-
-          tob++;
         }
+
+        /* CrazySpace */
+        const bool use_quats = quats && BM_elem_flag_test(eve, BM_ELEM_TAG);
+        if (use_quats || defmats) {
+          float mat[3][3], qmat[3][3], imat[3][3];
+
+          /* Use both or either quat and defmat correction. */
+          if (use_quats) {
+            quat_to_mat3(qmat, quats[BM_elem_index_get(eve)]);
+
+            if (defmats) {
+              mul_m3_series(mat, defmats[a], qmat, mtx);
+            }
+            else {
+              mul_m3_m3m3(mat, mtx, qmat);
+            }
+          }
+          else {
+            mul_m3_m3m3(mat, mtx, defmats[a]);
+          }
+
+          invert_m3_m3(imat, mat);
+
+          copy_m3_m3(tob->smtx, imat);
+          copy_m3_m3(tob->mtx, mat);
+        }
+        else {
+          copy_m3_m3(tob->smtx, smtx);
+          copy_m3_m3(tob->mtx, mtx);
+        }
+
+        if (tc->use_mirror_axis_any) {
+          if (tc->use_mirror_axis_x && fabsf(tob->loc[0]) < TRANSFORM_MAXDIST_MIRROR) {
+            tob->flag |= TD_MIRROR_EDGE_X;
+          }
+          if (tc->use_mirror_axis_y && fabsf(tob->loc[1]) < TRANSFORM_MAXDIST_MIRROR) {
+            tob->flag |= TD_MIRROR_EDGE_Y;
+          }
+          if (tc->use_mirror_axis_z && fabsf(tob->loc[2]) < TRANSFORM_MAXDIST_MIRROR) {
+            tob->flag |= TD_MIRROR_EDGE_Z;
+          }
+        }
+
+        tob++;
       }
     }
 
@@ -1068,15 +1067,28 @@ static void create_trans_vert_customdata_layer(BMVert *v,
   BLI_ghash_insert(tcld->origverts, v, r_tcld_vert);
 }
 
-void trans_mesh_customdata_correction_init(TransInfo *t, TransDataContainer *tc)
+static void trans_mesh_customdata_correction_init_container(TransInfo *t, TransDataContainer *tc)
 {
-  if (!(t->settings->uvcalc_flag & UVCALC_TRANSFORM_CORRECT)) {
-    return;
-  }
-
   if (tc->custom.type.data) {
     /* Custom data correction has initiated before. */
     BLI_assert(tc->custom.type.free_cb == trans_mesh_customdata_free_cb);
+    return;
+  }
+
+  if (!ELEM(t->mode,
+            TFM_TRANSLATION,
+            TFM_ROTATION,
+            TFM_RESIZE,
+            TFM_TOSPHERE,
+            TFM_SHEAR,
+            TFM_BEND,
+            TFM_SHRINKFATTEN,
+            TFM_TRACKBALL,
+            TFM_PUSHPULL,
+            TFM_ALIGN,
+            TFM_EDGE_SLIDE,
+            TFM_VERT_SLIDE)) {
+    /* Currently only modes that change the position of vertices are supported. */
     return;
   }
 
@@ -1096,7 +1108,6 @@ void trans_mesh_customdata_correction_init(TransInfo *t, TransDataContainer *tc)
     return;
   }
 
-  /* create copies of faces for customdata projection */
   bmesh_edit_begin(bm, BMO_OPTYPE_FLAG_UNTAN_MULTIRES);
 
   struct GHash *origfaces = BLI_ghash_ptr_new(__func__);
@@ -1158,6 +1169,19 @@ void trans_mesh_customdata_correction_init(TransInfo *t, TransDataContainer *tc)
 
   tc->custom.type.data = tcld;
   tc->custom.type.free_cb = trans_mesh_customdata_free_cb;
+}
+
+void trans_mesh_customdata_correction_init(TransInfo *t)
+{
+  const char uvcalc_correct_flag = ELEM(t->mode, TFM_VERT_SLIDE, TFM_EDGE_SLIDE) ?
+                                       UVCALC_TRANSFORM_CORRECT_SLIDE :
+                                       UVCALC_TRANSFORM_CORRECT;
+
+  if (t->settings->uvcalc_flag & uvcalc_correct_flag) {
+    FOREACH_TRANS_DATA_CONTAINER (t, tc) {
+      trans_mesh_customdata_correction_init_container(t, tc);
+    }
+  }
 }
 
 /**
@@ -1375,13 +1399,9 @@ void recalcData_mesh(TransInfo *t)
     }
   }
 
-  if (ELEM(t->mode, TFM_EDGE_SLIDE, TFM_VERT_SLIDE)) {
-    FOREACH_TRANS_DATA_CONTAINER (t, tc) {
-      trans_mesh_customdata_correction_apply(tc, false);
-    }
-  }
-
   FOREACH_TRANS_DATA_CONTAINER (t, tc) {
+    trans_mesh_customdata_correction_apply(tc, false);
+
     DEG_id_tag_update(tc->obedit->data, 0); /* sets recalc flags */
     BMEditMesh *em = BKE_editmesh_from_object(tc->obedit);
     EDBM_mesh_normals_update(em);
@@ -1399,7 +1419,7 @@ void special_aftertrans_update__mesh(bContext *UNUSED(C), TransInfo *t)
   const bool canceled = (t->state == TRANS_CANCEL);
   const bool use_automerge = !canceled && (t->flag & (T_AUTOMERGE | T_AUTOSPLIT)) != 0;
 
-  if (ELEM(t->mode, TFM_EDGE_SLIDE, TFM_VERT_SLIDE)) {
+  if (TRANS_DATA_CONTAINER_FIRST_OK(t)->custom.type.data != NULL) {
     /* Handle multires re-projection, done
      * on transform completion since it's
      * really slow -joeedh. */

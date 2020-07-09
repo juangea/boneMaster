@@ -417,7 +417,8 @@ typedef struct EEVEE_RenderPassData {
   int renderPassGlossyLight;
   int renderPassEmit;
   int renderPassSSSColor;
-  int _pad[2];
+  int renderPassEnvironment;
+  int _pad[1];
 } EEVEE_RenderPassData;
 
 /* ************ LIGHT UBO ************* */
@@ -588,7 +589,7 @@ typedef struct EEVEE_ObjectKey {
   /** Parent object for duplis */
   struct Object *parent;
   /** Dupli objects recursive unique identifier */
-  int id[16]; /* 2*MAX_DUPLI_RECUR */
+  int id[8]; /* MAX_DUPLI_RECUR */
 } EEVEE_ObjectKey;
 
 typedef struct EEVEE_ObjectMotionData {
@@ -835,6 +836,7 @@ typedef struct EEVEE_ViewLayerData {
   /* Material Render passes */
   struct {
     struct GPUUniformBuffer *combined;
+    struct GPUUniformBuffer *environment;
     struct GPUUniformBuffer *diff_color;
     struct GPUUniformBuffer *diff_light;
     struct GPUUniformBuffer *spec_color;

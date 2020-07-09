@@ -65,7 +65,6 @@ struct uiWidgetColors;
 struct wmDrag;
 struct wmDropBox;
 struct wmEvent;
-struct wmEvent;
 struct wmGizmo;
 struct wmKeyConfig;
 struct wmKeyMap;
@@ -174,13 +173,6 @@ enum {
   UI_RETURN_UPDATE = 1 << 4,
   /** Popup is ok to be handled. */
   UI_RETURN_POPUP_OK = 1 << 5,
-};
-
-/* panel controls */
-enum {
-  UI_PNL_SOLID = 1 << 1,
-  UI_PNL_CLOSE = 1 << 5,
-  UI_PNL_SCALE = 1 << 9,
 };
 
 /* but->flag - general state flags. */
@@ -301,12 +293,13 @@ enum {
 /* 16 to copy ICON_DEFAULT_HEIGHT */
 #define UI_DPI_ICON_SIZE ((float)16 * UI_DPI_FAC)
 
-/* Button types, bits stored in 1 value... and a short even!
- * - bits 0-4:  bitnr (0-31)
+/**
+ * Button types, bits stored in 1 value... and a short even!
+ * - bits 0-4:  #uiBut.bitnr (0-31)
  * - bits 5-7:  pointer type
  * - bit  8:    for 'bit'
  * - bit  9-15: button type (now 6 bits, 64 types)
- * */
+ */
 typedef enum {
   UI_BUT_POIN_CHAR = 32,
   UI_BUT_POIN_SHORT = 64,

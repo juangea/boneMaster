@@ -281,15 +281,14 @@ static BMLoop *get_next_loop(
       copy_v3_v3(r_slide_vec, vec_accum);
       return l;
     }
-    else {
-      /* accumulate the normalized edge vector,
-       * normalize so some edges don't skew the result */
-      float tvec[3];
-      sub_v3_v3v3(tvec, BM_edge_other_vert(l->e, v)->co, v->co);
-      vec_accum_len += normalize_v3(tvec);
-      add_v3_v3(vec_accum, tvec);
-      i += 1;
-    }
+
+    /* accumulate the normalized edge vector,
+     * normalize so some edges don't skew the result */
+    float tvec[3];
+    sub_v3_v3v3(tvec, BM_edge_other_vert(l->e, v)->co, v->co);
+    vec_accum_len += normalize_v3(tvec);
+    add_v3_v3(vec_accum, tvec);
+    i += 1;
 
     if (BM_loop_other_edge_loop(l, v)->e == e_next) {
       if (i) {
@@ -1252,11 +1251,14 @@ void drawEdgeSlide(TransInfo *t)
     TransDataEdgeSlideVert *curr_sv = &sld->sv[sld->curr_sv_index];
     const int alpha_shade = -160;
 
+    float co_dir[3];
+    add_v3_v3v3(co_dir, curr_sv->v_co_orig, curr_sv->dir_side[sld->curr_side_unclamp]);
+
     GPU_line_width(line_size);
     immUniformThemeColorShadeAlpha(TH_EDGE_SELECT, 80, alpha_shade);
     immBeginAtMost(GPU_PRIM_LINES, 2);
-    immVertex3fv(pos, curr_sv->v_side[sld->curr_side_unclamp]->co);
     immVertex3fv(pos, curr_sv->v_co_orig);
+    immVertex3fv(pos, co_dir);
     immEnd();
   }
 
@@ -1313,6 +1315,7 @@ static void edge_slide_snap_apply(TransInfo *t, float *value)
   if (t->tsnap.snapElem & (SCE_SNAP_MODE_EDGE | SCE_SNAP_MODE_FACE)) {
     float co_dir[3];
     sub_v3_v3v3(co_dir, co_dest[side_index], co_orig);
+    normalize_v3(co_dir);
     if (t->tsnap.snapElem & SCE_SNAP_MODE_EDGE) {
       transform_constraint_snap_axis_to_edge(t, co_dir, dvec);
     }
@@ -1537,7 +1540,6 @@ void initEdgeSlide_ex(
     if (sld) {
       tc->custom.mode.data = sld;
       tc->custom.mode.free_cb = freeEdgeSlideVerts;
-      trans_mesh_customdata_correction_init(t, tc);
       ok = true;
     }
   }

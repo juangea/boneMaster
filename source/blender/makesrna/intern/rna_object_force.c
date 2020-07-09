@@ -805,8 +805,8 @@ static char *rna_EffectorWeight_path(PointerRNA *ptr)
     /* check smoke modifier */
     md = (ModifierData *)BKE_modifiers_findby_type(ob, eModifierType_Fluid);
     if (md) {
-      FluidModifierData *mmd = (FluidModifierData *)md;
-      if (mmd->domain->effector_weights == ew) {
+      FluidModifierData *fmd = (FluidModifierData *)md;
+      if (fmd->domain->effector_weights == ew) {
         char name_esc[sizeof(md->name) * 2];
         BLI_strescape(name_esc, md->name, sizeof(name_esc));
         return BLI_sprintfN("modifiers[\"%s\"].settings.effector_weights", name_esc);
@@ -851,7 +851,7 @@ static void rna_CollisionSettings_dependency_update(Main *bmain, Scene *scene, P
     ED_object_modifier_add(NULL, bmain, scene, ob, NULL, eModifierType_Collision);
   }
   else if (!ob->pd->deflect && md) {
-    ED_object_modifier_remove(NULL, bmain, ob, md);
+    ED_object_modifier_remove(NULL, bmain, scene, ob, md);
   }
 
   WM_main_add_notifier(NC_OBJECT | ND_DRAW, ob);

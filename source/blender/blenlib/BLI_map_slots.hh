@@ -52,9 +52,9 @@ template<typename Key, typename Value> class SimpleMapSlot {
     Removed = 2,
   };
 
-  State m_state;
-  AlignedBuffer<sizeof(Key), alignof(Key)> m_key_buffer;
-  AlignedBuffer<sizeof(Value), alignof(Value)> m_value_buffer;
+  State state_;
+  TypedBuffer<Key> key_buffer_;
+  TypedBuffer<Value> value_buffer_;
 
  public:
   /**
@@ -62,7 +62,7 @@ template<typename Key, typename Value> class SimpleMapSlot {
    */
   SimpleMapSlot()
   {
-    m_state = Empty;
+    state_ = Empty;
   }
 
   /**
@@ -70,9 +70,9 @@ template<typename Key, typename Value> class SimpleMapSlot {
    */
   ~SimpleMapSlot()
   {
-    if (m_state == Occupied) {
-      this->key()->~Key();
-      this->value()->~Value();
+    if (state_ == Occupied) {
+      key_buffer_.ref().~Key();
+      value_buffer_.ref().~Value();
     }
   }
 
@@ -82,10 +82,10 @@ template<typename Key, typename Value> class SimpleMapSlot {
    */
   SimpleMapSlot(const SimpleMapSlot &other)
   {
-    m_state = other.m_state;
-    if (other.m_state == Occupied) {
-      new ((void *)this->key()) Key(*other.key());
-      new ((void *)this->value()) Value(*other.value());
+    state_ = other.state_;
+    if (other.state_ == Occupied) {
+      new (&key_buffer_) Key(*other.key_buffer_);
+      new (&value_buffer_) Value(*other.value_buffer_);
     }
   }
 
@@ -96,10 +96,10 @@ template<typename Key, typename Value> class SimpleMapSlot {
    */
   SimpleMapSlot(SimpleMapSlot &&other) noexcept
   {
-    m_state = other.m_state;
-    if (other.m_state == Occupied) {
-      new ((void *)this->key()) Key(std::move(*other.key()));
-      new ((void *)this->value()) Value(std::move(*other.value()));
+    state_ = other.state_;
+    if (other.state_ == Occupied) {
+      new (&key_buffer_) Key(std::move(*other.key_buffer_));
+      new (&value_buffer_) Value(std::move(*other.value_buffer_));
     }
   }
 
@@ -108,7 +108,7 @@ template<typename Key, typename Value> class SimpleMapSlot {
    */
   Key *key()
   {
-    return (Key *)m_key_buffer.ptr();
+    return key_buffer_;
   }
 
   /**
@@ -116,7 +116,7 @@ template<typename Key, typename Value> class SimpleMapSlot {
    */
   const Key *key() const
   {
-    return (const Key *)m_key_buffer.ptr();
+    return key_buffer_;
   }
 
   /**
@@ -124,7 +124,7 @@ template<typename Key, typename Value> class SimpleMapSlot {
    */
   Value *value()
   {
-    return (Value *)m_value_buffer.ptr();
+    return value_buffer_;
   }
 
   /**
@@ -132,7 +132,7 @@ template<typename Key, typename Value> class SimpleMapSlot {
    */
   const Value *value() const
   {
-    return (const Value *)m_value_buffer.ptr();
+    return value_buffer_;
   }
 
   /**
@@ -140,7 +140,7 @@ template<typename Key, typename Value> class SimpleMapSlot {
    */
   bool is_occupied() const
   {
-    return m_state == Occupied;
+    return state_ == Occupied;
   }
 
   /**
@@ -148,7 +148,7 @@ template<typename Key, typename Value> class SimpleMapSlot {
    */
   bool is_empty() const
   {
-    return m_state == Empty;
+    return state_ == Empty;
   }
 
   /**
@@ -158,7 +158,7 @@ template<typename Key, typename Value> class SimpleMapSlot {
   template<typename Hash> uint32_t get_hash(const Hash &hash)
   {
     BLI_assert(this->is_occupied());
-    return hash(*this->key());
+    return hash(*key_buffer_);
   }
 
   /**
@@ -169,11 +169,11 @@ template<typename Key, typename Value> class SimpleMapSlot {
   {
     BLI_assert(!this->is_occupied());
     BLI_assert(other.is_occupied());
-    m_state = Occupied;
-    new ((void *)this->key()) Key(std::move(*other.key()));
-    new ((void *)this->value()) Value(std::move(*other.value()));
-    other.key()->~Key();
-    other.value()->~Value();
+    state_ = Occupied;
+    new (&key_buffer_) Key(std::move(*other.key_buffer_));
+    new (&value_buffer_) Value(std::move(*other.value_buffer_));
+    other.key_buffer_.ref().~Key();
+    other.value_buffer_.ref().~Value();
   }
 
   /**
@@ -183,8 +183,8 @@ template<typename Key, typename Value> class SimpleMapSlot {
   template<typename ForwardKey, typename IsEqual>
   bool contains(const ForwardKey &key, const IsEqual &is_equal, uint32_t UNUSED(hash)) const
   {
-    if (m_state == Occupied) {
-      return is_equal(key, *this->key());
+    if (state_ == Occupied) {
+      return is_equal(key, *key_buffer_);
     }
     return false;
   }
@@ -198,7 +198,7 @@ template<typename Key, typename Value> class SimpleMapSlot {
   {
     BLI_assert(!this->is_occupied());
     this->occupy_without_value(std::forward<ForwardKey>(key), hash);
-    new ((void *)this->value()) Value(std::forward<ForwardValue>(value));
+    new (&value_buffer_) Value(std::forward<ForwardValue>(value));
   }
 
   /**
@@ -208,8 +208,8 @@ template<typename Key, typename Value> class SimpleMapSlot {
   template<typename ForwardKey> void occupy_without_value(ForwardKey &&key, uint32_t UNUSED(hash))
   {
     BLI_assert(!this->is_occupied());
-    m_state = Occupied;
-    new ((void *)this->key()) Key(std::forward<ForwardKey>(key));
+    state_ = Occupied;
+    new (&key_buffer_) Key(std::forward<ForwardKey>(key));
   }
 
   /**
@@ -219,9 +219,9 @@ template<typename Key, typename Value> class SimpleMapSlot {
   void remove()
   {
     BLI_assert(this->is_occupied());
-    m_state = Removed;
-    this->key()->~Key();
-    this->value()->~Value();
+    state_ = Removed;
+    key_buffer_.ref().~Key();
+    value_buffer_.ref().~Value();
   }
 };
 
@@ -235,84 +235,84 @@ template<typename Key, typename Value> class SimpleMapSlot {
  */
 template<typename Key, typename Value, typename KeyInfo> class IntrusiveMapSlot {
  private:
-  Key m_key = KeyInfo::get_empty();
-  AlignedBuffer<sizeof(Value), alignof(Value)> m_value_buffer;
+  Key key_ = KeyInfo::get_empty();
+  TypedBuffer<Value> value_buffer_;
 
  public:
   IntrusiveMapSlot() = default;
 
   ~IntrusiveMapSlot()
   {
-    if (KeyInfo::is_not_empty_or_removed(m_key)) {
-      this->value()->~Value();
+    if (KeyInfo::is_not_empty_or_removed(key_)) {
+      value_buffer_.ref().~Value();
     }
   }
 
-  IntrusiveMapSlot(const IntrusiveMapSlot &other) : m_key(other.m_key)
+  IntrusiveMapSlot(const IntrusiveMapSlot &other) : key_(other.key_)
   {
-    if (KeyInfo::is_not_empty_or_removed(m_key)) {
-      new ((void *)this->value()) Value(*other.value());
+    if (KeyInfo::is_not_empty_or_removed(key_)) {
+      new (&value_buffer_) Value(*other.value_buffer_);
     }
   }
 
-  IntrusiveMapSlot(IntrusiveMapSlot &&other) noexcept : m_key(other.m_key)
+  IntrusiveMapSlot(IntrusiveMapSlot &&other) noexcept : key_(other.key_)
   {
-    if (KeyInfo::is_not_empty_or_removed(m_key)) {
-      new ((void *)this->value()) Value(std::move(*other.value()));
+    if (KeyInfo::is_not_empty_or_removed(key_)) {
+      new (&value_buffer_) Value(std::move(*other.value_buffer_));
     }
   }
 
   Key *key()
   {
-    return &m_key;
+    return &key_;
   }
 
   const Key *key() const
   {
-    return &m_key;
+    return &key_;
   }
 
   Value *value()
   {
-    return (Value *)m_value_buffer.ptr();
+    return value_buffer_;
   }
 
   const Value *value() const
   {
-    return (const Value *)m_value_buffer.ptr();
+    return value_buffer_;
   }
 
   bool is_occupied() const
   {
-    return KeyInfo::is_not_empty_or_removed(m_key);
+    return KeyInfo::is_not_empty_or_removed(key_);
   }
 
   bool is_empty() const
   {
-    return KeyInfo::is_empty(m_key);
+    return KeyInfo::is_empty(key_);
   }
 
   template<typename Hash> uint32_t get_hash(const Hash &hash)
   {
     BLI_assert(this->is_occupied());
-    return hash(*this->key());
+    return hash(key_);
   }
 
   void relocate_occupied_here(IntrusiveMapSlot &other, uint32_t UNUSED(hash))
   {
     BLI_assert(!this->is_occupied());
     BLI_assert(other.is_occupied());
-    m_key = std::move(other.m_key);
-    new ((void *)this->value()) Value(std::move(*other.value()));
-    other.m_key.~Key();
-    other.value()->~Value();
+    key_ = std::move(other.key_);
+    new (&value_buffer_) Value(std::move(*other.value_buffer_));
+    other.key_.~Key();
+    other.value_buffer_.ref().~Value();
   }
 
   template<typename ForwardKey, typename IsEqual>
   bool contains(const ForwardKey &key, const IsEqual &is_equal, uint32_t UNUSED(hash)) const
   {
     BLI_assert(KeyInfo::is_not_empty_or_removed(key));
-    return is_equal(key, m_key);
+    return is_equal(key, key_);
   }
 
   template<typename ForwardKey, typename ForwardValue>
@@ -321,21 +321,21 @@ template<typename Key, typename Value, typename KeyInfo> class IntrusiveMapSlot 
     BLI_assert(!this->is_occupied());
     BLI_assert(KeyInfo::is_not_empty_or_removed(key));
     this->occupy_without_value(std::forward<ForwardKey>(key), hash);
-    new ((void *)this->value()) Value(std::forward<ForwardValue>(value));
+    new (&value_buffer_) Value(std::forward<ForwardValue>(value));
   }
 
   template<typename ForwardKey> void occupy_without_value(ForwardKey &&key, uint32_t UNUSED(hash))
   {
     BLI_assert(!this->is_occupied());
     BLI_assert(KeyInfo::is_not_empty_or_removed(key));
-    m_key = std::forward<ForwardKey>(key);
+    key_ = std::forward<ForwardKey>(key);
   }
 
   void remove()
   {
     BLI_assert(this->is_occupied());
-    KeyInfo::remove(m_key);
-    this->value()->~Value();
+    KeyInfo::remove(key_);
+    value_buffer_.ref().~Value();
   }
 };
 

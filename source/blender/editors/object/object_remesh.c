@@ -403,6 +403,7 @@ static int voxel_size_edit_modal(bContext *C, wmOperator *op, const wmEvent *eve
     mesh->remesh_voxel_size = cd->voxel_size;
     MEM_freeN(op->customdata);
     ED_region_tag_redraw(ar);
+    ED_workspace_status_text(C, NULL);
     return OPERATOR_FINISHED;
   }
 
@@ -1041,7 +1042,7 @@ static bool quadriflow_poll_property(const bContext *C, wmOperator *op, const Pr
     if (STREQ(prop_id, "target_edge_length") && mode != QUADRIFLOW_REMESH_EDGE_LENGTH) {
       return false;
     }
-    else if (STREQ(prop_id, "target_faces")) {
+    if (STREQ(prop_id, "target_faces")) {
       if (mode != QUADRIFLOW_REMESH_FACES) {
         /* Make sure we can edit the target_faces value even if it doesn't start as EDITABLE */
         float area = RNA_float_get(op->ptr, "mesh_area");
