@@ -38,6 +38,7 @@ set(INC
   ../render/extern/include
   ../../../intern/glew-mx
   ../../../intern/guardedalloc
+  ../../../intern/sky/include
 )
 
 set(INC_SYS
@@ -177,7 +178,7 @@ set(SRC
   shader/nodes/node_shader_light_path.c
   shader/nodes/node_shader_map_range.c
   shader/nodes/node_shader_mapping.c
-  shader/nodes/node_shader_math.c
+  shader/nodes/node_shader_math.cc
   shader/nodes/node_shader_mixRgb.c
   shader/nodes/node_shader_mix_shader.c
   shader/nodes/node_shader_normal.c
@@ -215,10 +216,10 @@ set(SRC
   shader/nodes/node_shader_uvAlongStroke.c
   shader/nodes/node_shader_uvmap.c
   shader/nodes/node_shader_valToRgb.c
-  shader/nodes/node_shader_value.c
+  shader/nodes/node_shader_value.cc
   shader/nodes/node_shader_vectTransform.c
   shader/nodes/node_shader_vector_displacement.c
-  shader/nodes/node_shader_vector_math.c
+  shader/nodes/node_shader_vector_math.cc
   shader/nodes/node_shader_vector_rotate.c
   shader/nodes/node_shader_vertex_color.c
   shader/nodes/node_shader_volume_absorption.c
@@ -298,6 +299,7 @@ set(SRC
 
 set(LIB
   bf_functions
+  bf_intern_sky
 )
 
 if(WITH_PYTHON)

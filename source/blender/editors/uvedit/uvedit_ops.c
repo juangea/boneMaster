@@ -2090,6 +2090,7 @@ void ED_operatortypes_uvedit(void)
   WM_operatortype_append(UV_OT_rip);
   WM_operatortype_append(UV_OT_stitch);
   WM_operatortype_append(UV_OT_shortest_path_pick);
+  WM_operatortype_append(UV_OT_shortest_path_select);
 
   WM_operatortype_append(UV_OT_seams_from_islands);
   WM_operatortype_append(UV_OT_mark_seam);
@@ -2124,7 +2125,7 @@ void ED_operatormacros_uvedit(void)
                                     OPTYPE_UNDO | OPTYPE_REGISTER);
   WM_operatortype_macro_define(ot, "UV_OT_rip");
   otmacro = WM_operatortype_macro_define(ot, "TRANSFORM_OT_translate");
-  RNA_enum_set(otmacro->ptr, "proportional", 0);
+  RNA_boolean_set(otmacro->ptr, "use_proportional_edit", false);
   RNA_boolean_set(otmacro->ptr, "mirror", false);
 }
 
