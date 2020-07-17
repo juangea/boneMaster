@@ -1733,7 +1733,6 @@ static void write_modifiers(BlendWriter *writer, ListBase *modbase)
       }
     }
     else if (md->type == eModifierType_Collision) {
-
 #if 0
       CollisionModifierData *collmd = (CollisionModifierData *)md;
       // TODO: CollisionModifier should use pointcache

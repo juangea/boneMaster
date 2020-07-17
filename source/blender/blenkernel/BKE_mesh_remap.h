@@ -30,6 +30,7 @@ struct CustomData_MeshMasks;
 struct MVert;
 struct MemArena;
 struct Mesh;
+struct SpaceTransform;
 
 /* Generic ways to map some geometry elements from a source mesh to a dest one. */
 

@@ -569,6 +569,25 @@ static inline BL::FluidDomainSettings object_fluid_gas_domain_find(BL::Object &b
   return BL::FluidDomainSettings(PointerRNA_NULL);
 }
 
+static inline BL::VoxelMesherModifier object_metaball_voxel_voxelmesher_find(BL::Object b_ob)
+{
+  BL::Object::modifiers_iterator b_mod;
+
+  for (b_ob.modifiers.begin(b_mod); b_mod != b_ob.modifiers.end(); ++b_mod) {
+    if (b_mod->is_a(&RNA_VoxelMesherModifier)) {
+      BL::VoxelMesherModifier b_fmd(*b_mod);
+
+      if (b_fmd.mode() == BL::VoxelMesherModifier::mode_METABALL)
+        return b_fmd;
+
+      if (b_fmd.mode() == BL::VoxelMesherModifier::mode_VOXEL)
+        return b_fmd;
+    }
+  }
+
+  return BL::VoxelMesherModifier(PointerRNA_NULL);
+}
+
 static inline Mesh::SubdivisionType object_subdivision_type(BL::Object &b_ob,
                                                             bool preview,
                                                             bool experimental)
