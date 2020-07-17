@@ -1084,9 +1084,9 @@ class VIEW3D_MT_mirror(Menu):
 
         for (space_name, space_id) in (("Global", 'GLOBAL'), ("Local", 'LOCAL')):
             for axis_index, axis_name in enumerate("XYZ"):
-                props = layout.operator("transform.mirror", text=f"{axis_name!s} {space_name!s}")
+                props = layout.operator("transform.mirror", text="%s %s" % (axis_name, space_name))
                 props.constraint_axis[axis_index] = True
-                props.orient_type = 'GLOBAL'
+                props.orient_type = space_id
 
             if space_id == 'GLOBAL':
                 layout.separator()
@@ -2256,8 +2256,7 @@ class VIEW3D_MT_object_relations(Menu):
 
         layout.operator("object.proxy_make", text="Make Proxy...")
 
-        if bpy.app.use_override_library:
-            layout.operator("object.make_override_library", text="Make Library Override...")
+        layout.operator("object.make_override_library", text="Make Library Override...")
 
         layout.operator("object.make_dupli_face")
 
@@ -3877,6 +3876,8 @@ class VIEW3D_MT_edit_mesh_extrude(Menu):
         layout.operator("view3d.edit_mesh_extrude_move_shrink_fatten", text="Extrude Faces Along Normals"),
         'FACE': lambda layout:
         layout.operator("mesh.extrude_faces_move", text="Extrude Individual Faces"),
+        'MANIFOLD': lambda layout:
+        layout.operator("view3d.edit_mesh_extrude_manifold_normal", text="Extrude Manifold"),
     }
 
     @staticmethod
@@ -3887,7 +3888,7 @@ class VIEW3D_MT_edit_mesh_extrude(Menu):
 
         menu = []
         if mesh.total_face_sel:
-            menu += ['REGION', 'REGION_VERT_NORMAL', 'FACE']
+            menu += ['REGION', 'REGION_VERT_NORMAL', 'FACE', 'MANIFOLD']
         if mesh.total_edge_sel and (select_mode[0] or select_mode[1]):
             menu += ['EDGE']
         if mesh.total_vert_sel and select_mode[0]:
