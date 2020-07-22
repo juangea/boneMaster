@@ -1660,24 +1660,8 @@ void DRW_render_gpencil(struct RenderEngine *engine, struct Depsgraph *depsgraph
   RenderEngineType *engine_type = engine->type;
   RenderData *r = &scene->r;
   Render *render = engine->re;
-  /* Changing Context */
-  if (G.background && DST.gl_context == NULL) {
-    WM_init_opengl(G_MAIN);
-  }
 
-  void *re_gl_context = RE_gl_context_get(render);
-  void *re_gpu_context = NULL;
-
-  /* Changing Context */
-  if (re_gl_context != NULL) {
-    DRW_opengl_render_context_enable(re_gl_context);
-    /* We need to query gpu context after a gl context has been bound. */
-    re_gpu_context = RE_gpu_context_get(render);
-    DRW_gpu_render_context_enable(re_gpu_context);
-  }
-  else {
-    DRW_opengl_context_enable();
-  }
+  DRW_render_context_enable(render);
 
   /* Reset before using it. */
   drw_state_prepare_clean_for_draw(&DST);
@@ -1729,14 +1713,7 @@ void DRW_render_gpencil(struct RenderEngine *engine, struct Depsgraph *depsgraph
   /* Restore Drawing area. */
   GPU_framebuffer_restore();
 
-  /* Changing Context */
-  if (re_gl_context != NULL) {
-    DRW_gpu_render_context_disable(re_gpu_context);
-    DRW_opengl_render_context_disable(re_gl_context);
-  }
-  else {
-    DRW_opengl_context_disable();
-  }
+  DRW_render_context_disable(render);
 
   DST.buffer_finish_called = false;
 }
@@ -1748,24 +1725,6 @@ void DRW_render_to_image(RenderEngine *engine, struct Depsgraph *depsgraph)
   RenderEngineType *engine_type = engine->type;
   DrawEngineType *draw_engine_type = engine_type->draw_engine;
   Render *render = engine->re;
-
-  if (G.background && DST.gl_context == NULL) {
-    WM_init_opengl(G_MAIN);
-  }
-
-  void *re_gl_context = RE_gl_context_get(render);
-  void *re_gpu_context = NULL;
-
-  /* Changing Context */
-  if (re_gl_context != NULL) {
-    DRW_opengl_render_context_enable(re_gl_context);
-    /* We need to query gpu context after a gl context has been bound. */
-    re_gpu_context = RE_gpu_context_get(render);
-    DRW_gpu_render_context_enable(re_gpu_context);
-  }
-  else {
-    DRW_opengl_context_enable();
-  }
 
   /* IMPORTANT: We don't support immediate mode in render mode!
    * This shall remain in effect until immediate mode supports
@@ -1793,9 +1752,6 @@ void DRW_render_to_image(RenderEngine *engine, struct Depsgraph *depsgraph)
 
   ViewportEngineData *data = drw_viewport_engine_data_ensure(draw_engine_type);
 
-  /* set default viewport */
-  glViewport(0, 0, size[0], size[1]);
-
   /* Main rendering. */
   rctf view_rect;
   rcti render_rect;
@@ -1809,12 +1765,15 @@ void DRW_render_to_image(RenderEngine *engine, struct Depsgraph *depsgraph)
   /* Reset state before drawing */
   DRW_state_reset();
 
+  /* set default viewport */
+  GPU_viewport(0, 0, size[0], size[1]);
+
   /* Init render result. */
   RenderResult *render_result = RE_engine_begin_result(engine,
                                                        0,
                                                        0,
-                                                       (int)size[0],
-                                                       (int)size[1],
+                                                       size[0],
+                                                       size[1],
                                                        view_layer->name,
                                                        /* RR_ALL_VIEWS */ NULL);
 
@@ -1842,15 +1801,6 @@ void DRW_render_to_image(RenderEngine *engine, struct Depsgraph *depsgraph)
 
   /* Reset state after drawing */
   DRW_state_reset();
-
-  /* Changing Context */
-  if (re_gl_context != NULL) {
-    DRW_gpu_render_context_disable(re_gpu_context);
-    DRW_opengl_render_context_disable(re_gl_context);
-  }
-  else {
-    DRW_opengl_context_disable();
-  }
 }
 
 void DRW_render_object_iter(
@@ -2469,12 +2419,6 @@ void DRW_draw_select_id(Depsgraph *depsgraph, ARegion *region, View3D *v3d, cons
 #endif
 }
 
-/** See #DRW_shgroup_world_clip_planes_from_rv3d. */
-static void draw_world_clip_planes_from_rv3d(GPUBatch *batch, const float world_clip_planes[6][4])
-{
-  GPU_batch_uniform_4fv_array(batch, "WorldClipPlanes", 6, world_clip_planes[0]);
-}
-
 /**
  * Clears the Depth Buffer and draws only the specified object.
  */
@@ -2497,7 +2441,7 @@ void DRW_draw_depth_object(
 
   const float(*world_clip_planes)[4] = NULL;
   if (RV3D_CLIPPING_ENABLED(v3d, rv3d)) {
-    ED_view3d_clipping_set(rv3d);
+    GPU_clip_distances(6);
     ED_view3d_clipping_local(rv3d, object->obmat);
     world_clip_planes = rv3d->clip_local;
   }
@@ -2525,7 +2469,7 @@ void DRW_draw_depth_object(
                                                           GPU_SHADER_CFG_DEFAULT;
       GPU_batch_program_set_builtin_with_config(batch, GPU_SHADER_3D_DEPTH_ONLY, sh_cfg);
       if (world_clip_planes != NULL) {
-        draw_world_clip_planes_from_rv3d(batch, world_clip_planes);
+        GPU_batch_uniform_4fv_array(batch, "WorldClipPlanes", 6, world_clip_planes[0]);
       }
 
       GPU_batch_draw(batch);
@@ -2536,7 +2480,7 @@ void DRW_draw_depth_object(
   }
 
   if (RV3D_CLIPPING_ENABLED(v3d, rv3d)) {
-    ED_view3d_clipping_disable();
+    GPU_clip_distances(0);
   }
 
   GPU_matrix_set(rv3d->viewmat);
@@ -2769,6 +2713,42 @@ void DRW_engines_free(void)
   DRW_opengl_context_disable();
 }
 
+void DRW_render_context_enable(Render *render)
+{
+  if (G.background && DST.gl_context == NULL) {
+    WM_init_opengl(G_MAIN);
+  }
+
+  void *re_gl_context = RE_gl_context_get(render);
+
+  /* Changing Context */
+  if (re_gl_context != NULL) {
+    DRW_opengl_render_context_enable(re_gl_context);
+    /* We need to query gpu context after a gl context has been bound. */
+    void *re_gpu_context = NULL;
+    re_gpu_context = RE_gpu_context_get(render);
+    DRW_gpu_render_context_enable(re_gpu_context);
+  }
+  else {
+    DRW_opengl_context_enable();
+  }
+}
+
+void DRW_render_context_disable(Render *render)
+{
+  void *re_gl_context = RE_gl_context_get(render);
+
+  if (re_gl_context != NULL) {
+    void *re_gpu_context = NULL;
+    re_gpu_context = RE_gpu_context_get(render);
+    DRW_gpu_render_context_disable(re_gpu_context);
+    DRW_opengl_render_context_disable(re_gl_context);
+  }
+  else {
+    DRW_opengl_context_disable();
+  }
+}
+
 /** \} */
 
 /** \name Init/Exit (DRW_opengl_ctx)
@@ -2909,8 +2889,8 @@ void DRW_gpu_render_context_disable(void *UNUSED(re_gpu_context))
  * switch to it just to submit the final frame, which has notable performance impact.
  *
  * We could "inject" a context through DRW_opengl_render_context_enable(), but that would have to
- * work from the main thread, which is tricky to get working too. The preferable solution would be
- * using a separate thread for VR drawing where a single context can stay active. */
+ * work from the main thread, which is tricky to get working too. The preferable solution would
+ * be using a separate thread for VR drawing where a single context can stay active. */
 void *DRW_xr_opengl_context_get(void)
 {
   return DST.gl_context;

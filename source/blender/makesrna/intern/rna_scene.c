@@ -924,13 +924,6 @@ static void rna_Scene_volume_update(Main *UNUSED(bmain), Scene *UNUSED(scene), P
   DEG_id_tag_update(&scene->id, ID_RECALC_AUDIO_VOLUME | ID_RECALC_SEQUENCER_STRIPS);
 }
 
-static const char *rna_Scene_statistics_string_get(Scene *UNUSED(scene),
-                                                   Main *UNUSED(bmain),
-                                                   ViewLayer *view_layer)
-{
-  return ED_info_footer_string(view_layer);
-}
-
 static void rna_Scene_framelen_update(Main *UNUSED(bmain), Scene *scene, PointerRNA *UNUSED(ptr))
 {
   scene->r.framelen = (float)scene->r.framapto / (float)scene->r.images;
@@ -3456,7 +3449,7 @@ static void rna_def_tool_settings(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "use_edge_path_live_unwrap", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "edge_mode_live_unwrap", 1);
-  RNA_def_property_ui_text(prop, "Live Unwrap", "Changing edges seam re-calculates UV unwrap");
+  RNA_def_property_ui_text(prop, "Live Unwrap", "Changing edges seam recalculates UV unwrap");
 
   prop = RNA_def_property(srna, "normal_vector", PROP_FLOAT, PROP_XYZ);
   RNA_def_property_ui_text(prop, "Normal Vector", "Normal Vector used to copy, add or multiply");
@@ -4814,7 +4807,7 @@ void rna_def_freestyle_settings(BlenderRNA *brna)
   RNA_def_property_ui_text(
       prop,
       "View Map Cache",
-      "Keep the computed view map and avoid re-calculating it if mesh geometry is unchanged");
+      "Keep the computed view map and avoid recalculating it if mesh geometry is unchanged");
   RNA_def_property_update(
       prop, NC_SCENE | ND_RENDER_OPTIONS, "rna_Scene_use_view_map_cache_update");
 
@@ -7275,9 +7268,6 @@ void RNA_def_scene(BlenderRNA *brna)
   StructRNA *srna;
   PropertyRNA *prop;
 
-  FunctionRNA *func;
-  PropertyRNA *parm;
-
   static const EnumPropertyItem audio_distance_model_items[] = {
       {0, "NONE", 0, "None", "No distance attenuation"},
       {1, "INVERSE", 0, "Inverse", "Inverse distance model"},
@@ -7668,14 +7658,6 @@ void RNA_def_scene(BlenderRNA *brna)
   RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_SOUND);
   RNA_def_property_update(prop, NC_SCENE, NULL);
   RNA_def_property_update(prop, NC_SCENE, "rna_Scene_volume_update");
-
-  /* Statistics */
-  func = RNA_def_function(srna, "statistics", "rna_Scene_statistics_string_get");
-  RNA_def_function_flag(func, FUNC_USE_MAIN);
-  parm = RNA_def_pointer(func, "view_layer", "ViewLayer", "", "Active layer");
-  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
-  parm = RNA_def_string(func, "statistics", NULL, 0, "Statistics", "");
-  RNA_def_function_return(func, parm);
 
   /* Grease Pencil */
   prop = RNA_def_property(srna, "grease_pencil", PROP_POINTER, PROP_NONE);

@@ -4265,7 +4265,7 @@ void interp_weights_poly_v3(float *w, float v[][3], const int n, const float co[
      * to borders of face.
      * In that case, do simple linear interpolation between the two edge vertices */
 
-    /* 'd_next.len' is infact 'd_curr.len', just avoid copy to begin with */
+    /* 'd_next.len' is in fact 'd_curr.len', just avoid copy to begin with */
     if (UNLIKELY(d_next.len < eps)) {
       ix_flag = IS_POINT_IX;
       break;
@@ -4350,7 +4350,7 @@ void interp_weights_poly_v2(float *w, float v[][2], const int n, const float co[
      * to borders of face. In that case,
      * do simple linear interpolation between the two edge vertices */
 
-    /* 'd_next.len' is infact 'd_curr.len', just avoid copy to begin with */
+    /* 'd_next.len' is in fact 'd_curr.len', just avoid copy to begin with */
     if (UNLIKELY(d_next.len < eps)) {
       ix_flag = IS_POINT_IX;
       break;
@@ -4877,6 +4877,37 @@ void projmat_dimensions(const float projmat[4][4],
     *r_top = (-projmat[3][1] + 1.0f) / projmat[1][1];
     *r_near = (projmat[3][2] + 1.0f) / projmat[2][2];
     *r_far = (projmat[3][2] - 1.0f) / projmat[2][2];
+  }
+}
+
+void projmat_dimensions_db(const float projmat_fl[4][4],
+                           double *r_left,
+                           double *r_right,
+                           double *r_bottom,
+                           double *r_top,
+                           double *r_near,
+                           double *r_far)
+{
+  double projmat[4][4];
+  copy_m4d_m4(projmat, projmat_fl);
+
+  bool is_persp = projmat[3][3] == 0.0f;
+
+  if (is_persp) {
+    *r_left = (projmat[2][0] - 1.0) / projmat[0][0];
+    *r_right = (projmat[2][0] + 1.0) / projmat[0][0];
+    *r_bottom = (projmat[2][1] - 1.0) / projmat[1][1];
+    *r_top = (projmat[2][1] + 1.0) / projmat[1][1];
+    *r_near = projmat[3][2] / (projmat[2][2] - 1.0);
+    *r_far = projmat[3][2] / (projmat[2][2] + 1.0);
+  }
+  else {
+    *r_left = (-projmat[3][0] - 1.0) / projmat[0][0];
+    *r_right = (-projmat[3][0] + 1.0) / projmat[0][0];
+    *r_bottom = (-projmat[3][1] - 1.0) / projmat[1][1];
+    *r_top = (-projmat[3][1] + 1.0) / projmat[1][1];
+    *r_near = (projmat[3][2] + 1.0) / projmat[2][2];
+    *r_far = (projmat[3][2] - 1.0) / projmat[2][2];
   }
 }
 
