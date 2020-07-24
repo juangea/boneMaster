@@ -22,7 +22,7 @@
 namespace blender::sim {
 
 /**
- * The start time is inclusive and the end time is exclusive. The duration is zero, the interval
+ * The start time is exclusive and the end time is inclusive. If the duration is zero, the interval
  * describes a single point in time.
  */
 class TimeInterval {

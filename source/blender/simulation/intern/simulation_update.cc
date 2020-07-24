@@ -17,6 +17,7 @@
 #include "SIM_simulation_update.hh"
 
 #include "BKE_customdata.h"
+#include "BKE_lib_id.h"
 #include "BKE_simulation.h"
 
 #include "DNA_scene_types.h"
@@ -29,7 +30,10 @@
 #include "BLI_listbase.h"
 #include "BLI_map.hh"
 #include "BLI_rand.h"
+#include "BLI_set.hh"
 #include "BLI_vector.hh"
+
+#include "NOD_node_tree_dependencies.hh"
 
 #include "particle_function.hh"
 #include "simulation_collect_influences.hh"
@@ -108,13 +112,19 @@ void update_simulation_in_depsgraph(Depsgraph *depsgraph,
   SimulationInfluences influences;
   RequiredStates required_states;
 
-  /* TODO: Use simulation_cow, but need to add depsgraph relations before that. */
-  collect_simulation_influences(*simulation_orig, resources, influences, required_states);
+  collect_simulation_influences(*simulation_cow, resources, influences, required_states);
+
+  bke::PersistentDataHandleMap handle_map;
+  LISTBASE_FOREACH (
+      PersistentDataHandleItem *, handle_item, &simulation_orig->persistent_data_handles) {
+    ID *id_cow = DEG_get_evaluated_id(depsgraph, handle_item->id);
+    handle_map.add(handle_item->handle, *id_cow);
+  }
 
   if (current_frame == 1) {
     reinitialize_empty_simulation_states(simulation_orig, required_states);
 
-    initialize_simulation_states(*simulation_orig, *depsgraph, influences);
+    initialize_simulation_states(*simulation_orig, *depsgraph, influences, handle_map);
     simulation_orig->current_frame = 1;
 
     copy_states_to_cow(simulation_orig, simulation_cow);
@@ -123,11 +133,88 @@ void update_simulation_in_depsgraph(Depsgraph *depsgraph,
     update_simulation_state_list(simulation_orig, required_states);
 
     float time_step = 1.0f / 24.0f;
-    solve_simulation_time_step(*simulation_orig, *depsgraph, influences, time_step);
+    solve_simulation_time_step(*simulation_orig, *depsgraph, influences, handle_map, time_step);
     simulation_orig->current_frame = current_frame;
 
     copy_states_to_cow(simulation_orig, simulation_cow);
   }
+}
+
+/* Returns true when dependencies have changed. */
+bool update_simulation_dependencies(Simulation *simulation)
+{
+  nodes::NodeTreeDependencies dependencies = nodes::find_node_tree_dependencies(
+      *simulation->nodetree);
+
+  ListBase *handle_list = &simulation->persistent_data_handles;
+
+  bool dependencies_changed = false;
+
+  Map<ID *, PersistentDataHandleItem *> handle_item_by_id;
+  Map<PersistentDataHandleItem *, int> old_flag_by_handle_item;
+  Set<int> used_handles;
+
+  /* Remove unused handle items and clear flags that are reinitialized later. */
+  LISTBASE_FOREACH_MUTABLE (PersistentDataHandleItem *, handle_item, handle_list) {
+    if (dependencies.depends_on(handle_item->id)) {
+      handle_item_by_id.add_new(handle_item->id, handle_item);
+      used_handles.add_new(handle_item->handle);
+      old_flag_by_handle_item.add_new(handle_item, handle_item->flag);
+      handle_item->flag &= ~(SIM_HANDLE_DEPENDS_ON_TRANSFORM | SIM_HANDLE_DEPENDS_ON_GEOMETRY);
+    }
+    else {
+      if (handle_item->id != nullptr) {
+        id_us_min(handle_item->id);
+      }
+      BLI_remlink(handle_list, handle_item);
+      MEM_freeN(handle_item);
+      dependencies_changed = true;
+    }
+  }
+
+  /* Add handle items for new id dependencies. */
+  int next_handle = 0;
+  for (ID *id : dependencies.id_dependencies()) {
+    handle_item_by_id.lookup_or_add_cb(id, [&]() {
+      while (used_handles.contains(next_handle)) {
+        next_handle++;
+      }
+      used_handles.add_new(next_handle);
+
+      PersistentDataHandleItem *handle_item = (PersistentDataHandleItem *)MEM_callocN(
+          sizeof(*handle_item), AT);
+      id_us_plus(id);
+      handle_item->id = id;
+      handle_item->handle = next_handle;
+      BLI_addtail(handle_list, handle_item);
+
+      return handle_item;
+    });
+  }
+
+  /* Set appropriate dependency flags. */
+  for (Object *object : dependencies.transform_dependencies()) {
+    PersistentDataHandleItem *handle_item = handle_item_by_id.lookup(&object->id);
+    handle_item->flag |= SIM_HANDLE_DEPENDS_ON_TRANSFORM;
+  }
+  for (Object *object : dependencies.geometry_dependencies()) {
+    PersistentDataHandleItem *handle_item = handle_item_by_id.lookup(&object->id);
+    handle_item->flag |= SIM_HANDLE_DEPENDS_ON_GEOMETRY;
+  }
+
+  if (!dependencies_changed) {
+    /* Check if any flags have changed. */
+    LISTBASE_FOREACH (PersistentDataHandleItem *, handle_item, handle_list) {
+      int old_flag = old_flag_by_handle_item.lookup_default(handle_item, 0);
+      int new_flag = handle_item->flag;
+      if (old_flag != new_flag) {
+        dependencies_changed = true;
+        break;
+      }
+    }
+  }
+
+  return dependencies_changed;
 }
 
 }  // namespace blender::sim
