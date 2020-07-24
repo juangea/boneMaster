@@ -302,9 +302,11 @@ class CYCLES_RENDER_PT_sampling_advanced(CyclesButtonsPanel, Panel):
         row.prop(cscene, "seed")
         row.prop(cscene, "use_animated_seed", text="", icon='TIME')
 
+        if not(cscene.use_adaptive_sampling):
+            col = layout.column(align=True)
+            col.prop(cscene, "sampling_pattern", text="Pattern")
+
         col = layout.column(align=True)
-        col.active = not(cscene.use_adaptive_sampling)
-        col.prop(cscene, "sampling_pattern", text="Pattern")
         col.prop(cscene, "scrambling_distance")
         col.prop(cscene, "disable_viewport_scramble", text="Disable Viewport Scramble")
 

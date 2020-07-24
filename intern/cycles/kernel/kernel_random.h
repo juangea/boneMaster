@@ -61,6 +61,9 @@ ccl_device uint sobol_dimension(KernelGlobals *kg, int index, int dimension)
 
 #endif /* __SOBOL__ */
 
+#define NUM_PJ_SAMPLES 64 * 64
+#define NUM_PJ_PATTERNS 48
+
 ccl_device_forceinline float path_rng_1D(
     KernelGlobals *kg, uint rng_hash, int sample, int num_samples, int dimension)
 {
@@ -68,7 +71,38 @@ ccl_device_forceinline float path_rng_1D(
   return (float)drand48();
 #endif
   if (kernel_data.integrator.sampling_pattern == SAMPLING_PATTERN_PMJ) {
-    return pmj_sample_1D(kg, sample, rng_hash, dimension);
+    //return pmj_sample_1D(kg, sample, rng_hash, dimension);
+
+    float r;
+    if(sample > NUM_PJ_SAMPLES) {
+      r = cmj_randfloat(sample, dimension);
+    }
+
+    int index = ((dimension % NUM_PJ_PATTERNS) * NUM_PJ_SAMPLES + sample) * 2 + (dimension & 1);
+    r = __uint_as_float(kernel_tex_fetch(__sample_pattern_lut, index)) - 1.0f;
+    /* Cranly-Patterson rotation using rng seed */    
+
+    float shift;
+
+    if(kernel_data.integrator.dither_size > 0) {
+      int size = kernel_data.integrator.dither_size;
+      /* Extract the pixel coordinates from rng and wrap them into the dither matrix. */
+      int x = (rng_hash & DITHER_COORD_MASK) % size;
+      int y = ((rng_hash >> DITHER_Y_SHIFT) & DITHER_COORD_MASK) % size;
+      float2 shifts = kernel_tex_fetch(__sobol_dither, y*size + x);
+      shift = (dimension & 1)? shifts.y: shifts.x;
+    }
+    else {
+      /* Hash rng with dimension to solve correlation issues.
+      * See T38710, T50116.
+      */
+      uint tmp_rng = cmj_hash_simple(dimension, rng_hash);
+      shift = tmp_rng * (1.0f/(float)0xFFFFFFFF);
+    }
+
+    shift *= kernel_data.integrator.scrambling_distance;
+
+    return r + shift - floorf(r + shift);    
   }
 #ifdef __CMJ__
 #  ifdef __SOBOL__
@@ -125,9 +159,11 @@ ccl_device_forceinline void path_rng_2D(KernelGlobals *kg,
   return;
 #endif
   if (kernel_data.integrator.sampling_pattern == SAMPLING_PATTERN_PMJ) {
-    const float2 f = pmj_sample_2D(kg, sample, rng_hash, dimension);
-    *fx = f.x;
-    *fy = f.y;
+    //const float2 f = pmj_sample_2D(kg, sample, rng_hash, dimension);
+    //*fx = f.x;
+    //*fy = f.y;
+    *fx = path_rng_1D(kg, rng_hash, sample, num_samples, dimension);
+    *fy = path_rng_1D(kg, rng_hash, sample, num_samples, dimension + 1);    
     return;
   }
 #ifdef __CMJ__
