@@ -30,7 +30,7 @@ ccl_device_inline void get_work_pixel(ccl_global const WorkTile *tile,
                                       ccl_private uint *y,
                                       ccl_private uint *sample)
 {
-#ifdef __KERNEL_CUDA__
+//#ifdef __KERNEL_CUDA__
   /* Keeping threads for the same pixel together improves performance on CUDA. */
   uint sample_offset = global_work_index % tile->num_samples;
   uint pixel_offset = global_work_index / tile->num_samples;
