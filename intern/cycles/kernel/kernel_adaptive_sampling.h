@@ -105,7 +105,7 @@ ccl_device void kernel_adaptive_post_adjust(KernelGlobals *kg,
       *(ccl_global float3 *)(buffer + kernel_data.film.pass_glossy_color) *= sample_multiplier;
     if (light_flag & PASSMASK(TRANSMISSION_COLOR))
       *(ccl_global float3 *)(buffer +
-                             kernel_data.film.pass_transmission_color) *= sample_multiplier;
+                             kernel_data.film.pass_transmission_color) *= sample_multiplier;                           
   }
 #endif
 

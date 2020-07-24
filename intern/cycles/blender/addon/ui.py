@@ -306,6 +306,7 @@ class CYCLES_RENDER_PT_sampling_advanced(CyclesButtonsPanel, Panel):
         col.active = not(cscene.use_adaptive_sampling)
         col.prop(cscene, "sampling_pattern", text="Pattern")
         col.prop(cscene, "scrambling_distance")
+        col.prop(cscene, "disable_viewport_scramble", text="Disable Viewport Scramble")
 
         layout.prop(cscene, "use_square_samples")
 
@@ -686,6 +687,7 @@ class CYCLES_RENDER_PT_performance_tiles(CyclesButtonsPanel, Panel):
         sub.prop(rd, "tile_x", text="Tiles X")
         sub.prop(rd, "tile_y", text="Y")
         col.prop(cscene, "tile_order", text="Order")
+        col.prop(cscene, "renderfarm_safe_tiles", text="Renderfarm Safe Tiles")
 
         sub = col.column()
         sub.active = not rd.use_save_buffers

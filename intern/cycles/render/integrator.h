@@ -92,6 +92,7 @@ class Integrator : public Node {
   SamplingPattern sampling_pattern;
   float scrambling_distance;
   bool use_dithered_sampling;
+  bool disable_viewport_scramble;
 
   bool need_update;
 

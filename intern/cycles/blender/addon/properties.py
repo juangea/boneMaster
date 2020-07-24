@@ -293,6 +293,18 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         default=False,
     )
 
+    disable_viewport_scramble: BoolProperty(
+        name="Disable Viewport Scramble",
+        description="Disable Scrambling Distance on viewport preview",
+        default=False,
+    )     
+
+    renderfarm_safe_tiles: BoolProperty(
+        name="Renderfarm Safe Tiles",
+        description="Manage tile size for CPU or GPU, designed for mixed renderfarm use",
+        default=False,
+    ) 
+
     samples: IntProperty(
         name="Samples",
         description="Number of samples to render for each pixel",
