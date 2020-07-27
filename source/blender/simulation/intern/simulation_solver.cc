@@ -26,18 +26,6 @@
 
 namespace blender::sim {
 
-ParticleForce::~ParticleForce()
-{
-}
-
-ParticleEmitter::~ParticleEmitter()
-{
-}
-
-ParticleAction::~ParticleAction()
-{
-}
-
 static CustomDataType cpp_to_custom_data_type(const CPPType &type)
 {
   if (type.is<float3>()) {
@@ -140,15 +128,21 @@ BLI_NOINLINE static void simulate_particle_chunk(SimulationSolveContext &solve_c
                                                  float end_time)
 {
   int particle_amount = attributes.size();
+
+  Span<const ParticleAction *> begin_actions =
+      solve_context.influences.particle_time_step_begin_actions.lookup_as(state.head.name);
+  for (const ParticleAction *action : begin_actions) {
+    ParticleChunkContext particles{IndexMask(particle_amount), attributes};
+    ParticleActionContext action_context{solve_context, particles};
+    action->execute(action_context);
+  }
+
   Array<float3> force_vectors{particle_amount, {0, 0, 0}};
   Span<const ParticleForce *> forces = solve_context.influences.particle_forces.lookup_as(
       state.head.name);
-
-  ParticleChunkContext particle_chunk_context{IndexMask(particle_amount), attributes};
-  ParticleForceContext particle_force_context{
-      solve_context, particle_chunk_context, force_vectors};
-
   for (const ParticleForce *force : forces) {
+    ParticleChunkContext particles{IndexMask(particle_amount), attributes};
+    ParticleForceContext particle_force_context{solve_context, particles, force_vectors};
     force->add_force(particle_force_context);
   }
 
@@ -166,6 +160,14 @@ BLI_NOINLINE static void simulate_particle_chunk(SimulationSolveContext &solve_c
       dead_states[i] = true;
     }
   }
+
+  Span<const ParticleAction *> end_actions =
+      solve_context.influences.particle_time_step_end_actions.lookup_as(state.head.name);
+  for (const ParticleAction *action : end_actions) {
+    ParticleChunkContext particles{IndexMask(particle_amount), attributes};
+    ParticleActionContext action_context{solve_context, particles};
+    action->execute(action_context);
+  }
 }
 
 BLI_NOINLINE static void simulate_existing_particles(SimulationSolveContext &solve_context,
@@ -178,7 +180,7 @@ BLI_NOINLINE static void simulate_existing_particles(SimulationSolveContext &sol
 
   Array<float> remaining_durations(state.tot_particles, solve_context.solve_interval.duration());
   simulate_particle_chunk(
-      solve_context, state, attributes, remaining_durations, solve_context.solve_interval.end());
+      solve_context, state, attributes, remaining_durations, solve_context.solve_interval.stop());
 }
 
 BLI_NOINLINE static void run_emitters(SimulationSolveContext &solve_context,
@@ -273,6 +275,7 @@ void solve_simulation_time_step(Simulation &simulation,
                                 Depsgraph &depsgraph,
                                 const SimulationInfluences &influences,
                                 const bke::PersistentDataHandleMap &handle_map,
+                                const DependencyAnimations &dependency_animations,
                                 float time_step)
 {
   SimulationStateMap state_map;
@@ -285,7 +288,8 @@ void solve_simulation_time_step(Simulation &simulation,
                                        influences,
                                        TimeInterval(simulation.current_simulation_time, time_step),
                                        state_map,
-                                       handle_map};
+                                       handle_map,
+                                       dependency_animations};
 
   Span<ParticleSimulationState *> particle_simulation_states =
       state_map.lookup<ParticleSimulationState>();
@@ -322,7 +326,7 @@ void solve_simulation_time_step(Simulation &simulation,
       Span<const ParticleAction *> actions = influences.particle_birth_actions.lookup_as(
           state->head.name);
       for (const ParticleAction *action : actions) {
-        MutableParticleChunkContext chunk_context{IndexRange(attributes.size()), attributes};
+        ParticleChunkContext chunk_context{IndexRange(attributes.size()), attributes};
         ParticleActionContext action_context{solve_context, chunk_context};
         action->execute(action_context);
       }
@@ -335,7 +339,7 @@ void solve_simulation_time_step(Simulation &simulation,
     for (MutableAttributesRef attributes : allocator.get_allocations()) {
       Array<float> remaining_durations(attributes.size());
       Span<float> birth_times = attributes.get<float>("Birth Time");
-      const float end_time = solve_context.solve_interval.end();
+      const float end_time = solve_context.solve_interval.stop();
       for (int i : attributes.index_range()) {
         remaining_durations[i] = end_time - birth_times[i];
       }
@@ -345,7 +349,7 @@ void solve_simulation_time_step(Simulation &simulation,
     remove_dead_and_add_new_particles(*state, allocator);
   }
 
-  simulation.current_simulation_time = solve_context.solve_interval.end();
+  simulation.current_simulation_time = solve_context.solve_interval.stop();
 }
 
 }  // namespace blender::sim

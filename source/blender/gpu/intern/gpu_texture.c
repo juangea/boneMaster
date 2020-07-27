@@ -45,6 +45,16 @@
 
 #include "gpu_context_private.h"
 
+#define WARN_NOT_BOUND(_tex) \
+  { \
+    if (_tex->number == -1) { \
+      fprintf(stderr, "Warning : Trying to set parameter on a texture not bound.\n"); \
+      BLI_assert(0); \
+      return; \
+    } \
+  } \
+  ((void)0)
+
 static struct GPUTextureGlobal {
   /** Texture used in place of invalid textures (not loaded correctly, missing). */
   GPUTexture *invalid_tex_1D;
@@ -1176,8 +1186,27 @@ GPUTexture *GPU_texture_create_buffer(eGPUTextureFormat tex_format, const GLuint
   return tex;
 }
 
-GPUTexture *GPU_texture_from_bindcode(int textarget, int bindcode)
+static GLenum convert_target_to_gl(eGPUTextureTarget target)
 {
+  switch (target) {
+    case TEXTARGET_2D:
+      return GL_TEXTURE_2D;
+    case TEXTARGET_CUBE_MAP:
+      return GL_TEXTURE_CUBE_MAP;
+    case TEXTARGET_2D_ARRAY:
+      return GL_TEXTURE_2D_ARRAY;
+    case TEXTARGET_TILE_MAPPING:
+      return GL_TEXTURE_1D_ARRAY;
+    default:
+      BLI_assert(0);
+      return GL_TEXTURE_2D;
+  }
+}
+
+GPUTexture *GPU_texture_from_bindcode(eGPUTextureTarget target, int bindcode)
+{
+  GLenum textarget = convert_target_to_gl(target);
+
   GPUTexture *tex = MEM_callocN(sizeof(GPUTexture), "GPUTexture");
   tex->bindcode = bindcode;
   tex->refcount = 1;
@@ -1468,7 +1497,8 @@ void GPU_texture_update_sub(GPUTexture *tex,
   GLenum data_format = gpu_get_gl_dataformat(tex->format, &tex->format_flag);
   GLenum data_type = gpu_get_gl_datatype(gpu_data_format);
 
-  glBindTexture(tex->target, tex->bindcode);
+  WARN_NOT_BOUND(tex);
+
   switch (tex->target) {
     case GL_TEXTURE_1D:
       glTexSubImage1D(tex->target, 0, offset_x, width, data_format, data_type, pixels);
@@ -1496,8 +1526,6 @@ void GPU_texture_update_sub(GPUTexture *tex,
     default:
       BLI_assert(!"tex->target mode not supported");
   }
-
-  glBindTexture(tex->target, 0);
 }
 
 void *GPU_texture_read(GPUTexture *tex, eGPUDataFormat gpu_data_format, int miplvl)
@@ -1790,16 +1818,6 @@ void GPU_texture_unbind_all(void)
 
   glActiveTexture(GL_TEXTURE0);
 }
-
-#define WARN_NOT_BOUND(_tex) \
-  { \
-    if (_tex->number == -1) { \
-      fprintf(stderr, "Warning : Trying to set parameter on a texture not bound.\n"); \
-      BLI_assert(0); \
-      return; \
-    } \
-  } \
-  ((void)0)
 
 void GPU_texture_generate_mipmap(GPUTexture *tex)
 {
