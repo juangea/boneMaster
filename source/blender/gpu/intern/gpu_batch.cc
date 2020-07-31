@@ -37,6 +37,7 @@
 #include "gpu_context_private.h"
 #include "gpu_primitive_private.h"
 #include "gpu_shader_private.h"
+#include "gpu_vertex_format_private.h"
 
 #include <limits.h>
 #include <stdlib.h>
@@ -370,22 +371,20 @@ static GLuint batch_vao_get(GPUBatch *batch)
   return new_vao;
 }
 
-void GPU_batch_program_set_no_use(GPUBatch *batch,
-                                  uint32_t program,
-                                  const GPUShaderInterface *shaderface)
+void GPU_batch_set_shader_no_bind(GPUBatch *batch, GPUShader *shader)
 {
 #if TRUST_NO_ONE
-  assert(glIsProgram(program));
+  assert(glIsProgram(shader->program));
   assert(batch->program_in_use == 0);
 #endif
-  batch->interface = shaderface;
-  batch->program = program;
+  batch->interface = shader->interface;
+  batch->program = shader->program;
   batch->vao_id = batch_vao_get(batch);
 }
 
-void GPU_batch_program_set(GPUBatch *batch, uint32_t program, const GPUShaderInterface *shaderface)
+void GPU_batch_set_shader(GPUBatch *batch, GPUShader *shader)
 {
-  GPU_batch_program_set_no_use(batch, program, shaderface);
+  GPU_batch_set_shader_no_bind(batch, shader);
   GPU_batch_program_use_begin(batch); /* hack! to make Batch_Uniform* simpler */
 }
 
@@ -440,6 +439,7 @@ static void create_bindings(GPUVertBuf *verts,
     }
 
     const GLvoid *pointer = (const GLubyte *)0 + offset + v_first * stride;
+    const GLenum type = convert_comp_type_to_gl(static_cast<GPUVertCompType>(a->comp_type));
 
     for (uint n_idx = 0; n_idx < a->name_len; n_idx++) {
       const char *name = GPU_vertformat_attr_name_get(format, a, n_idx);
@@ -452,19 +452,13 @@ static void create_bindings(GPUVertBuf *verts,
       *attr_mask &= ~(1 << input->location);
 
       if (a->comp_len == 16 || a->comp_len == 12 || a->comp_len == 8) {
-#if TRUST_NO_ONE
-        assert(a->fetch_mode == GPU_FETCH_FLOAT);
-        assert(a->gl_comp_type == GL_FLOAT);
-#endif
+        BLI_assert(a->fetch_mode == GPU_FETCH_FLOAT);
+        BLI_assert(a->comp_type == GPU_COMP_F32);
         for (int i = 0; i < a->comp_len / 4; i++) {
           glEnableVertexAttribArray(input->location + i);
           glVertexAttribDivisor(input->location + i, (use_instancing) ? 1 : 0);
-          glVertexAttribPointer(input->location + i,
-                                4,
-                                a->gl_comp_type,
-                                GL_FALSE,
-                                stride,
-                                (const GLubyte *)pointer + i * 16);
+          glVertexAttribPointer(
+              input->location + i, 4, type, GL_FALSE, stride, (const GLubyte *)pointer + i * 16);
         }
       }
       else {
@@ -474,15 +468,13 @@ static void create_bindings(GPUVertBuf *verts,
         switch (a->fetch_mode) {
           case GPU_FETCH_FLOAT:
           case GPU_FETCH_INT_TO_FLOAT:
-            glVertexAttribPointer(
-                input->location, a->comp_len, a->gl_comp_type, GL_FALSE, stride, pointer);
+            glVertexAttribPointer(input->location, a->comp_len, type, GL_FALSE, stride, pointer);
             break;
           case GPU_FETCH_INT_TO_FLOAT_UNIT:
-            glVertexAttribPointer(
-                input->location, a->comp_len, a->gl_comp_type, GL_TRUE, stride, pointer);
+            glVertexAttribPointer(input->location, a->comp_len, type, GL_TRUE, stride, pointer);
             break;
           case GPU_FETCH_INT:
-            glVertexAttribIPointer(input->location, a->comp_len, a->gl_comp_type, stride, pointer);
+            glVertexAttribIPointer(input->location, a->comp_len, type, stride, pointer);
             break;
         }
       }
@@ -989,17 +981,12 @@ void GPU_draw_list_submit(GPUDrawList *list)
 /** \name Utilities
  * \{ */
 
-void GPU_batch_program_set_shader(GPUBatch *batch, GPUShader *shader)
-{
-  GPU_batch_program_set(batch, shader->program, shader->interface);
-}
-
 void GPU_batch_program_set_builtin_with_config(GPUBatch *batch,
                                                eGPUBuiltinShader shader_id,
                                                eGPUShaderConfig sh_cfg)
 {
   GPUShader *shader = GPU_shader_get_builtin_shader_with_config(shader_id, sh_cfg);
-  GPU_batch_program_set(batch, shader->program, shader->interface);
+  GPU_batch_set_shader(batch, shader);
 }
 
 void GPU_batch_program_set_builtin(GPUBatch *batch, eGPUBuiltinShader shader_id)
@@ -1012,10 +999,7 @@ void GPU_batch_program_set_builtin(GPUBatch *batch, eGPUBuiltinShader shader_id)
  * DO NOT DRAW WITH THE BATCH BEFORE CALLING immUnbindProgram. */
 void GPU_batch_program_set_imm_shader(GPUBatch *batch)
 {
-  GLuint program;
-  GPUShaderInterface *interface;
-  immGetProgram(&program, &interface);
-  GPU_batch_program_set(batch, program, interface);
+  GPU_batch_set_shader(batch, immGetShader());
 }
 
 /** \} */

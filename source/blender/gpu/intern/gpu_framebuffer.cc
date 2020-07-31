@@ -28,7 +28,6 @@
 #include "BLI_utildefines.h"
 
 #include "GPU_batch.h"
-#include "GPU_draw.h"
 #include "GPU_extensions.h"
 #include "GPU_framebuffer.h"
 #include "GPU_shader.h"
@@ -451,7 +450,7 @@ static void gpu_framebuffer_update_attachments_and_fill_empty_slots(GPUFrameBuff
   BLI_assert(GPU_framebuffer_active_get() == fb);
 
   /* Update attachments */
-  for (int i_type = GPU_FB_MAX_ATTACHEMENT; i_type >= 0; --i_type) {
+  for (int i_type = GPU_FB_MAX_ATTACHEMENT - 1; i_type >= 0; --i_type) {
     GPUAttachmentType type = static_cast<GPUAttachmentType>(i_type);
     GPUTexture *tex = fb->attachments[type].tex;
 
@@ -1046,7 +1045,7 @@ void GPU_offscreen_read_pixels(GPUOffScreen *ofs, eGPUDataFormat type, void *pix
   const int w = GPU_texture_width(ofs->color);
   const int h = GPU_texture_height(ofs->color);
 
-  BLI_assert(ELEM(type, GPU_DATA_UNSIGNED_BYTE, GL_FLOAT));
+  BLI_assert(ELEM(type, GPU_DATA_UNSIGNED_BYTE, GPU_DATA_FLOAT));
   GLenum gl_type = (type == GPU_DATA_FLOAT) ? GL_FLOAT : GL_UNSIGNED_BYTE;
 
   glReadPixels(0, 0, w, h, GL_RGBA, gl_type, pixels);
