@@ -88,6 +88,15 @@ bool uv_find_nearest_face_multi(struct Scene *scene,
                                 const float co[2],
                                 struct UvNearestHit *hit_final);
 
+BMLoop *uv_find_nearest_loop_from_vert(struct Scene *scene,
+                                       struct Object *obedit,
+                                       struct BMVert *v,
+                                       const float co[2]);
+BMLoop *uv_find_nearest_loop_from_edge(struct Scene *scene,
+                                       struct Object *obedit,
+                                       struct BMEdge *e,
+                                       const float co[2]);
+
 /* utility tool functions */
 
 void uvedit_live_unwrap_update(struct SpaceImage *sima,
@@ -126,6 +135,7 @@ const float *uvedit_first_selected_uv_from_vertex(struct Scene *scene,
 void UV_OT_select_all(struct wmOperatorType *ot);
 void UV_OT_select(struct wmOperatorType *ot);
 void UV_OT_select_loop(struct wmOperatorType *ot);
+void UV_OT_select_edge_ring(struct wmOperatorType *ot);
 void UV_OT_select_linked(struct wmOperatorType *ot);
 void UV_OT_select_linked_pick(struct wmOperatorType *ot);
 void UV_OT_select_split(struct wmOperatorType *ot);

@@ -115,6 +115,13 @@ bool uvedit_uv_select_test(const struct Scene *scene,
                            struct BMLoop *l,
                            const int cd_loop_uv_offset);
 /* uv face */
+void uvedit_face_select_set_with_sticky(const struct SpaceImage *sima,
+                                        const struct Scene *scene,
+                                        struct BMEditMesh *em,
+                                        struct BMFace *efa,
+                                        const bool select,
+                                        const bool do_history,
+                                        const int cd_loop_uv_offset);
 void uvedit_face_select_set(const struct Scene *scene,
                             struct BMEditMesh *em,
                             struct BMFace *efa,
@@ -131,6 +138,13 @@ void uvedit_face_select_disable(const struct Scene *scene,
                                 struct BMFace *efa,
                                 const int cd_loop_uv_offset);
 /* uv edge */
+void uvedit_edge_select_set_with_sticky(const struct SpaceImage *sima,
+                                        const struct Scene *scene,
+                                        struct BMEditMesh *em,
+                                        struct BMLoop *l,
+                                        const bool select,
+                                        const bool do_history,
+                                        const uint cd_loop_uv_offset);
 void uvedit_edge_select_set(const struct Scene *scene,
                             struct BMEditMesh *em,
                             struct BMLoop *l,
@@ -147,6 +161,13 @@ void uvedit_edge_select_disable(const struct Scene *scene,
                                 struct BMLoop *l,
                                 const int cd_loop_uv_offset);
 /* uv vert */
+void uvedit_uv_select_set_with_sticky(const struct SpaceImage *sima,
+                                      const struct Scene *scene,
+                                      struct BMEditMesh *em,
+                                      struct BMLoop *l,
+                                      const bool select,
+                                      const bool do_history,
+                                      const uint cd_loop_uv_offset);
 void uvedit_uv_select_set(const struct Scene *scene,
                           struct BMEditMesh *em,
                           struct BMLoop *l,
@@ -195,6 +216,9 @@ struct BMLoop *ED_uvedit_active_vert_loop_get(struct BMesh *bm);
 
 void ED_uvedit_active_edge_loop_set(struct BMesh *bm, struct BMLoop *l);
 struct BMLoop *ED_uvedit_active_edge_loop_get(struct BMesh *bm);
+
+char ED_uvedit_select_mode_get(const Scene *scene);
+void ED_uvedit_select_sync_flush(const ToolSettings *ts, struct BMEditMesh *em, const bool select);
 
 /* uvedit_unwrap_ops.c */
 void ED_uvedit_live_unwrap_begin(struct Scene *scene, struct Object *obedit);

@@ -24,11 +24,11 @@
 #ifndef __GPU_FRAMEBUFFER_H__
 #define __GPU_FRAMEBUFFER_H__
 
+#include "GPU_texture.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include "GPU_texture.h"
 
 typedef struct GPUAttachment {
   struct GPUTexture *tex;
@@ -40,6 +40,12 @@ typedef enum eGPUFrameBufferBits {
   GPU_DEPTH_BIT = (1 << 1),
   GPU_STENCIL_BIT = (1 << 2),
 } eGPUFrameBufferBits;
+
+typedef enum eGPUBackBuffer {
+  GPU_BACKBUFFER = 0,
+  GPU_BACKBUFFER_RIGHT,
+  GPU_BACKBUFFER_LEFT,
+} eGPUBackBuffer;
 
 typedef struct GPUFrameBuffer GPUFrameBuffer;
 typedef struct GPUOffScreen GPUOffScreen;
@@ -223,6 +229,8 @@ void GPU_clear(eGPUFrameBufferBits flags);
 
 void GPU_frontbuffer_read_pixels(
     int x, int y, int w, int h, int channels, eGPUDataFormat format, void *data);
+
+void GPU_backbuffer_bind(eGPUBackBuffer buffer);
 
 #ifdef __cplusplus
 }

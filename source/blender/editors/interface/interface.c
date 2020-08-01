@@ -44,6 +44,7 @@
 
 #include "BLI_utildefines.h"
 
+#include "BKE_animsys.h"
 #include "BKE_context.h"
 #include "BKE_idprop.h"
 #include "BKE_main.h"
@@ -1733,6 +1734,7 @@ void UI_block_end_ex(const bContext *C, uiBlock *block, const int xy[2], int r_x
   wmWindow *window = CTX_wm_window(C);
   Scene *scene = CTX_data_scene(C);
   ARegion *region = CTX_wm_region(C);
+  Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
   uiBut *but;
 
   BLI_assert(block->active);
@@ -1761,7 +1763,9 @@ void UI_block_end_ex(const bContext *C, uiBlock *block, const int xy[2], int r_x
       }
     }
 
-    ui_but_anim_flag(but, (scene) ? scene->r.cfra : 0.0f);
+    const AnimationEvalContext anim_eval_context = BKE_animsys_eval_context_construct(
+        depsgraph, (scene) ? scene->r.cfra : 0.0f);
+    ui_but_anim_flag(but, &anim_eval_context);
     ui_but_override_flag(CTX_data_main(C), but);
     if (UI_but_is_decorator(but)) {
       ui_but_anim_decorate_update_from_flag(but);
@@ -3075,8 +3079,38 @@ static double soft_range_round_down(double value, double max)
   return newmax;
 }
 
+void ui_but_range_set_hard(uiBut *but)
+{
+  if (but->rnaprop) {
+    const PropertyType type = RNA_property_type(but->rnaprop);
+    double hardmin, hardmax;
+
+    /* clamp button range to something reasonable in case
+     * we get -inf/inf from RNA properties */
+    if (type == PROP_INT) {
+      int imin, imax;
+
+      RNA_property_int_range(&but->rnapoin, but->rnaprop, &imin, &imax);
+      hardmin = (imin == INT_MIN) ? -1e4 : imin;
+      hardmax = (imin == INT_MAX) ? 1e4 : imax;
+    }
+    else if (type == PROP_FLOAT) {
+      float fmin, fmax;
+
+      RNA_property_float_range(&but->rnapoin, but->rnaprop, &fmin, &fmax);
+      hardmin = (fmin == -FLT_MAX) ? (float)-1e4 : fmin;
+      hardmax = (fmax == FLT_MAX) ? (float)1e4 : fmax;
+    }
+    else {
+      return;
+    }
+    but->hardmin = hardmin;
+    but->hardmax = hardmax;
+  }
+}
+
 /* note: this could be split up into functions which handle arrays and not */
-static void ui_set_but_soft_range(uiBut *but)
+void ui_but_range_set_soft(uiBut *but)
 {
   /* ideally we would not limit this but practically, its more than
    * enough worst case is very long vectors wont use a smart soft-range
@@ -3480,7 +3514,7 @@ static void ui_but_update_ex(uiBut *but, const bool validate)
   /* only update soft range while not editing */
   if (!ui_but_is_editing(but)) {
     if ((but->rnaprop != NULL) || (but->poin && (but->pointype & UI_BUT_POIN_TYPES))) {
-      ui_set_but_soft_range(but);
+      ui_but_range_set_soft(but);
     }
   }
 
@@ -6427,7 +6461,8 @@ static void operator_enum_search_update_fn(const struct bContext *C,
       /* note: need to give the index rather than the
        * identifier because the enum can be freed */
       if (BLI_strcasestr(item->name, str)) {
-        if (!UI_search_item_add(items, item->name, POINTER_FROM_INT(item->value), item->icon, 0)) {
+        if (!UI_search_item_add(
+                items, item->name, POINTER_FROM_INT(item->value), item->icon, 0, 0)) {
           break;
         }
       }

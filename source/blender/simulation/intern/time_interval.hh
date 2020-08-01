@@ -12,27 +12,46 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
  */
 
-/** \file
- * \ingroup editors
+#ifndef __SIM_TIME_INTERVAL_HH__
+#define __SIM_TIME_INTERVAL_HH__
+
+#include "BLI_utildefines.h"
+
+namespace blender::sim {
+
+/**
+ * The start time is inclusive and the end time is exclusive. The duration is zero, the interval
+ * describes a single point in time.
  */
+class TimeInterval {
+ private:
+  float start_;
+  float duration_;
 
-#ifndef __ED_LOGIC_H__
-#define __ED_LOGIC_H__
+ public:
+  TimeInterval(float start, float duration) : start_(start), duration_(duration)
+  {
+    BLI_assert(duration_ >= 0.0f);
+  }
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+  float start() const
+  {
+    return start_;
+  }
 
-/* logic_ops.c */
-void ED_operatortypes_logic(void);
+  float end() const
+  {
+    return start_ + duration_;
+  }
 
-#ifdef __cplusplus
-}
-#endif
+  float duration() const
+  {
+    return duration_;
+  }
+};
 
-#endif /* __ED_LOGIC_H__ */
+}  // namespace blender::sim
+
+#endif /* __SIM_TIME_INTERVAL_HH__ */

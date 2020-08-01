@@ -3112,8 +3112,9 @@ void BKE_curve_bevelList_make(Object *ob, ListBase *nurbs, bool for_render)
       if (bl->poly > 0) {
         BevPoint *bevp;
 
-        min = 300000.0;
         bevp = bl->bevpoints;
+        bevp1 = bl->bevpoints;
+        min = bevp1->vec[0];
         nr = bl->nr;
         while (nr--) {
           if (min > bevp->vec[0]) {
@@ -4629,7 +4630,7 @@ void BKE_nurb_direction_switch(Nurb *nu)
       bp1++;
       bp2--;
     }
-    /* If there're odd number of points no need to touch coord of middle one,
+    /* If there are odd number of points no need to touch coord of middle one,
      * but still need to change it's tilt.
      */
     if (nu->pntsu & 1) {

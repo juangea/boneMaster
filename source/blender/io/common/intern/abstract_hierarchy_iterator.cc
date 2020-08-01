@@ -39,6 +39,7 @@
 #include "DNA_modifier_types.h"
 #include "DNA_object_types.h"
 #include "DNA_particle_types.h"
+#include "DNA_rigidbody_types.h"
 
 #include "DEG_depsgraph_query.h"
 
@@ -127,6 +128,9 @@ bool AbstractHierarchyWriter::check_is_animated(const HierarchyContext &context)
   if (BKE_key_from_object(object) != nullptr) {
     return true;
   }
+  if (check_has_deforming_physics(context)) {
+    return true;
+  }
 
   /* Test modifiers. */
   /* TODO(Sybren): replace this with a check on the depsgraph to properly check for dependency on
@@ -142,6 +146,18 @@ bool AbstractHierarchyWriter::check_is_animated(const HierarchyContext &context)
   return false;
 }
 
+bool AbstractHierarchyWriter::check_has_physics(const HierarchyContext &context)
+{
+  const RigidBodyOb *rbo = context.object->rigidbody_object;
+  return rbo != nullptr && rbo->type == RBO_TYPE_ACTIVE;
+}
+
+bool AbstractHierarchyWriter::check_has_deforming_physics(const HierarchyContext &context)
+{
+  const RigidBodyOb *rbo = context.object->rigidbody_object;
+  return rbo != nullptr && rbo->type == RBO_TYPE_ACTIVE && (rbo->flag & RBO_FLAG_USE_DEFORM) != 0;
+}
+
 AbstractHierarchyIterator::AbstractHierarchyIterator(Depsgraph *depsgraph)
     : depsgraph_(depsgraph), writers_(), export_subset_({true, true})
 {
@@ -149,6 +165,12 @@ AbstractHierarchyIterator::AbstractHierarchyIterator(Depsgraph *depsgraph)
 
 AbstractHierarchyIterator::~AbstractHierarchyIterator()
 {
+  /* release_writers() cannot be called here directly, as it calls into the pure-virtual
+   * release_writer() function. By the time this destructor is called, the subclass that implements
+   * that pure-virtual function is already destructed. */
+  BLI_assert(
+      writers_.empty() ||
+      !"release_writers() should be called before the AbstractHierarchyIterator goes out of scope");
 }
 
 void AbstractHierarchyIterator::iterate_and_write()
@@ -165,7 +187,7 @@ void AbstractHierarchyIterator::iterate_and_write()
 void AbstractHierarchyIterator::release_writers()
 {
   for (WriterMap::value_type it : writers_) {
-    delete_object_writer(it.second);
+    release_writer(it.second);
   }
   writers_.clear();
 }

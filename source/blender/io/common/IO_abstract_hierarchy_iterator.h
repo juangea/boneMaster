@@ -129,7 +129,14 @@ class AbstractHierarchyWriter {
   // but wasn't used while exporting the current frame (for example, a particle-instanced mesh of
   // which the particle is no longer alive).
  protected:
+  /* Return true if the data written by this writer changes over time.
+   * Note that this function assumes this is an object data writer. Transform writers should not
+   * call this but implement their own logic. */
   virtual bool check_is_animated(const HierarchyContext &context) const;
+
+  /* Helper functions for animation checks. */
+  static bool check_has_physics(const HierarchyContext &context);
+  static bool check_has_deforming_physics(const HierarchyContext &context);
 };
 
 /* Determines which subset of the writers actually gets to write. */
@@ -340,7 +347,7 @@ class AbstractHierarchyIterator {
   virtual AbstractHierarchyWriter *create_particle_writer(const HierarchyContext *context) = 0;
 
   /* Called by release_writers() to free what the create_XXX_writer() functions allocated. */
-  virtual void delete_object_writer(AbstractHierarchyWriter *writer) = 0;
+  virtual void release_writer(AbstractHierarchyWriter *writer) = 0;
 
   AbstractHierarchyWriter *get_writer(const std::string &export_path) const;
   ExportChildren &graph_children(const HierarchyContext *parent_context);

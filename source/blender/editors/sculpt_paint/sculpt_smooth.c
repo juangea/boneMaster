@@ -242,6 +242,9 @@ static void do_smooth_brush_task_cb_ex(void *__restrict userdata,
         madd_v3_v3v3fl(val, vd.co, val, fade);
         SCULPT_clip(sd, ss, vd.co, val);
       }
+      if (vd.mvert) {
+        vd.mvert->flag |= ME_VERT_PBVH_UPDATE;
+      }
     }
   }
   BKE_pbvh_vertex_iter_end;
@@ -273,6 +276,7 @@ void SCULPT_smooth(Sculpt *sd,
     return;
   }
 
+  SCULPT_vertex_random_access_init(ss);
   SCULPT_boundary_info_ensure(ob);
 
   for (iteration = 0; iteration <= count; iteration++) {

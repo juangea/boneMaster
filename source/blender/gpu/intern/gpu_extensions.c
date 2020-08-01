@@ -350,7 +350,8 @@ void gpu_extensions_init(void)
 
   /* Intel Ivy Bridge GPU's seems to have buggy cube-map array support. (see T75943) */
   if (GPU_type_matches(GPU_DEVICE_INTEL, GPU_OS_WIN, GPU_DRIVER_OFFICIAL) &&
-      (strstr(renderer, "HD Graphics 4000") || strstr(renderer, "HD Graphics 2500"))) {
+      (strstr(renderer, "HD Graphics 4000") || strstr(renderer, "HD Graphics 4400") ||
+       strstr(renderer, "HD Graphics 2500"))) {
     GG.glew_arb_texture_cube_map_array_is_supported = false;
   }
 
@@ -409,7 +410,7 @@ void gpu_extensions_exit(void)
 bool GPU_mem_stats_supported(void)
 {
 #ifndef GPU_STANDALONE
-  return (GLEW_NVX_gpu_memory_info || GLEW_ATI_meminfo) && (G.debug & G_DEBUG_GPU_MEM);
+  return (GLEW_NVX_gpu_memory_info || GLEW_ATI_meminfo);
 #else
   return false;
 #endif
