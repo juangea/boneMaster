@@ -1960,7 +1960,7 @@ void DRW_render_instance_buffer_finish(void)
 void DRW_draw_select_loop(struct Depsgraph *depsgraph,
                           ARegion *region,
                           View3D *v3d,
-                          bool UNUSED(use_obedit_skip),
+                          bool use_obedit_skip,
                           bool draw_surface,
                           bool UNUSED(use_nearest),
                           const rcti *rect,
@@ -1973,7 +1973,7 @@ void DRW_draw_select_loop(struct Depsgraph *depsgraph,
   RenderEngineType *engine_type = ED_view3d_engine_type(scene, v3d->shading.type);
   ViewLayer *view_layer = DEG_get_evaluated_view_layer(depsgraph);
   Object *obact = OBACT(view_layer);
-  Object *obedit = OBEDIT_FROM_OBACT(obact);
+  Object *obedit = use_obedit_skip ? NULL : OBEDIT_FROM_OBACT(obact);
 #ifndef USE_GPU_SELECT
   UNUSED_VARS(scene, view_layer, v3d, region, rect);
 #else
@@ -2719,6 +2719,12 @@ void DRW_render_context_enable(Render *render)
     WM_init_opengl(G_MAIN);
   }
 
+  if (GPU_use_main_context_workaround()) {
+    GPU_context_main_lock();
+    DRW_opengl_context_enable();
+    return;
+  }
+
   void *re_gl_context = RE_gl_context_get(render);
 
   /* Changing Context */
@@ -2736,6 +2742,12 @@ void DRW_render_context_enable(Render *render)
 
 void DRW_render_context_disable(Render *render)
 {
+  if (GPU_use_main_context_workaround()) {
+    DRW_opengl_context_disable();
+    GPU_context_main_unlock();
+    return;
+  }
+
   void *re_gl_context = RE_gl_context_get(render);
 
   if (re_gl_context != NULL) {
