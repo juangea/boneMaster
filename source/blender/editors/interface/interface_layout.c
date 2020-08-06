@@ -674,7 +674,7 @@ static void ui_item_array(uiLayout *layout,
 
       /* show checkboxes for rna on a non-emboss block (menu for eg) */
       if (type == PROP_BOOLEAN &&
-          ELEM(layout->root->block->dt, UI_EMBOSS_NONE, UI_EMBOSS_PULLDOWN)) {
+          ELEM(layout->root->block->emboss, UI_EMBOSS_NONE, UI_EMBOSS_PULLDOWN)) {
         boolarr = MEM_callocN(sizeof(bool) * len, __func__);
         RNA_property_boolean_get_array(ptr, prop, boolarr);
       }
@@ -937,7 +937,7 @@ static uiBut *ui_item_with_label(uiLayout *layout,
                                  int h,
                                  int flag)
 {
-  uiLayout *sub;
+  uiLayout *sub = layout;
   uiBut *but = NULL;
   PropertyType type;
   PropertySubType subtype;
@@ -945,14 +945,20 @@ static uiBut *ui_item_with_label(uiLayout *layout,
 #ifdef UI_PROP_DECORATE
   uiLayout *layout_prop_decorate = NULL;
   const bool use_prop_sep = ((layout->item.flag & UI_ITEM_PROP_SEP) != 0);
+  const bool use_prop_decorate = use_prop_sep && (layout->item.flag & UI_ITEM_PROP_DECORATE) &&
+                                 (layout->item.flag & UI_ITEM_PROP_DECORATE_NO_PAD) == 0;
 #endif
 
-  /* Previously 'align' was enabled to make sure the label is spaced closely to the button.
-   * Set the space to zero instead as aligning a large number of labels can end up aligning
-   * thousands of buttons when displaying key-map search (a heavy operation), see: T78636. */
-  sub = uiLayoutRow(layout, false);
-  sub->space = 0;
-  UI_block_layout_set_current(block, sub);
+  UI_block_layout_set_current(block, layout);
+
+  /* Only add new row if more than 1 item will be added. */
+  if (name[0] || use_prop_decorate) {
+    /* Also avoid setting 'align' if possible. Set the space to zero instead as aligning a large
+     * number of labels can end up aligning thousands of buttons when displaying key-map search (a
+     * heavy operation), see: T78636. */
+    sub = uiLayoutRow(layout, layout->align);
+    sub->space = 0;
+  }
 
 #ifdef UI_PROP_DECORATE
   if (name[0]) {
@@ -1050,11 +1056,8 @@ static uiBut *ui_item_with_label(uiLayout *layout,
 
 #ifdef UI_PROP_DECORATE
   /* Only for alignment. */
-  if (use_prop_sep) { /* Flag may have been unset meanwhile. */
-    if ((layout->item.flag & UI_ITEM_PROP_DECORATE) &&
-        (layout->item.flag & UI_ITEM_PROP_DECORATE_NO_PAD) == 0) {
-      uiItemL(layout_prop_decorate ? layout_prop_decorate : sub, NULL, ICON_BLANK1);
-    }
+  if (use_prop_decorate) { /* Note that sep flag may have been unset meanwhile. */
+    uiItemL(layout_prop_decorate ? layout_prop_decorate : sub, NULL, ICON_BLANK1);
   }
 #endif /* UI_PROP_DECORATE */
 
@@ -2330,7 +2333,7 @@ void uiItemFullR(uiLayout *layout,
 
   /* Mark non-embossed textfields inside a listbox. */
   if (but && (block->flag & UI_BLOCK_LIST_ITEM) && (but->type == UI_BTYPE_TEXT) &&
-      (but->dt & UI_EMBOSS_NONE)) {
+      (but->emboss & UI_EMBOSS_NONE)) {
     UI_but_flag_enable(but, UI_BUT_LIST_ITEM);
   }
 
@@ -3828,7 +3831,7 @@ static void ui_litem_layout_radial(uiLayout *litem)
         bitem->but->rect.xmax += 1.5f * UI_UNIT_X;
         /* enable drawing as pie item if supported by widget */
         if (ui_item_is_radial_drawable(bitem)) {
-          bitem->but->dt = UI_EMBOSS_RADIAL;
+          bitem->but->emboss = UI_EMBOSS_RADIAL;
           bitem->but->drawflag |= UI_BUT_ICON_LEFT;
         }
       }
@@ -5036,7 +5039,7 @@ float uiLayoutGetUnitsY(uiLayout *layout)
 int uiLayoutGetEmboss(uiLayout *layout)
 {
   if (layout->emboss == UI_EMBOSS_UNDEFINED) {
-    return layout->root->block->dt;
+    return layout->root->block->emboss;
   }
   return layout->emboss;
 }
@@ -5411,7 +5414,7 @@ void ui_layout_add_but(uiLayout *layout, uiBut *but)
   }
 
   if (layout->emboss != UI_EMBOSS_UNDEFINED) {
-    but->dt = layout->emboss;
+    but->emboss = layout->emboss;
   }
 }
 

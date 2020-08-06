@@ -12,27 +12,25 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
  */
 
-/** \file
- * \ingroup editors
- */
+#include "node_simulation_util.h"
 
-#ifndef __ED_LOGIC_H__
-#define __ED_LOGIC_H__
+static bNodeSocketTemplate sim_node_kill_particle_in[] = {
+    {SOCK_CONTROL_FLOW, N_("Execute")},
+    {-1, ""},
+};
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+static bNodeSocketTemplate sim_node_kill_particle_out[] = {
+    {SOCK_CONTROL_FLOW, N_("Execute")},
+    {-1, ""},
+};
 
-/* logic_ops.c */
-void ED_operatortypes_logic(void);
+void register_node_type_sim_kill_particle()
+{
+  static bNodeType ntype;
 
-#ifdef __cplusplus
+  sim_node_type_base(&ntype, SIM_NODE_KILL_PARTICLE, "Kill Particle", 0, 0);
+  node_type_socket_templates(&ntype, sim_node_kill_particle_in, sim_node_kill_particle_out);
+  nodeRegisterType(&ntype);
 }
-#endif
-
-#endif /* __ED_LOGIC_H__ */

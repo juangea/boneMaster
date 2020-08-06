@@ -46,15 +46,10 @@
 #include "BKE_mesh.h"
 #include "BKE_modifier.h"
 #include "BKE_pointcloud.h"
+#include "BKE_screen.h"
 #include "BKE_simulation.h"
 
 #include "BLO_read_write.h"
-
-/* SpaceType struct has a member called 'new' which obviously conflicts with C++
- * so temporarily redefining the new keyword to make it compile. */
-#define new extern_new
-#include "BKE_screen.h"
-#undef new
 
 #include "UI_interface.h"
 #include "UI_resources.h"
@@ -114,10 +109,12 @@ static PointCloud *modifyPointCloud(ModifierData *md,
 
   const float3 *positions = (const float3 *)CustomData_get_layer_named(
       &state->attributes, CD_PROP_FLOAT3, "Position");
+  const float *radii = (const float *)CustomData_get_layer_named(
+      &state->attributes, CD_PROP_FLOAT, "Radius");
   memcpy(pointcloud->co, positions, sizeof(float3) * state->tot_particles);
 
   for (int i = 0; i < state->tot_particles; i++) {
-    pointcloud->radius[i] = 0.03f;
+    pointcloud->radius[i] = radii[i];
   }
 
   return pointcloud;

@@ -29,6 +29,8 @@
 
 #include "DNA_lightprobe_types.h"
 
+#include "GPU_viewport.h"
+
 #include "BKE_camera.h"
 
 struct EEVEE_ShadowCasterBuffer;
@@ -163,7 +165,7 @@ enum {
   VAR_MAT_MESH = (1 << 0),
   VAR_MAT_VOLUME = (1 << 1),
   VAR_MAT_HAIR = (1 << 2),
-  VAR_MAT_PROBE = (1 << 3),
+  /* VAR_MAT_PROBE = (1 << 3), UNUSED */
   VAR_MAT_BLEND = (1 << 4),
   VAR_MAT_LOOKDEV = (1 << 5),
   VAR_MAT_HOLDOUT = (1 << 6),
@@ -747,7 +749,6 @@ typedef struct EEVEE_EffectsInfo {
  * - sizeof(bool) == sizeof(int) in GLSL so use int in C */
 typedef struct EEVEE_CommonUniformBuffer {
   float prev_persmat[4][4]; /* mat4 */
-  float view_vecs[2][4];    /* vec4[2] */
   float mip_ratio[10][4];   /* vec2[10] */
   /* Ambient Occlusion */
   /* -- 16 byte aligned -- */
@@ -891,6 +892,7 @@ typedef struct EEVEE_Data {
   EEVEE_TextureList *txl;
   EEVEE_PassList *psl;
   EEVEE_StorageList *stl;
+  char info[GPU_INFO_SIZE];
 } EEVEE_Data;
 
 typedef struct EEVEE_PrivateData {
@@ -968,8 +970,10 @@ EEVEE_ObjectMotionData *EEVEE_motion_blur_object_data_get(EEVEE_MotionBlurData *
                                                           Object *ob,
                                                           bool hair);
 EEVEE_GeometryMotionData *EEVEE_motion_blur_geometry_data_get(EEVEE_MotionBlurData *mb,
-                                                              Object *ob,
-                                                              bool hair);
+                                                              Object *ob);
+EEVEE_GeometryMotionData *EEVEE_motion_blur_hair_data_get(EEVEE_MotionBlurData *mb,
+                                                          Object *ob,
+                                                          struct ModifierData *md);
 EEVEE_LightProbeEngineData *EEVEE_lightprobe_data_get(Object *ob);
 EEVEE_LightProbeEngineData *EEVEE_lightprobe_data_ensure(Object *ob);
 EEVEE_LightEngineData *EEVEE_light_data_get(Object *ob);
@@ -1001,7 +1005,6 @@ void EEVEE_object_hair_cache_populate(EEVEE_Data *vedata,
 void EEVEE_materials_cache_finish(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata);
 void EEVEE_materials_free(void);
 void EEVEE_update_noise(EEVEE_PassList *psl, EEVEE_FramebufferList *fbl, const double offsets[3]);
-void EEVEE_update_viewvecs(float invproj[4][4], float winmat[4][4], float (*r_viewvecs)[4]);
 void EEVEE_material_renderpasses_init(EEVEE_Data *vedata);
 void EEVEE_material_output_init(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata, uint tot_samples);
 void EEVEE_material_output_accumulate(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata);
@@ -1057,15 +1060,14 @@ void EEVEE_random_rotation_m4(int sample_ofs, float scale, float r_mat[4][4]);
 /* eevee_shaders.c */
 void EEVEE_shaders_lightprobe_shaders_init(void);
 void EEVEE_shaders_material_shaders_init(void);
+struct DRWShaderLibrary *EEVEE_shader_lib_get(void);
 struct GPUShader *EEVEE_shaders_probe_filter_glossy_sh_get(void);
-struct GPUShader *EEVEE_shaders_probe_default_sh_get(void);
 struct GPUShader *EEVEE_shaders_probe_filter_diffuse_sh_get(void);
 struct GPUShader *EEVEE_shaders_probe_filter_visibility_sh_get(void);
 struct GPUShader *EEVEE_shaders_probe_grid_fill_sh_get(void);
 struct GPUShader *EEVEE_shaders_probe_planar_downsample_sh_get(void);
-struct GPUShader *EEVEE_shaders_default_studiolight_sh_get(void);
-struct GPUShader *EEVEE_shaders_default_background_sh_get(void);
-struct GPUShader *EEVEE_shaders_background_studiolight_sh_get(void);
+struct GPUShader *EEVEE_shaders_studiolight_probe_sh_get(void);
+struct GPUShader *EEVEE_shaders_studiolight_background_sh_get(void);
 struct GPUShader *EEVEE_shaders_probe_cube_display_sh_get(void);
 struct GPUShader *EEVEE_shaders_probe_grid_display_sh_get(void);
 struct GPUShader *EEVEE_shaders_probe_planar_display_sh_get(void);
@@ -1077,6 +1079,7 @@ struct bNodeTree *EEVEE_shader_default_world_nodetree(World *wo);
 Material *EEVEE_material_default_diffuse_get(void);
 Material *EEVEE_material_default_glossy_get(void);
 Material *EEVEE_material_default_error_get(void);
+World *EEVEE_world_default_get(void);
 struct GPUMaterial *EEVEE_material_default_get(struct Scene *scene, Material *ma, int options);
 struct GPUMaterial *EEVEE_material_get(
     EEVEE_Data *vedata, struct Scene *scene, Material *ma, World *wo, int options);
@@ -1300,10 +1303,9 @@ void EEVEE_render_update_passes(struct RenderEngine *engine,
 /** eevee_lookdev.c */
 void EEVEE_lookdev_cache_init(EEVEE_Data *vedata,
                               EEVEE_ViewLayerData *sldata,
-                              DRWShadingGroup **grp,
                               DRWPass *pass,
-                              struct World *world,
-                              EEVEE_LightProbesInfo *pinfo);
+                              EEVEE_LightProbesInfo *pinfo,
+                              DRWShadingGroup **r_shgrp);
 void EEVEE_lookdev_draw(EEVEE_Data *vedata);
 
 /** eevee_engine.c */

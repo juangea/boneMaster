@@ -53,8 +53,6 @@
 
 #include "ED_view3d.h"
 
-#include "GPU_draw.h"
-
 #include "overlay_private.h"
 
 #include "draw_common.h"
@@ -547,7 +545,7 @@ static void OVERLAY_forcefield(OVERLAY_ExtraCallBuffers *cb, Object *ob, ViewLay
       if (cu && (cu->flag & CU_PATH) && ob->runtime.curve_cache->path &&
           ob->runtime.curve_cache->path->data) {
         instdata.size_x = instdata.size_y = instdata.size_z = pd->f_strength;
-        float pos[3], tmp[3];
+        float pos[4], tmp[3];
         where_on_path(ob, 0.0f, pos, tmp, NULL, NULL, NULL);
         copy_v3_v3(instdata.pos, ob->obmat[3]);
         translate_m4(instdata.mat, pos[0], pos[1], pos[2]);
@@ -1339,7 +1337,7 @@ static void OVERLAY_relationship_lines(OVERLAY_ExtraCallBuffers *cb,
       else {
         const bConstraintTypeInfo *cti = BKE_constraint_typeinfo_get(curcon);
 
-        if ((cti && cti->get_constraint_targets) && (curcon->ui_expand_flag && (1 << 0))) {
+        if ((cti && cti->get_constraint_targets) && (curcon->ui_expand_flag & (1 << 0))) {
           ListBase targets = {NULL, NULL};
           bConstraintTarget *ct;
 
@@ -1422,7 +1420,7 @@ static void OVERLAY_volume_extra(OVERLAY_ExtraCallBuffers *cb,
       line_count /= fds->res[axis];
     }
 
-    GPU_create_smoke_velocity(fmd);
+    DRW_smoke_ensure_velocity(fmd);
 
     GPUShader *sh = OVERLAY_shader_volume_velocity(use_needle);
     DRWShadingGroup *grp = DRW_shgroup_create(sh, data->psl->extra_ps[0]);
@@ -1452,7 +1450,7 @@ static void OVERLAY_volume_free_smoke_textures(OVERLAY_Data *data)
   LinkData *link;
   while ((link = BLI_pophead(&data->stl->pd->smoke_domains))) {
     FluidModifierData *fmd = (FluidModifierData *)link->data;
-    GPU_free_smoke_velocity(fmd);
+    DRW_smoke_free_velocity(fmd);
     MEM_freeN(link);
   }
 }

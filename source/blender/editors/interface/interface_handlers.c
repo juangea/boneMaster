@@ -1382,6 +1382,9 @@ static void ui_multibut_states_apply(bContext *C, uiHandleButtonData *data, uiBl
 
 static bool ui_drag_toggle_but_is_supported(const uiBut *but)
 {
+  if (but->flag & UI_BUT_DISABLED) {
+    return false;
+  }
   if (ui_but_is_bool(but)) {
     return true;
   }
@@ -4387,7 +4390,7 @@ static int ui_do_but_TEX(
       if (ELEM(event->type, EVT_PADENTER, EVT_RETKEY) && (!UI_but_is_utf8(but))) {
         /* pass - allow filesel, enter to execute */
       }
-      else if (but->dt == UI_EMBOSS_NONE && !event->ctrl) {
+      else if (but->emboss == UI_EMBOSS_NONE && !event->ctrl) {
         /* pass */
       }
       else {
@@ -7126,7 +7129,7 @@ static int ui_do_but_CURVEPROFILE(
         dist_min_sq = square_f(U.dpi_fac * 8.0f); /* 8 pixel radius from each table point. */
 
         /* Loop through the path's high resolution table and find what's near the click. */
-        for (int i = 1; i <= PROF_N_TABLE(profile->path_len); i++) {
+        for (int i = 1; i <= PROF_TABLE_LEN(profile->path_len); i++) {
           copy_v2_v2(f_xy_prev, f_xy);
           BLI_rctf_transform_pt_v(&but->rect, &profile->view_rect, f_xy, &table[i].x);
 
@@ -7997,6 +8000,9 @@ static void button_activate_init(bContext *C,
                                  uiButtonActivateType type)
 {
   uiHandleButtonData *data;
+
+  /* Only ever one active button! */
+  BLI_assert(ui_region_find_active_but(region) == NULL);
 
   /* setup struct */
   data = MEM_callocN(sizeof(uiHandleButtonData), "uiHandleButtonData");
@@ -8900,6 +8906,11 @@ static int ui_handle_button_event(bContext *C, const wmEvent *event, uiBut *but)
 
     /* for jumping to the next button with tab while text editing */
     if (post_but) {
+      /* The post_but still has previous ranges (without the changes in active button considered),
+       * needs refreshing the ranges. */
+      ui_but_range_set_soft(post_but);
+      ui_but_range_set_hard(post_but);
+
       button_activate_init(C, region, post_but, post_type);
     }
     else if (!((event->type == EVT_BUT_CANCEL) && (event->val == 1))) {

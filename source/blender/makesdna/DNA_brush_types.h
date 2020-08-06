@@ -67,7 +67,9 @@ typedef struct BrushGpencilSettings {
   short draw_smoothlvl;
   /** Number of times to subdivide new strokes. */
   short draw_subdivide;
-  char _pad[4];
+  /** Layers used for fill. */
+  short fill_layer_mode;
+  char _pad[2];
 
   /** Factor for transparency. */
   float fill_threshold;
@@ -118,7 +120,8 @@ typedef struct BrushGpencilSettings {
   int sculpt_mode_flag;
   /** Preset type (used to reset brushes - internal). */
   short preset_type;
-  char _pad3[2];
+  /** Brush preselected mode (Active/Material/Vertexcolor). */
+  short brush_draw_mode;
 
   /** Randomness for Hue. */
   float random_hue;
@@ -190,7 +193,7 @@ typedef enum eGPDbrush_Flag {
   /* brush use pressure */
   GP_BRUSH_USE_PRESSURE = (1 << 0),
   /* brush use pressure for alpha factor */
-  GP_BRUSH_USE_STENGTH_PRESSURE = (1 << 1),
+  GP_BRUSH_USE_STRENGTH_PRESSURE = (1 << 1),
   /* brush use pressure for alpha factor */
   GP_BRUSH_USE_JITTER_PRESSURE = (1 << 2),
   /* fill hide transparent */
@@ -251,12 +254,29 @@ typedef enum eGP_FillDrawModes {
   GP_FILL_DMODE_CONTROL = 2,
 } eGP_FillDrawModes;
 
+/* BrushGpencilSettings->fill_layer_mode */
+typedef enum eGP_FillLayerModes {
+  GP_FILL_GPLMODE_VISIBLE = 0,
+  GP_FILL_GPLMODE_ACTIVE = 1,
+  GP_FILL_GPLMODE_ALL_ABOVE = 2,
+  GP_FILL_GPLMODE_ALL_BELOW = 3,
+  GP_FILL_GPLMODE_ABOVE = 4,
+  GP_FILL_GPLMODE_BELOW = 5,
+} eGP_FillLayerModes;
+
 /* BrushGpencilSettings->gp_eraser_mode */
 typedef enum eGP_BrushEraserMode {
   GP_BRUSH_ERASER_SOFT = 0,
   GP_BRUSH_ERASER_HARD = 1,
   GP_BRUSH_ERASER_STROKE = 2,
 } eGP_BrushEraserMode;
+
+/* BrushGpencilSettings->brush_draw_mode */
+typedef enum eGP_BrushMode {
+  GP_BRUSH_MODE_ACTIVE = 0,
+  GP_BRUSH_MODE_MATERIAL = 1,
+  GP_BRUSH_MODE_VERTEXCOLOR = 2,
+} eGP_BrushMode;
 
 /* BrushGpencilSettings default brush icons */
 typedef enum eGP_BrushIcons {
@@ -330,6 +350,11 @@ typedef enum eBrushClothForceFalloffType {
   BRUSH_CLOTH_FORCE_FALLOFF_RADIAL = 0,
   BRUSH_CLOTH_FORCE_FALLOFF_PLANE = 1,
 } eBrushClothForceFalloffType;
+
+typedef enum eBrushClothSimulationAreaType {
+  BRUSH_CLOTH_SIMULATION_AREA_LOCAL = 0,
+  BRUSH_CLOTH_SIMULATION_AREA_GLOBAL = 1,
+} eBrushClothSimulationAreaType;
 
 typedef enum eBrushPoseDeformType {
   BRUSH_POSE_DEFORM_ROTATE_TWIST = 0,
@@ -500,7 +525,7 @@ typedef struct Brush {
   /** Source for fill tool color gradient application. */
   char gradient_fill_mode;
 
-  char _pad0[1];
+  char _pad0[5];
 
   /** Projection shape (sphere, circle). */
   char falloff_shape;
@@ -526,7 +551,7 @@ typedef struct Brush {
   char gpencil_sculpt_tool;
   /** Active grease pencil weight tool. */
   char gpencil_weight_tool;
-  char _pad1[6];
+  char _pad1[2];
 
   float autosmooth_factor;
 
@@ -565,12 +590,15 @@ typedef struct Brush {
   /* cloth */
   int cloth_deform_type;
   int cloth_force_falloff_type;
+  int cloth_simulation_area_type;
 
   float cloth_mass;
   float cloth_damping;
 
   float cloth_sim_limit;
   float cloth_sim_falloff;
+
+  float cloth_constraint_softbody_strength;
 
   /* smooth */
   int smooth_deform_type;
@@ -716,6 +744,9 @@ typedef enum eBrushFlags2 {
   BRUSH_MULTIPLANE_SCRAPE_PLANES_PREVIEW = (1 << 1),
   BRUSH_POSE_IK_ANCHORED = (1 << 2),
   BRUSH_USE_CONNECTED_ONLY = (1 << 3),
+  BRUSH_CLOTH_PIN_SIMULATION_BOUNDARY = (1 << 4),
+  BRUSH_POSE_USE_LOCK_ROTATION = (1 << 5),
+  BRUSH_CLOTH_USE_COLLISION = (1 << 6),
 } eBrushFlags2;
 
 typedef enum {

@@ -31,6 +31,8 @@
 #include "BKE_global.h"
 #include "MEM_guardedalloc.h"
 
+#include "DNA_userdef_types.h"
+
 #include "GPU_extensions.h"
 #include "GPU_framebuffer.h"
 #include "GPU_glew.h"
@@ -95,7 +97,7 @@ static struct GPUGlobal {
   bool broken_amd_driver;
   /* Some crappy Intel drivers don't work well with shaders created in different
    * rendering contexts. */
-  bool context_local_shaders_workaround;
+  bool use_main_context_workaround;
   /* Intel drivers exhibit artifacts when using #glCopyImageSubData & workbench anti-aliasing.
    * (see T76273) */
   bool texture_copy_workaround;
@@ -223,9 +225,9 @@ bool GPU_unused_fb_slot_workaround(void)
   return GG.unused_fb_slot_workaround;
 }
 
-bool GPU_context_local_shaders_workaround(void)
+bool GPU_use_main_context_workaround(void)
 {
-  return GG.context_local_shaders_workaround;
+  return GG.use_main_context_workaround;
 }
 
 bool GPU_texture_copy_workaround(void)
@@ -237,6 +239,13 @@ bool GPU_crappy_amd_driver(void)
 {
   /* Currently are the same drivers with the `unused_fb_slot` problem. */
   return GG.broken_amd_driver;
+}
+
+int GPU_texture_size_with_limit(int res)
+{
+  int size = GPU_max_texture_size();
+  int reslimit = (U.glreslimit != 0) ? min_ii(U.glreslimit, size) : size;
+  return min_ii(reslimit, res);
 }
 
 void gpu_extensions_init(void)
@@ -312,7 +321,7 @@ void gpu_extensions_init(void)
   if (GPU_type_matches(GPU_DEVICE_INTEL, GPU_OS_WIN, GPU_DRIVER_OFFICIAL)) {
     /* Limit this fix to older hardware with GL < 4.5. This means Broadwell GPUs are
      * covered since they only support GL 4.4 on windows.
-     * This fixes some issues with workbench antialiasing on Win + Intel GPU. (see T76273) */
+     * This fixes some issues with workbench anti-aliasing on Win + Intel GPU. (see T76273) */
     if (!GLEW_VERSION_4_5) {
       GG.texture_copy_workaround = true;
     }
@@ -382,12 +391,12 @@ void gpu_extensions_init(void)
       /* Maybe not all of these drivers have problems with `GLEW_ARB_base_instance`.
        * But it's hard to test each case. */
       GG.glew_arb_base_instance_is_supported = false;
-      GG.context_local_shaders_workaround = true;
+      GG.use_main_context_workaround = true;
     }
 
     if (strstr(version, "Build 20.19.15.4285")) {
       /* Somehow fixes armature display issues (see T69743). */
-      GG.context_local_shaders_workaround = true;
+      GG.use_main_context_workaround = true;
     }
   }
   else if (GPU_type_matches(GPU_DEVICE_ATI, GPU_OS_UNIX, GPU_DRIVER_OPENSOURCE) &&

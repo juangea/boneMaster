@@ -255,13 +255,13 @@ void ED_object_base_init_transform_on_add(Object *object, const float loc[3], co
 /* Uses context to figure out transform for primitive.
  * Returns standard diameter. */
 float ED_object_new_primitive_matrix(
-    bContext *C, Object *obedit, const float loc[3], const float rot[3], float primmat[4][4])
+    bContext *C, Object *obedit, const float loc[3], const float rot[3], float r_primmat[4][4])
 {
   Scene *scene = CTX_data_scene(C);
   View3D *v3d = CTX_wm_view3d(C);
   float mat[3][3], rmat[3][3], cmat[3][3], imat[3][3];
 
-  unit_m4(primmat);
+  unit_m4(r_primmat);
 
   eul_to_mat3(rmat, rot);
   invert_m3(rmat);
@@ -270,13 +270,13 @@ float ED_object_new_primitive_matrix(
   copy_m3_m4(mat, obedit->obmat);
   mul_m3_m3m3(cmat, rmat, mat);
   invert_m3_m3(imat, cmat);
-  copy_m4_m3(primmat, imat);
+  copy_m4_m3(r_primmat, imat);
 
   /* center */
-  copy_v3_v3(primmat[3], loc);
-  sub_v3_v3v3(primmat[3], primmat[3], obedit->obmat[3]);
+  copy_v3_v3(r_primmat[3], loc);
+  sub_v3_v3v3(r_primmat[3], r_primmat[3], obedit->obmat[3]);
   invert_m3_m3(imat, mat);
-  mul_m3_v3(imat, primmat[3]);
+  mul_m3_v3(imat, r_primmat[3]);
 
   {
     const float dia = v3d ? ED_view3d_grid_scale(scene, v3d, NULL) :
@@ -692,6 +692,46 @@ void OBJECT_OT_lightprobe_add(wmOperatorType *ot)
  * \{ */
 
 /* for object add operator */
+
+static const char *get_effector_defname(ePFieldType type)
+{
+  switch (type) {
+    case PFIELD_FORCE:
+      return CTX_DATA_(BLT_I18NCONTEXT_ID_OBJECT, "Force");
+    case PFIELD_VORTEX:
+      return CTX_DATA_(BLT_I18NCONTEXT_ID_OBJECT, "Vortex");
+    case PFIELD_MAGNET:
+      return CTX_DATA_(BLT_I18NCONTEXT_ID_OBJECT, "Magnet");
+    case PFIELD_WIND:
+      return CTX_DATA_(BLT_I18NCONTEXT_ID_OBJECT, "Wind");
+    case PFIELD_GUIDE:
+      return CTX_DATA_(BLT_I18NCONTEXT_ID_OBJECT, "CurveGuide");
+    case PFIELD_TEXTURE:
+      return CTX_DATA_(BLT_I18NCONTEXT_ID_OBJECT, "TextureField");
+    case PFIELD_HARMONIC:
+      return CTX_DATA_(BLT_I18NCONTEXT_ID_OBJECT, "Harmonic");
+    case PFIELD_CHARGE:
+      return CTX_DATA_(BLT_I18NCONTEXT_ID_OBJECT, "Charge");
+    case PFIELD_LENNARDJ:
+      return CTX_DATA_(BLT_I18NCONTEXT_ID_OBJECT, "Lennard-Jones");
+    case PFIELD_BOID:
+      return CTX_DATA_(BLT_I18NCONTEXT_ID_OBJECT, "Boid");
+    case PFIELD_TURBULENCE:
+      return CTX_DATA_(BLT_I18NCONTEXT_ID_OBJECT, "Turbulence");
+    case PFIELD_DRAG:
+      return CTX_DATA_(BLT_I18NCONTEXT_ID_OBJECT, "Drag");
+    case PFIELD_FLUIDFLOW :
+      return CTX_DATA_(BLT_I18NCONTEXT_ID_OBJECT, "FluidField");
+    case PFIELD_NULL:
+      return CTX_DATA_(BLT_I18NCONTEXT_ID_OBJECT, "Field");
+    case NUM_PFIELD_TYPES:
+      break;
+  }
+
+  BLI_assert(false);
+  return CTX_DATA_(BLT_I18NCONTEXT_ID_OBJECT, "Field");
+}
+
 static int effector_add_exec(bContext *C, wmOperator *op)
 {
   Object *ob;
@@ -712,8 +752,8 @@ static int effector_add_exec(bContext *C, wmOperator *op)
 
   if (type == PFIELD_GUIDE) {
     Curve *cu;
-    const char *name = CTX_DATA_(BLT_I18NCONTEXT_ID_OBJECT, "CurveGuide");
-    ob = ED_object_add_type(C, OB_CURVE, name, loc, rot, false, local_view_bits);
+    ob = ED_object_add_type(
+        C, OB_CURVE, get_effector_defname(type), loc, rot, false, local_view_bits);
 
     cu = ob->data;
     cu->flag |= CU_PATH | CU_3D;
@@ -726,8 +766,7 @@ static int effector_add_exec(bContext *C, wmOperator *op)
     }
   }
   else {
-    const char *name = CTX_DATA_(BLT_I18NCONTEXT_ID_OBJECT, "Field");
-    ob = ED_object_add_type(C, OB_EMPTY, name, loc, rot, false, local_view_bits);
+    ob = ED_object_add_type(C, OB_EMPTY, get_effector_defname(type), loc, rot, false, local_view_bits);
     BKE_object_obdata_size_init(ob, dia);
     if (ELEM(type, PFIELD_WIND, PFIELD_VORTEX)) {
       ob->empty_drawtype = OB_SINGLE_ARROW;
@@ -1237,7 +1276,7 @@ static int object_gpencil_add_exec(bContext *C, wmOperator *op)
       break;
   }
 
-  /* if this is a new object, initialise default stuff (colors, etc.) */
+  /* If this is a new object, initialize default stuff (colors, etc.) */
   if (newob) {
     /* set default viewport color to black */
     copy_v3_fl(ob->color, 0.0f);

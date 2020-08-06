@@ -90,7 +90,6 @@
 
 #include "RE_pipeline.h"
 
-#include "GPU_draw.h"
 #include "GPU_texture.h"
 
 #include "BLI_sys_types.h"  // for intptr_t support
@@ -393,7 +392,7 @@ void BKE_image_free_buffers_ex(Image *ima, bool do_lock)
     ima->rr = NULL;
   }
 
-  GPU_free_image(ima);
+  BKE_image_free_gputextures(ima);
 
   LISTBASE_FOREACH (ImageTile *, tile, &ima->tiles) {
     tile->ok = IMA_OK;
@@ -3943,7 +3942,7 @@ static void image_create_multilayer(Image *ima, ImBuf *ibuf, int framenr)
 #endif /* WITH_OPENEXR */
 
 /* common stuff to do with images after loading */
-static void image_initialize_after_load(Image *ima, ImageUser *iuser, ImBuf *UNUSED(ibuf))
+static void image_init_after_load(Image *ima, ImageUser *iuser, ImBuf *UNUSED(ibuf))
 {
   /* Preview is NULL when it has never been used as an icon before.
    * Never handle previews/icons outside of main thread. */
@@ -4046,11 +4045,11 @@ static ImBuf *load_sequence_single(
       }
     }
     else {
-      image_initialize_after_load(ima, iuser, ibuf);
+      image_init_after_load(ima, iuser, ibuf);
       *r_assign = true;
     }
 #else
-    image_initialize_after_load(ima, iuser, ibuf);
+    image_init_after_load(ima, iuser, ibuf);
     *r_assign = true;
 #endif
   }
@@ -4155,7 +4154,7 @@ static ImBuf *image_load_sequence_multilayer(Image *ima, ImageUser *iuser, int e
 
       BKE_imbuf_stamp_info(ima->rr, ibuf);
 
-      image_initialize_after_load(ima, iuser, ibuf);
+      image_init_after_load(ima, iuser, ibuf);
       image_assign_ibuf(ima, ibuf, iuser ? iuser->multi_index : 0, entry);
     }
     // else printf("pass not found\n");
@@ -4219,7 +4218,7 @@ static ImBuf *load_movie_single(Image *ima, ImageUser *iuser, int frame, const i
     ibuf = IMB_makeSingleUser(IMB_anim_absolute(ia->anim, fra, IMB_TC_RECORD_RUN, IMB_PROXY_NONE));
 
     if (ibuf) {
-      image_initialize_after_load(ima, iuser, ibuf);
+      image_init_after_load(ima, iuser, ibuf);
     }
     else {
       tile->ok = 0;
@@ -4364,7 +4363,7 @@ static ImBuf *load_image_single(Image *ima,
     else
 #endif
     {
-      image_initialize_after_load(ima, iuser, ibuf);
+      image_init_after_load(ima, iuser, ibuf);
       *r_assign = true;
 
       /* make packed file for autopack */
@@ -4478,7 +4477,7 @@ static ImBuf *image_get_ibuf_multilayer(Image *ima, ImageUser *iuser)
     if (rpass) {
       ibuf = IMB_allocImBuf(ima->rr->rectx, ima->rr->recty, 32, 0);
 
-      image_initialize_after_load(ima, iuser, ibuf);
+      image_init_after_load(ima, iuser, ibuf);
 
       ibuf->rect_float = rpass->rect;
       ibuf->flags |= IB_rectfloat;

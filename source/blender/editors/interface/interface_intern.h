@@ -233,8 +233,8 @@ struct uiBut {
   const char *disabled_info;
 
   BIFIconID icon;
-  /** drawtype: UI_EMBOSS, UI_EMBOSS_NONE ... etc, copied from the block */
-  char dt;
+  /** emboss: UI_EMBOSS, UI_EMBOSS_NONE ... etc, copied from the #uiBlock.emboss */
+  char emboss;
   /** direction in a pie menu, used for collision detection (RadialDirection) */
   signed char pie_dir;
   /** could be made into a single flag */
@@ -405,8 +405,8 @@ struct uiBlock {
   char direction;
   /** UI_BLOCK_THEME_STYLE_* */
   char theme_style;
-  /** drawtype: UI_EMBOSS, UI_EMBOSS_NONE ... etc, copied to buttons */
-  char dt;
+  /** UI_EMBOSS, UI_EMBOSS_NONE ... etc, copied to #uiBut.emboss */
+  char emboss;
   bool auto_open;
   char _pad[5];
   double auto_open_last;
@@ -536,6 +536,9 @@ void ui_but_extra_operator_icons_free(uiBut *but);
 extern void ui_but_rna_menu_convert_to_panel_type(struct uiBut *but, const char *panel_type);
 extern void ui_but_rna_menu_convert_to_menu_type(struct uiBut *but, const char *menu_type);
 extern bool ui_but_menu_draw_as_popover(const uiBut *but);
+
+void ui_but_range_set_hard(uiBut *but);
+void ui_but_range_set_soft(uiBut *but);
 
 extern void ui_but_update(uiBut *but);
 extern void ui_but_update_edited(uiBut *but);

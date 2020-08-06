@@ -2862,7 +2862,7 @@ static void rna_def_tool_settings(BlenderRNA *brna)
        "3D Cursor",
        "Draw stroke at 3D cursor location"},
       /* Weird, GP_PROJECT_VIEWALIGN is inverted. */
-      {0, "VIEW", ICON_RESTRICT_VIEW_ON, "View", "Stick stroke to the view "},
+      {0, "VIEW", ICON_RESTRICT_VIEW_ON, "View", "Stick stroke to the view"},
       {GP_PROJECT_VIEWSPACE | GP_PROJECT_DEPTH_VIEW,
        "SURFACE",
        ICON_FACESEL,
@@ -3088,6 +3088,15 @@ static void rna_def_tool_settings(BlenderRNA *brna)
   RNA_def_property_ui_text(prop,
                            "Correct Face Attributes",
                            "Correct data such as UV's and vertex colors when transforming");
+  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
+
+  prop = RNA_def_property(srna, "use_transform_correct_keep_connected", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(
+      prop, NULL, "uvcalc_flag", UVCALC_TRANSFORM_CORRECT_KEEP_CONNECTED);
+  RNA_def_property_ui_text(
+      prop,
+      "Keep Connected",
+      "During the Face Attributes correction, merge attributes connected to the same vertex");
   RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
 
   prop = RNA_def_property(srna, "use_mesh_automerge", PROP_BOOLEAN, PROP_NONE);
@@ -3580,7 +3589,7 @@ static void rna_def_unified_paint_settings(BlenderRNA *brna)
   RNA_def_property_enum_bitflag_sdna(prop, NULL, "flag");
   RNA_def_property_enum_items(prop, brush_size_unit_items);
   RNA_def_property_ui_text(
-      prop, "Radius Unit", "Measure brush size relative to the view or the scene ");
+      prop, "Radius Unit", "Measure brush size relative to the view or the scene");
 }
 
 static void rna_def_curve_paint_settings(BlenderRNA *brna)

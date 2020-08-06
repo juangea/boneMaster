@@ -1126,6 +1126,12 @@ void DepsgraphNodeBuilder::build_rigidbody(Scene *scene)
       if (object->type != OB_MESH) {
         continue;
       }
+      if (object->rigidbody_object == nullptr) {
+        continue;
+      }
+      if (object->rigidbody_object->type == RBO_TYPE_PASSIVE) {
+        continue;
+      }
       /* Create operation for flushing results. */
       /* Object's transform component - where the rigidbody operation
        * lives. */
@@ -1809,6 +1815,9 @@ void DepsgraphNodeBuilder::build_simulation(Simulation *simulation)
 void DepsgraphNodeBuilder::build_scene_sequencer(Scene *scene)
 {
   if (scene->ed == nullptr) {
+    return;
+  }
+  if (built_map_.checkIsBuiltAndTag(scene, BuilderMap::TAG_SCENE_SEQUENCER)) {
     return;
   }
   build_scene_audio(scene);

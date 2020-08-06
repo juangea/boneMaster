@@ -196,7 +196,7 @@ void SCULPT_vertex_normal_get(SculptSession *ss, int index, float no[3])
   }
 }
 
-static const float *sculpt_vertex_persistent_co_get(SculptSession *ss, int index)
+const float *SCULPT_vertex_persistent_co_get(SculptSession *ss, int index)
 {
   if (ss->persistent_base) {
     return ss->persistent_base[index].co;
@@ -204,7 +204,7 @@ static const float *sculpt_vertex_persistent_co_get(SculptSession *ss, int index
   return SCULPT_vertex_co_get(ss, index);
 }
 
-static void sculpt_vertex_persistent_normal_get(SculptSession *ss, int index, float no[3])
+void SCULPT_vertex_persistent_normal_get(SculptSession *ss, int index, float no[3])
 {
   if (ss->persistent_base) {
     copy_v3_v3(no, ss->persistent_base[index].no);
@@ -2966,7 +2966,7 @@ static void do_draw_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int totnode)
 
   /* XXX - this shouldn't be necessary, but sculpting crashes in blender2.8 otherwise
    * initialize before threads so they can do curve mapping. */
-  BKE_curvemapping_initialize(brush->curve);
+  BKE_curvemapping_init(brush->curve);
 
   /* Threaded loop over nodes. */
   SculptThreadedTaskData data = {
@@ -3043,7 +3043,7 @@ static void do_draw_sharp_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int to
 
   /* XXX - this shouldn't be necessary, but sculpting crashes in blender2.8 otherwise
    * initialize before threads so they can do curve mapping. */
-  BKE_curvemapping_initialize(brush->curve);
+  BKE_curvemapping_init(brush->curve);
 
   /* Threaded loop over nodes. */
   SculptThreadedTaskData data = {
@@ -3273,7 +3273,7 @@ static void do_slide_relax_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int t
     return;
   }
 
-  BKE_curvemapping_initialize(brush->curve);
+  BKE_curvemapping_init(brush->curve);
 
   SculptThreadedTaskData data = {
       .sd = sd,
@@ -4341,9 +4341,9 @@ static void do_layer_brush_task_cb_ex(void *__restrict userdata,
       float normal[3];
 
       if (use_persistent_base) {
-        sculpt_vertex_persistent_normal_get(ss, vi, normal);
+        SCULPT_vertex_persistent_normal_get(ss, vi, normal);
         mul_v3_fl(normal, brush->height);
-        madd_v3_v3v3fl(final_co, sculpt_vertex_persistent_co_get(ss, vi), normal, *disp_factor);
+        madd_v3_v3v3fl(final_co, SCULPT_vertex_persistent_co_get(ss, vi), normal, *disp_factor);
       }
       else {
         normal_short_to_float_v3(normal, orig_data.no);
@@ -5513,15 +5513,21 @@ static void do_brush_action(Sculpt *sd, Object *ob, Brush *brush, UnifiedPaintSe
     BKE_pbvh_search_gather(ss->pbvh, NULL, NULL, &nodes, &totnode);
   }
   else if (brush->sculpt_tool == SCULPT_TOOL_CLOTH) {
-    SculptSearchSphereData data = {
-        .ss = ss,
-        .sd = sd,
-        .radius_squared = square_f(ss->cache->radius * (1.0 + brush->cloth_sim_limit)),
-        .original = false,
-        .ignore_fully_ineffective = false,
-        .center = ss->cache->initial_location,
-    };
-    BKE_pbvh_search_gather(ss->pbvh, SCULPT_search_sphere_cb, &data, &nodes, &totnode);
+    if (brush->cloth_simulation_area_type == BRUSH_CLOTH_SIMULATION_AREA_LOCAL) {
+      SculptSearchSphereData data = {
+          .ss = ss,
+          .sd = sd,
+          .radius_squared = square_f(ss->cache->initial_radius * (1.0 + brush->cloth_sim_limit)),
+          .original = false,
+          .ignore_fully_ineffective = false,
+          .center = ss->cache->initial_location,
+      };
+      BKE_pbvh_search_gather(ss->pbvh, SCULPT_search_sphere_cb, &data, &nodes, &totnode);
+    }
+    else {
+      /* Gobal simulation, get all nodes. */
+      BKE_pbvh_search_gather(ss->pbvh, NULL, NULL, &nodes, &totnode);
+    }
   }
   else {
     const bool use_original = sculpt_tool_needs_original(brush->sculpt_tool) ? true :
@@ -6390,7 +6396,7 @@ static void sculpt_update_cache_invariants(
         brush = br;
         cache->saved_smooth_size = BKE_brush_size_get(scene, brush);
         BKE_brush_size_set(scene, brush, size);
-        BKE_curvemapping_initialize(brush->curve);
+        BKE_curvemapping_init(brush->curve);
       }
     }
   }
@@ -6458,7 +6464,7 @@ static void sculpt_update_cache_invariants(
 
 #define PIXEL_INPUT_THRESHHOLD 5
   if (brush->sculpt_tool == SCULPT_TOOL_ROTATE) {
-    cache->dial = BLI_dial_initialize(cache->initial_mouse, PIXEL_INPUT_THRESHHOLD);
+    cache->dial = BLI_dial_init(cache->initial_mouse, PIXEL_INPUT_THRESHHOLD);
   }
 
 #undef PIXEL_INPUT_THRESHHOLD
@@ -7208,11 +7214,16 @@ static void sculpt_restore_mesh(Sculpt *sd, Object *ob)
   SculptSession *ss = ob->sculpt;
   Brush *brush = BKE_paint_brush(&sd->paint);
 
+  /* For the cloth brush it makes more sense to not restore the mesh state to keep running the
+   * simulation from the previous state. */
+  if (brush->sculpt_tool == SCULPT_TOOL_CLOTH) {
+    return;
+  }
+
   /* Restore the mesh before continuing with anchored stroke. */
   if ((brush->flag & BRUSH_ANCHORED) ||
       ((brush->sculpt_tool == SCULPT_TOOL_GRAB ||
-        brush->sculpt_tool == SCULPT_TOOL_ELASTIC_DEFORM ||
-        brush->sculpt_tool == SCULPT_TOOL_CLOTH) &&
+        brush->sculpt_tool == SCULPT_TOOL_ELASTIC_DEFORM) &&
        BKE_brush_use_size_pressure(brush)) ||
       (brush->flag & BRUSH_DRAG_DOT)) {
 
@@ -8155,6 +8166,14 @@ void SCULPT_geometry_preview_lines_update(bContext *C, SculptSession *ss, float 
     return;
   }
 
+  if (!ss->deform_modifiers_active) {
+    return;
+  }
+
+  if (BKE_pbvh_type(ss->pbvh) == PBVH_GRIDS) {
+    return;
+  }
+
   BKE_sculpt_update_object_for_edit(depsgraph, ob, true, true, false);
 
   if (!ss->pmap) {
@@ -8942,7 +8961,7 @@ static void SCULPT_OT_mask_by_color(wmOperatorType *ot)
       "preserve_previous_mask",
       false,
       "Preserve Previous Mask",
-      "Preserve the previous mask and add or substract the new one generated by the colors");
+      "Preserve the previous mask and add or subtract the new one generated by the colors");
 
   RNA_def_float(ot->srna,
                 "threshold",
