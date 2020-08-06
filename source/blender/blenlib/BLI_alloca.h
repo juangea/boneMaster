@@ -25,6 +25,8 @@
 
 /* BLI_array_alloca / alloca */
 
+#include <stdlib.h>
+
 #if defined(__GNUC__) || defined(__clang__)
 #  if defined(__cplusplus) && (__cplusplus > 199711L)
 #    define BLI_array_alloca(arr, realsize) (decltype(arr)) alloca(sizeof(*arr) * (realsize))

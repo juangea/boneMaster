@@ -2497,7 +2497,12 @@ static void write_lightcache_texture(BlendWriter *writer, LightCacheTexture *tex
     else if (tex->data_type == LIGHTCACHETEX_UINT) {
       data_size *= sizeof(uint);
     }
-    BLO_write_raw(writer, data_size, tex->data);
+
+    /* FIXME: We can't save more than what 32bit systems can handle.
+     * The solution would be to split the texture but it is too late for 2.90. (see T78529) */
+    if (data_size < INT_MAX) {
+      BLO_write_raw(writer, data_size, tex->data);
+    }
   }
 }
 
@@ -4047,8 +4052,9 @@ static bool write_file_handle(Main *mainvar,
    * avoid thumbnail detecting changes because of this. */
   mywrite_flush(wd);
 
-  OverrideLibraryStorage *override_storage =
-      wd->use_memfile ? NULL : BKE_lib_override_library_operations_store_initialize();
+  OverrideLibraryStorage *override_storage = wd->use_memfile ?
+                                                 NULL :
+                                                 BKE_lib_override_library_operations_store_init();
 
 #define ID_BUFFER_STATIC_SIZE 8192
   /* This outer loop allows to save first data-blocks from real mainvar,

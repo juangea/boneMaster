@@ -80,11 +80,9 @@
 //#define USE_MODIFIER_VALIDATE
 
 #ifdef USE_MODIFIER_VALIDATE
-#  define ASSERT_IS_VALID_DM(dm) (BLI_assert((dm == NULL) || (DM_is_valid(dm) == true)))
 #  define ASSERT_IS_VALID_MESH(mesh) \
     (BLI_assert((mesh == NULL) || (BKE_mesh_is_valid(mesh) == true)))
 #else
-#  define ASSERT_IS_VALID_DM(dm)
 #  define ASSERT_IS_VALID_MESH(mesh)
 #endif
 
@@ -2356,32 +2354,6 @@ void DM_debug_print(DerivedMesh *dm)
   puts(str);
   fflush(stdout);
   MEM_freeN(str);
-}
-
-void DM_debug_print_cdlayers(CustomData *data)
-{
-  int i;
-  const CustomDataLayer *layer;
-
-  printf("{\n");
-
-  for (i = 0, layer = data->layers; i < data->totlayer; i++, layer++) {
-
-    const char *name = CustomData_layertype_name(layer->type);
-    const int size = CustomData_sizeof(layer->type);
-    const char *structname;
-    int structnum;
-    CustomData_file_write_info(layer->type, &structname, &structnum);
-    printf("        dict(name='%s', struct='%s', type=%d, ptr='%p', elem=%d, length=%d),\n",
-           name,
-           structname,
-           layer->type,
-           (const void *)layer->data,
-           size,
-           (int)(MEM_allocN_len(layer->data) / size));
-  }
-
-  printf("}\n");
 }
 
 bool DM_is_valid(DerivedMesh *dm)

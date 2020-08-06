@@ -1401,7 +1401,7 @@ static void widget_draw_icon(
     }
   }
   else if (ELEM(but->type, UI_BTYPE_BUT)) {
-    if (but->flag & UI_BUT_DISABLED) {
+    if (but->flag & (UI_BUT_DISABLED | UI_BUT_INACTIVE)) {
       alpha *= 0.5f;
     }
   }
@@ -2403,7 +2403,7 @@ static void widget_draw_text_icon(const uiFontStyle *fstyle,
     }
     else if (but->flag & UI_BUT_DRAG_MULTI) {
       bool text_is_edited = ui_but_drag_multi_edit_get(but) != NULL;
-      if (text_is_edited) {
+      if (text_is_edited || (but->drawflag & UI_BUT_TEXT_LEFT)) {
         rect->xmin += text_padding;
       }
     }
@@ -2622,18 +2622,19 @@ static void widget_state_numslider(uiWidgetType *wt, int state, int drawflag)
 /* labels use theme colors for text */
 static void widget_state_option_menu(uiWidgetType *wt, int state, int drawflag)
 {
-  bTheme *btheme = UI_GetTheme(); /* XXX */
+  const bTheme *btheme = UI_GetTheme();
 
-  /* call this for option button */
+  const uiWidgetColors *old_wcol = wt->wcol_theme;
+  uiWidgetColors wcol_menu_option = *wt->wcol_theme;
+
+  /* Override the checkbox theme colors to use the menu-back text colors. */
+  copy_v3_v3_uchar(wcol_menu_option.text, btheme->tui.wcol_menu_back.text);
+  copy_v3_v3_uchar(wcol_menu_option.text_sel, btheme->tui.wcol_menu_back.text_sel);
+  wt->wcol_theme = &wcol_menu_option;
+
   widget_state(wt, state, drawflag);
 
-  /* if not selected we get theme from menu back */
-  if (state & UI_SELECT) {
-    copy_v3_v3_uchar(wt->wcol.text, btheme->tui.wcol_menu_back.text_sel);
-  }
-  else {
-    copy_v3_v3_uchar(wt->wcol.text, btheme->tui.wcol_menu_back.text);
-  }
+  wt->wcol_theme = old_wcol;
 }
 
 static void widget_state_nothing(uiWidgetType *wt, int UNUSED(state), int UNUSED(drawflag))

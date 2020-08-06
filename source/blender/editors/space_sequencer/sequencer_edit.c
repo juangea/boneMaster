@@ -1000,6 +1000,7 @@ static bool sequence_offset_after_frame(Scene *scene, const int delta, const int
     if (seq->startdisp >= cfra) {
       BKE_sequence_translate(scene, seq, delta);
       BKE_sequence_calc(scene, seq);
+      BKE_sequence_invalidate_cache_preprocessed(scene, seq);
       done = true;
     }
   }
@@ -2150,7 +2151,7 @@ static int sequencer_reassign_inputs_exec(bContext *C, wmOperator *op)
   if (BKE_sequencer_render_loop_check(seq1, last_seq) ||
       BKE_sequencer_render_loop_check(seq2, last_seq) ||
       BKE_sequencer_render_loop_check(seq3, last_seq)) {
-    BKE_report(op->reports, RPT_ERROR, "Cannot reassign inputs: recursion detected.");
+    BKE_report(op->reports, RPT_ERROR, "Cannot reassign inputs: recursion detected");
     return OPERATOR_CANCELLED;
   }
 
@@ -2517,6 +2518,8 @@ static int sequencer_delete_exec(bContext *C, wmOperator *UNUSED(op))
   Scene *scene = CTX_data_scene(C);
   Editing *ed = BKE_sequencer_editing_get(scene, false);
   Sequence *seq;
+
+  BKE_sequencer_prefetch_stop(scene);
 
   SEQP_BEGIN (scene->ed, seq) {
     if (seq->flag & SELECT) {
@@ -2924,8 +2927,8 @@ static int sequencer_meta_separate_exec(bContext *C, wmOperator *UNUSED(op))
   }
 
   /* This moves strips from meta to parent, sating within same edit and no new strips are
-   * allocated. If the UUID was unique already (as it should) it will stay unique. Nn need to
-   * re-generate the UUIDs.*/
+   * allocated. If the UUID was unique already (as it should) it will stay unique.
+   * No need to re-generate the UUIDs. */
   BLI_movelisttolist(ed->seqbasep, &last_seq->seqbase);
 
   BLI_listbase_clear(&last_seq->seqbase);

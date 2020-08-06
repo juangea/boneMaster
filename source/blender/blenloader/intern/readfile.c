@@ -5145,6 +5145,9 @@ static void direct_link_pose(BlendDataReader *reader, bPose *pose)
   pose->chan_array = NULL;
 
   for (pchan = pose->chanbase.first; pchan; pchan = pchan->next) {
+    BKE_pose_channel_runtime_reset(&pchan->runtime);
+    BKE_pose_channel_session_uuid_generate(pchan);
+
     pchan->bone = NULL;
     BLO_read_data_address(reader, &pchan->parent);
     BLO_read_data_address(reader, &pchan->child);
@@ -5170,7 +5173,6 @@ static void direct_link_pose(BlendDataReader *reader, bPose *pose)
     CLAMP(pchan->rotmode, ROT_MODE_MIN, ROT_MODE_MAX);
 
     pchan->draw_data = NULL;
-    BKE_pose_channel_runtime_reset(&pchan->runtime);
   }
   pose->ikdata = NULL;
   if (pose->ikparam != NULL) {
@@ -5516,7 +5518,7 @@ static void direct_link_gpencil_modifiers(BlendDataReader *reader, ListBase *lb)
       if (gpmd->curve_intensity) {
         BKE_curvemapping_blend_read(reader, gpmd->curve_intensity);
         /* initialize the curve. Maybe this could be moved to modififer logic */
-        BKE_curvemapping_initialize(gpmd->curve_intensity);
+        BKE_curvemapping_init(gpmd->curve_intensity);
       }
     }
     else if (md->type == eGpencilModifierType_Thick) {
@@ -5525,7 +5527,7 @@ static void direct_link_gpencil_modifiers(BlendDataReader *reader, ListBase *lb)
       BLO_read_data_address(reader, &gpmd->curve_thickness);
       if (gpmd->curve_thickness) {
         BKE_curvemapping_blend_read(reader, gpmd->curve_thickness);
-        BKE_curvemapping_initialize(gpmd->curve_thickness);
+        BKE_curvemapping_init(gpmd->curve_thickness);
       }
     }
     else if (md->type == eGpencilModifierType_Tint) {
@@ -5534,7 +5536,7 @@ static void direct_link_gpencil_modifiers(BlendDataReader *reader, ListBase *lb)
       BLO_read_data_address(reader, &gpmd->curve_intensity);
       if (gpmd->curve_intensity) {
         BKE_curvemapping_blend_read(reader, gpmd->curve_intensity);
-        BKE_curvemapping_initialize(gpmd->curve_intensity);
+        BKE_curvemapping_init(gpmd->curve_intensity);
       }
     }
     else if (md->type == eGpencilModifierType_Smooth) {
@@ -5542,7 +5544,7 @@ static void direct_link_gpencil_modifiers(BlendDataReader *reader, ListBase *lb)
       BLO_read_data_address(reader, &gpmd->curve_intensity);
       if (gpmd->curve_intensity) {
         BKE_curvemapping_blend_read(reader, gpmd->curve_intensity);
-        BKE_curvemapping_initialize(gpmd->curve_intensity);
+        BKE_curvemapping_init(gpmd->curve_intensity);
       }
     }
     else if (md->type == eGpencilModifierType_Color) {
@@ -5550,7 +5552,7 @@ static void direct_link_gpencil_modifiers(BlendDataReader *reader, ListBase *lb)
       BLO_read_data_address(reader, &gpmd->curve_intensity);
       if (gpmd->curve_intensity) {
         BKE_curvemapping_blend_read(reader, gpmd->curve_intensity);
-        BKE_curvemapping_initialize(gpmd->curve_intensity);
+        BKE_curvemapping_init(gpmd->curve_intensity);
       }
     }
     else if (md->type == eGpencilModifierType_Opacity) {
@@ -5558,7 +5560,7 @@ static void direct_link_gpencil_modifiers(BlendDataReader *reader, ListBase *lb)
       BLO_read_data_address(reader, &gpmd->curve_intensity);
       if (gpmd->curve_intensity) {
         BKE_curvemapping_blend_read(reader, gpmd->curve_intensity);
-        BKE_curvemapping_initialize(gpmd->curve_intensity);
+        BKE_curvemapping_init(gpmd->curve_intensity);
       }
     }
   }
@@ -6030,7 +6032,7 @@ static void direct_link_lightcache_texture(BlendDataReader *reader, LightCacheTe
 
   if (lctex->data) {
     BLO_read_data_address(reader, &lctex->data);
-    if (BLO_read_requires_endian_switch(reader)) {
+    if (lctex->data && BLO_read_requires_endian_switch(reader)) {
       int data_size = lctex->components * lctex->tex_size[0] * lctex->tex_size[1] *
                       lctex->tex_size[2];
 
@@ -6042,10 +6044,15 @@ static void direct_link_lightcache_texture(BlendDataReader *reader, LightCacheTe
       }
     }
   }
+
+  if (lctex->data == NULL) {
+    zero_v3_int(lctex->tex_size);
+  }
 }
 
 static void direct_link_lightcache(BlendDataReader *reader, LightCache *cache)
 {
+  cache->flag &= ~LIGHTCACHE_NOT_USABLE;
   direct_link_lightcache_texture(reader, &cache->cube_tx);
   direct_link_lightcache_texture(reader, &cache->grid_tx);
 
@@ -6086,6 +6093,14 @@ static bool scene_validate_setscene__liblink(Scene *sce, const int totscene)
   }
 
   for (a = 0, sce_iter = sce; sce_iter->set; sce_iter = sce_iter->set, a++) {
+    /* This runs per library (before each libraries #Main has been joined),
+     * so we can't step into other libraries since `totscene` is only for this library.
+     *
+     * Also, other libraries may not have been linked yet,
+     * while we could check #LIB_TAG_NEED_LINK the library pointer check is sufficient. */
+    if (sce->id.lib != sce_iter->id.lib) {
+      return true;
+    }
     if (sce_iter->flag & SCE_READFILE_LIBLINK_NEED_SETSCENE_CHECK) {
       return true;
     }

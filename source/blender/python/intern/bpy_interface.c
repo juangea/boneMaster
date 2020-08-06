@@ -438,6 +438,12 @@ static void python_script_error_jump_text(struct Text *text)
   }
 }
 
+void BPY_python_backtrace(/* FILE */ void *fp)
+{
+  fputs("\n# Python backtrace\n", fp);
+  PyC_StackPrint(fp);
+}
+
 /* super annoying, undo _PyModule_Clear(), bug [#23871] */
 #define PYMODULE_CLEAR_WORKAROUND
 
@@ -921,8 +927,11 @@ int BPY_context_member_get(bContext *C, const char *member, bContextDataResult *
 /* TODO, reloading the module isn't functional at the moment. */
 
 static void bpy_module_free(void *mod);
+
+/* Defined in 'creator.c' when building as a Python module. */
 extern int main_python_enter(int argc, const char **argv);
 extern void main_python_exit(void);
+
 static struct PyModuleDef bpy_proxy_def = {
     PyModuleDef_HEAD_INIT,
     "bpy",           /* m_name */

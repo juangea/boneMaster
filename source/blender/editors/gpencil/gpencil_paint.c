@@ -836,7 +836,7 @@ static short gpencil_stroke_addpoint(tGPsdata *p,
     }
 
     /* color strength */
-    if (brush_settings->flag & GP_BRUSH_USE_STENGTH_PRESSURE) {
+    if (brush_settings->flag & GP_BRUSH_USE_STRENGTH_PRESSURE) {
       pt->strength *= BKE_curvemapping_evaluateF(brush_settings->curve_strength, 0, pressure);
       CLAMP(pt->strength, GPENCIL_STRENGTH_MIN, 1.0f);
     }
@@ -1817,15 +1817,15 @@ static void gpencil_init_drawing_brush(bContext *C, tGPsdata *p)
     changed = true;
   }
   /* Be sure curves are initializated. */
-  BKE_curvemapping_initialize(paint->brush->gpencil_settings->curve_sensitivity);
-  BKE_curvemapping_initialize(paint->brush->gpencil_settings->curve_strength);
-  BKE_curvemapping_initialize(paint->brush->gpencil_settings->curve_jitter);
-  BKE_curvemapping_initialize(paint->brush->gpencil_settings->curve_rand_pressure);
-  BKE_curvemapping_initialize(paint->brush->gpencil_settings->curve_rand_strength);
-  BKE_curvemapping_initialize(paint->brush->gpencil_settings->curve_rand_uv);
-  BKE_curvemapping_initialize(paint->brush->gpencil_settings->curve_rand_hue);
-  BKE_curvemapping_initialize(paint->brush->gpencil_settings->curve_rand_saturation);
-  BKE_curvemapping_initialize(paint->brush->gpencil_settings->curve_rand_value);
+  BKE_curvemapping_init(paint->brush->gpencil_settings->curve_sensitivity);
+  BKE_curvemapping_init(paint->brush->gpencil_settings->curve_strength);
+  BKE_curvemapping_init(paint->brush->gpencil_settings->curve_jitter);
+  BKE_curvemapping_init(paint->brush->gpencil_settings->curve_rand_pressure);
+  BKE_curvemapping_init(paint->brush->gpencil_settings->curve_rand_strength);
+  BKE_curvemapping_init(paint->brush->gpencil_settings->curve_rand_uv);
+  BKE_curvemapping_init(paint->brush->gpencil_settings->curve_rand_hue);
+  BKE_curvemapping_init(paint->brush->gpencil_settings->curve_rand_saturation);
+  BKE_curvemapping_init(paint->brush->gpencil_settings->curve_rand_value);
 
   /* assign to temp tGPsdata */
   p->brush = paint->brush;
