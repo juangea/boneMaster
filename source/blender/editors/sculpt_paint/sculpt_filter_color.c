@@ -80,7 +80,7 @@ typedef enum eSculptColorFilterTypes {
   COLOR_FILTER_SMOOTH,
 } eSculptColorFilterTypes;
 
-EnumPropertyItem prop_color_filter_types[] = {
+static EnumPropertyItem prop_color_filter_types[] = {
     {COLOR_FILTER_FILL, "FILL", 0, "Fill", "Fill with a specific color"},
     {COLOR_FILTER_HUE, "HUE", 0, "Hue", "Change hue"},
     {COLOR_FILTER_SATURATION, "SATURATION", 0, "Saturation", "Change saturation"},
@@ -322,6 +322,6 @@ void SCULPT_OT_color_filter(struct wmOperatorType *ot)
       ot->srna, "strength", 1.0f, -10.0f, 10.0f, "Strength", "Filter Strength", -10.0f, 10.0f);
 
   PropertyRNA *prop = RNA_def_float_color(
-      ot->srna, "fill_color", 3, NULL, 0.0f, FLT_MAX, "Fill Color", "fill color", 0.0f, 1.0f);
+      ot->srna, "fill_color", 3, NULL, 0.0f, FLT_MAX, "Fill Color", "", 0.0f, 1.0f);
   RNA_def_property_subtype(prop, PROP_COLOR_GAMMA);
 }
