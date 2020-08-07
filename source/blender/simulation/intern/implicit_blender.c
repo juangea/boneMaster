@@ -1783,18 +1783,24 @@ BLI_INLINE void apply_spring(
 bool SIM_mass_spring_force_spring_linear(Implicit_Data *data,
                                          int i,
                                          int j,
-                                         float restlen,
+                                         float restlenorig,
+                                         float *lenfact,
                                          float stiffness_tension,
                                          float damping_tension,
                                          float stiffness_compression,
                                          float damping_compression,
                                          bool resist_compress,
                                          bool new_compress,
-                                         float clamp_force)
+                                         float clamp_force,
+                                         float plasticity,
+                                         float yield_fact)
 {
   float extent[3], length, dir[3], vel[3];
   float f[3], dfdx[3][3], dfdv[3][3];
   float damping = 0;
+  float restlen;
+
+  restlen = (*lenfact) * restlenorig;
 
   // calculate elonglation
   spring_length(data, i, j, extent, dir, &length, vel);
@@ -1814,6 +1820,12 @@ bool SIM_mass_spring_force_spring_linear(Implicit_Data *data,
     mul_v3_v3fl(f, dir, stretch_force);
 
     dfdx_spring(dfdx, dir, length, restlen, stiffness_tension);
+
+    /* compute plasticity offset factor */
+    if (length > restlen * yield_fact) {
+      restlen += ((length / yield_fact) - restlen) * plasticity;
+      *lenfact = restlen / restlenorig;
+    }
   }
   else if (new_compress) {
     /* This is based on the Choi and Ko bending model,
@@ -1827,8 +1839,22 @@ bool SIM_mass_spring_force_spring_linear(Implicit_Data *data,
 
     outerproduct(dfdx, dir, dir);
     mul_m3_fl(dfdx, fbstar_jacobi(length, restlen, kb, cb));
+
+    /* compute plasticity offset factor */
+    if (length < restlen / yield_fact) {
+      restlen -= (restlen - (length * yield_fact)) * plasticity;
+      *lenfact = restlen / restlenorig;
+    }
   }
   else {
+    /* compute plasticity offset factor */
+    /* plasticity has to be computed even for non-compressive springs in a compression condition,
+     * otherwise issues occur where shearing gets unconstrained when cloth undergoes compression */
+    if (length < restlen / yield_fact) {
+      restlen -= (restlen - (length * yield_fact)) * plasticity;
+      *lenfact = restlen / restlenorig;
+    }
+
     return false;
   }
 
@@ -1955,19 +1981,39 @@ bool SIM_mass_spring_force_spring_angular(Implicit_Data *data,
                                           int *i_b,
                                           int len_a,
                                           int len_b,
-                                          float restang,
+                                          float restangorig,
+                                          float *angoffset,
                                           float stiffness,
-                                          float damping)
+                                          float damping,
+                                          float plasticity,
+                                          float yield_ang)
 {
   float angle, dir_a[3], dir_b[3], vel_a[3], vel_b[3];
   float f_a[3], f_b[3], f_e[3];
   float force;
+  float restang;
   int x;
+
+  restang = restangorig + *angoffset;
 
   spring_angle(data, i, j, i_a, i_b, len_a, len_b, dir_a, dir_b, &angle, vel_a, vel_b);
 
   /* spring force */
   force = stiffness * (angle - restang);
+
+  /* compute plasticity offset */
+  if (angle > restang) {
+    if (angle - restang > yield_ang) {
+      restang += (angle - restang - yield_ang) * plasticity;
+      *angoffset = restang - restangorig;
+    }
+  }
+  else if (angle < restang) {
+    if (restang - angle > yield_ang) {
+      restang -= (restang - angle - yield_ang) * plasticity;
+      *angoffset = restang - restangorig;
+    }
+  }
 
   /* damping force */
   force += -damping * (dot_v3v3(vel_a, dir_a) + dot_v3v3(vel_b, dir_b));

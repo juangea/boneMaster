@@ -161,6 +161,11 @@ void cloth_init(ClothModifierData *clmd)
 
   clmd->sim_parms->bending_model = CLOTH_BENDING_ANGULAR;
 
+  clmd->sim_parms->struct_plasticity = 0.0f;
+  clmd->sim_parms->struct_yield_fact = 1.0f;
+  clmd->sim_parms->bend_plasticity = 0.0f;
+  clmd->sim_parms->bend_yield_fact = 0.0f;
+
   if (!clmd->sim_parms->effector_weights) {
     clmd->sim_parms->effector_weights = BKE_effector_add_weights(NULL);
   }
@@ -1413,6 +1418,7 @@ static bool cloth_add_shear_bend_spring(ClothModifierData *clmd,
   spring->lin_stiffness = (cloth->verts[spring->kl].shear_stiff +
                            cloth->verts[spring->ij].shear_stiff) /
                           2.0f;
+  spring->lenfact = 1.0f;
 
   if (edgelist) {
     BLI_linklist_append(&edgelist[spring->ij], spring);
@@ -1454,6 +1460,8 @@ static bool cloth_add_shear_bend_spring(ClothModifierData *clmd,
 
     spring->restang = cloth_spring_angle(
         cloth->verts, spring->ij, spring->kl, spring->pa, spring->pb, spring->la, spring->lb);
+
+    spring->angoffset = 0.0f;
 
     spring->ang_stiffness = (cloth->verts[spring->ij].bend_stiff +
                              cloth->verts[spring->kl].bend_stiff) /
@@ -1655,6 +1663,7 @@ static int cloth_build_springs(ClothModifierData *clmd, Mesh *mesh)
                                    cloth->verts[spring->ij].internal_stiff) /
                                   2.0f;
           spring->type = CLOTH_SPRING_TYPE_INTERNAL;
+          spring->lenfact = 1.0f;
 
           spring->flags = 0;
 
@@ -1725,6 +1734,8 @@ static int cloth_build_springs(ClothModifierData *clmd, Mesh *mesh)
         cloth->verts[spring->kl].spring_count++;
         struct_springs_real++;
       }
+
+      spring->lenfact = 1.0f;
 
       spring->flags = 0;
       struct_springs++;
@@ -1830,6 +1841,8 @@ static int cloth_build_springs(ClothModifierData *clmd, Mesh *mesh)
                                                  spring->la,
                                                  spring->lb);
 
+            spring->angoffset = 0.0f;
+
             spring->ang_stiffness = (cloth->verts[spring->ij].bend_stiff +
                                      cloth->verts[spring->kl].bend_stiff) /
                                     2.0f;
@@ -1884,6 +1897,7 @@ static int cloth_build_springs(ClothModifierData *clmd, Mesh *mesh)
                                        cloth->verts[spring->ij].xrest) *
                               shrink_factor;
             spring->type = CLOTH_SPRING_TYPE_BENDING;
+            spring->lenfact = 1.0f;
             spring->lin_stiffness = (cloth->verts[spring->kl].bend_stiff +
                                      cloth->verts[spring->ij].bend_stiff) /
                                     2.0f;
@@ -1922,6 +1936,7 @@ static int cloth_build_springs(ClothModifierData *clmd, Mesh *mesh)
           spring->restlen = len_v3v3(cloth->verts[spring->kl].xrest,
                                      cloth->verts[spring->ij].xrest);
           spring->type = CLOTH_SPRING_TYPE_BENDING_HAIR;
+          spring->lenfact = 1.0f;
           spring->lin_stiffness = (cloth->verts[spring->kl].bend_stiff +
                                    cloth->verts[spring->ij].bend_stiff) /
                                   2.0f;
@@ -1961,6 +1976,7 @@ static int cloth_build_springs(ClothModifierData *clmd, Mesh *mesh)
           spring->restlen = len_v3v3(cloth->verts[spring->kl].xrest,
                                      cloth->verts[spring->ij].xrest);
           spring->type = CLOTH_SPRING_TYPE_BENDING;
+          spring->lenfact = 1.0f;
           spring->lin_stiffness = (cloth->verts[spring->kl].bend_stiff +
                                    cloth->verts[spring->ij].bend_stiff) /
                                   2.0f;
