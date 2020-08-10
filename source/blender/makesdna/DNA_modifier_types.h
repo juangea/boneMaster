@@ -94,6 +94,7 @@ typedef enum ModifierType {
   eModifierType_WeightedNormal = 54,
   eModifierType_Weld = 55,
   eModifierType_Fluid = 56,
+  eModifierType_VoxelMesher = 57,
   NUM_MODIFIER_TYPES,
 } ModifierType;
 
@@ -1648,6 +1649,139 @@ typedef struct RemeshModifierData {
   float voxel_size;
   float adaptivity;
 } RemeshModifierData;
+
+/* Voxel Mesher modifier */
+typedef enum eVoxelMesherModifierMode {
+  /* OpenVDB voxel remesh */
+  MOD_VOXELMESHER_VOXEL = 0,
+  /* metaball remesh, turns vertices or particles into metaballs */
+  MOD_VOXELMESHER_METABALL = 1,
+} eVoxelMesherModifierMode;
+
+typedef enum eVoxelMesherModifierFlags {
+  MOD_VOXELMESHER_SMOOTH_SHADING = (1 << 1),
+  MOD_VOXELMESHER_SMOOTH_NORMALS = (1 << 2),
+  MOD_VOXELMESHER_RELAX_TRIANGLES = (1 << 3),
+  MOD_VOXELMESHER_REPROJECT_DATA = (1 << 4),
+  MOD_VOXELMESHER_LIVE_REMESH = (1 << 5),
+  MOD_VOXELMESHER_ACCUMULATE = (1 << 6),
+  MOD_VOXELMESHER_SHARPEN_FEATURES = (1 << 7),
+  MOD_VOXELMESHER_FIX_POLES = (1 << 8),
+} VoxelMesherModifierFlags;
+
+typedef enum MetaballVoxelMesherFlags {
+  MOD_VOXELMESHER_VERTICES = (1 << 0),
+  MOD_VOXELMESHER_PARTICLES = (1 << 1),
+} MetaballVoxelMesherFlags;
+
+typedef enum {
+  eVoxelMesherFlag_Alive = (1 << 0),
+  eVoxelMesherFlag_Dead = (1 << 1),
+  eVoxelMesherFlag_Unborn = (1 << 2),
+  eVoxelMesherFlag_Size = (1 << 3),
+  eVoxelMesherFlag_Verts = (1 << 4),
+} MetaballVoxelMesherPsysFlag;
+
+typedef enum {
+  eVoxelMesherModifierOp_Union = 0,
+  eVoxelMesherModifierOp_Difference = 1,
+  eVoxelMesherModifierOp_Intersect = 2,
+} VoxelMesherModifierOp;
+
+typedef enum {
+  eVoxelMesherModifierSampler_None = 0,
+  eVoxelMesherModifierSampler_Point = 1,
+  eVoxelMesherModifierSampler_Box = 2,
+  eVoxelMesherModifierSampler_Quadratic = 3,
+} VoxelMesherModifierSampler;
+
+typedef enum eVoxelFilterType {
+  VOXEL_FILTER_NONE = 0,
+  VOXEL_FILTER_GAUSSIAN = 1,
+  VOXEL_FILTER_MEAN = 2,
+  VOXEL_FILTER_MEDIAN = 3,
+  VOXEL_FILTER_MEAN_CURVATURE = 4,
+  VOXEL_FILTER_LAPLACIAN = 5,
+  VOXEL_FILTER_DILATE = 6,
+  VOXEL_FILTER_ERODE = 7,
+} eVoxelFilterType;
+
+/*filter bias, aligned to openvdb */
+typedef enum eVoxelFilterBias {
+  VOXEL_BIAS_FIRST = 0,
+  VOXEL_BIAS_SECOND,
+  VOXEL_BIAS_THIRD,
+  VOXEL_BIAS_WENO5,
+  VOXEL_BIAS_HJWENO5,
+} eVoxelFilterBias;
+
+typedef enum eCSGVolumeOperandFlags {
+  MOD_VOXELMESHER_CSG_OBJECT_ENABLED = (1 << 0),
+  MOD_VOXELMESHER_CSG_SYNC_VOXEL_SIZE = (1 << 1),
+  MOD_VOXELMESHER_CSG_VOXEL_PERCENTAGE = (1 << 2),
+} eCSGVolumeOperandFlags;
+
+typedef struct CSGVolume_Object {
+  struct CSGVolume_Object *next, *prev;
+  struct Object *object;
+  float voxel_size;
+  float voxel_percentage;
+  char operation;
+  char flag;
+  char sampler;
+
+  char input;
+  char pflag;
+  char _pad;
+  short psys;
+
+  float part_trail_size;
+  float part_min_radius;
+  float part_scale_factor;
+  float part_vel_factor;
+  int part_trail;
+  int _pad2;
+
+} CSGVolume_Object;
+
+typedef struct VoxelMesherModifierData {
+  ModifierData modifier;
+
+  /* for voxel mode */
+  float voxel_size;
+  float isovalue;
+  float adaptivity;
+  float edge_tolerance;
+  float filter_distance;
+  float filter_sigma;
+  int filter_type;
+  int filter_bias;
+  int filter_width;
+  int filter_iterations;
+  int active_index;
+  float _pad1;
+
+  /* volume csg */
+  struct ListBase csg_operands;
+  struct Mesh *mesh_cached;
+  struct OpenVDBLevelSet *levelset_cached;
+
+  /*for metaball mode*/
+  float rendersize;
+  float wiresize;
+  float thresh;
+  float basesize[3];
+  int input;
+  int pflag;
+  
+  short flag;
+  short mode;
+  short psys;
+  short _pad3;
+
+  char size_defgrp_name[64]; /* MAX_VGROUP_NAME */
+  
+} VoxelMesherModifierData;
 
 /* Skin modifier */
 typedef struct SkinModifierData {

@@ -18,8 +18,32 @@
 
 # <pep8 compliant>
 import bpy
-from bpy.types import Panel
+from bpy.types import Panel, UIList
 from bpy.app.translations import pgettext_iface as iface_
+
+
+class VOXEL_MESHER_UL_csg(UIList):
+    def draw_item(self, _context, layout, _data, item, icon, _active_data_, _active_propname, _index):
+        # assert(isinstance(item, bpy.types.VertexGroup))
+        if self.layout_type in {'DEFAULT', 'COMPACT'}:
+            row = layout.row(align=True)
+            layout.prop(item, "enabled", text="")
+
+            if _index == 0:
+                layout.label(text="Self Object")    
+            else:
+                sp = layout.split(factor=0.1, align=True)
+                sp.separator()
+                s = sp.split(factor=0.66, align=True)
+                s.prop(item, "object", text="")
+                s.prop(item, "operation", text="")
+
+            layout.prop(item, "input", text="")
+            
+
+        elif self.layout_type == 'GRID':
+            layout.alignment = 'CENTER'
+            layout.label(text="", icon_value=icon)
 
 
 class ModifierButtonsPanel:
@@ -27,6 +51,7 @@ class ModifierButtonsPanel:
     bl_region_type = 'WINDOW'
     bl_context = "modifier"
     bl_options = {'HIDE_HEADER'}
+
 
 
 class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
@@ -1360,6 +1385,93 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
 
         layout.prop(md, "use_smooth_shade")
 
+    def VOXEL_MESHER(self, layout, ob, md):
+        layout.prop(md, "mode")
+
+        if md.mode == 'VOXEL':
+            col = layout.column(align=True)
+            col.prop(md, "voxel_size")
+            col.prop(md, "isovalue")
+            col.prop(md, "adaptivity")
+            layout.prop(md, "filter_type")
+            if md.filter_type != "NONE":
+                layout.prop(md, "filter_bias")
+                if md.filter_type in {"GAUSSIAN", "MEDIAN", "MEAN"}:
+                    layout.prop(md, "filter_width")
+                if md.filter_type == "GAUSSIAN":
+                    layout.prop(md, "filter_iterations")
+                    layout.prop(md, "filter_sigma")
+                if md.filter_type in {"DILATE", "ERODE"}:
+                    layout.prop(md, "filter_distance")
+            row = layout.row()
+            row.prop(md, "live_remesh")
+            row.prop(md, "smooth_normals")
+            row = layout.row()
+            row.prop(md, "relax_triangles")
+            row.prop(md, "reproject_data")
+            row = layout.row()
+            row.prop(md, "accumulate")
+            row.prop(md, "fix_poles")
+            row = layout.row()
+            row.prop(md, "sharpen_features")
+            if md.sharpen_features:
+                row.prop(md, "edge_tolerance")
+            layout.label(text="CSG Objects")
+
+            row = layout.row()
+            row.template_list("VOXEL_MESHER_UL_csg", "", md, "csg_operands", md, "active_index", rows=5)
+
+            col = row.column(align=True)
+            col.operator("voxelmesher.csg_add", icon='ADD', text="")
+            col.operator("voxelmesher.csg_remove", icon='REMOVE', text="").index = md.active_index
+            col.separator()
+            col.operator("voxelmesher.csg_move_up", icon='TRIA_UP', text="").index = md.active_index
+            col.operator("voxelmesher.csg_move_down", icon='TRIA_DOWN', text="").index = md.active_index
+
+            csg = md.csg_operands[md.active_index]
+            #row = layout.row(align=True)
+            #row.prop(csg, "input")
+
+            #col = layout.column()
+            #col.prop(csg, "use_voxel_percentage", text="Voxel Percentage")
+            #if not csg.use_voxel_percentage:
+            #    col.prop(csg, "sync_voxel_size", text="Sync Voxel Size")
+            #    col.prop(csg, "voxel_size")
+            #else:
+            #    col.prop(csg, "voxel_percentage")
+            #col.prop(csg, "sampler", text="")
+
+            if 'PARTICLES' in csg.input:
+                col = layout.column()
+                col.prop(csg, "psys")
+
+                col.prop(csg, "part_min_radius")
+                col.prop(csg, "part_scale_factor")
+                col.prop(csg, "part_vel_factor")
+
+                col = layout.column()
+                col.prop(csg, "part_trail")
+                col.prop(csg, "part_trail_size")
+                
+        elif md.mode == 'METABALL':
+            row = layout.row()
+            row.prop(md, "input")
+            if 'PARTICLES' in md.input:
+                row = layout.row()
+                row.prop(md, "psys")
+                row = layout.row()
+                row.prop(md, "filter")
+            row = layout.row()
+            col = row.column(align=True)
+            col.prop(md, "mball_size")
+            col = row.column(align=True)
+            col.label(text="Display Parameters:")
+            col.prop(md, "mball_threshold")
+            col.prop(md, "mball_resolution")
+            col.prop(md, "mball_render_resolution")
+            layout.prop_search(md, "size_vertex_group", ob, "vertex_groups", text = "Size Vertex Group")
+            layout.prop(md, "use_smooth_shade")
+
     @staticmethod
     def vertex_weight_mask(layout, ob, md):
         layout.label(text="Influence/Mask Options:")
@@ -2281,6 +2393,7 @@ class DATA_PT_gpencil_modifiers(ModifierButtonsPanel, Panel):
 
 
 classes = (
+    VOXEL_MESHER_UL_csg,
     DATA_PT_modifiers,
     DATA_PT_gpencil_modifiers,
 )

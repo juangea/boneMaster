@@ -5940,6 +5940,12 @@ static void direct_link_modifiers(FileData *fd, ListBase *lb, Object *ob)
         }
       }
     }
+    else if (md->type == eModifierType_VoxelMesher) {
+      VoxelMesherModifierData *vmd = (VoxelMesherModifierData *)md;
+      link_list(fd, &vmd->csg_operands);
+      vmd->mesh_cached = NULL;
+      vmd->levelset_cached = NULL;
+    }
     else if (md->type == eModifierType_Bevel) {
       BevelModifierData *bmd = (BevelModifierData *)md;
       bmd->custom_profile = newdataadr(fd, bmd->custom_profile);

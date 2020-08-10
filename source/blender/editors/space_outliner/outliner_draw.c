@@ -2151,6 +2151,9 @@ TreeElementIcon tree_element_get_icon(TreeStoreElem *tselem, TreeElement *te)
             case eModifierType_Remesh:
               data.icon = ICON_MOD_REMESH;
               break;
+            case eModifierType_VoxelMesher:
+              data.icon = ICON_MOD_REMESH;
+              break;
             case eModifierType_WeightVGEdit:
             case eModifierType_WeightVGMix:
             case eModifierType_WeightVGProximity:

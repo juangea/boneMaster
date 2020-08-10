@@ -2679,3 +2679,289 @@ void OBJECT_OT_surfacedeform_bind(wmOperatorType *ot)
 }
 
 /** \} */
+
+/* ------------------------------------------------------------------- */
+/** \name Voxel Mesher Modifier Operators
+ * \{ */
+
+static bool voxelmesher_update_check(bContext *C, wmOperator *op)
+{
+  Object *ob = ED_object_active_context(C);
+  VoxelMesherModifierData *vmd = (VoxelMesherModifierData *)edit_modifier_property_get(
+      op, ob, eModifierType_VoxelMesher);
+  bool do_update = true;
+
+  if (vmd->mode == MOD_VOXELMESHER_VOXEL) {
+    if (((vmd->flag & MOD_VOXELMESHER_LIVE_REMESH) == 0) && vmd->mesh_cached) {
+      do_update = false;
+    }
+  }
+
+  return do_update;
+}
+
+static bool voxelmesher_csg_poll(bContext *C)
+{
+  return edit_modifier_poll_generic(C, &RNA_VoxelMesherModifier, 0, true);
+}
+
+static int voxelmesher_csg_add_exec(bContext *C, wmOperator *op)
+{
+  Object *ob = ED_object_active_context(C);
+  Main *bmain = CTX_data_main(C);
+  VoxelMesherModifierData *vmd = (VoxelMesherModifierData *)edit_modifier_property_get(
+      op, ob, eModifierType_VoxelMesher);
+
+  if (vmd == NULL) {
+    return OPERATOR_CANCELLED;
+  }
+
+  CSGVolume_Object *vcob = MEM_callocN(sizeof(CSGVolume_Object), "vcob");
+  vcob->voxel_size = vmd->voxel_size;
+  vcob->flag |= MOD_VOXELMESHER_CSG_OBJECT_ENABLED;
+  vcob->flag |= MOD_VOXELMESHER_CSG_SYNC_VOXEL_SIZE;
+  vcob->sampler = eVoxelMesherModifierSampler_None;
+  vcob->voxel_percentage = 100.0f;
+
+  // some more initialization
+  vcob->input = MOD_VOXELMESHER_VERTICES;
+  vcob->pflag = 1;
+  vcob->psys = 1;
+  vcob->part_trail_size = 1.0f;
+  vcob->part_min_radius = 0.1f;
+  vcob->part_scale_factor = 2.0f;
+  vcob->part_vel_factor = 0.25f;
+
+  BLI_addtail(&vmd->csg_operands, vcob);
+
+  if (voxelmesher_update_check(C, op)) {
+    if (BLI_listbase_is_single(&vmd->csg_operands)) {
+      /*trigger update to detach modifier transform relation from modifier */
+      DEG_relations_tag_update(bmain);
+    }
+
+    DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY | ID_RECALC_COPY_ON_WRITE);
+    WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, ob);
+  }
+
+  return OPERATOR_FINISHED;
+}
+
+static int voxelmesher_csg_add_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
+{
+  if (edit_modifier_invoke_properties(C, op))
+    return voxelmesher_csg_add_exec(C, op);
+  else
+    return OPERATOR_CANCELLED;
+}
+
+void VOXELMESHER_OT_csg_add(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Add CSG Object";
+  ot->description = "Add CSG Object to voxelmesher modifier";
+  ot->idname = "VOXELMESHER_OT_csg_add";
+
+  /* api callbacks */
+  ot->poll = voxelmesher_csg_poll;
+  ot->invoke = voxelmesher_csg_add_invoke;
+  ot->exec = voxelmesher_csg_add_exec;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
+  edit_modifier_properties(ot);
+}
+
+static int voxelmesher_csg_remove_exec(bContext *C, wmOperator *op)
+{
+  Object *ob = ED_object_active_context(C);
+  Main *bmain = CTX_data_main(C);
+  VoxelMesherModifierData *vmd = (VoxelMesherModifierData *)edit_modifier_property_get(
+      op, ob, eModifierType_VoxelMesher);
+  int index = RNA_int_get(op->ptr, "index");
+  bool remove_allowed = false;
+
+  if (vmd == NULL) {
+    return OPERATOR_CANCELLED;
+  }
+
+  CSGVolume_Object *vcob = (CSGVolume_Object *)BLI_findlink(&vmd->csg_operands, index);
+  remove_allowed = (vcob && !vcob->object && index > 0) || (vcob && vcob->object && vcob->object != ob && index > 0);
+  if (!remove_allowed) {
+    return OPERATOR_CANCELLED;
+  }
+
+  if (vcob) {
+    BLI_remlink(&vmd->csg_operands, vcob);
+    MEM_freeN(vcob);
+    vmd->active_index = index - 1;
+  }
+
+  if (voxelmesher_update_check(C, op)) {
+    if (BLI_listbase_is_empty(&vmd->csg_operands)) {
+      /*trigger update to detach modifier transform relation from modifier */
+      DEG_relations_tag_update(bmain);
+    }
+
+    DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY | ID_RECALC_COPY_ON_WRITE);
+    WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, ob);
+  }
+
+  return OPERATOR_FINISHED;
+}
+
+static int voxelmesher_csg_remove_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
+{
+  if (edit_modifier_invoke_properties(C, op))
+    return voxelmesher_csg_remove_exec(C, op);
+  else
+    return OPERATOR_CANCELLED;
+}
+
+void VOXELMESHER_OT_csg_remove(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Remove CSG Object";
+  ot->description = "Remove CSG Object at index";
+  ot->idname = "VOXELMESHER_OT_csg_remove";
+
+  /* api callbacks */
+  ot->poll = voxelmesher_csg_poll;
+  ot->invoke = voxelmesher_csg_remove_invoke;
+  ot->exec = voxelmesher_csg_remove_exec;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
+  edit_modifier_properties(ot);
+
+  RNA_def_int(
+      ot->srna, "index", 0, 0, INT_MAX, "Index", "Index of the Object to remove", 0, INT_MAX);
+}
+
+static int voxelmesher_csg_move_up_exec(bContext *C, wmOperator *op)
+{
+  Object *ob = ED_object_active_context(C);
+  VoxelMesherModifierData *vmd = (VoxelMesherModifierData *)edit_modifier_property_get(
+      op, ob, eModifierType_VoxelMesher);
+  int index = RNA_int_get(op->ptr, "index");
+  bool move_allowed = false;
+
+  if (vmd == NULL) {
+    return OPERATOR_CANCELLED;
+  }
+
+  CSGVolume_Object *vcob = (CSGVolume_Object *)BLI_findlink(&vmd->csg_operands, index);
+
+  move_allowed = vcob && vcob->prev && vcob->object != ob && index > 1;
+  if (!move_allowed) {
+    return OPERATOR_CANCELLED;
+  }
+
+  if (vcob) {
+    BLI_remlink(&vmd->csg_operands, vcob);
+    BLI_insertlinkbefore(&vmd->csg_operands, vcob->prev, vcob);
+    vmd->active_index = index - 1;
+  }
+
+  if (voxelmesher_update_check(C, op)) {
+    DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY | ID_RECALC_COPY_ON_WRITE);
+    WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, ob);
+  }
+
+  return OPERATOR_FINISHED;
+}
+
+static int voxelmesher_csg_move_up_invoke(bContext *C,
+                                          wmOperator *op,
+                                          const wmEvent *UNUSED(event))
+{
+  if (edit_modifier_invoke_properties(C, op))
+    return voxelmesher_csg_move_up_exec(C, op);
+  else
+    return OPERATOR_CANCELLED;
+}
+
+void VOXELMESHER_OT_csg_move_up(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Move CSG Object up";
+  ot->description = "Move CSG Object at index to previous index";
+  ot->idname = "VOXELMESHER_OT_csg_move_up";
+
+  /* api callbacks */
+  ot->poll = voxelmesher_csg_poll;
+  ot->invoke = voxelmesher_csg_move_up_invoke;
+  ot->exec = voxelmesher_csg_move_up_exec;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
+  edit_modifier_properties(ot);
+
+  RNA_def_int(
+      ot->srna, "index", 0, 0, INT_MAX, "Index", "Index of the Object to move up", 0, INT_MAX);
+}
+
+static int voxelmesher_csg_move_down_exec(bContext *C, wmOperator *op)
+{
+  Object *ob = ED_object_active_context(C);
+  VoxelMesherModifierData *vmd = (VoxelMesherModifierData *)edit_modifier_property_get(
+      op, ob, eModifierType_VoxelMesher);
+  int index = RNA_int_get(op->ptr, "index");
+  bool move_allowed = false;
+
+  if (vmd == NULL) {
+    return OPERATOR_CANCELLED;
+  }
+
+  CSGVolume_Object *vcob = (CSGVolume_Object *)BLI_findlink(&vmd->csg_operands, index);
+
+  move_allowed = vcob && vcob->next && vcob->object != ob && index > 0;
+  if (!move_allowed) {
+    return OPERATOR_CANCELLED;
+  }
+
+  if (vcob) {
+    BLI_remlink(&vmd->csg_operands, vcob);
+    BLI_insertlinkafter(&vmd->csg_operands, vcob->next, vcob);
+    vmd->active_index = index + 1;
+  }
+
+  if (voxelmesher_update_check(C, op)) {
+    DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY | ID_RECALC_COPY_ON_WRITE);
+    WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, ob);
+  }
+
+  return OPERATOR_FINISHED;
+}
+
+static int voxelmesher_csg_move_down_invoke(bContext *C,
+                                            wmOperator *op,
+                                            const wmEvent *UNUSED(event))
+{
+  if (edit_modifier_invoke_properties(C, op))
+    return voxelmesher_csg_move_down_exec(C, op);
+  else
+    return OPERATOR_CANCELLED;
+}
+
+void VOXELMESHER_OT_csg_move_down(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Move CSG Object down";
+  ot->description = "Move CSG Object at index to next index";
+  ot->idname = "VOXELMESHER_OT_csg_move_down";
+
+  /* api callbacks */
+  ot->poll = voxelmesher_csg_poll;
+  ot->invoke = voxelmesher_csg_move_down_invoke;
+  ot->exec = voxelmesher_csg_move_down_exec;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
+  edit_modifier_properties(ot);
+
+  RNA_def_int(
+      ot->srna, "index", 0, 0, INT_MAX, "Index", "Index of the Object to move down", 0, INT_MAX);
+}
+
+/** \} */

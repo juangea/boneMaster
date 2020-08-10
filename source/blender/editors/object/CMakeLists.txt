@@ -94,4 +94,17 @@ if(WITH_NEW_OBJECT_TYPES)
   add_definitions(-DWITH_NEW_OBJECT_TYPES)
 endif()
 
+if(WITH_OPENVDB)
+  add_definitions(-DWITH_OPENVDB)
+  list(APPEND INC
+     ../../../../intern/openvdb
+  )
+
+  if(WITH_OPENVDB_BLOSC)
+    add_definitions(
+      -DWITH_OPENVDB_BLOSC
+    )
+  endif()
+endif()
+
 blender_add_lib(bf_editor_object "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
