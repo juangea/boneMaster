@@ -225,6 +225,7 @@ static bool paint_tool_require_location(Brush *brush, ePaintMode mode)
                SCULPT_TOOL_GRAB,
                SCULPT_TOOL_ELASTIC_DEFORM,
                SCULPT_TOOL_POSE,
+               SCULPT_TOOL_BOUNDARY,
                SCULPT_TOOL_ROTATE,
                SCULPT_TOOL_SNAKE_HOOK,
                SCULPT_TOOL_THUMB)) {
@@ -265,6 +266,7 @@ static bool paint_tool_require_inbetween_mouse_events(Brush *brush, ePaintMode m
                SCULPT_TOOL_SNAKE_HOOK,
                SCULPT_TOOL_ELASTIC_DEFORM,
                SCULPT_TOOL_CLOTH,
+               SCULPT_TOOL_BOUNDARY,
                SCULPT_TOOL_POSE)) {
         return false;
       }
@@ -1008,6 +1010,7 @@ static bool sculpt_is_grab_tool(Brush *br)
               SCULPT_TOOL_GRAB,
               SCULPT_TOOL_ELASTIC_DEFORM,
               SCULPT_TOOL_POSE,
+              SCULPT_TOOL_BOUNDARY,
               SCULPT_TOOL_THUMB,
               SCULPT_TOOL_ROTATE,
               SCULPT_TOOL_SNAKE_HOOK);
@@ -1198,7 +1201,10 @@ static void paint_line_strokes_spacing(bContext *C,
   *length_residue = length;
 }
 
-static void paint_stroke_line_end(bContext *C, wmOperator *op, PaintStroke *stroke, float mouse[2])
+static void paint_stroke_line_end(bContext *C,
+                                  wmOperator *op,
+                                  PaintStroke *stroke,
+                                  const float mouse[2])
 {
   Brush *br = stroke->brush;
   if (stroke->stroke_started && (br->flag & BRUSH_LINE)) {

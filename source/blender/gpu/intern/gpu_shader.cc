@@ -120,6 +120,7 @@ static void gpu_shader_standard_extensions(char defines[MAX_EXT_DEFINE_LENGTH])
   }
   if (GLEW_ARB_shader_draw_parameters) {
     strcat(defines, "#extension GL_ARB_shader_draw_parameters : enable\n");
+    strcat(defines, "#define GPU_ARB_shader_draw_parameters\n");
   }
   if (GPU_arb_texture_cube_map_array_is_supported()) {
     strcat(defines, "#extension GL_ARB_texture_cube_map_array : enable\n");
@@ -539,9 +540,8 @@ static const char *string_join_array_maybe_alloc(const char **str_arr, bool *r_i
   if (is_alloc) {
     return BLI_string_join_arrayN(str_arr, i);
   }
-  else {
-    return str_arr[0];
-  }
+
+  return str_arr[0];
 }
 
 /**

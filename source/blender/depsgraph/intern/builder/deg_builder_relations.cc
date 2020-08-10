@@ -254,9 +254,8 @@ TimeSourceNode *DepsgraphRelationBuilder::get_node(const TimeSourceKey &key) con
     /* XXX TODO */
     return nullptr;
   }
-  else {
-    return graph_->time_source;
-  }
+
+  return graph_->time_source;
 }
 
 ComponentNode *DepsgraphRelationBuilder::get_node(const ComponentKey &key) const
@@ -353,16 +352,16 @@ Relation *DepsgraphRelationBuilder::add_time_relation(TimeSourceNode *timesrc,
   if (timesrc && node_to) {
     return graph_->add_new_relation(timesrc, node_to, description, flags);
   }
-  else {
-    DEG_DEBUG_PRINTF((::Depsgraph *)graph_,
-                     BUILD,
-                     "add_time_relation(%p = %s, %p = %s, %s) Failed\n",
-                     timesrc,
-                     (timesrc) ? timesrc->identifier().c_str() : "<None>",
-                     node_to,
-                     (node_to) ? node_to->identifier().c_str() : "<None>",
-                     description);
-  }
+
+  DEG_DEBUG_PRINTF((::Depsgraph *)graph_,
+                   BUILD,
+                   "add_time_relation(%p = %s, %p = %s, %s) Failed\n",
+                   timesrc,
+                   (timesrc) ? timesrc->identifier().c_str() : "<None>",
+                   node_to,
+                   (node_to) ? node_to->identifier().c_str() : "<None>",
+                   description);
+
   return nullptr;
 }
 
@@ -374,16 +373,16 @@ Relation *DepsgraphRelationBuilder::add_operation_relation(OperationNode *node_f
   if (node_from && node_to) {
     return graph_->add_new_relation(node_from, node_to, description, flags);
   }
-  else {
-    DEG_DEBUG_PRINTF((::Depsgraph *)graph_,
-                     BUILD,
-                     "add_operation_relation(%p = %s, %p = %s, %s) Failed\n",
-                     node_from,
-                     (node_from) ? node_from->identifier().c_str() : "<None>",
-                     node_to,
-                     (node_to) ? node_to->identifier().c_str() : "<None>",
-                     description);
-  }
+
+  DEG_DEBUG_PRINTF((::Depsgraph *)graph_,
+                   BUILD,
+                   "add_operation_relation(%p = %s, %p = %s, %s) Failed\n",
+                   node_from,
+                   (node_from) ? node_from->identifier().c_str() : "<None>",
+                   node_to,
+                   (node_to) ? node_to->identifier().c_str() : "<None>",
+                   description);
+
   return nullptr;
 }
 
@@ -1013,6 +1012,9 @@ void DepsgraphRelationBuilder::build_object_pointcache(Object *object)
     /* Check which components needs the point cache. */
     int flag = -1;
     if (ptcache_id->type == PTCACHE_TYPE_RIGIDBODY) {
+      if (object->rigidbody_object->type == RBO_TYPE_PASSIVE) {
+        continue;
+      }
       flag = FLAG_TRANSFORM;
       OperationKey transform_key(
           &object->id, NodeType::TRANSFORM, OperationCode::TRANSFORM_SIMULATION_INIT);
@@ -1729,8 +1731,7 @@ void DepsgraphRelationBuilder::build_rigidbody(Scene *scene)
       /* Geometry must be known to create the rigid body. RBO_MESH_BASE
        * uses the non-evaluated mesh, so then the evaluation is
        * unnecessary. */
-      if (object->rigidbody_object != nullptr &&
-          object->rigidbody_object->mesh_source != RBO_MESH_BASE) {
+      if (rigidbody_object_depends_on_evaluated_geometry(object->rigidbody_object)) {
         /* NOTE: We prefer this relation to be never killed, to avoid
          * access partially evaluated mesh from solver. */
         ComponentKey object_geometry_key(&object->id, NodeType::GEOMETRY);

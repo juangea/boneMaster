@@ -21,8 +21,7 @@
  * \ingroup edsculpt
  */
 
-#ifndef __SCULPT_INTERN_H__
-#define __SCULPT_INTERN_H__
+#pragma once
 
 #include "DNA_brush_types.h"
 #include "DNA_key_types.h"
@@ -393,6 +392,22 @@ struct SculptPoseIKChain *SCULPT_pose_ik_chain_init(struct Sculpt *sd,
                                                     const float radius);
 void SCULPT_pose_ik_chain_free(struct SculptPoseIKChain *ik_chain);
 
+/* Boundary Brush. */
+struct SculptBoundary *SCULPT_boundary_data_init(Object *object,
+                                                 const int initial_vertex,
+                                                 const float radius);
+void SCULPT_boundary_data_free(struct SculptBoundary *bdata);
+void SCULPT_do_boundary_brush(struct Sculpt *sd,
+                              struct Object *ob,
+                              struct PBVHNode **nodes,
+                              int totnode);
+
+void SCULPT_boundary_edges_preview_draw(const uint gpuattr,
+                                        struct SculptSession *ss,
+                                        const float outline_col[3],
+                                        const float outline_alpha);
+void SCULPT_boundary_pivot_line_preview_draw(const uint gpuattr, struct SculptSession *ss);
+
 /* Multiplane Scrape Brush. */
 void SCULPT_do_multiplane_scrape_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int totnode);
 void SCULPT_multiplane_scrape_preview_draw(const uint gpuattr,
@@ -631,6 +646,9 @@ typedef struct SculptThreadedTaskData {
 
   float transform_mats[8][4][4];
 
+  /* Boundary brush */
+  float boundary_deform_strength;
+
   float cloth_time_step;
   SculptClothSimulation *cloth_sim;
   float *cloth_sim_initial_location;
@@ -856,6 +874,9 @@ typedef struct StrokeCache {
   float initial_normal[3];
   float true_initial_normal[3];
 
+  /* Boundary brush */
+  struct SculptBoundary *bdata[PAINT_SYMM_AREAS];
+
   /* Surface Smooth Brush */
   /* Stores the displacement produced by the laplacian step of HC smooth. */
   float (*surface_smooth_laplacian_disp)[3];
@@ -997,5 +1018,3 @@ void SCULPT_OT_set_detail_size(struct wmOperatorType *ot);
 
 /* Dyntopo. */
 void SCULPT_OT_dynamic_topology_toggle(struct wmOperatorType *ot);
-
-#endif

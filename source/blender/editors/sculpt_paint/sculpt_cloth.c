@@ -522,12 +522,12 @@ static SculptClothSimulation *cloth_brush_simulation_create(SculptSession *ss,
   cloth_sim->capacity_length_constraints = CLOTH_LENGTH_CONSTRAINTS_BLOCK;
 
   cloth_sim->acceleration = MEM_calloc_arrayN(
-      totverts, 3 * sizeof(float), "cloth sim acceleration");
-  cloth_sim->pos = MEM_calloc_arrayN(totverts, 3 * sizeof(float), "cloth sim pos");
-  cloth_sim->prev_pos = MEM_calloc_arrayN(totverts, 3 * sizeof(float), "cloth sim prev pos");
+      totverts, sizeof(float[3]), "cloth sim acceleration");
+  cloth_sim->pos = MEM_calloc_arrayN(totverts, sizeof(float[3]), "cloth sim pos");
+  cloth_sim->prev_pos = MEM_calloc_arrayN(totverts, sizeof(float[3]), "cloth sim prev pos");
   cloth_sim->last_iteration_pos = MEM_calloc_arrayN(
-      totverts, sizeof(float) * 3, "cloth sim last iteration pos");
-  cloth_sim->init_pos = MEM_calloc_arrayN(totverts, 3 * sizeof(float), "cloth sim init pos");
+      totverts, sizeof(float[3]), "cloth sim last iteration pos");
+  cloth_sim->init_pos = MEM_calloc_arrayN(totverts, sizeof(float[3]), "cloth sim init pos");
   cloth_sim->length_constraint_tweak = MEM_calloc_arrayN(
       totverts, sizeof(float), "cloth sim length tweak");
 
@@ -535,7 +535,7 @@ static SculptClothSimulation *cloth_brush_simulation_create(SculptSession *ss,
    * positions. */
   if (brush && SCULPT_is_cloth_deform_brush(brush)) {
     cloth_sim->deformation_pos = MEM_calloc_arrayN(
-        totverts, 3 * sizeof(float), "cloth sim deformation positions");
+        totverts, sizeof(float[3]), "cloth sim deformation positions");
   }
 
   cloth_sim->mass = cloth_mass;
@@ -979,7 +979,7 @@ void SCULPT_cloth_simulation_limits_draw(const uint gpuattr,
                                          const float alpha)
 {
   float cursor_trans[4][4], cursor_rot[4][4];
-  float z_axis[4] = {0.0f, 0.0f, 1.0f, 0.0f};
+  const float z_axis[4] = {0.0f, 0.0f, 1.0f, 0.0f};
   float quat[4];
   unit_m4(cursor_trans);
   translate_m4(cursor_trans, location[0], location[1], location[2]);

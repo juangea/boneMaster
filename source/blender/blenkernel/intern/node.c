@@ -1266,9 +1266,8 @@ bNode *nodeFindRootParent(bNode *node)
   if (node->parent) {
     return nodeFindRootParent(node->parent);
   }
-  else {
-    return node->type == NODE_FRAME ? node : NULL;
-  }
+
+  return node->type == NODE_FRAME ? node : NULL;
 }
 
 /**
@@ -1280,7 +1279,7 @@ bool nodeIsChildOf(const bNode *parent, const bNode *child)
   if (parent == child) {
     return true;
   }
-  else if (child->parent) {
+  if (child->parent) {
     return nodeIsChildOf(parent, child->parent);
   }
   return false;
@@ -1339,9 +1338,8 @@ static void iter_backwards_ex(const bNodeTree *ntree,
     if (link->fromnode->iter_flag & recursion_mask) {
       continue;
     }
-    else {
-      link->fromnode->iter_flag |= recursion_mask;
-    }
+
+    link->fromnode->iter_flag |= recursion_mask;
 
     if (!callback(link->fromnode, link->tonode, userdata)) {
       return;
@@ -1919,7 +1917,7 @@ bNodePreview *BKE_node_preview_verify(
   }
 
   if (preview->rect == NULL) {
-    preview->rect = MEM_callocN(4 * xsize + xsize * ysize * sizeof(char) * 4, "node preview rect");
+    preview->rect = MEM_callocN(4 * xsize + xsize * ysize * sizeof(char[4]), "node preview rect");
     preview->xsize = xsize;
     preview->ysize = ysize;
   }
@@ -2057,7 +2055,7 @@ static void node_preview_sync(bNodePreview *to, bNodePreview *from)
   if (to->rect && from->rect) {
     int xsize = to->xsize;
     int ysize = to->ysize;
-    memcpy(to->rect, from->rect, xsize * ysize * sizeof(char) * 4);
+    memcpy(to->rect, from->rect, xsize * ysize * sizeof(char[4]));
   }
 }
 
@@ -2582,9 +2580,8 @@ bNodeTree *ntreeLocalize(bNodeTree *ntree)
 
     return ltree;
   }
-  else {
-    return NULL;
-  }
+
+  return NULL;
 }
 
 /* sync local composite with real tree */
@@ -2989,9 +2986,8 @@ bNode *nodeGetActiveID(bNodeTree *ntree, short idtype)
     return node_get_active_id_recursive(
         ntree->active_viewer_key, NODE_INSTANCE_KEY_BASE, ntree, idtype);
   }
-  else {
-    return NULL;
-  }
+
+  return NULL;
 }
 
 bool nodeSetActiveID(bNodeTree *ntree, short idtype, ID *id)
@@ -3127,9 +3123,8 @@ int nodeSocketLinkLimit(struct bNodeSocket *sock)
     int limit = (sock->in_out == SOCK_IN) ? stype->input_link_limit : stype->output_link_limit;
     return limit;
   }
-  else {
-    return sock->limit;
-  }
+
+  return sock->limit;
 }
 
 /* ************** Node Clipboard *********** */
@@ -3419,9 +3414,8 @@ bool BKE_node_instance_hash_tag_key(bNodeInstanceHash *hash, bNodeInstanceKey ke
     entry->tag = 1;
     return true;
   }
-  else {
-    return false;
-  }
+
+  return false;
 }
 
 void BKE_node_instance_hash_remove_untagged(bNodeInstanceHash *hash,
@@ -3835,6 +3829,7 @@ static bool node_poll_instance_default(bNode *node, bNodeTree *ntree)
   return node->typeinfo->poll(node->typeinfo, ntree);
 }
 
+/* NOLINTNEXTLINE: readability-function-size */
 void node_type_base(bNodeType *ntype, int type, const char *name, short nclass, short flag)
 {
   /* Use static type info header to map static int type to identifier string and RNA struct type.
