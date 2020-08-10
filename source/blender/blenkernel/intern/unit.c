@@ -130,7 +130,7 @@ typedef struct bUnitCollection {
 /* Keep table lignment. */
 /* clang-format off */
 
-#define UNIT_COLLECTION_LENGTH(def) (sizeof(def) / sizeof(bUnitDef) - 1)
+#define UNIT_COLLECTION_LENGTH(def) (ARRAY_SIZE(def) - 1)
 #define NULL_UNIT {NULL, NULL, NULL, NULL, NULL, NULL, 0.0, 0.0}
 
 /* Dummy */
@@ -970,9 +970,8 @@ double bUnit_PreferredInputUnitScalar(const struct UnitSettings *settings, int t
   if (unit) {
     return unit->scalar;
   }
-  else {
-    return bUnit_BaseScalar(units.system, type);
-  }
+
+  return bUnit_BaseScalar(units.system, type);
 }
 
 /* make a copy of the string that replaces the units with numbers
@@ -1155,9 +1154,8 @@ double bUnit_BaseScalar(int system, int type)
   if (usys) {
     return unit_default(usys)->scalar;
   }
-  else {
-    return 1.0;
-  }
+
+  return 1.0;
 }
 
 /* external access */

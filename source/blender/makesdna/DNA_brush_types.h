@@ -21,8 +21,7 @@
  * \ingroup DNA
  */
 
-#ifndef __DNA_BRUSH_TYPES_H__
-#define __DNA_BRUSH_TYPES_H__
+#pragma once
 
 #include "DNA_ID.h"
 #include "DNA_curve_types.h"
@@ -69,7 +68,7 @@ typedef struct BrushGpencilSettings {
   short draw_subdivide;
   /** Layers used for fill. */
   short fill_layer_mode;
-  char _pad[2];
+  short fill_direction;
 
   /** Factor for transparency. */
   float fill_threshold;
@@ -380,6 +379,14 @@ typedef enum eBrushSlideDeformType {
   BRUSH_SLIDE_DEFORM_EXPAND = 2,
 } eBrushSlideDeformType;
 
+typedef enum eBrushBoundaryDeformType {
+  BRUSH_BOUNDARY_DEFORM_BEND = 0,
+  BRUSH_BOUNDARY_DEFORM_EXPAND = 1,
+  BRUSH_BOUNDARY_DEFORM_INFLATE = 2,
+  BRUSH_BOUNDARY_DEFORM_GRAB = 3,
+  BRUSH_BOUNDARY_DEFORM_TWIST = 4,
+} eBrushBushBoundaryDeformType;
+
 /* Gpencilsettings.Vertex_mode */
 typedef enum eGp_Vertex_Mode {
   /* Affect to Stroke only. */
@@ -525,7 +532,7 @@ typedef struct Brush {
   /** Source for fill tool color gradient application. */
   char gradient_fill_mode;
 
-  char _pad0[5];
+  char _pad0[1];
 
   /** Projection shape (sphere, circle). */
   char falloff_shape;
@@ -586,6 +593,9 @@ typedef struct Brush {
   int pose_smooth_iterations;
   int pose_ik_segments;
   int pose_origin_type;
+
+  /* boundary */
+  int boundary_deform_type;
 
   /* cloth */
   int cloth_deform_type;
@@ -799,6 +809,7 @@ typedef enum eBrushSculptTool {
   SCULPT_TOOL_DRAW_FACE_SETS = 27,
   SCULPT_TOOL_PAINT = 28,
   SCULPT_TOOL_SMEAR = 29,
+  SCULPT_TOOL_BOUNDARY = 30,
 } eBrushSculptTool;
 
 /* Brush.uv_sculpt_tool */
@@ -946,5 +957,3 @@ enum {
 
 #define MAX_BRUSH_PIXEL_RADIUS 500
 #define GP_MAX_BRUSH_PIXEL_RADIUS 1000
-
-#endif /* __DNA_BRUSH_TYPES_H__ */

@@ -23,8 +23,7 @@
  * This interface allow GPU to manage VAOs for multiple context and threads.
  */
 
-#ifndef __GPU_CONTEXT_H__
-#define __GPU_CONTEXT_H__
+#pragma once
 
 #include "GPU_batch.h"
 #include "GPU_common.h"
@@ -36,7 +35,15 @@ extern "C" {
 
 typedef struct GPUContext GPUContext;
 
-GPUContext *GPU_context_create(GLuint default_framebuffer);
+typedef enum eGPUBackendType {
+  GPU_BACKEND_NONE = 0,
+  GPU_BACKEND_OPENGL,
+} eGPUBackendType;
+
+void GPU_backend_init(eGPUBackendType backend);
+void GPU_backend_exit(void);
+
+GPUContext *GPU_context_create(void *ghost_window);
 void GPU_context_discard(GPUContext *);
 
 void GPU_context_active_set(GPUContext *);
@@ -53,5 +60,3 @@ void GPU_context_main_unlock(void);
 #ifdef __cplusplus
 }
 #endif
-
-#endif /* __GPU_CONTEXT_H__ */

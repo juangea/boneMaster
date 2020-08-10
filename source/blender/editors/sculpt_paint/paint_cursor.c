@@ -875,7 +875,7 @@ BLI_INLINE void draw_rect_point(uint pos,
   imm_draw_box_wire_2d(pos, minx, miny, maxx, maxy);
 }
 
-BLI_INLINE void draw_bezier_handle_lines(uint pos, float sel_col[4], BezTriple *bez)
+BLI_INLINE void draw_bezier_handle_lines(uint pos, const float sel_col[4], BezTriple *bez)
 {
   immUniformColor4f(0.0f, 0.0f, 0.0f, 0.5f);
   GPU_line_width(3.0f);
@@ -1352,8 +1352,10 @@ static void paint_cursor_sculpt_session_update_and_init(PaintCursorContext *pcon
   ViewContext *vc = &pcontext->vc;
   SculptCursorGeometryInfo gi;
 
-  float mouse[2] = {pcontext->x - pcontext->region->winrct.xmin,
-                    pcontext->y - pcontext->region->winrct.ymin};
+  const float mouse[2] = {
+      pcontext->x - pcontext->region->winrct.xmin,
+      pcontext->y - pcontext->region->winrct.ymin,
+  };
 
   /* This updates the active vertex, which is needed for most of the Sculpt/Vertex Colors tools to
    * work correctly */
@@ -1410,8 +1412,6 @@ static void paint_draw_2D_view_brush_cursor(PaintCursorContext *pcontext)
                           pcontext->translation[1],
                           pcontext->final_radius,
                           40);
-
-  immUnbindProgram();
 }
 
 static void paint_draw_legacy_3D_view_brush_cursor(PaintCursorContext *pcontext)
@@ -1457,7 +1457,7 @@ static void paint_cursor_update_object_space_radius(PaintCursorContext *pcontext
 static void paint_cursor_drawing_setup_cursor_space(PaintCursorContext *pcontext)
 {
   float cursor_trans[4][4], cursor_rot[4][4];
-  float z_axis[4] = {0.0f, 0.0f, 1.0f, 0.0f};
+  const float z_axis[4] = {0.0f, 0.0f, 1.0f, 0.0f};
   float quat[4];
   copy_m4_m4(cursor_trans, pcontext->vc.obact->obmat);
   translate_m4(cursor_trans, pcontext->location[0], pcontext->location[1], pcontext->location[2]);
@@ -1506,6 +1506,43 @@ static void paint_cursor_pose_brush_origins_draw(PaintCursorContext *pcontext)
                                    pcontext->vc.obact->obmat,
                                    3);
   }
+}
+
+static void paint_cursor_preview_boundary_data_pivot_draw(PaintCursorContext *pcontext)
+{
+
+  if (!pcontext->ss->boundary_preview) {
+    /* There is no guarantee that a boundary preview exists as there may be no boundaries
+     * inside the brush radius. */
+    return;
+  }
+  immUniformColor4f(1.0f, 1.0f, 1.0f, 0.8f);
+  cursor_draw_point_screen_space(
+      pcontext->pos,
+      pcontext->region,
+      SCULPT_vertex_co_get(pcontext->ss, pcontext->ss->boundary_preview->pivot_vertex),
+      pcontext->vc.obact->obmat,
+      3);
+}
+
+static void paint_cursor_preview_boundary_data_update(PaintCursorContext *pcontext,
+                                                      const bool update_previews)
+{
+  SculptSession *ss = pcontext->ss;
+  if (!(update_previews || !ss->boundary_preview)) {
+    return;
+  }
+
+  /* Needed for updating the necessary SculptSession data in order to initialize the
+   * boundary data for the preview. */
+  BKE_sculpt_update_object_for_edit(pcontext->depsgraph, pcontext->vc.obact, true, false, false);
+
+  if (ss->boundary_preview) {
+    SCULPT_boundary_data_free(ss->boundary_preview);
+  }
+
+  ss->boundary_preview = SCULPT_boundary_data_init(
+      pcontext->vc.obact, ss->active_vertex_index, pcontext->radius);
 }
 
 static void paint_cursor_draw_3d_view_brush_cursor_inactive(PaintCursorContext *pcontext)
@@ -1577,6 +1614,11 @@ static void paint_cursor_draw_3d_view_brush_cursor_inactive(PaintCursorContext *
     paint_cursor_pose_brush_origins_draw(pcontext);
   }
 
+  if (brush->sculpt_tool == SCULPT_TOOL_BOUNDARY) {
+    paint_cursor_preview_boundary_data_update(pcontext, update_previews);
+    paint_cursor_preview_boundary_data_pivot_draw(pcontext);
+  }
+
   /* Setup 3D perspective drawing. */
   GPU_matrix_push_projection();
   ED_view3d_draw_setup_view(pcontext->wm,
@@ -1601,6 +1643,12 @@ static void paint_cursor_draw_3d_view_brush_cursor_inactive(PaintCursorContext *
 
   if (brush->sculpt_tool == SCULPT_TOOL_POSE) {
     paint_cursor_pose_brush_segments_draw(pcontext);
+  }
+
+  if (brush->sculpt_tool == SCULPT_TOOL_BOUNDARY) {
+    SCULPT_boundary_edges_preview_draw(
+        pcontext->pos, pcontext->ss, pcontext->outline_col, pcontext->outline_alpha);
+    SCULPT_boundary_pivot_line_preview_draw(pcontext->pos, pcontext->ss);
   }
 
   GPU_matrix_pop();

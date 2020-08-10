@@ -82,7 +82,7 @@ void SCULPT_filter_cache_init(Object *ob, Sculpt *sd, const int undo_type)
 
   ss->filter_cache->random_seed = rand();
 
-  float center[3] = {0.0f};
+  const float center[3] = {0.0f};
   SculptSearchSphereData search_data = {
       .original = true,
       .center = center,
@@ -595,7 +595,7 @@ static int sculpt_mesh_filter_invoke(bContext *C, wmOperator *op, const wmEvent 
   }
 
   if (RNA_enum_get(op->ptr, "type") == MESH_FILTER_SURFACE_SMOOTH) {
-    ss->filter_cache->surface_smooth_laplacian_disp = MEM_mallocN(3 * sizeof(float) * totvert,
+    ss->filter_cache->surface_smooth_laplacian_disp = MEM_mallocN(sizeof(float[3]) * totvert,
                                                                   "surface smooth disp");
     ss->filter_cache->surface_smooth_shape_preservation = RNA_float_get(
         op->ptr, "surface_smooth_shape_preservation");
@@ -612,7 +612,7 @@ static int sculpt_mesh_filter_invoke(bContext *C, wmOperator *op, const wmEvent 
 
     ss->filter_cache->sharpen_factor = MEM_mallocN(sizeof(float) * totvert, "sharpen factor");
     ss->filter_cache->sharpen_detail_directions = MEM_malloc_arrayN(
-        totvert, 3 * sizeof(float), "sharpen detail direction");
+        totvert, sizeof(float[3]), "sharpen detail direction");
 
     mesh_filter_sharpen_init_factors(ss);
   }
