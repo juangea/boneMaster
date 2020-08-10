@@ -17,8 +17,7 @@
  * All rights reserved.
  */
 
-#ifndef __IMPLICIT_H__
-#define __IMPLICIT_H__
+#pragma once
 
 /** \file
  * \ingroup bph
@@ -273,6 +272,4 @@ void SIM_hair_volume_vertex_grid_forces(struct HairGrid *grid,
 
 #ifdef __cplusplus
 }
-#endif
-
 #endif
