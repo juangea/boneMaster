@@ -18,8 +18,7 @@
  * \ingroup modifiers
  */
 
-#ifndef __MOD_MODIFIERTYPES_H__
-#define __MOD_MODIFIERTYPES_H__
+#pragma once
 
 #include "BKE_modifier.h"
 
@@ -95,5 +94,3 @@ void modifier_type_init(ModifierTypeInfo *types[]);
 #ifdef __cplusplus
 }
 #endif
-
-#endif /* __MOD_MODIFIERTYPES_H__ */

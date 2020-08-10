@@ -21,8 +21,7 @@
  * \ingroup edobj
  */
 
-#ifndef __OBJECT_INTERN_H__
-#define __OBJECT_INTERN_H__
+#pragma once
 
 #ifdef __cplusplus
 extern "C" {
@@ -320,5 +319,3 @@ void VOXELMESHER_OT_csg_move_down(struct wmOperatorType *ot);
 #ifdef __cplusplus
 }
 #endif
-
-#endif /* __OBJECT_INTERN_H__ */

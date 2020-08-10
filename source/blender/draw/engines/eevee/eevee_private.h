@@ -20,8 +20,7 @@
  * \ingroup DNA
  */
 
-#ifndef __EEVEE_PRIVATE_H__
-#define __EEVEE_PRIVATE_H__
+#pragma once
 
 #include "DRW_render.h"
 
@@ -913,6 +912,7 @@ typedef struct EEVEE_PrivateData {
   /* Render Matrices */
   float studiolight_matrix[3][3];
   float overscan, overscan_pixels;
+  float camtexcofac[4];
   float size_orig[2];
 
   /* Mist Settings */
@@ -1285,6 +1285,9 @@ bool EEVEE_render_init(EEVEE_Data *vedata,
 void EEVEE_render_view_sync(EEVEE_Data *vedata,
                             struct RenderEngine *engine,
                             struct Depsgraph *depsgraph);
+void EEVEE_render_modules_init(EEVEE_Data *vedata,
+                               struct RenderEngine *engine,
+                               struct Depsgraph *depsgraph);
 void EEVEE_render_cache_init(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata);
 void EEVEE_render_cache(void *vedata,
                         struct Object *ob,
@@ -1356,5 +1359,3 @@ static const float cubefacemat[6][4][4] = {
      {0.0f, 0.0f, 1.0f, 0.0f},
      {0.0f, 0.0f, 0.0f, 1.0f}},
 };
-
-#endif /* __EEVEE_PRIVATE_H__ */
