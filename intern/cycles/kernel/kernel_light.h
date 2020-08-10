@@ -30,6 +30,7 @@ typedef struct LightSample {
   int prim;       /* primitive id for triangle/curve lights */
   int shader;     /* shader id */
   int lamp;       /* lamp id */
+  uint groups;    /* lightgroup bitfield */
   LightType type; /* type of light */
 } LightSample;
 
@@ -541,6 +542,7 @@ ccl_device_inline bool lamp_light_sample(
   ls->lamp = lamp;
   ls->u = randu;
   ls->v = randv;
+  ls->groups = lamp_lightgroups(kg, lamp);
 
   if (type == LIGHT_DISTANT) {
     /* distant light */
@@ -663,6 +665,7 @@ ccl_device bool lamp_light_eval(
   /* todo: missing texture coordinates */
   ls->u = 0.0f;
   ls->v = 0.0f;
+  ls->groups = lamp_lightgroups(kg, lamp);
 
   if (!(ls->shader & SHADER_USE_MIS))
     return false;
@@ -942,6 +945,7 @@ ccl_device_forceinline void triangle_light_sample(KernelGlobals *kg,
   ls->lamp = LAMP_NONE;
   ls->shader |= SHADER_USE_MIS;
   ls->type = LIGHT_TRIANGLE;
+  ls->groups = object_lightgroups(kg, object);
 
   float distance_to_plane = fabsf(dot(N0, V[0] - P) / dot(N0, N0));
 

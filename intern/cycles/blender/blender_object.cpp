@@ -312,6 +312,14 @@ Object *BlenderSync::sync_object(BL::Depsgraph &b_depsgraph,
       object->random_id = hash_uint2(hash_string(object->name.c_str()), 0);
     }
 
+    /* light groups */
+    if (lightgroup_map.count(b_ob.name())) {
+      object->lightgroups = lightgroup_map[b_ob.name()];
+    }
+    else {
+      object->lightgroups = LIGHTGROUPS_NONE;
+    }
+
     object->tag_update(scene);
   }
 
@@ -346,6 +354,20 @@ void BlenderSync::sync_objects(BL::Depsgraph &b_depsgraph,
 
   /* initialize culling */
   BlenderObjectCulling culling(scene, b_scene);
+
+  /* Build lightgroup map */
+  lightgroup_map.clear();
+  for (int i = 0; i < lightgroups.size(); i++) {
+    BL::Collection &b_collection = lightgroups[i].first;
+    if (b_collection) {
+      BL::Collection::all_objects_iterator b_object_iter;
+      for (b_collection.all_objects.begin(b_object_iter);
+           b_object_iter != b_collection.all_objects.end();
+           ++b_object_iter) {
+        lightgroup_map[b_object_iter->name()] |= (1 << i);
+      }
+    }
+  }
 
   /* object loop */
   bool cancel = false;

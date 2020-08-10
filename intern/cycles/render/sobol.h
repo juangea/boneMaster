@@ -26,6 +26,9 @@ CCL_NAMESPACE_BEGIN
 
 void sobol_generate_direction_vectors(uint vectors[][SOBOL_BITS], int dimensions);
 
+int sobol_dither_matrix_size();
+void sobol_generate_dither_matrix(float2 *matrix);
+
 CCL_NAMESPACE_END
 
 #endif /* __SOBOL_H__ */

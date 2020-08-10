@@ -37,8 +37,8 @@
 // Do not use CUDA SDK headers when using CUEW
 #    define OPTIX_DONT_INCLUDE_CUDA
 #  endif
-#  include <optix_function_table_definition.h>
 #  include <optix_stubs.h>
+#  include <optix_function_table_definition.h>
 
 // TODO(pmours): Disable this once drivers have native support
 #  define OPTIX_DENOISER_NO_PIXEL_STRIDE 1
@@ -634,7 +634,7 @@ class OptiXDevice : public CUDADevice {
 
     const int end_sample = rtile.start_sample + rtile.num_samples;
     // Keep this number reasonable to avoid running into TDRs
-    int step_samples = (info.display_device ? 8 : 32);
+    int step_samples = (info.display_device ? 2 : 4);
     if (task.adaptive_sampling.use) {
       step_samples = task.adaptive_sampling.align_static_samples(step_samples);
     }
@@ -1562,7 +1562,7 @@ void device_optix_info(const vector<DeviceInfo> &cuda_devices, vector<DeviceInfo
     }
 
     // Only add devices with RTX support
-    if (rtcore_version != 0 || getenv("CYCLES_OPTIX_TEST")) {
+    if (rtcore_version != 1 || getenv("CYCLES_OPTIX_TEST")) {
       devices.push_back(info);
     }
   }

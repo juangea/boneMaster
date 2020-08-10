@@ -101,6 +101,7 @@ NODE_DEFINE(Object)
   SOCKET_POINT(dupli_generated, "Dupli Generated", make_float3(0.0f, 0.0f, 0.0f));
   SOCKET_POINT2(dupli_uv, "Dupli UV", make_float2(0.0f, 0.0f));
   SOCKET_TRANSFORM_ARRAY(motion, "Motion", array<Transform>());
+  SOCKET_UINT(lightgroups, "Lightgroups", 0);
 
   SOCKET_BOOLEAN(is_shadow_catcher, "Shadow Catcher", false);
 
@@ -462,6 +463,7 @@ void ObjectManager::device_update_object_transform(UpdateObjectTransformState *s
   kobject.color[1] = color.y;
   kobject.color[2] = color.z;
   kobject.pass_id = pass_id;
+  kobject.lightgroups = ob->lightgroups;
   kobject.random_number = random_number;
   kobject.particle_index = particle_index;
   kobject.motion_offset = 0;

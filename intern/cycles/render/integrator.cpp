@@ -77,6 +77,8 @@ NODE_DEFINE(Integrator)
   SOCKET_BOOLEAN(sample_all_lights_indirect, "Sample All Lights Indirect", true);
   SOCKET_FLOAT(light_sampling_threshold, "Light Sampling Threshold", 0.05f);
 
+  SOCKET_UINT(background_lightgroups, "Background Lightgroups", 0);
+
   static NodeEnum method_enum;
   method_enum.insert("path", PATH);
   method_enum.insert("branched_path", BRANCHED_PATH);
@@ -87,6 +89,8 @@ NODE_DEFINE(Integrator)
   sampling_pattern_enum.insert("cmj", SAMPLING_PATTERN_CMJ);
   sampling_pattern_enum.insert("pmj", SAMPLING_PATTERN_PMJ);
   SOCKET_ENUM(sampling_pattern, "Sampling Pattern", sampling_pattern_enum, SAMPLING_PATTERN_SOBOL);
+  SOCKET_FLOAT(scrambling_distance, "Scrambling Distance", 1.0f);
+  SOCKET_BOOLEAN(use_dithered_sampling, "Use Dithered Sampling", false);
 
   return type;
 }
@@ -181,6 +185,7 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
   }
 
   kintegrator->sampling_pattern = sampling_pattern;
+  kintegrator->scrambling_distance = scrambling_distance;
   kintegrator->aa_samples = aa_samples;
   if (aa_samples > 0 && adaptive_min_samples == 0) {
     kintegrator->adaptive_min_samples = max(4, (int)sqrtf(aa_samples));
@@ -212,6 +217,8 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
   else {
     kintegrator->light_inv_rr_threshold = 0.0f;
   }
+
+  kintegrator->background_lightgroups = background_lightgroups;
 
   /* sobol directions table */
   int max_samples = 1;
@@ -256,12 +263,28 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
     dscene->sample_pattern_lut.copy_to_device();
   }
 
+  /* Sobol dithering table */
+  if(use_dithered_sampling) {
+		int dither_size = sobol_dither_matrix_size();
+		float2 *dither_matrix = dscene->sobol_dither.resize(dither_size*dither_size);
+
+		sobol_generate_dither_matrix(dither_matrix);
+
+		dscene->sobol_dither.copy_to_device(); //device->tex_alloc("__sobol_dither", 
+
+		kintegrator->dither_size = dither_size;
+	}
+	else {
+		kintegrator->dither_size = 0;
+	}  
+
   need_update = false;
 }
 
 void Integrator::device_free(Device *, DeviceScene *dscene)
 {
-  dscene->sample_pattern_lut.free();
+	dscene->sample_pattern_lut.free();
+	dscene->sobol_dither.free();
 }
 
 bool Integrator::modified(const Integrator &integrator)

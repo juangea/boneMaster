@@ -39,8 +39,8 @@
 #  include "util/util_path.h"
 #  include "util/util_string.h"
 #  include "util/util_system.h"
-#  include "util/util_time.h"
 #  include "util/util_types.h"
+#  include "util/util_time.h"
 #  include "util/util_windows.h"
 
 #  include "kernel/split/kernel_split_data_types.h"
@@ -207,6 +207,7 @@ CUDADevice::CUDADevice(DeviceInfo &info, Stats &stats, Profiler &profiler, bool 
   map_host_limit = 0;
   map_host_used = 0;
   can_map_host = 0;
+  pitch_alignment = 0;
 
   functions.loaded = false;
 
@@ -223,6 +224,9 @@ CUDADevice::CUDADevice(DeviceInfo &info, Stats &stats, Profiler &profiler, bool 
    * so we can predict which memory to map to host. */
   cuda_assert(
       cuDeviceGetAttribute(&can_map_host, CU_DEVICE_ATTRIBUTE_CAN_MAP_HOST_MEMORY, cuDevice));
+
+  cuda_assert(cuDeviceGetAttribute(
+      &pitch_alignment, CU_DEVICE_ATTRIBUTE_TEXTURE_PITCH_ALIGNMENT, cuDevice));
 
   unsigned int ctx_flags = CU_CTX_LMEM_RESIZE_TO_MAX;
   if (can_map_host) {
@@ -281,6 +285,49 @@ bool CUDADevice::support_device(const DeviceRequestedFeatures & /*requested_feat
                       major,
                       minor));
     return false;
+  }
+
+  return true;
+}
+
+bool CUDADevice::check_peer_access(Device *peer_device)
+{
+  if (peer_device == this) {
+    return false;
+  }
+  if (peer_device->info.type != DEVICE_CUDA && peer_device->info.type != DEVICE_OPTIX) {
+    return false;
+  }
+
+  CUDADevice *const peer_device_cuda = static_cast<CUDADevice *>(peer_device);
+
+  int can_access = 0;
+  cuda_assert(cuDeviceCanAccessPeer(&can_access, cuDevice, peer_device_cuda->cuDevice));
+  if (can_access == 0) {
+    return false;
+  }
+
+  // Ensure array access over the link is possible as well (for 3D textures)
+  cuda_assert(cuDeviceGetP2PAttribute(&can_access,
+                                      CU_DEVICE_P2P_ATTRIBUTE_ARRAY_ACCESS_ACCESS_SUPPORTED,
+                                      cuDevice,
+                                      peer_device_cuda->cuDevice));
+  if (can_access == 0) {
+    return false;
+  }
+
+  // Enable peer access in both directions
+  {
+    const CUDAContextScope scope(this);
+    if (cuda_error(cuCtxEnablePeerAccess(peer_device_cuda->cuContext, 0))) {
+      return false;
+    }
+  }
+  {
+    const CUDAContextScope scope(peer_device_cuda);
+    if (cuda_error(cuCtxEnablePeerAccess(cuContext, 0))) {
+      return false;
+    }
   }
 
   return true;
@@ -1029,18 +1076,17 @@ void CUDADevice::const_copy_to(const char *name, void *host, size_t size)
 
 void CUDADevice::global_alloc(device_memory &mem)
 {
-  CUDAContextScope scope(this);
-
-  generic_alloc(mem);
-  generic_copy_to(mem);
+  if (mem.device == this) {
+    generic_alloc(mem);
+    generic_copy_to(mem);
+  }
 
   const_copy_to(mem.name, &mem.device_pointer, sizeof(mem.device_pointer));
 }
 
 void CUDADevice::global_free(device_memory &mem)
 {
-  if (mem.device_pointer) {
-    CUDAContextScope scope(this);
+  if (mem.device == this && mem.device_pointer) {
     generic_free(mem);
   }
 }
@@ -1109,7 +1155,19 @@ void CUDADevice::tex_alloc(device_texture &mem)
   size_t src_pitch = mem.data_width * dsize * mem.data_elements;
   size_t dst_pitch = src_pitch;
 
-  if (mem.data_depth > 1) {
+  if (mem.device != this) {
+    cmem = &cuda_mem_map[&mem];
+    cmem->texobject = 0;
+
+    if (mem.data_depth > 1) {
+      array_3d = (CUarray)mem.device_pointer;
+      cmem->array = array_3d;
+    }
+    else if (mem.data_height > 0) {
+      dst_pitch = align_up(src_pitch, pitch_alignment);
+    }
+  }
+  else if (mem.data_depth > 1) {
     /* 3D texture using array, there is no API for linear memory. */
     CUDA_ARRAY3D_DESCRIPTOR desc;
 
@@ -1153,10 +1211,7 @@ void CUDADevice::tex_alloc(device_texture &mem)
   }
   else if (mem.data_height > 0) {
     /* 2D texture, using pitch aligned linear memory. */
-    int alignment = 0;
-    cuda_assert(
-        cuDeviceGetAttribute(&alignment, CU_DEVICE_ATTRIBUTE_TEXTURE_PITCH_ALIGNMENT, cuDevice));
-    dst_pitch = align_up(src_pitch, alignment);
+    dst_pitch = align_up(src_pitch, pitch_alignment);
     size_t dst_size = dst_pitch * mem.data_height;
 
     cmem = generic_alloc(mem, dst_size - mem.memory_size());
@@ -1188,6 +1243,15 @@ void CUDADevice::tex_alloc(device_texture &mem)
   }
 
   /* Kepler+, bindless textures. */
+  int flat_slot = 0;
+  if (string_startswith(mem.name, "__tex_image")) {
+    int pos = string(mem.name).rfind("_");
+    flat_slot = atoi(mem.name + pos + 1);
+  }
+  else {
+    assert(0);
+  }
+
   CUDA_RESOURCE_DESC resDesc;
   memset(&resDesc, 0, sizeof(resDesc));
 
@@ -1248,7 +1312,11 @@ void CUDADevice::tex_free(device_texture &mem)
       cuTexObjectDestroy(cmem.texobject);
     }
 
-    if (cmem.array) {
+    if (mem.device != this) {
+      /* Do not free memory here, since it was allocated on a different device. */
+      cuda_mem_map.erase(cuda_mem_map.find(&mem));
+    }
+    else if (cmem.array) {
       /* Free array. */
       cuArrayDestroy(cmem.array);
       stats.mem_free(mem.device_size);
@@ -1836,6 +1904,12 @@ void CUDADevice::path_trace(DeviceTask &task,
   /* Render all samples. */
   int start_sample = rtile.start_sample;
   int end_sample = rtile.start_sample + rtile.num_samples;
+
+  step_samples = end_sample;
+  if (end_sample > 4352)
+  {
+      step_samples = 4352;
+  }
 
   for (int sample = start_sample; sample < end_sample; sample += step_samples) {
     /* Setup and copy work tile to device. */

@@ -77,6 +77,8 @@ class Light : public Node {
   int max_bounces;
   uint random_id;
 
+  uint lightgroups;
+
   void tag_update(Scene *scene);
 
   /* Check whether the light has contribution the scene. */

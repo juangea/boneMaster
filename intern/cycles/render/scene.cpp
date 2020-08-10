@@ -79,7 +79,8 @@ DeviceScene::DeviceScene(Device *device)
       shaders(device, "__shaders", MEM_GLOBAL),
       lookup_table(device, "__lookup_table", MEM_GLOBAL),
       sample_pattern_lut(device, "__sample_pattern_lut", MEM_GLOBAL),
-      ies_lights(device, "__ies", MEM_GLOBAL)
+      ies_lights(device, "__ies", MEM_GLOBAL),
+      sobol_dither(device, "__sobol_dither", MEM_GLOBAL)
 {
   memset((void *)&data, 0, sizeof(data));
 }

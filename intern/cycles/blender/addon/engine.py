@@ -287,6 +287,14 @@ def list_render_passes(srl):
             if any(getattr(crl, option) for option in clean_options):
                 yield ("Denoising Clean", "RGB", 'COLOR')
 
+    # Light groups.
+    lightgroup_names = []
+    for lightgroup in crl.lightgroups:
+        name = lightgroup.name
+        if (lightgroup.collection or lightgroup.include_world) and not name in lightgroup_names:
+            yield (name + ".Combined", "RGB", 'COLOR')
+            lightgroup_names.append(name)
+
     # Custom AOV passes.
     for aov in crl.aovs:
         if aov.type == 'VALUE':

@@ -189,7 +189,6 @@ class CYCLES_RENDER_PT_sampling(CyclesButtonsPanel, Panel):
             col = layout.column(align=True)
             col.prop(cscene, "aa_samples", text="Render")
             col.prop(cscene, "preview_aa_samples", text="Viewport")
-
         # Viewport denoising is currently only supported with OptiX
         if show_optix_denoising(context):
             col = layout.column()
@@ -276,6 +275,7 @@ class CYCLES_RENDER_PT_sampling_advanced(CyclesButtonsPanel, Panel):
         col = layout.column(align=True)
         col.active = not(cscene.use_adaptive_sampling)
         col.prop(cscene, "sampling_pattern", text="Pattern")
+        col.prop(cscene, "scrambling_distance")
 
         layout.prop(cscene, "use_square_samples")
 
@@ -373,7 +373,7 @@ class CYCLES_RENDER_PT_subdivision(CyclesButtonsPanel, Panel):
         col = layout.column()
         sub = col.column(align=True)
         sub.prop(cscene, "dicing_rate", text="Dicing Rate Render")
-        sub.prop(cscene, "preview_dicing_rate", text="Viewport")
+        sub.prop(cscene, "preview_dicing_rate", text="Preview")
 
         col.separator()
 
@@ -428,11 +428,9 @@ class CYCLES_RENDER_PT_volumes(CyclesButtonsPanel, Panel):
         scene = context.scene
         cscene = scene.cycles
 
-        col = layout.column(align=True)
-        col.prop(cscene, "volume_step_rate", text="Step Rate Render")
-        col.prop(cscene, "volume_preview_step_rate", text="Viewport")
-
-        layout.prop(cscene, "volume_max_steps", text="Max Steps")
+        col = layout.column()
+        col.prop(cscene, "volume_step_size", text="Step Size")
+        col.prop(cscene, "volume_max_steps", text="Max Steps")
 
 
 class CYCLES_RENDER_PT_light_paths(CyclesButtonsPanel, Panel):
@@ -739,6 +737,7 @@ class CYCLES_RENDER_PT_performance_viewport(CyclesButtonsPanel, Panel):
         col = layout.column()
         col.prop(rd, "preview_pixel_size", text="Pixel Size")
         col.prop(cscene, "preview_start_resolution", text="Start Pixels")
+        col.prop(cscene, "viewport_denoising_samples", text="OIDN Min Samples")
 
         if show_optix_denoising(context):
             sub = col.row(align=True)
@@ -772,8 +771,6 @@ class CYCLES_RENDER_PT_filter(CyclesButtonsPanel, Panel):
         col.prop(view_layer, "use_solid", text="Surfaces")
         col = flow.column()
         col.prop(view_layer, "use_strand", text="Hair")
-        col = flow.column()
-        col.prop(view_layer, "use_volumes", text="Volumes")
         if with_freestyle:
             col = flow.column()
             col.prop(view_layer, "use_freestyle", text="Freestyle")
@@ -845,8 +842,6 @@ class CYCLES_RENDER_PT_passes_data(CyclesButtonsPanel, Panel):
         col.prop(cycles_view_layer, "denoising_store_passes", text="Denoising Data")
         col = flow.column()
         col.prop(cycles_view_layer, "pass_debug_render_time", text="Render Time")
-        col = flow.column()
-        col.prop(cycles_view_layer, "pass_debug_sample_count", text="Sample Count")
 
         layout.separator()
 
@@ -988,6 +983,37 @@ class CYCLES_RENDER_PT_passes_aov(CyclesButtonsPanel, Panel):
           active_aov = cycles_view_layer.aovs[cycles_view_layer.active_aov]
           if active_aov.conflict:
             layout.label(text=active_aov.conflict, icon='ERROR')
+
+
+class CYCLES_RENDER_PT_lightgroups(CyclesButtonsPanel, Panel):
+    bl_label = "Lightgroups"
+    bl_context = "view_layer"
+    bl_parent_id = "CYCLES_RENDER_PT_passes"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+
+        cycles_view_layer = context.view_layer.cycles
+
+        row = layout.row()
+        col = row.column()
+        col.template_list("UI_UL_list", "lightgroups", cycles_view_layer, "lightgroups", cycles_view_layer, "active_lightgroup", rows=3)
+
+        col = row.column()
+        sub = col.column(align=True)
+        sub.operator("cycles.lightgroup_add", icon='ADD', text="")
+        sub.operator("cycles.lightgroup_remove", icon='REMOVE', text="")
+        if len(cycles_view_layer.lightgroups) > 0:
+            sub.operator("cycles.lightgroup_move", icon='TRIA_UP', text="").direction = 'UP'
+            sub.operator("cycles.lightgroup_move", icon='TRIA_DOWN', text="").direction = 'DOWN'
+
+            lg = cycles_view_layer.lightgroups[cycles_view_layer.active_lightgroup]
+            row = layout.row()
+            col = row.column()
+            col.prop(lg, "collection")
+            col.prop(lg, "include_world")
 
 
 class CYCLES_RENDER_PT_denoising(CyclesButtonsPanel, Panel):
@@ -1416,6 +1442,8 @@ class CYCLES_LIGHT_PT_light(CyclesButtonsPanel, Panel):
 
         light = context.light
         clamp = light.cycles
+
+        layout.use_property_decorate = False
 
         if self.bl_space_type == 'PROPERTIES':
             layout.row().prop(light, "type", expand=True)
@@ -1917,6 +1945,7 @@ class CYCLES_RENDER_PT_bake_influence(CyclesButtonsPanel, Panel):
             flow.prop(cbk, "use_pass_diffuse")
             flow.prop(cbk, "use_pass_glossy")
             flow.prop(cbk, "use_pass_transmission")
+            flow.prop(cbk, "use_pass_subsurface")
             flow.prop(cbk, "use_pass_ambient_occlusion")
             flow.prop(cbk, "use_pass_emit")
 
@@ -2309,6 +2338,7 @@ classes = (
     CYCLES_RENDER_PT_passes_debug,
     CYCLES_RENDER_UL_aov,
     CYCLES_RENDER_PT_passes_aov,
+    CYCLES_RENDER_PT_lightgroups,
     CYCLES_RENDER_PT_filter,
     CYCLES_RENDER_PT_override,
     CYCLES_RENDER_PT_denoising,

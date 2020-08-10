@@ -25,6 +25,7 @@ from bpy.props import (
     IntProperty,
     PointerProperty,
     StringProperty,
+    CollectionProperty,
 )
 
 from math import pi
@@ -111,6 +112,7 @@ enum_use_layer_samples = (
 
 enum_sampling_pattern = (
     ('SOBOL', "Sobol", "Use Sobol random sampling pattern"),
+    ('DITHERED_SOBOL', "Dithered Sobol", "Use dithered Sobol random sampling pattern"),
     ('CORRELATED_MUTI_JITTER', "Correlated Multi-Jitter", "Use Correlated Multi-Jitter random sampling pattern"),
     ('PROGRESSIVE_MUTI_JITTER', "Progressive Multi-Jitter", "Use Progressive Multi-Jitter random sampling pattern"),
 )
@@ -323,6 +325,14 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         items=enum_sampling_pattern,
         default='SOBOL',
     )
+
+    scrambling_distance: FloatProperty(
+        name="Scrambling distance",
+        description="The amount of pixel-dependent scrambling applied to the Sobol sequence,"
+                    "lower values might speed up rendering but can cause visible artifacts",
+        min=0.0, max=1.0,
+        default=1.0,
+    )    
 
     use_layer_samples: EnumProperty(
         name="Layer Samples",
@@ -664,6 +674,11 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         "(this renders somewhat slower, "
         "but time can be saved by manually stopping the render when the noise is low enough)",
         default=False,
+    )
+    viewport_denoising_samples: IntProperty(
+        name="OIDN min samples",
+        description="The minimum number of samples after which the viewport will be denoised",
+        default=0,
     )
 
     bake_type: EnumProperty(
@@ -1308,6 +1323,13 @@ class CyclesAOVPass(bpy.types.PropertyGroup):
         default=""
     )
 
+
+class CyclesLightGroup(bpy.types.PropertyGroup):
+    name: StringProperty(name="Name", default="Lightgroup")
+    collection: PointerProperty(name="Collection", type=bpy.types.Collection)
+    include_world: BoolProperty(name="Include World", default=False)
+
+
 class CyclesRenderLayerSettings(bpy.types.PropertyGroup):
 
     pass_debug_bvh_traversed_nodes: BoolProperty(
@@ -1485,6 +1507,15 @@ class CyclesRenderLayerSettings(bpy.types.PropertyGroup):
         min=0
     )
 
+    lightgroups: CollectionProperty(
+        name="Light Groups",
+        type=CyclesLightGroup,
+        )
+    active_lightgroup: IntProperty(
+        name="Active Light Group",
+        default=0,
+        )
+
     @classmethod
     def register(cls):
         bpy.types.ViewLayer.cycles = PointerProperty(
@@ -1527,6 +1558,12 @@ class CyclesPreferences(bpy.types.AddonPreferences):
     )
 
     devices: bpy.props.CollectionProperty(type=CyclesDeviceSettings)
+
+    peer_memory: BoolProperty(
+        name="Distribute memory across interconnected devices",
+        description="Make more room for large scenes to fit by distributing memory across interconnected devices (e.g. via NVLink) rather than duplicating it",
+        default=False,
+    )
 
     def find_existing_device_entry(self, device):
         for device_entry in self.devices:
@@ -1625,14 +1662,22 @@ class CyclesPreferences(bpy.types.AddonPreferences):
         row = layout.row()
         row.prop(self, "compute_device_type", expand=True)
 
-        devices = self.get_devices_for_type(self.compute_device_type)
+        if self.compute_device_type == 'NONE':
+            return
         row = layout.row()
-        if self.compute_device_type == 'CUDA':
-            self._draw_devices(row, 'CUDA', devices)
-        elif self.compute_device_type == 'OPTIX':
-            self._draw_devices(row, 'OPTIX', devices)
-        elif self.compute_device_type == 'OPENCL':
-            self._draw_devices(row, 'OPENCL', devices)
+        devices = self.get_devices_for_type(self.compute_device_type)
+        self._draw_devices(row, self.compute_device_type, devices)
+
+        import _cycles
+        has_peer_memory = 0
+        for device in _cycles.available_devices(self.compute_device_type):
+            if device[3] and self.find_existing_device_entry(device).use:
+                has_peer_memory += 1
+        if has_peer_memory > 1:
+            layout = layout.row()
+            layout.use_property_split = True
+            col = layout.column()
+            col.prop(self, "peer_memory")
 
     def draw(self, context):
         self.draw_impl(self.layout, context)
@@ -1660,6 +1705,7 @@ def register():
     bpy.utils.register_class(CyclesDeviceSettings)
     bpy.utils.register_class(CyclesPreferences)
     bpy.utils.register_class(CyclesAOVPass)
+    bpy.utils.register_class(CyclesLightGroup)
     bpy.utils.register_class(CyclesRenderLayerSettings)
     bpy.utils.register_class(CyclesView3DShadingSettings)
 
@@ -1682,5 +1728,6 @@ def unregister():
     bpy.utils.unregister_class(CyclesDeviceSettings)
     bpy.utils.unregister_class(CyclesPreferences)
     bpy.utils.unregister_class(CyclesAOVPass)
+    bpy.utils.unregister_class(CyclesLightGroup)
     bpy.utils.unregister_class(CyclesRenderLayerSettings)
     bpy.utils.unregister_class(CyclesView3DShadingSettings)

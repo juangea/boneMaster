@@ -225,6 +225,9 @@ class BlenderSync {
   bool world_recalc;
   BlenderViewportParameters viewport_parameters;
 
+  unordered_map<string, uint> lightgroup_map;
+  vector<std::pair<BL::Collection, bool>> lightgroups;
+
   Scene *scene;
   bool preview;
   bool experimental;
