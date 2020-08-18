@@ -6507,7 +6507,7 @@ static void direct_link_lightcache_texture(FileData *fd, LightCacheTexture *lcte
 
   if (lctex->data) {
     lctex->data = newdataadr(fd, lctex->data);
-    if (fd->flags & FD_FLAGS_SWITCH_ENDIAN) {
+    if (lctex->data && fd->flags & FD_FLAGS_SWITCH_ENDIAN) {
       int data_size = lctex->components * lctex->tex_size[0] * lctex->tex_size[1] *
                       lctex->tex_size[2];
 
@@ -6518,6 +6518,10 @@ static void direct_link_lightcache_texture(FileData *fd, LightCacheTexture *lcte
         BLI_endian_switch_uint32_array((uint *)lctex->data, data_size * sizeof(uint));
       }
     }
+  }
+
+  if (lctex->data == NULL) {
+    zero_v3_int(lctex->tex_size);
   }
 }
 
@@ -6563,6 +6567,14 @@ static bool scene_validate_setscene__liblink(Scene *sce, const int totscene)
   }
 
   for (a = 0, sce_iter = sce; sce_iter->set; sce_iter = sce_iter->set, a++) {
+    /* This runs per library (before each libraries #Main has been joined),
+     * so we can't step into other libraries since `totscene` is only for this library.
+     *
+     * Also, other libraries may not have been linked yet,
+     * while we could check #LIB_TAG_NEED_LINK the library pointer check is sufficient. */
+    if (sce->id.lib != sce_iter->id.lib) {
+      return true;
+    }
     if (sce_iter->flag & SCE_READFILE_LIBLINK_NEED_SETSCENE_CHECK) {
       return true;
     }
