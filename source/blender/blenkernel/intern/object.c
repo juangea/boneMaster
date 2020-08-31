@@ -156,7 +156,6 @@ static ThreadMutex vparent_lock = BLI_MUTEX_INITIALIZER;
 #endif
 
 static void copy_object_pose(Object *obn, const Object *ob, const int flag);
-static void copy_object_lod(Object *obn, const Object *ob, const int flag);
 
 static void object_init_data(ID *id)
 {
@@ -264,8 +263,6 @@ static void object_copy_data(Main *bmain, ID *id_dst, const ID *id_src, const in
   ob_dst->avs = ob_src->avs;
   ob_dst->mpath = animviz_copy_motionpath(ob_src->mpath);
 
-  copy_object_lod(ob_dst, ob_src, flag_subdata);
-
   /* Do not copy object's preview
    * (mostly due to the fact renderers create temp copy of objects). */
   if ((flag & LIB_ID_COPY_NO_PREVIEW) == 0 && false) { /* XXX TODO temp hack */
@@ -313,8 +310,6 @@ static void object_free_data(ID *id)
   BKE_sculptsession_free(ob);
 
   BLI_freelistN(&ob->pc_ids);
-
-  BLI_freelistN(&ob->lodlevels);
 
   /* Free runtime curves data. */
   if (ob->runtime.curve_cache) {
@@ -499,12 +494,6 @@ static void object_foreach_id(ID *id, LibraryForeachIDData *data)
     BKE_LIB_FOREACHID_PROCESS(data, object->rigidbody_constraint->ob2, IDWALK_CB_NEVER_SELF);
   }
 
-  if (object->lodlevels.first) {
-    LISTBASE_FOREACH (LodLevel *, level, &object->lodlevels) {
-      BKE_LIB_FOREACHID_PROCESS(data, level->source, IDWALK_CB_NEVER_SELF);
-    }
-  }
-
   BKE_modifiers_foreach_ID_link(object, library_foreach_modifiersForeachIDLink, data);
   BKE_gpencil_modifiers_foreach_ID_link(
       object, library_foreach_gpencil_modifiersForeachIDLink, data);
@@ -539,6 +528,12 @@ IDTypeInfo IDType_ID_OB = {
     .free_data = object_free_data,
     .make_local = object_make_local,
     .foreach_id = object_foreach_id,
+    .foreach_cache = NULL,
+
+    .blend_write = NULL,
+    .blend_read_data = NULL,
+    .blend_read_lib = NULL,
+    .blend_read_expand = NULL,
 };
 
 void BKE_object_workob_clear(Object *workob)
@@ -1583,13 +1578,6 @@ static void copy_object_pose(Object *obn, const Object *ob, const int flag)
       }
     }
   }
-}
-
-static void copy_object_lod(Object *obn, const Object *ob, const int UNUSED(flag))
-{
-  BLI_duplicatelist(&obn->lodlevels, &ob->lodlevels);
-
-  obn->currentlod = (LodLevel *)obn->lodlevels.first;
 }
 
 bool BKE_object_pose_context_check(const Object *ob)

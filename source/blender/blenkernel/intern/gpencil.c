@@ -126,6 +126,12 @@ IDTypeInfo IDType_ID_GD = {
     .free_data = greasepencil_free_data,
     .make_local = NULL,
     .foreach_id = greasepencil_foreach_id,
+    .foreach_cache = NULL,
+
+    .blend_write = NULL,
+    .blend_read_data = NULL,
+    .blend_read_lib = NULL,
+    .blend_read_expand = NULL,
 };
 
 /* ************************************************** */
@@ -532,6 +538,7 @@ bGPdata *BKE_gpencil_data_addnew(Main *bmain, const char name[])
   gpd->grid.lines = GP_DEFAULT_GRID_LINES;            /* Number of lines */
 
   /* Onion-skinning settings (data-block level) */
+  gpd->onion_keytype = -1; /* All by default. */
   gpd->onion_flag |= (GP_ONION_GHOST_PREVCOL | GP_ONION_GHOST_NEXTCOL);
   gpd->onion_flag |= GP_ONION_FADE;
   gpd->onion_mode = GP_ONION_MODE_RELATIVE;

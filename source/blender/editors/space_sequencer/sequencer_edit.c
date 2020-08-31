@@ -58,6 +58,7 @@
 #include "ED_sequencer.h"
 
 #include "UI_interface.h"
+#include "UI_resources.h"
 #include "UI_view2d.h"
 
 #include "DEG_depsgraph.h"
@@ -216,7 +217,7 @@ static void seq_proxy_build_job(const bContext *C, ReportList *reports)
   file_list = BLI_gset_new(BLI_ghashutil_strhash_p, BLI_ghashutil_strcmp, "file list");
   bool selected = false; /* Check for no selected strips */
 
-  SEQP_BEGIN (ed, seq) {
+  SEQ_CURRENT_BEGIN (ed, seq) {
     if (!ELEM(seq->type, SEQ_TYPE_MOVIE, SEQ_TYPE_IMAGE, SEQ_TYPE_META) ||
         (seq->flag & SELECT) == 0) {
       continue;
@@ -239,7 +240,7 @@ static void seq_proxy_build_job(const bContext *C, ReportList *reports)
       BKE_reportf(reports, RPT_WARNING, "Overwrite is not checked for %s, skipping", seq->name);
     }
   }
-  SEQ_END;
+  SEQ_CURRENT_END;
 
   if (!selected) {
     BKE_reportf(reports, RPT_WARNING, "Select movie or image strips");
@@ -482,10 +483,10 @@ void ED_sequencer_deselect_all(Scene *scene)
     return;
   }
 
-  SEQP_BEGIN (ed, seq) {
+  SEQ_CURRENT_BEGIN (ed, seq) {
     seq->flag &= ~SEQ_ALLSEL;
   }
-  SEQ_END;
+  SEQ_CURRENT_END;
 }
 
 void recurs_sel_seq(Sequence *seqm)
@@ -1030,7 +1031,7 @@ static void set_filter_seq(Scene *scene)
     return;
   }
 
-  SEQP_BEGIN (ed, seq) {
+  SEQ_CURRENT_BEGIN (ed, seq) {
     if (seq->flag & SELECT) {
       if (seq->type == SEQ_TYPE_MOVIE) {
         seq->flag |= SEQ_FILTERY;
@@ -1039,7 +1040,7 @@ static void set_filter_seq(Scene *scene)
       }
     }
   }
-  SEQ_END;
+  SEQ_CURRENT_END;
 }
 #endif
 
@@ -1065,7 +1066,7 @@ static void UNUSED_FUNCTION(seq_remap_paths)(Scene *scene)
     return;
   }
 
-  SEQP_BEGIN (ed, seq) {
+  SEQ_CURRENT_BEGIN (ed, seq) {
     if (seq->flag & SELECT) {
       if (STREQLEN(seq->strip->dir, from, strlen(from))) {
         printf("found %s\n", seq->strip->dir);
@@ -1080,7 +1081,7 @@ static void UNUSED_FUNCTION(seq_remap_paths)(Scene *scene)
       }
     }
   }
-  SEQ_END;
+  SEQ_CURRENT_END;
 }
 
 /** \} */
@@ -1308,7 +1309,7 @@ static int sequencer_snap_exec(bContext *C, wmOperator *op)
   }
 
   /* Test for effects and overlap.
-   * Don't use SEQP_BEGIN since that would be recursive. */
+   * Don't use SEQ_CURRENT_BEGIN since that would be recursive. */
   for (seq = ed->seqbasep->first; seq; seq = seq->next) {
     if (seq->flag & SELECT && !(seq->depth == 0 && seq->flag & SEQ_LOCK)) {
       seq->flag &= ~SEQ_OVERLAP;
@@ -2294,25 +2295,25 @@ static int sequencer_split_exec(bContext *C, wmOperator *op)
     Sequence *seq;
     if (ignore_selection) {
       if (use_cursor_position) {
-        SEQP_BEGIN (ed, seq) {
+        SEQ_CURRENT_BEGIN (ed, seq) {
           if (seq->enddisp == split_frame && seq->machine == split_channel) {
             seq_selected = seq->flag & SEQ_ALLSEL;
           }
         }
-        SEQ_END;
+        SEQ_CURRENT_END;
         if (!seq_selected) {
-          SEQP_BEGIN (ed, seq) {
+          SEQ_CURRENT_BEGIN (ed, seq) {
             if (seq->startdisp == split_frame && seq->machine == split_channel) {
               seq->flag &= ~SEQ_ALLSEL;
             }
           }
-          SEQ_END;
+          SEQ_CURRENT_END;
         }
       }
     }
     else {
       if (split_side != SEQ_SIDE_BOTH) {
-        SEQP_BEGIN (ed, seq) {
+        SEQ_CURRENT_BEGIN (ed, seq) {
           if (split_side == SEQ_SIDE_LEFT) {
             if (seq->startdisp >= split_frame) {
               seq->flag &= ~SEQ_ALLSEL;
@@ -2324,15 +2325,15 @@ static int sequencer_split_exec(bContext *C, wmOperator *op)
             }
           }
         }
-        SEQ_END;
+        SEQ_CURRENT_END;
       }
     }
-    SEQP_BEGIN (ed, seq) {
+    SEQ_CURRENT_BEGIN (ed, seq) {
       if (seq->seq1 || seq->seq2 || seq->seq3) {
         BKE_sequence_calc(scene, seq);
       }
     }
-    SEQ_END;
+    SEQ_CURRENT_END;
 
     BKE_sequencer_sort(scene);
   }
@@ -2376,6 +2377,28 @@ static int sequencer_split_invoke(bContext *C, wmOperator *op, const wmEvent *ev
   return sequencer_split_exec(C, op);
 }
 
+static void sequencer_split_ui(bContext *UNUSED(C), wmOperator *op)
+{
+  uiLayout *layout = op->layout;
+  uiLayoutSetPropSep(layout, true);
+  uiLayoutSetPropDecorate(layout, false);
+
+  PointerRNA ptr;
+  RNA_pointer_create(NULL, op->type->srna, op->properties, &ptr);
+
+  uiLayout *row = uiLayoutRow(layout, false);
+  uiItemR(row, &ptr, "type", UI_ITEM_R_EXPAND, NULL, ICON_NONE);
+  uiItemR(layout, &ptr, "frame", 0, NULL, ICON_NONE);
+  uiItemR(layout, &ptr, "side", 0, NULL, ICON_NONE);
+
+  uiItemS(layout);
+
+  uiItemR(layout, &ptr, "use_cursor_position", 0, NULL, ICON_NONE);
+  if (RNA_boolean_get(&ptr, "use_cursor_position")) {
+    uiItemR(layout, &ptr, "channel", 0, NULL, ICON_NONE);
+  }
+}
+
 void SEQUENCER_OT_split(struct wmOperatorType *ot)
 {
   /* Identifiers. */
@@ -2387,6 +2410,7 @@ void SEQUENCER_OT_split(struct wmOperatorType *ot)
   ot->invoke = sequencer_split_invoke;
   ot->exec = sequencer_split_exec;
   ot->poll = sequencer_edit_poll;
+  ot->ui = sequencer_split_ui;
 
   /* Flags. */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -2521,12 +2545,12 @@ static int sequencer_delete_exec(bContext *C, wmOperator *UNUSED(op))
 
   BKE_sequencer_prefetch_stop(scene);
 
-  SEQP_BEGIN (scene->ed, seq) {
+  SEQ_CURRENT_BEGIN (scene->ed, seq) {
     if (seq->flag & SELECT) {
       BKE_sequencer_flag_for_removal(scene, ed->seqbasep, seq);
     }
   }
-  SEQ_END;
+  SEQ_CURRENT_END;
   BKE_sequencer_remove_flagged_sequences(scene, ed->seqbasep);
 
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
@@ -2641,6 +2665,8 @@ static int sequencer_separate_images_exec(bContext *C, wmOperator *op)
   int step = RNA_int_get(op->ptr, "length");
 
   seq = ed->seqbasep->first; /* Poll checks this is valid. */
+
+  BKE_sequencer_prefetch_stop(scene);
 
   while (seq) {
     if ((seq->flag & SELECT) && (seq->type == SEQ_TYPE_IMAGE) && (seq->len > 1)) {
@@ -2837,6 +2863,8 @@ static int sequencer_meta_make_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
+  BKE_sequencer_prefetch_stop(scene);
+
   /* Remove all selected from main list, and put in meta. */
 
   seqm = BKE_sequence_alloc(ed->seqbasep, 1, 1, SEQ_TYPE_META); /* Channel number set later. */
@@ -2922,6 +2950,8 @@ static int sequencer_meta_separate_exec(bContext *C, wmOperator *UNUSED(op))
     return OPERATOR_CANCELLED;
   }
 
+  BKE_sequencer_prefetch_stop(scene);
+
   for (seq = last_seq->seqbase.first; seq != NULL; seq = seq->next) {
     BKE_sequence_invalidate_cache_composite(scene, seq);
   }
@@ -2946,7 +2976,7 @@ static int sequencer_meta_separate_exec(bContext *C, wmOperator *UNUSED(op))
   recurs_del_seq_flag(scene, ed->seqbasep, SEQ_FLAG_DELETE, 0);
 
   /* Test for effects and overlap
-   * don't use SEQP_BEGIN since that would be recursive. */
+   * don't use SEQ_CURRENT_BEGIN since that would be recursive. */
   for (seq = ed->seqbasep->first; seq; seq = seq->next) {
     if (seq->flag & SELECT) {
       seq->flag &= ~SEQ_OVERLAP;
@@ -3470,7 +3500,7 @@ static int sequencer_rebuild_proxy_exec(bContext *C, wmOperator *UNUSED(op))
 
   file_list = BLI_gset_new(BLI_ghashutil_strhash_p, BLI_ghashutil_strcmp, "file list");
 
-  SEQP_BEGIN (ed, seq) {
+  SEQ_CURRENT_BEGIN (ed, seq) {
     if ((seq->flag & SELECT)) {
       ListBase queue = {NULL, NULL};
       LinkData *link;
@@ -3487,7 +3517,7 @@ static int sequencer_rebuild_proxy_exec(bContext *C, wmOperator *UNUSED(op))
       BKE_sequencer_free_imbuf(scene, &ed->seqbase, false);
     }
   }
-  SEQ_END;
+  SEQ_CURRENT_END;
 
   BLI_gset_free(file_list, MEM_freeN);
 
@@ -3538,7 +3568,7 @@ static int sequencer_enable_proxies_exec(bContext *C, wmOperator *op)
     turnon = false;
   }
 
-  SEQP_BEGIN (ed, seq) {
+  SEQ_CURRENT_BEGIN (ed, seq) {
     if ((seq->flag & SELECT)) {
       if (ELEM(seq->type, SEQ_TYPE_MOVIE, SEQ_TYPE_IMAGE, SEQ_TYPE_META)) {
         BKE_sequencer_proxy_set(seq, turnon);
@@ -3583,7 +3613,7 @@ static int sequencer_enable_proxies_exec(bContext *C, wmOperator *op)
       }
     }
   }
-  SEQ_END;
+  SEQ_CURRENT_END;
 
   WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
 
@@ -3960,12 +3990,12 @@ static int sequencer_export_subtitles_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  SEQ_BEGIN (ed, seq) {
+  SEQ_ALL_BEGIN (ed, seq) {
     if (seq->type == SEQ_TYPE_TEXT) {
       BLI_addtail(&text_seq, MEM_dupallocN(seq));
     }
   }
-  SEQ_END;
+  SEQ_ALL_END;
 
   if (BLI_listbase_is_empty(&text_seq)) {
     BKE_report(op->reports, RPT_ERROR, "No subtitles (text strips) to export");

@@ -427,6 +427,15 @@ if(WITH_TBB)
   find_package_wrapper(TBB)
 endif()
 
+if(WITH_GMP)
+  find_package(GMP)
+
+  if(NOT GMP_FOUND)
+    set(WITH_GMP OFF)
+    message(STATUS "GMP not found")
+  endif()
+endif()
+
 if(WITH_XR_OPENXR)
   find_package(XR_OpenXR_SDK)
   if(NOT XR_OPENXR_SDK_FOUND)
@@ -589,6 +598,14 @@ endif()
 # GNU Compiler
 if(CMAKE_COMPILER_IS_GNUCC)
   set(PLATFORM_CFLAGS "-pipe -fPIC -funsigned-char -fno-strict-aliasing")
+
+  # `maybe-uninitialized` is unreliable in release builds, but fine in debug builds.
+  set(GCC_EXTRA_FLAGS_RELEASE "-Wno-maybe-uninitialized")
+  set(CMAKE_C_FLAGS_RELEASE          "${GCC_EXTRA_FLAGS_RELEASE} ${CMAKE_C_FLAGS_RELEASE}")
+  set(CMAKE_C_FLAGS_RELWITHDEBINFO   "${GCC_EXTRA_FLAGS_RELEASE} ${CMAKE_C_FLAGS_RELWITHDEBINFO}")
+  set(CMAKE_CXX_FLAGS_RELEASE        "${GCC_EXTRA_FLAGS_RELEASE} ${CMAKE_CXX_FLAGS_RELEASE}")
+  set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${GCC_EXTRA_FLAGS_RELEASE} ${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
+  unset(GCC_EXTRA_FLAGS_RELEASE)
 
   if(WITH_LINKER_GOLD)
     execute_process(

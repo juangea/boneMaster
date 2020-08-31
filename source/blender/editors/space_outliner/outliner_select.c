@@ -46,6 +46,7 @@
 #include "BKE_main.h"
 #include "BKE_object.h"
 #include "BKE_paint.h"
+#include "BKE_report.h"
 #include "BKE_scene.h"
 #include "BKE_sequencer.h"
 #include "BKE_workspace.h"
@@ -193,12 +194,17 @@ static void do_outliner_item_posemode_toggle(
   }
   else {
     bool ok = false;
-    if (ob->mode & OB_MODE_POSE) {
+
+    if (ID_IS_LINKED(ob)) {
+      BKE_report(CTX_wm_reports(C), RPT_WARNING, "Cannot pose libdata");
+    }
+    else if (ob->mode & OB_MODE_POSE) {
       ok = ED_object_posemode_exit_ex(bmain, ob);
     }
     else {
       ok = ED_object_posemode_enter_ex(bmain, ob);
     }
+
     if (ok) {
       ED_object_base_select(base, (ob->mode & OB_MODE_POSE) ? BA_SELECT : BA_DESELECT);
 
@@ -1000,7 +1006,9 @@ static eOLDrawState tree_element_active_master_collection(bContext *C,
     ViewLayer *view_layer = CTX_data_view_layer(C);
     LayerCollection *layer_collection = view_layer->layer_collections.first;
     BKE_layer_collection_activate(view_layer, layer_collection);
-    WM_main_add_notifier(NC_SCENE | ND_LAYER, NULL);
+    /* A very precise notifier - ND_LAYER alone is quite vague, we want to avoid unnecessary work
+     * when only the active collection changes. */
+    WM_main_add_notifier(NC_SCENE | ND_LAYER | NS_LAYER_COLLECTION | NA_ACTIVATED, NULL);
   }
 
   return OL_DRAWSEL_NONE;
@@ -1022,7 +1030,9 @@ static eOLDrawState tree_element_active_layer_collection(bContext *C,
     LayerCollection *layer_collection = te->directdata;
     ViewLayer *view_layer = BKE_view_layer_find_from_collection(scene, layer_collection);
     BKE_layer_collection_activate(view_layer, layer_collection);
-    WM_main_add_notifier(NC_SCENE | ND_LAYER, NULL);
+    /* A very precise notifier - ND_LAYER alone is quite vague, we want to avoid unnecessary work
+     * when only the active collection changes. */
+    WM_main_add_notifier(NC_SCENE | ND_LAYER | NS_LAYER_COLLECTION | NA_ACTIVATED, NULL);
   }
 
   return OL_DRAWSEL_NONE;
@@ -1507,7 +1517,7 @@ static int outliner_box_select_exec(bContext *C, wmOperator *op)
 
   DEG_id_tag_update(&scene->id, ID_RECALC_SELECT);
   WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, scene);
-  ED_region_tag_redraw(region);
+  ED_region_tag_redraw_no_rebuild(region);
 
   ED_outliner_select_sync_from_outliner(C, space_outliner);
 
@@ -1630,6 +1640,40 @@ static TreeElement *outliner_find_next_element(SpaceOutliner *space_outliner, Tr
   return te;
 }
 
+static TreeElement *outliner_walk_left(SpaceOutliner *space_outliner,
+                                       TreeElement *te,
+                                       bool toggle_all)
+{
+  TreeStoreElem *tselem = TREESTORE(te);
+
+  if (TSELEM_OPEN(tselem, space_outliner)) {
+    outliner_item_openclose(space_outliner, te, false, toggle_all);
+  }
+  /* Only walk up a level if the element is closed and not toggling expand */
+  else if (!toggle_all && te->parent) {
+    te = te->parent;
+  }
+
+  return te;
+}
+
+static TreeElement *outliner_walk_right(SpaceOutliner *space_outliner,
+                                        TreeElement *te,
+                                        bool toggle_all)
+{
+  TreeStoreElem *tselem = TREESTORE(te);
+
+  /* Only walk down a level if the element is open and not toggling expand */
+  if (!toggle_all && TSELEM_OPEN(tselem, space_outliner) && !BLI_listbase_is_empty(&te->subtree)) {
+    te = te->subtree.first;
+  }
+  else {
+    outliner_item_openclose(space_outliner, te, true, toggle_all);
+  }
+
+  return te;
+}
+
 static TreeElement *do_outliner_select_walk(SpaceOutliner *space_outliner,
                                             TreeElement *te,
                                             const int direction,
@@ -1646,10 +1690,10 @@ static TreeElement *do_outliner_select_walk(SpaceOutliner *space_outliner,
       te = outliner_find_next_element(space_outliner, te);
       break;
     case UI_SELECT_WALK_LEFT:
-      outliner_item_openclose(te, false, toggle_all);
+      te = outliner_walk_left(space_outliner, te, toggle_all);
       break;
     case UI_SELECT_WALK_RIGHT:
-      outliner_item_openclose(te, true, toggle_all);
+      te = outliner_walk_right(space_outliner, te, toggle_all);
       break;
   }
 
@@ -1729,7 +1773,7 @@ static int outliner_walk_select_invoke(bContext *C, wmOperator *op, const wmEven
   outliner_walk_scroll(region, active_te);
 
   ED_outliner_select_sync_from_outliner(C, space_outliner);
-  ED_region_tag_redraw(region);
+  outliner_tag_redraw_avoid_rebuild_on_open_change(space_outliner, region);
 
   return OPERATOR_FINISHED;
 }

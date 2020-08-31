@@ -200,12 +200,9 @@ static void graph_main_region_draw(const bContext *C, ARegion *region)
   Scene *scene = CTX_data_scene(C);
   bAnimContext ac;
   View2D *v2d = &region->v2d;
-  float col[3];
 
   /* clear and setup matrix */
-  UI_GetThemeColor3fv(TH_BACK, col);
-  GPU_clear_color(col[0], col[1], col[2], 1.0f);
-  GPU_clear(GPU_COLOR_BIT);
+  UI_ThemeClearColor(TH_BACK);
 
   UI_view2d_view_ortho(v2d);
 
@@ -249,7 +246,7 @@ static void graph_main_region_draw(const bContext *C, ARegion *region)
 
       /* Draw a green line to indicate the cursor value */
       immUniformThemeColorShadeAlpha(TH_CFRAME, -10, -50);
-      GPU_blend(true);
+      GPU_blend(GPU_BLEND_ALPHA);
       GPU_line_width(2.0);
 
       immBegin(GPU_PRIM_LINES, 2);
@@ -257,7 +254,7 @@ static void graph_main_region_draw(const bContext *C, ARegion *region)
       immVertex2f(pos, v2d->cur.xmax, y);
       immEnd();
 
-      GPU_blend(false);
+      GPU_blend(GPU_BLEND_NONE);
     }
 
     /* current frame or vertical component of vertical component of the cursor */
@@ -268,7 +265,7 @@ static void graph_main_region_draw(const bContext *C, ARegion *region)
       /* to help differentiate this from the current frame,
        * draw slightly darker like the horizontal one */
       immUniformThemeColorShadeAlpha(TH_CFRAME, -40, -50);
-      GPU_blend(true);
+      GPU_blend(GPU_BLEND_ALPHA);
       GPU_line_width(2.0);
 
       immBegin(GPU_PRIM_LINES, 2);
@@ -276,7 +273,7 @@ static void graph_main_region_draw(const bContext *C, ARegion *region)
       immVertex2f(pos, x, v2d->cur.ymax);
       immEnd();
 
-      GPU_blend(false);
+      GPU_blend(GPU_BLEND_NONE);
     }
 
     immUnbindProgram();
@@ -358,12 +355,9 @@ static void graph_channel_region_draw(const bContext *C, ARegion *region)
 {
   bAnimContext ac;
   View2D *v2d = &region->v2d;
-  float col[3];
 
   /* clear and setup matrix */
-  UI_GetThemeColor3fv(TH_BACK, col);
-  GPU_clear_color(col[0], col[1], col[2], 1.0f);
-  GPU_clear(GPU_COLOR_BIT);
+  UI_ThemeClearColor(TH_BACK);
 
   UI_view2d_view_ortho(v2d);
 

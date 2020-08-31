@@ -68,8 +68,6 @@ typedef struct bScreen {
   /** User-setting for which editors get redrawn during anim playback. */
   short redraws_flag;
 
-  char statusbar_info[256];
-
   /** Temp screen in a temp window, don't save (like user prefs). */
   char temp;
   /** Temp screen for image render display or fileselect. */
@@ -536,9 +534,8 @@ typedef enum eScreen_Redraws_Flag {
 /** #Panel.flag */
 enum {
   PNL_SELECT = (1 << 0),
-  PNL_CLOSEDX = (1 << 1),
-  PNL_CLOSEDY = (1 << 2),
-  PNL_CLOSED = (PNL_CLOSEDX | PNL_CLOSEDY),
+  PNL_UNUSED_1 = (1 << 1), /* Cleared */
+  PNL_CLOSED = (1 << 2),
   /* PNL_TABBED = (1 << 3), */  /*UNUSED*/
   /* PNL_OVERLAP = (1 << 4), */ /*UNUSED*/
   PNL_PIN = (1 << 5),
@@ -635,12 +632,20 @@ typedef enum eRegionType {
   RGN_TYPE_EXECUTE = 10,
   RGN_TYPE_FOOTER = 11,
   RGN_TYPE_TOOL_HEADER = 12,
+
+#define RGN_TYPE_LEN (RGN_TYPE_TOOL_HEADER + 1)
 } eRegionType;
+
 /* use for function args */
 #define RGN_TYPE_ANY -1
 
 /* Region supports panel tabs (categories). */
 #define RGN_TYPE_HAS_CATEGORY_MASK (1 << RGN_TYPE_UI)
+
+/* Check for any kind of header region. */
+#define RGN_TYPE_IS_HEADER_ANY(regiontype) \
+  (((1 << (regiontype)) & \
+    ((1 << RGN_TYPE_HEADER) | 1 << (RGN_TYPE_TOOL_HEADER) | (1 << RGN_TYPE_FOOTER))) != 0)
 
 /** #ARegion.alignment */
 enum {
@@ -661,6 +666,7 @@ enum {
 
 /** Mask out flags so we can check the alignment. */
 #define RGN_ALIGN_ENUM_FROM_MASK(align) ((align) & ((1 << 4) - 1))
+#define RGN_ALIGN_FLAG_FROM_MASK(align) ((align) & ~((1 << 4) - 1))
 
 /** #ARegion.flag */
 enum {

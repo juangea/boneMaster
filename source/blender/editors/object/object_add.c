@@ -1450,6 +1450,7 @@ static int collection_instance_add_exec(bContext *C, wmOperator *op)
     DEG_relations_tag_update(bmain);
     DEG_id_tag_update(&scene->id, ID_RECALC_SELECT);
     WM_event_add_notifier(C, NC_SCENE | ND_OB_ACTIVE, scene);
+    WM_event_add_notifier(C, NC_SCENE | ND_LAYER_CONTENT, scene);
 
     return OPERATOR_FINISHED;
   }
@@ -2783,6 +2784,7 @@ static int object_convert_exec(bContext *C, wmOperator *op)
   DEG_id_tag_update(&scene->id, ID_RECALC_SELECT);
   WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, scene);
   WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, scene);
+  WM_event_add_notifier(C, NC_SCENE | ND_LAYER_CONTENT, scene);
 
   return OPERATOR_FINISHED;
 }
@@ -3003,6 +3005,7 @@ static int duplicate_exec(bContext *C, wmOperator *op)
   DEG_id_tag_update(&scene->id, ID_RECALC_COPY_ON_WRITE | ID_RECALC_SELECT);
 
   WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, scene);
+  WM_event_add_notifier(C, NC_SCENE | ND_LAYER_CONTENT, scene);
 
   return OPERATOR_FINISHED;
 }
@@ -3094,6 +3097,7 @@ static int object_add_named_exec(bContext *C, wmOperator *op)
   DEG_id_tag_update(&scene->id, ID_RECALC_SELECT);
   WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, scene);
   WM_event_add_notifier(C, NC_SCENE | ND_OB_ACTIVE, scene);
+  WM_event_add_notifier(C, NC_SCENE | ND_LAYER_CONTENT, scene);
   ED_outliner_select_sync_from_object_tag(C);
 
   return OPERATOR_FINISHED;
@@ -3163,20 +3167,45 @@ static int object_join_exec(bContext *C, wmOperator *op)
     }
   }
 
+  int ret = OPERATOR_CANCELLED;
   if (ob->type == OB_MESH) {
-    return ED_mesh_join_objects_exec(C, op);
+    ret = ED_mesh_join_objects_exec(C, op);
   }
-  if (ELEM(ob->type, OB_CURVE, OB_SURF)) {
-    return ED_curve_join_objects_exec(C, op);
+  else if (ELEM(ob->type, OB_CURVE, OB_SURF)) {
+    ret = ED_curve_join_objects_exec(C, op);
   }
-  if (ob->type == OB_ARMATURE) {
-    return ED_armature_join_objects_exec(C, op);
+  else if (ob->type == OB_ARMATURE) {
+    ret = ED_armature_join_objects_exec(C, op);
   }
-  if (ob->type == OB_GPENCIL) {
-    return ED_gpencil_join_objects_exec(C, op);
+  else if (ob->type == OB_GPENCIL) {
+    ret = ED_gpencil_join_objects_exec(C, op);
   }
 
-  return OPERATOR_CANCELLED;
+  if (ret & OPERATOR_FINISHED) {
+    /* Even though internally failure to invert is accounted for with a fallback,
+     * show a warning since the result may not be what the user expects. See T80077.
+     *
+     * Failure to invert the matrix is typically caused by zero scaled axes
+     * (which can be caused by constraints, even if the input scale isn't zero).
+     *
+     * Internally the join functions use #invert_m4_m4_safe_ortho which creates
+     * an inevitable matrix from one that has one or more degenerate axes.
+     *
+     * In most cases we don't worry about special handling for non-inevitable matrices however for
+     * joining objects there may be flat 2D objects where it's not obvious the scale is zero.
+     * In this case, using #invert_m4_m4_safe_ortho works as well as we can expect,
+     * joining the contents, flattening on the axis that's zero scaled.
+     * If the zero scale is removed, the data on this axis remains un-scaled
+     * (something that wouldn't work for #invert_m4_m4_safe). */
+    float imat_test[4][4];
+    if (!invert_m4_m4(imat_test, ob->obmat)) {
+      BKE_report(op->reports,
+                 RPT_WARNING,
+                 "Active object final transform has one or more zero scaled axes");
+    }
+  }
+
+  return ret;
 }
 
 void OBJECT_OT_join(wmOperatorType *ot)

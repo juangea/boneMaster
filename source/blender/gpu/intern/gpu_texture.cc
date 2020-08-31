@@ -44,6 +44,7 @@
 #include "GPU_texture.h"
 
 #include "gpu_context_private.hh"
+#include "gpu_framebuffer_private.hh"
 
 #define WARN_NOT_BOUND(_tex) \
   { \
@@ -108,6 +109,9 @@ struct GPUTexture {
   GLuint copy_fb;
   GPUContext *copy_fb_ctx;
 };
+
+using namespace blender;
+using namespace blender::gpu;
 
 static uint gpu_get_bytesize(eGPUTextureFormat data_type);
 static void gpu_texture_framebuffer_ensure(GPUTexture *tex);
@@ -615,7 +619,7 @@ static bool gpu_texture_check_capacity(
     GPUTexture *tex, GLenum proxy, GLenum internalformat, GLenum data_format, GLenum data_type)
 {
   if (proxy == GL_PROXY_TEXTURE_CUBE_MAP_ARRAY_ARB &&
-      GPU_type_matches(GPU_DEVICE_ATI, GPU_OS_MAC, GPU_DRIVER_ANY)) {
+      GPU_type_matches(GPU_DEVICE_ANY, GPU_OS_MAC, GPU_DRIVER_ANY)) {
     /* Special fix for T79703. */
     /* Depth has already been checked. */
     return tex->w <= GPU_max_cube_map_size();
@@ -1158,9 +1162,9 @@ static GLenum convert_target_to_gl(int dimension, bool is_array)
 {
   switch (dimension) {
     case 1:
-      return is_array ? GL_TEXTURE_1D : GL_TEXTURE_1D_ARRAY;
+      return is_array ? GL_TEXTURE_1D_ARRAY : GL_TEXTURE_1D;
     case 2:
-      return is_array ? GL_TEXTURE_2D : GL_TEXTURE_2D_ARRAY;
+      return is_array ? GL_TEXTURE_2D_ARRAY : GL_TEXTURE_2D;
     case 3:
       return GL_TEXTURE_3D;
     default:
@@ -1611,6 +1615,9 @@ void GPU_texture_clear(GPUTexture *tex, eGPUDataFormat gpu_data_format, const vo
     /* This means that this function can only be used in one context for each texture. */
     BLI_assert(tex->copy_fb_ctx == GPU_context_active_get());
 
+    int viewport[4];
+    GPU_viewport_size_get_i(viewport);
+
     glBindFramebuffer(GL_FRAMEBUFFER, tex->copy_fb);
     glViewport(0, 0, tex->w, tex->h);
 
@@ -1674,6 +1681,8 @@ void GPU_texture_clear(GPUTexture *tex, eGPUDataFormat gpu_data_format, const vo
       glClearColor(r, g, b, a);
       glClear(GL_COLOR_BUFFER_BIT);
     }
+
+    glViewport(UNPACK4(viewport));
 
     if (prev_fb) {
       GPU_framebuffer_bind(prev_fb);
@@ -2015,7 +2024,8 @@ void GPU_texture_free(GPUTexture *tex)
   if (tex->refcount == 0) {
     for (int i = 0; i < GPU_TEX_MAX_FBO_ATTACHED; i++) {
       if (tex->fb[i] != NULL) {
-        GPU_framebuffer_texture_detach_slot(tex->fb[i], tex, tex->fb_attachment[i]);
+        FrameBuffer *framebuffer = reinterpret_cast<FrameBuffer *>(tex->fb[i]);
+        framebuffer->attachment_set((GPUAttachmentType)tex->fb_attachment[i], GPU_ATTACHMENT_NONE);
       }
     }
 
@@ -2127,17 +2137,26 @@ void GPU_texture_attach_framebuffer(GPUTexture *tex, GPUFrameBuffer *fb, int att
 }
 
 /* Return previous attachment point */
-int GPU_texture_detach_framebuffer(GPUTexture *tex, GPUFrameBuffer *fb)
+void GPU_texture_detach_framebuffer(GPUTexture *tex, GPUFrameBuffer *fb)
 {
   for (int i = 0; i < GPU_TEX_MAX_FBO_ATTACHED; i++) {
     if (tex->fb[i] == fb) {
       tex->fb[i] = NULL;
+      return;
+    }
+  }
+  BLI_assert(!"Error: Texture: Framebuffer is not attached");
+}
+
+/* Return attachment type for the given framebuffer or -1 if not attached. */
+int GPU_texture_framebuffer_attachement_get(GPUTexture *tex, GPUFrameBuffer *fb)
+{
+  for (int i = 0; i < GPU_TEX_MAX_FBO_ATTACHED; i++) {
+    if (tex->fb[i] == fb) {
       return tex->fb_attachment[i];
     }
   }
-
-  BLI_assert(!"Error: Texture: Framebuffer is not attached");
-  return 0;
+  return -1;
 }
 
 void GPU_texture_get_mipmap_size(GPUTexture *tex, int lvl, int *size)
@@ -2174,6 +2193,11 @@ void GPU_texture_get_mipmap_size(GPUTexture *tex, int lvl, int *size)
 
 void GPU_samplers_init(void)
 {
+  float max_anisotropy = 1.0f;
+  if (GLEW_EXT_texture_filter_anisotropic) {
+    glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &max_anisotropy);
+  }
+
   glGenSamplers(GPU_SAMPLER_MAX, GG.samplers);
   for (int i = 0; i < GPU_SAMPLER_MAX; i++) {
     eGPUSamplerState state = static_cast<eGPUSamplerState>(i);
@@ -2188,7 +2212,7 @@ void GPU_samplers_init(void)
     GLenum compare_mode = (state & GPU_SAMPLER_COMPARE) ? GL_COMPARE_REF_TO_TEXTURE : GL_NONE;
     /* TODO(fclem) Anisotropic level should be a render engine parameter. */
     float aniso_filter = ((state & GPU_SAMPLER_MIPMAP) && (state & GPU_SAMPLER_ANISO)) ?
-                             U.anisotropic_filter :
+                             max_ff(max_anisotropy, U.anisotropic_filter) :
                              1.0f;
 
     glSamplerParameteri(GG.samplers[i], GL_TEXTURE_WRAP_S, wrap_s);

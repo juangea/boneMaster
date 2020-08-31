@@ -32,12 +32,19 @@
 
 #include "glew-mx.h"
 
-#include "gl_batch.hh"
-
 #include <mutex>
+
+/* Enabled on MacOS by default since there is no support for debug callbacks. */
+#if defined(DEBUG) && defined(__APPLE__)
+#  define GL_CHECK_ERROR(info) GLContext::check_error(info)
+#else
+#  define GL_CHECK_ERROR(info)
+#endif
 
 namespace blender {
 namespace gpu {
+
+class GLVaoCache;
 
 class GLSharedOrphanLists {
  public:
@@ -51,13 +58,11 @@ class GLSharedOrphanLists {
   void orphans_clear(void);
 };
 
-struct GLContext : public GPUContext {
+class GLContext : public GPUContext {
   /* TODO(fclem) these needs to become private. */
  public:
   /** Default VAO for procedural draw calls. */
   GLuint default_vao_;
-  /** Default framebuffer object for some GL implementation. */
-  GLuint default_framebuffer_;
   /** VBO for missing vertex attrib binding. Avoid undefined behavior on some implementation. */
   GLuint default_attr_vbo_;
   /**
@@ -77,6 +82,8 @@ struct GLContext : public GPUContext {
  public:
   GLContext(void *ghost_window, GLSharedOrphanLists &shared_orphan_list);
   ~GLContext();
+
+  static void check_error(const char *info);
 
   void activate(void) override;
   void deactivate(void) override;

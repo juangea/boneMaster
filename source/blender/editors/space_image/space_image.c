@@ -650,7 +650,6 @@ static void image_main_region_draw(const bContext *C, ARegion *region)
 
   GPU_framebuffer_bind(framebuffer_default);
   GPU_clear_color(0.0f, 0.0f, 0.0f, 0.0f);
-  GPU_clear(GPU_COLOR_BIT);
 
   GPU_framebuffer_bind(framebuffer_overlay);
 
@@ -661,8 +660,7 @@ static void image_main_region_draw(const bContext *C, ARegion *region)
   UI_GetThemeColor3fv(TH_BACK, col);
   srgb_to_linearrgb_v3_v3(col, col);
   GPU_clear_color(col[0], col[1], col[2], 1.0f);
-  GPU_clear(GPU_COLOR_BIT);
-  GPU_depth_test(false);
+  GPU_depth_test(GPU_DEPTH_NONE);
 
   image_user_refresh_scene(C, sima);
 
@@ -836,9 +834,7 @@ static void image_buttons_region_layout(const bContext *C, ARegion *region)
       break;
   }
 
-  const bool vertical = true;
-  ED_region_panels_layout_ex(
-      C, region, &region->type->paneltypes, contexts_base, -1, vertical, NULL);
+  ED_region_panels_layout_ex(C, region, &region->type->paneltypes, contexts_base, NULL);
 }
 
 static void image_buttons_region_draw(const bContext *C, ARegion *region)
