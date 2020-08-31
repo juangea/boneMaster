@@ -55,11 +55,11 @@ BlenderSync::BlenderSync(BL::RenderEngine &b_engine,
     : b_engine(b_engine),
       b_data(b_data),
       b_scene(b_scene),
-      shader_map(&scene->shaders),
-      object_map(&scene->objects),
-      geometry_map(&scene->geometry),
-      light_map(&scene->lights),
-      particle_system_map(&scene->particle_systems),
+      shader_map(),
+      object_map(),
+      geometry_map(),
+      light_map(),
+      particle_system_map(),
       world_map(NULL),
       world_recalc(false),
       scene(scene),
@@ -239,7 +239,7 @@ void BlenderSync::sync_data(BL::RenderSettings &b_render,
 
   /* Shader sync done at the end, since object sync uses it.
    * false = don't delete unused shaders, not supported. */
-  shader_map.post_sync(false);
+  shader_map.post_sync(scene, false);
 
   free_data_after_sync(b_depsgraph);
 }
@@ -372,8 +372,10 @@ void BlenderSync::sync_film(BL::SpaceView3D &b_v3d)
   Film *film = scene->film;
   Film prevfilm = *film;
 
+  vector<Pass> prevpasses = scene->passes;
+
   if (b_v3d) {
-    film->display_pass = update_viewport_display_passes(b_v3d, film->passes);
+    film->display_pass = update_viewport_display_passes(b_v3d, scene->passes);
   }
 
   film->exposure = get_float(cscene, "film_exposure");
@@ -403,7 +405,11 @@ void BlenderSync::sync_film(BL::SpaceView3D &b_v3d)
 
   if (film->modified(prevfilm)) {
     film->tag_update(scene);
-    film->tag_passes_update(scene, prevfilm.passes, false);
+  }
+
+  if (!Pass::equals(prevpasses, scene->passes)) {
+    film->tag_passes_update(scene, prevpasses, false);
+    film->tag_update(scene);
   }
 }
 

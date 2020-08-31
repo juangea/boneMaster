@@ -237,7 +237,7 @@ void outliner_build_tree(struct Main *mainvar,
                          struct SpaceOutliner *space_outliner,
                          struct ARegion *region);
 
-bool outliner_element_needs_rebuild_on_open_change(const TreeStoreElem *tselem);
+bool outliner_mode_requires_always_rebuild(const struct SpaceOutliner *space_outliner);
 
 typedef struct IDsSelectedData {
   struct ListBase selected_array;
@@ -374,7 +374,10 @@ void item_object_mode_exit_fn(struct bContext *C,
 
 void outliner_set_coordinates(struct ARegion *region, struct SpaceOutliner *space_outliner);
 
-void outliner_item_openclose(TreeElement *te, bool open, bool toggle_all);
+void outliner_item_openclose(struct SpaceOutliner *space_outliner,
+                             TreeElement *te,
+                             bool open,
+                             bool toggle_all);
 
 /* outliner_dragdrop.c */
 void outliner_dropboxes(void);
@@ -515,6 +518,8 @@ float outliner_restrict_columns_width(const struct SpaceOutliner *space_outliner
 TreeElement *outliner_find_element_with_flag(const ListBase *lb, short flag);
 bool outliner_is_element_visible(const TreeElement *te);
 void outliner_scroll_view(struct ARegion *region, int delta_y);
+void outliner_tag_redraw_avoid_rebuild_on_open_change(const struct SpaceOutliner *space_outliner,
+                                                      struct ARegion *region);
 
 /* outliner_sync.c ---------------------------------------------- */
 

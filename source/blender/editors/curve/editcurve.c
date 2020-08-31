@@ -2172,12 +2172,22 @@ bool ed_editnurb_extrude_flag(EditNurb *editnurb, const short flag)
   return ok;
 }
 
+static void calc_duplicate_actnurb(const ListBase *editnurb, const ListBase *newnurb, Curve *cu)
+{
+  cu->actnu = BLI_listbase_count(editnurb) + BLI_listbase_count(newnurb);
+}
+
 static bool calc_duplicate_actvert(
     const ListBase *editnurb, const ListBase *newnurb, Curve *cu, int start, int end, int vert)
 {
+  if (cu->actvert == -1) {
+    calc_duplicate_actnurb(editnurb, newnurb, cu);
+    return true;
+  }
+
   if ((start <= cu->actvert) && (end > cu->actvert)) {
+    calc_duplicate_actnurb(editnurb, newnurb, cu);
     cu->actvert = vert;
-    cu->actnu = BLI_listbase_count(editnurb) + BLI_listbase_count(newnurb);
     return true;
   }
   return false;
@@ -2427,26 +2437,31 @@ static void adduplicateflagNurb(
                 }
 
                 if (cu->actnu == i) {
-                  for (b = 0, diffa = 0; b < newv; b++, diffa += nu->pntsu - newu) {
-                    starta = b * nu->pntsu + a;
-                    if (calc_duplicate_actvert(editnurb,
-                                               newnurb,
-                                               cu,
-                                               cu->actvert,
-                                               starta,
-                                               cu->actvert % nu->pntsu + newu +
-                                                   b * newnu->pntsu)) {
-                      /* actvert in cyclicu selection */
-                      break;
-                    }
-                    if (calc_duplicate_actvert(editnurb,
-                                               newnurb,
-                                               cu,
-                                               starta,
-                                               starta + newu,
-                                               cu->actvert - starta + b * newnu->pntsu)) {
-                      /* actvert in 'current' iteration selection */
-                      break;
+                  if (cu->actvert == -1) {
+                    calc_duplicate_actnurb(editnurb, newnurb, cu);
+                  }
+                  else {
+                    for (b = 0, diffa = 0; b < newv; b++, diffa += nu->pntsu - newu) {
+                      starta = b * nu->pntsu + a;
+                      if (calc_duplicate_actvert(editnurb,
+                                                 newnurb,
+                                                 cu,
+                                                 cu->actvert,
+                                                 starta,
+                                                 cu->actvert % nu->pntsu + newu +
+                                                     b * newnu->pntsu)) {
+                        /* actvert in cyclicu selection */
+                        break;
+                      }
+                      if (calc_duplicate_actvert(editnurb,
+                                                 newnurb,
+                                                 cu,
+                                                 starta,
+                                                 starta + newu,
+                                                 cu->actvert - starta + b * newnu->pntsu)) {
+                        /* actvert in 'current' iteration selection */
+                        break;
+                      }
                     }
                   }
                 }
@@ -2474,16 +2489,21 @@ static void adduplicateflagNurb(
 
               /* general case if not handled by cyclicu or cyclicv */
               if (cu->actnu == i) {
-                for (b = 0, diffa = 0; b < newv; b++, diffa += nu->pntsu - newu) {
-                  starta = b * nu->pntsu + a;
-                  if (calc_duplicate_actvert(editnurb,
-                                             newnurb,
-                                             cu,
-                                             starta,
-                                             starta + newu,
-                                             cu->actvert - (a / nu->pntsu * nu->pntsu + diffa +
-                                                            (starta % nu->pntsu)))) {
-                    break;
+                if (cu->actvert == -1) {
+                  calc_duplicate_actnurb(editnurb, newnurb, cu);
+                }
+                else {
+                  for (b = 0, diffa = 0; b < newv; b++, diffa += nu->pntsu - newu) {
+                    starta = b * nu->pntsu + a;
+                    if (calc_duplicate_actvert(editnurb,
+                                               newnurb,
+                                               cu,
+                                               starta,
+                                               starta + newu,
+                                               cu->actvert - (a / nu->pntsu * nu->pntsu + diffa +
+                                                              (starta % nu->pntsu)))) {
+                      break;
+                    }
                   }
                 }
               }
@@ -2510,15 +2530,20 @@ static void adduplicateflagNurb(
 
             /* check for actvert in the unused cyclicuv selection */
             if (cu->actnu == i) {
-              for (b = 0, diffa = 0; b < newv; b++, diffa += nu->pntsu - newu) {
-                starta = b * nu->pntsu;
-                if (calc_duplicate_actvert(editnurb,
-                                           newnurb,
-                                           cu,
-                                           starta,
-                                           starta + newu,
-                                           cu->actvert - (diffa + (starta % nu->pntsu)))) {
-                  break;
+              if (cu->actvert == -1) {
+                calc_duplicate_actnurb(editnurb, newnurb, cu);
+              }
+              else {
+                for (b = 0, diffa = 0; b < newv; b++, diffa += nu->pntsu - newu) {
+                  starta = b * nu->pntsu;
+                  if (calc_duplicate_actvert(editnurb,
+                                             newnurb,
+                                             cu,
+                                             starta,
+                                             starta + newu,
+                                             cu->actvert - (diffa + (starta % nu->pntsu)))) {
+                    break;
+                  }
                 }
               }
             }
@@ -6923,8 +6948,9 @@ int ED_curve_join_objects_exec(bContext *C, wmOperator *op)
 
   BLI_listbase_clear(&tempbase);
 
-  /* trasnform all selected curves inverse in obact */
-  invert_m4_m4(imat, ob_active->obmat);
+  /* Inverse transform for all selected curves in this object,
+   * See #object_join_exec for detailed comment on why the safe version is used. */
+  invert_m4_m4_safe_ortho(imat, ob_active->obmat);
 
   CTX_DATA_BEGIN (C, Object *, ob_iter, selected_editable_objects) {
     if (ob_iter->type == ob_active->type) {
@@ -6988,6 +7014,7 @@ int ED_curve_join_objects_exec(bContext *C, wmOperator *op)
   DEG_id_tag_update(&scene->id, ID_RECALC_SELECT);
 
   WM_event_add_notifier(C, NC_SCENE | ND_OB_ACTIVE, scene);
+  WM_event_add_notifier(C, NC_SCENE | ND_LAYER_CONTENT, scene);
 
   return OPERATOR_FINISHED;
 }

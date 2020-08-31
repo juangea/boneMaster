@@ -66,6 +66,7 @@
 
 #ifdef WITH_PYTHON
 #  include "BPY_extern.h"
+#  include "BPY_extern_run.h"
 #endif
 
 /* ****************************************************** */
@@ -112,6 +113,12 @@ IDTypeInfo IDType_ID_WM = {
     .free_data = window_manager_free_data,
     .make_local = NULL,
     .foreach_id = window_manager_foreach_id,
+    .foreach_cache = NULL,
+
+    .blend_write = NULL,
+    .blend_read_data = NULL,
+    .blend_read_lib = NULL,
+    .blend_read_expand = NULL,
 };
 
 #define MAX_OP_REGISTERED 32
@@ -270,7 +277,7 @@ void WM_keyconfig_reload(bContext *C)
 {
   if (CTX_py_init_get(C) && !G.background) {
 #ifdef WITH_PYTHON
-    BPY_execute_string(C, (const char *[]){"bpy", NULL}, "bpy.utils.keyconfig_init()");
+    BPY_run_string_eval(C, (const char *[]){"bpy", NULL}, "bpy.utils.keyconfig_init()");
 #endif
   }
 }

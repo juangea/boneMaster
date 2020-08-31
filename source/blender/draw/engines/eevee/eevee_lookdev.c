@@ -275,7 +275,7 @@ void EEVEE_lookdev_draw(EEVEE_Data *vedata)
     common->ao_dist = 0.0f;
     common->ao_factor = 0.0f;
     common->ao_settings = 0.0f;
-    DRW_uniformbuffer_update(sldata->common_ubo, common);
+    GPU_uniformbuf_update(sldata->common_ubo, common);
 
     /* override matrices */
     float winmat[4][4], viewmat[4][4];
@@ -330,6 +330,8 @@ void EEVEE_lookdev_draw(EEVEE_Data *vedata)
                                  effects->sphere_size);
 
     DRW_draw_pass(psl->lookdev_glossy_pass);
+
+    GPU_framebuffer_viewport_reset(fb);
 
     DRW_stats_group_end();
 

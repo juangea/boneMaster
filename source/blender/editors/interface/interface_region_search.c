@@ -256,8 +256,8 @@ static void ui_searchbox_butrect(rcti *r_rect, uiSearchboxData *data, int itemnr
 {
   /* thumbnail preview */
   if (data->preview) {
-    int butw = (BLI_rcti_size_x(&data->bbox) - 2 * MENU_BORDER) / data->prv_cols;
-    int buth = (BLI_rcti_size_y(&data->bbox) - 2 * MENU_BORDER) / data->prv_rows;
+    const int butw = (BLI_rcti_size_x(&data->bbox) - 2 * MENU_BORDER) / data->prv_cols;
+    const int buth = (BLI_rcti_size_y(&data->bbox) - 2 * MENU_BORDER) / data->prv_rows;
     int row, col;
 
     *r_rect = data->bbox;
@@ -273,7 +273,7 @@ static void ui_searchbox_butrect(rcti *r_rect, uiSearchboxData *data, int itemnr
   }
   /* list view */
   else {
-    int buth = (BLI_rcti_size_y(&data->bbox) - 2 * UI_POPUP_MENU_TOP) / SEARCH_ITEMS;
+    const int buth = (BLI_rcti_size_y(&data->bbox) - 2 * UI_POPUP_MENU_TOP) / SEARCH_ITEMS;
 
     *r_rect = data->bbox;
     r_rect->xmin = data->bbox.xmin + 3.0f;
@@ -592,15 +592,15 @@ static void ui_searchbox_region_draw_cb(const bContext *C, ARegion *region)
       /* indicate more */
       if (data->items.more) {
         ui_searchbox_butrect(&rect, data, data->items.maxitem - 1);
-        GPU_blend(true);
+        GPU_blend(GPU_BLEND_ALPHA);
         UI_icon_draw(rect.xmax - 18, rect.ymin - 7, ICON_TRIA_DOWN);
-        GPU_blend(false);
+        GPU_blend(GPU_BLEND_NONE);
       }
       if (data->items.offset) {
         ui_searchbox_butrect(&rect, data, 0);
-        GPU_blend(true);
+        GPU_blend(GPU_BLEND_ALPHA);
         UI_icon_draw(rect.xmin, rect.ymax - 9, ICON_TRIA_UP);
-        GPU_blend(false);
+        GPU_blend(GPU_BLEND_NONE);
       }
     }
     else {
@@ -657,15 +657,15 @@ static void ui_searchbox_region_draw_cb(const bContext *C, ARegion *region)
       /* indicate more */
       if (data->items.more) {
         ui_searchbox_butrect(&rect, data, data->items.maxitem - 1);
-        GPU_blend(true);
+        GPU_blend(GPU_BLEND_ALPHA);
         UI_icon_draw((BLI_rcti_size_x(&rect)) / 2, rect.ymin - 9, ICON_TRIA_DOWN);
-        GPU_blend(false);
+        GPU_blend(GPU_BLEND_NONE);
       }
       if (data->items.offset) {
         ui_searchbox_butrect(&rect, data, 0);
-        GPU_blend(true);
+        GPU_blend(GPU_BLEND_ALPHA);
         UI_icon_draw((BLI_rcti_size_x(&rect)) / 2, rect.ymax - 7, ICON_TRIA_UP);
-        GPU_blend(false);
+        GPU_blend(GPU_BLEND_NONE);
       }
     }
   }
@@ -701,7 +701,7 @@ ARegion *ui_searchbox_create_generic(bContext *C, ARegion *butregion, uiButSearc
   static ARegionType type;
   ARegion *region;
   uiSearchboxData *data;
-  float aspect = but->block->aspect;
+  const float aspect = but->block->aspect;
   rctf rect_fl;
   rcti rect_i;
   const int margin = UI_POPUP_MARGIN;
@@ -953,15 +953,15 @@ static void ui_searchbox_region_draw_cb__operator(const bContext *UNUSED(C), ARe
     /* indicate more */
     if (data->items.more) {
       ui_searchbox_butrect(&rect, data, data->items.maxitem - 1);
-      GPU_blend(true);
+      GPU_blend(GPU_BLEND_ALPHA);
       UI_icon_draw((BLI_rcti_size_x(&rect)) / 2, rect.ymin - 9, ICON_TRIA_DOWN);
-      GPU_blend(false);
+      GPU_blend(GPU_BLEND_NONE);
     }
     if (data->items.offset) {
       ui_searchbox_butrect(&rect, data, 0);
-      GPU_blend(true);
+      GPU_blend(GPU_BLEND_ALPHA);
       UI_icon_draw((BLI_rcti_size_x(&rect)) / 2, rect.ymax - 7, ICON_TRIA_UP);
-      GPU_blend(false);
+      GPU_blend(GPU_BLEND_NONE);
     }
   }
 }

@@ -183,7 +183,6 @@ static void ui_update_color_picker_buts_rgb(uiBut *from_but,
                                             ColorPicker *cpicker,
                                             const float rgb[3])
 {
-  uiBut *bt;
   float *hsv = cpicker->color_data;
 
   /* Convert from RGB to HSV in perceptually linear space. */
@@ -196,7 +195,7 @@ static void ui_update_color_picker_buts_rgb(uiBut *from_but,
 
   /* this updates button strings,
    * is hackish... but button pointers are on stack of caller function */
-  for (bt = block->buttons.first; bt; bt = bt->next) {
+  LISTBASE_FOREACH (uiBut *, bt, &block->buttons) {
     if (bt->custom_data != cpicker) {
       continue;
     }
@@ -352,7 +351,7 @@ static void ui_colorpicker_hide_reveal(uiBlock *block, enum ePickerType colormod
 static void ui_colorpicker_create_mode_cb(bContext *UNUSED(C), void *bt1, void *UNUSED(arg))
 {
   uiBut *bt = bt1;
-  short colormode = ui_but_value_get(bt);
+  const short colormode = ui_but_value_get(bt);
   ui_colorpicker_hide_reveal(bt->block, colormode);
 }
 
@@ -849,9 +848,7 @@ static int ui_colorpicker_small_wheel_cb(const bContext *UNUSED(C),
   }
 
   if (add != 0.0f) {
-    uiBut *but;
-
-    for (but = block->buttons.first; but; but = but->next) {
+    LISTBASE_FOREACH (uiBut *, but, &block->buttons) {
       if (but->type == UI_BTYPE_HSVCUBE && but->active == NULL) {
         uiPopupBlockHandle *popup = block->handle;
         float rgb[3];

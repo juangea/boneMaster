@@ -117,6 +117,12 @@ IDTypeInfo IDType_ID_PAL = {
     .free_data = palette_free_data,
     .make_local = NULL,
     .foreach_id = NULL,
+    .foreach_cache = NULL,
+
+    .blend_write = NULL,
+    .blend_read_data = NULL,
+    .blend_read_lib = NULL,
+    .blend_read_expand = NULL,
 };
 
 static void paint_curve_copy_data(Main *UNUSED(bmain),
@@ -155,6 +161,12 @@ IDTypeInfo IDType_ID_PC = {
     .free_data = paint_curve_free_data,
     .make_local = NULL,
     .foreach_id = NULL,
+    .foreach_cache = NULL,
+
+    .blend_write = NULL,
+    .blend_read_data = NULL,
+    .blend_read_lib = NULL,
+    .blend_read_expand = NULL,
 };
 
 const char PAINT_CURSOR_SCULPT[3] = {255, 100, 100};
@@ -1421,7 +1433,7 @@ MultiresModifierData *BKE_sculpt_multires_active(Scene *scene, Object *ob)
         continue;
       }
 
-      if (mmd->sculptlvl > 0) {
+      if (mmd->sculptlvl > 0 && !(mmd->flags & eMultiresModifierFlag_UseSculptBaseMesh)) {
         return mmd;
       }
 
@@ -1437,10 +1449,9 @@ static bool sculpt_modifiers_active(Scene *scene, Sculpt *sd, Object *ob)
 {
   ModifierData *md;
   Mesh *me = (Mesh *)ob->data;
-  MultiresModifierData *mmd = BKE_sculpt_multires_active(scene, ob);
   VirtualModifierData virtualModifierData;
 
-  if (mmd || ob->sculpt->bm) {
+  if (ob->sculpt->bm || BKE_sculpt_multires_active(scene, ob)) {
     return false;
   }
 
@@ -1458,7 +1469,10 @@ static bool sculpt_modifiers_active(Scene *scene, Sculpt *sd, Object *ob)
       continue;
     }
     if (md->type == eModifierType_Multires && (ob->mode & OB_MODE_SCULPT)) {
-      continue;
+      MultiresModifierData *mmd = (MultiresModifierData *)md;
+      if (!(mmd->flags & eMultiresModifierFlag_UseSculptBaseMesh)) {
+        continue;
+      }
     }
     if (md->type == eModifierType_ShapeKey) {
       continue;

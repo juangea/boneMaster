@@ -862,7 +862,8 @@ typedef struct BooleanModifierData {
 
   struct Object *object;
   char operation;
-  char _pad[2];
+  char solver;
+  char _pad[1];
   char bm_flag;
   float double_threshold;
 } BooleanModifierData;
@@ -873,7 +874,12 @@ typedef enum {
   eBooleanModifierOp_Difference = 2,
 } BooleanModifierOp;
 
-/* bm_flag (only used when G_DEBUG) */
+typedef enum {
+  eBooleanModifierSolver_Fast = 0,
+  eBooleanModifierSolver_Exact = 1,
+} BooleanModifierSolver;
+
+/* bm_flag only used when G_DEBUG. */
 enum {
   eBooleanModifierBMeshFlag_BMesh_Separate = (1 << 0),
   eBooleanModifierBMeshFlag_BMesh_NoDissolve = (1 << 1),
@@ -1033,6 +1039,7 @@ typedef enum {
   eMultiresModifierFlag_PlainUv_DEPRECATED = (1 << 1),
   eMultiresModifierFlag_UseCrease = (1 << 2),
   eMultiresModifierFlag_UseCustomNormals = (1 << 3),
+  eMultiresModifierFlag_UseSculptBaseMesh = (1 << 4),
 } MultiresModifierFlag;
 
 /* DEPRECATED, only used for versioning. */

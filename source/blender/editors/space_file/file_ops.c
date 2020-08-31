@@ -1722,7 +1722,11 @@ void FILE_OT_execute(struct wmOperatorType *ot)
   /* api callbacks */
   ot->invoke = file_exec_invoke;
   ot->exec = file_exec;
-  ot->poll = file_operator_poll;
+  /* Important since handler is on window level.
+   *
+   * Avoid using #file_operator_poll since this is also used for entering directories
+   * which is used even when the file manager doesn't have an operator. */
+  ot->poll = ED_operator_file_active;
 
   /* properties */
   prop = RNA_def_boolean(ot->srna,
@@ -2293,7 +2297,7 @@ static void file_expand_directory(bContext *C)
     }
 #else
     {
-      get_default_root(sfile->params->dir);
+      BLI_windows_get_default_root_dir(sfile->params->dir);
     }
     /* change "C:" --> "C:\", [#28102] */
     else if ((isalpha(sfile->params->dir[0]) && (sfile->params->dir[1] == ':')) &&
