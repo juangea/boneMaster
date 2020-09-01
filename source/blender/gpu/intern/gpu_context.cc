@@ -71,6 +71,11 @@ GPUContext::~GPUContext()
 {
   GPU_matrix_state_discard(matrix_state);
   delete state_manager;
+  delete front_left;
+  delete back_left;
+  delete front_right;
+  delete back_right;
+  delete imm;
 }
 
 bool GPUContext::is_active_on_thread(void)
@@ -119,12 +124,6 @@ void GPU_context_active_set(GPUContext *ctx)
 GPUContext *GPU_context_active_get(void)
 {
   return active_ctx;
-}
-
-GLuint GPU_vao_default(void)
-{
-  BLI_assert(active_ctx); /* need at least an active context */
-  return static_cast<GLContext *>(active_ctx)->default_vao_;
 }
 
 GLuint GPU_vao_alloc(void)
