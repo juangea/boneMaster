@@ -30,7 +30,9 @@
 #include "DNA_gpencil_modifier_types.h"
 #include "DNA_gpencil_types.h"
 #include "DNA_modifier_types.h"
+#include "DNA_object_force_types.h"
 #include "DNA_object_types.h"
+#include "DNA_particle_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_shader_fx_types.h"
 
@@ -188,18 +190,50 @@ void do_versions_after_linking_290(Main *bmain, ReportList *UNUSED(reports))
 
     /* Patch first frame for old files. */
     Scene *scene = bmain->scenes.first;
-    LISTBASE_FOREACH (Object *, ob, &bmain->objects) {
-      if (ob->type != OB_GPENCIL) {
-        continue;
-      }
-      bGPdata *gpd = ob->data;
-      LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd->layers) {
-        bGPDframe *gpf = gpl->frames.first;
-        if (gpf && gpf->framenum > scene->r.sfra) {
-          bGPDframe *gpf_dup = BKE_gpencil_frame_duplicate(gpf);
-          gpf_dup->framenum = scene->r.sfra;
-          BLI_addhead(&gpl->frames, gpf_dup);
+    if (scene != NULL) {
+      LISTBASE_FOREACH (Object *, ob, &bmain->objects) {
+        if (ob->type != OB_GPENCIL) {
+          continue;
         }
+        bGPdata *gpd = ob->data;
+        LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd->layers) {
+          bGPDframe *gpf = gpl->frames.first;
+          if (gpf && gpf->framenum > scene->r.sfra) {
+            bGPDframe *gpf_dup = BKE_gpencil_frame_duplicate(gpf);
+            gpf_dup->framenum = scene->r.sfra;
+            BLI_addhead(&gpl->frames, gpf_dup);
+          }
+        }
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_ATLEAST(bmain, 290, 8)) {
+    /* Paint Brush. This ensure that the brush paints by default. Used during the development and
+     * patch review of the initial Sculpt Vertex Colors implementation (D5975) */
+    LISTBASE_FOREACH (Brush *, brush, &bmain->brushes) {
+      if (brush->ob_mode & OB_MODE_SCULPT && brush->sculpt_tool == SCULPT_TOOL_PAINT) {
+        brush->tip_roundness = 1.0f;
+        brush->flow = 1.0f;
+        brush->density = 1.0f;
+        brush->tip_scale_x = 1.0f;
+      }
+    }
+
+    /* Pose Brush with support for loose parts. */
+    LISTBASE_FOREACH (Brush *, brush, &bmain->brushes) {
+      if (brush->sculpt_tool == SCULPT_TOOL_POSE && brush->disconnected_distance_max == 0.0f) {
+        brush->flag2 |= BRUSH_USE_CONNECTED_ONLY;
+        brush->disconnected_distance_max = 0.1f;
+      }
+    }
+
+    LISTBASE_FOREACH (Collection *, collection, &bmain->collections) {
+      if (BKE_collection_cycles_fix(bmain, collection)) {
+        printf(
+            "WARNING: Cycle detected in collection '%s', fixed as best as possible.\n"
+            "You may have to reconstruct your View Layers...\n",
+            collection->id.name);
       }
     }
   }
@@ -215,14 +249,6 @@ void do_versions_after_linking_290(Main *bmain, ReportList *UNUSED(reports))
    * \note Keep this message at the bottom of the function.
    */
   {
-    LISTBASE_FOREACH (Collection *, collection, &bmain->collections) {
-      if (BKE_collection_cycles_fix(bmain, collection)) {
-        printf(
-            "WARNING: Cycle detected in collection '%s', fixed as best as possible.\n"
-            "You may have to reconstruct your View Layers...\n",
-            collection->id.name);
-      }
-    }
     /* Keep this block, even when empty. */
   }
 }
@@ -405,17 +431,29 @@ void blo_do_versions_290(FileData *fd, Library *UNUSED(lib), Main *bmain)
     }
   }
 
-  /**
-   * Versioning code until next subversion bump goes here.
-   *
-   * \note Be sure to check when bumping the version:
-   * - "versioning_userdef.c", #BLO_version_defaults_userpref_blend
-   * - "versioning_userdef.c", #do_versions_theme
-   *
-   * \note Keep this message at the bottom of the function.
-   */
-  {
-    /* Keep this block, even when empty. */
+  if (!MAIN_VERSION_ATLEAST(bmain, 290, 8)) {
+    /* Set the cloth wind factor to 1 for old forces. */
+    if (!DNA_struct_elem_find(fd->filesdna, "PartDeflect", "float", "f_wind_factor")) {
+      LISTBASE_FOREACH (Object *, ob, &bmain->objects) {
+        if (ob->pd) {
+          ob->pd->f_wind_factor = 1.0f;
+        }
+      }
+      LISTBASE_FOREACH (ParticleSettings *, part, &bmain->particles) {
+        if (part->pd) {
+          part->pd->f_wind_factor = 1.0f;
+        }
+        if (part->pd2) {
+          part->pd2->f_wind_factor = 1.0f;
+        }
+      }
+    }
+
+    for (wmWindowManager *wm = bmain->wm.first; wm; wm = wm->id.next) {
+      /* Don't rotate light with the viewer by default, make it fixed. Shading settings can't be
+       * edited and this flag should always be set. So we can always execute this. */
+      wm->xr.session_settings.shading.flag |= V3D_SHADING_WORLD_ORIENTATION;
+    }
 
     /* Initialize additional parameter of the Nishita sky model and change altitude unit. */
     if (!DNA_struct_elem_find(fd->filesdna, "NodeTexSky", "float", "sun_intensity")) {
@@ -446,5 +484,18 @@ void blo_do_versions_290(FileData *fd, Library *UNUSED(lib), Main *bmain)
         }
       }
     }
+  }
+
+  /**
+   * Versioning code until next subversion bump goes here.
+   *
+   * \note Be sure to check when bumping the version:
+   * - "versioning_userdef.c", #BLO_version_defaults_userpref_blend
+   * - "versioning_userdef.c", #do_versions_theme
+   *
+   * \note Keep this message at the bottom of the function.
+   */
+  {
+    /* Keep this block, even when empty. */
   }
 }
