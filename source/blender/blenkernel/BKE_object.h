@@ -131,6 +131,7 @@ struct Object *BKE_object_add_for_data(struct Main *bmain,
                                        bool do_id_user) ATTR_RETURNS_NONNULL;
 void *BKE_object_obdata_add_from_type(struct Main *bmain, int type, const char *name)
     ATTR_NONNULL(1);
+int BKE_object_obdata_to_type(const struct ID *id) ATTR_NONNULL(1);
 
 struct Object *BKE_object_copy(struct Main *bmain, const struct Object *ob);
 bool BKE_object_is_libdata(const struct Object *ob);
@@ -311,10 +312,10 @@ void BKE_object_handle_update_ex(struct Depsgraph *depsgraph,
 
 void BKE_object_sculpt_data_create(struct Object *ob);
 
-int BKE_object_obdata_texspace_get(struct Object *ob,
-                                   short **r_texflag,
-                                   float **r_loc,
-                                   float **r_size);
+bool BKE_object_obdata_texspace_get(struct Object *ob,
+                                    short **r_texflag,
+                                    float **r_loc,
+                                    float **r_size);
 
 struct Mesh *BKE_object_get_evaluated_mesh(struct Object *object);
 struct Mesh *BKE_object_get_pre_modified_mesh(struct Object *object);
