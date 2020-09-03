@@ -24,6 +24,8 @@
 extern "C" {
 #endif
 
+#include <stddef.h>
+
 /* Level Set Filters */
 typedef enum OpenVDBLevelSet_FilterType {
   OPENVDB_LEVELSET_FILTER_NONE = 0,
@@ -65,6 +67,7 @@ struct OpenVDBLevelSet;
 struct OpenVDBFloatGrid;
 struct OpenVDBIntGrid;
 struct OpenVDBVectorGrid;
+struct ParticleList;
 
 struct OpenVDBVolumeToMeshData {
   int tottriangles;
@@ -74,28 +77,6 @@ struct OpenVDBVolumeToMeshData {
   float *vertices;
   unsigned int *quads;
   unsigned int *triangles;
-};
-
-struct OpenVDBRemeshData {
-  float *verts;
-  unsigned int *faces;
-  int totfaces;
-  int totverts;
-
-  float *out_verts;
-  unsigned int *out_faces;
-  unsigned int *out_tris;
-  int out_totverts;
-  int out_totfaces;
-  int out_tottris;
-  int filter_type;
-  enum OpenVDBLevelSet_FilterType filter_bias;
-  enum OpenVDBLevelSet_FilterBias filter_width; /* Parameter for gaussian, median, mean*/
-
-  float voxel_size;
-  float isovalue;
-  float adaptivity;
-  int relax_disoriented_triangles;
 };
 
 int OpenVDB_getVersionHex(void);
@@ -185,30 +166,32 @@ void OpenVDBTransform_free(struct OpenVDBTransform *transform);
 void OpenVDBTransform_create_linear_transform(struct OpenVDBTransform *transform,
                                               double voxel_size);
 
-struct OpenVDBLevelSet *OpenVDBLevelSet_create(bool initGrid, struct OpenVDBTransform *xform);
+struct OpenVDBLevelSet *OpenVDBLevelSet_create(bool initGrid, float voxel_size, float half_width);
 void OpenVDBLevelSet_free(struct OpenVDBLevelSet *level_set);
 void OpenVDBLevelSet_mesh_to_level_set(struct OpenVDBLevelSet *level_set,
                                        const float *vertices,
                                        const unsigned int *faces,
                                        const unsigned int totvertices,
                                        const unsigned int totfaces,
-                                       struct OpenVDBTransform *xform);
-void OpenVDBLevelSet_mesh_to_level_set_transform(struct OpenVDBLevelSet *level_set,
-                                                 const float *vertices,
-                                                 const unsigned int *faces,
-                                                 const unsigned int totvertices,
-                                                 const unsigned int totfaces,
-                                                 struct OpenVDBTransform *transform);
+                                       struct OpenVDBTransform *xform,
+                                       bool do_convert,
+                                       bool do_add,
+                                       OpenVDBLevelSet_CSGOperation op);
 void OpenVDBLevelSet_volume_to_mesh(struct OpenVDBLevelSet *level_set,
                                     struct OpenVDBVolumeToMeshData *mesh,
                                     const double isovalue,
                                     const double adaptivity,
-                                    const bool relax_disoriented_triangles);
+                                    const bool relax_disoriented_triangles,
+                                    struct OpenVDBLevelSet *mask);
 void OpenVDBLevelSet_filter(struct OpenVDBLevelSet *level_set,
                             OpenVDBLevelSet_FilterType filter_type,
                             int width,
+                            int iterations,
+                            float sigma,
                             float distance,
-                            OpenVDBLevelSet_FilterBias bias);
+                            OpenVDBLevelSet_FilterBias bias,
+                            const bool sharpen_features,
+                            const float edge_tolerance);
 void OpenVDBLevelSet_CSG_operation(struct OpenVDBLevelSet *out,
                                    struct OpenVDBLevelSet *gridA,
                                    struct OpenVDBLevelSet *gridB,
@@ -218,6 +201,20 @@ struct OpenVDBLevelSet *OpenVDBLevelSet_transform_and_resample(struct OpenVDBLev
                                                                struct OpenVDBLevelSet *level_setB,
                                                                char sampler,
                                                                float isolevel);
+
+struct OpenVDBLevelSet *OpenVDB_level_set_copy(struct OpenVDBLevelSet *level_set);
+
+void OpenVDBLevelSet_particles_to_level_set(struct OpenVDBLevelSet *level_set,
+                                            struct ParticleList *part_list,
+                                            float min_radius,
+                                            bool trail,
+                                            float trail_size);
+
+struct OpenVDBLevelSet *OpenVDBLevelSet_copy(struct OpenVDBLevelSet *level_set);
+
+struct ParticleList *OpenVDB_create_part_list(size_t totpart, float rad_scale, float vel_scale);
+void OpenVDB_part_list_free(struct ParticleList *part_list);
+void OpenVDB_add_particle(struct ParticleList *part_list, float pos[3], float rad, float vel[3]);
 
 #ifdef __cplusplus
 }

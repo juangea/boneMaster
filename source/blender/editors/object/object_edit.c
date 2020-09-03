@@ -33,6 +33,7 @@
 
 #include "BLI_blenlib.h"
 #include "BLI_ghash.h"
+#include "BLI_math.h"
 #include "BLI_utildefines.h"
 
 #include "BLT_translation.h"
@@ -54,11 +55,14 @@
 
 #include "IMB_imbuf_types.h"
 
+#include "BKE_anim_path.h"
 #include "BKE_anim_visualization.h"
+#include "BKE_bvhutils.h"
 #include "BKE_collection.h"
 #include "BKE_constraint.h"
 #include "BKE_context.h"
 #include "BKE_curve.h"
+#include "BKE_customdata.h"
 #include "BKE_editlattice.h"
 #include "BKE_editmesh.h"
 #include "BKE_effect.h"
@@ -66,15 +70,18 @@
 #include "BKE_image.h"
 #include "BKE_lattice.h"
 #include "BKE_layer.h"
+#include "BKE_library.h"
 #include "BKE_main.h"
 #include "BKE_material.h"
 #include "BKE_mball.h"
 #include "BKE_mesh.h"
+#include "BKE_mesh_runtime.h"
 #include "BKE_modifier.h"
 #include "BKE_object.h"
 #include "BKE_paint.h"
 #include "BKE_particle.h"
 #include "BKE_pointcache.h"
+#include "BKE_remesh.h"
 #include "BKE_report.h"
 #include "BKE_scene.h"
 #include "BKE_softbody.h"
@@ -113,6 +120,10 @@
 #include "WM_types.h"
 
 #include "object_intern.h"  // own include
+
+#ifdef WITH_OPENVDB
+#  include "openvdb_capi.h"
+#endif
 
 static CLG_LogRef LOG = {"ed.object.edit"};
 
