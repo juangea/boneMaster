@@ -212,7 +212,7 @@ bool DeviceSplitKernel::path_trace(DeviceTask &task,
     double start_time = time_dt();
 
     /* initial guess to start rolling average */
-    const int initial_num_samples = 1;
+    //const int initial_num_samples = 1;
     /* approx number of samples per second */
     //const int samples_per_second = (avg_time_per_sample > 0.0) ?
     //                                   int(double(time_multiplier) / avg_time_per_sample) + 1 :
