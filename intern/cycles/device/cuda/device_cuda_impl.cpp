@@ -39,8 +39,8 @@
 #  include "util/util_path.h"
 #  include "util/util_string.h"
 #  include "util/util_system.h"
-#  include "util/util_time.h"
 #  include "util/util_types.h"
+#  include "util/util_time.h"
 #  include "util/util_windows.h"
 
 #  include "kernel/split/kernel_split_data_types.h"
@@ -1254,6 +1254,15 @@ void CUDADevice::tex_alloc(device_texture &mem)
   }
 
   /* Kepler+, bindless textures. */
+  int flat_slot = 0;
+  if (string_startswith(mem.name, "__tex_image")) {
+    int pos = string(mem.name).rfind("_");
+    flat_slot = atoi(mem.name + pos + 1);
+  }
+  else {
+    assert(0);
+  }
+
   CUDA_RESOURCE_DESC resDesc;
   memset(&resDesc, 0, sizeof(resDesc));
 
@@ -1900,13 +1909,22 @@ void CUDADevice::render(DeviceTask &task, RenderTile &rtile, device_vector<WorkT
   }
 
   uint step_samples = divide_up(min_blocks * num_threads_per_block, wtile->w * wtile->h);
-  if (task.adaptive_sampling.use) {
-    step_samples = task.adaptive_sampling.align_static_samples(step_samples);
-  }
 
   /* Render all samples. */
   int start_sample = rtile.start_sample;
   int end_sample = rtile.start_sample + rtile.num_samples;
+
+  step_samples = end_sample;
+  if (end_sample > 4352)
+  {
+      step_samples = 4352;
+  }
+
+  if (task.adaptive_sampling.use) {
+    step_samples = task.adaptive_sampling.align_static_samples(step_samples);
+  }
+
+
 
   for (int sample = start_sample; sample < end_sample; sample += step_samples) {
     /* Setup and copy work tile to device. */

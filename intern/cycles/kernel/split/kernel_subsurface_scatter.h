@@ -42,6 +42,8 @@ ccl_device_noinline bool kernel_split_branched_path_subsurface_indirect_light_it
   ShaderData *sd = kernel_split_sd(branched_state_sd, ray_index);
   PathRadiance *L = &kernel_split_state.path_radiance[ray_index];
   ShaderData *emission_sd = AS_SHADER_DATA(&kernel_split_state.sd_DL_shadow[ray_index]);
+  uint buffer_offset = kernel_split_state.buffer_offset[ray_index];
+  ccl_global float *buffer = kernel_split_params.tile.buffer + buffer_offset;
 
   for (int i = branched_state->ss_next_closure; i < sd->num_closure; i++) {
     ShaderClosure *sc = &sd->closure[i];
@@ -62,7 +64,7 @@ ccl_device_noinline bool kernel_split_branched_path_subsurface_indirect_light_it
     }
     int num_samples = kernel_data.integrator.subsurface_samples * 3;
     float num_samples_inv = 1.0f / num_samples;
-    uint bssrdf_rng_hash = cmj_hash(branched_state->path_state.rng_hash, i);
+    uint bssrdf_rng_hash = path_rng_hash(branched_state->path_state.rng_hash, i);
 
     /* do subsurface scatter step with copy of shader data, this will
      * replace the BSSRDF with a diffuse BSDF closure */
@@ -134,6 +136,7 @@ ccl_device_noinline bool kernel_split_branched_path_subsurface_indirect_light_it
                                                        bssrdf_sd,
                                                        emission_sd,
                                                        hit_state,
+                                                       buffer,
                                                        branched_state->throughput,
                                                        num_samples_inv,
                                                        L,
@@ -209,6 +212,8 @@ ccl_device void kernel_subsurface_scatter(KernelGlobals *kg)
     ccl_global SubsurfaceIndirectRays *ss_indirect = &kernel_split_state.ss_rays[ray_index];
     ShaderData *sd = kernel_split_sd(sd, ray_index);
     ShaderData *emission_sd = AS_SHADER_DATA(&kernel_split_state.sd_DL_shadow[ray_index]);
+    uint buffer_offset = kernel_split_state.buffer_offset[ray_index];
+    ccl_global float *buffer = kernel_split_params.tile.buffer + buffer_offset;
 
     if (sd->flag & SD_BSSRDF) {
 
@@ -217,7 +222,7 @@ ccl_device void kernel_subsurface_scatter(KernelGlobals *kg)
           IS_FLAG(ray_state, ray_index, RAY_BRANCHED_INDIRECT)) {
 #  endif
         if (kernel_path_subsurface_scatter(
-                kg, sd, emission_sd, L, state, ray, throughput, ss_indirect)) {
+                kg, sd, emission_sd, L, state, buffer, ray, throughput, ss_indirect)) {
           kernel_split_path_end(kg, ray_index);
         }
 #  ifdef __BRANCHED_PATH__

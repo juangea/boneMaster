@@ -22,6 +22,7 @@
 CCL_NAMESPACE_BEGIN
 
 /* Texture limits on devices. */
+
 #define TEX_NUM_MAX (INT_MAX >> 4)
 
 /* Color to use when textures are not found. */

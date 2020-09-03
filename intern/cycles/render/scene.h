@@ -121,6 +121,7 @@ class DeviceScene {
 
   /* integrator */
   device_vector<uint> sample_pattern_lut;
+  device_vector<float2> sobol_dither;
 
   /* ies lights */
   device_vector<float> ies_lights;

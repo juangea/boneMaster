@@ -304,8 +304,10 @@ ccl_device_forceinline void path_radiance_clamp_throughput(KernelGlobals *kg,
 ccl_device_inline void path_radiance_accum_emission(KernelGlobals *kg,
                                                     PathRadiance *L,
                                                     ccl_addr_space PathState *state,
+                                                    ccl_global float *buffer,
                                                     float3 throughput,
-                                                    float3 value)
+                                                    float3 value,
+                                                    uint lightgroups)
 {
 #ifdef __SHADOW_TRICKS__
   if (state->flag & PATH_RAY_SHADOW_CATCHER) {
@@ -326,6 +328,15 @@ ccl_device_inline void path_radiance_accum_emission(KernelGlobals *kg,
       L->direct_emission += contribution;
     else
       L->indirect += contribution;
+
+    if (lightgroups && buffer) {
+      for (int i = 0; i < kernel_data.film.num_lightgroups; i++) {
+        if (lightgroups & (1 << i)) {
+          kernel_write_pass_float3(buffer + kernel_data.film.pass_lightgroup + 4 * i,
+                                   contribution);
+        }
+      }
+    }
   }
   else
 #endif
@@ -402,10 +413,12 @@ ccl_device_inline void path_radiance_accum_total_ao(PathRadiance *L,
 ccl_device_inline void path_radiance_accum_light(KernelGlobals *kg,
                                                  PathRadiance *L,
                                                  ccl_addr_space PathState *state,
+                                                 ccl_global float *buffer,
                                                  float3 throughput,
                                                  BsdfEval *bsdf_eval,
                                                  float3 shadow,
                                                  float shadow_fac,
+                                                 uint lightgroups,
                                                  bool is_lamp)
 {
 #ifdef __SHADOW_TRICKS__
@@ -448,6 +461,15 @@ ccl_device_inline void path_radiance_accum_light(KernelGlobals *kg,
       /* indirectly visible lighting after BSDF bounce */
       L->indirect += full_contribution;
     }
+
+    if (lightgroups && buffer) {
+      for (int i = 0; i < kernel_data.film.num_lightgroups; i++) {
+        if (lightgroups & (1 << i)) {
+          kernel_write_pass_float3(buffer + kernel_data.film.pass_lightgroup + 4 * i,
+                                   full_contribution);
+        }
+      }
+    }
   }
   else
 #endif
@@ -478,6 +500,7 @@ ccl_device_inline void path_radiance_accum_total_light(PathRadiance *L,
 ccl_device_inline void path_radiance_accum_background(KernelGlobals *kg,
                                                       PathRadiance *L,
                                                       ccl_addr_space PathState *state,
+                                                      ccl_global float *buffer,
                                                       float3 throughput,
                                                       float3 value)
 {
@@ -506,6 +529,16 @@ ccl_device_inline void path_radiance_accum_background(KernelGlobals *kg,
       L->direct_emission += contribution;
     else
       L->indirect += contribution;
+
+    uint lightgroups = kernel_data.integrator.background_lightgroups;
+    if (lightgroups && buffer) {
+      for (int i = 0; i < kernel_data.film.num_lightgroups; i++) {
+        if (lightgroups & (1 << i)) {
+          kernel_write_pass_float3(buffer + kernel_data.film.pass_lightgroup + 4 * i,
+                                   contribution);
+        }
+      }
+    }
   }
   else
 #endif

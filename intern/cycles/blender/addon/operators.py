@@ -74,6 +74,87 @@ class CYCLES_OT_remove_aov(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class CYCLES_OT_lightgroup_add(bpy.types.Operator):
+    """Add a lightgroup"""
+    bl_idname="cycles.lightgroup_add"
+    bl_label="Add Lightgroup"
+
+    def execute(self, context):
+        view_layer = context.view_layer
+        cycles_view_layer = view_layer.cycles
+        lgs = cycles_view_layer.lightgroups
+
+        new_lg = lgs.add()
+
+        number = 0
+        name = "Lightgroup"
+        while name in lgs.keys():
+            number = number + 1
+            name = "Lightgroup.{:03d}".format(number)
+        new_lg.name = name
+
+        cycles_view_layer.active_lightgroup = len(lgs) - 1
+
+        view_layer.update_render_passes()
+        return {'FINISHED'}
+
+
+class CYCLES_OT_lightgroup_remove(bpy.types.Operator):
+    """Remove a lightgroup"""
+    bl_idname="cycles.lightgroup_remove"
+    bl_label="Remove Lightgroup"
+
+    def execute(self, context):
+        view_layer = context.view_layer
+        cycles_view_layer = view_layer.cycles
+        lgs = cycles_view_layer.lightgroups
+
+        cycles_view_layer.lightgroups.remove(cycles_view_layer.active_lightgroup)
+
+        if cycles_view_layer.active_lightgroup >= len(lgs):
+            cycles_view_layer.active_lightgroup = max(len(lgs) - 1, 0)
+
+        view_layer.update_render_passes()
+        return {'FINISHED'}
+
+
+class CYCLES_OT_lightgroup_move(bpy.types.Operator):
+    bl_idname = "cycles.lightgroup_move"
+    bl_label = "Move Lightgroup"
+
+    direction: bpy.props.EnumProperty(
+        name="Move Direction",
+        description="Direction to move the active Lightgroup: UP (default) or DOWN",
+        items=[
+            ('UP', "Up", "", -1),
+            ('DOWN', "Down", "", 1),
+        ],
+        default='UP',
+        options={'HIDDEN'},
+    )
+
+    @classmethod
+    def poll(cls, context):
+        view_layer = context.view_layer
+        cycles_view_layer = view_layer.cycles
+        return len(cycles_view_layer.lightgroups) > 1
+
+    def execute(self, context):
+        view_layer = context.view_layer
+        cycles_view_layer = view_layer.cycles
+
+        active_idx = cycles_view_layer.active_lightgroup
+        new_idx = active_idx + (-1 if self.direction == 'UP' else 1)
+
+        if new_idx < 0 or new_idx >= len(cycles_view_layer.lightgroups):
+            return {'FINISHED'}
+
+        cycles_view_layer.lightgroups.move(active_idx, new_idx)
+        cycles_view_layer.active_lightgroup = new_idx
+
+        return {'FINISHED'}
+
+
 class CYCLES_OT_denoise_animation(Operator):
     "Denoise rendered animation sequence using current scene and view " \
     "layer settings. Requires denoising data passes and output to " \
@@ -200,6 +281,9 @@ classes = (
     CYCLES_OT_add_aov,
     CYCLES_OT_remove_aov,
     CYCLES_OT_denoise_animation,
+    CYCLES_OT_lightgroup_add,
+    CYCLES_OT_lightgroup_remove,
+    CYCLES_OT_lightgroup_move,
     CYCLES_OT_merge_images
 )
 

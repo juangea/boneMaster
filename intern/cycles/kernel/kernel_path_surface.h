@@ -25,6 +25,7 @@ ccl_device_noinline_cpu void kernel_branched_path_surface_connect_light(
     ShaderData *sd,
     ShaderData *emission_sd,
     ccl_addr_space PathState *state,
+    ccl_global float *buffer,
     float3 throughput,
     float num_samples_adjust,
     PathRadiance *L,
@@ -65,7 +66,7 @@ ccl_device_noinline_cpu void kernel_branched_path_surface_connect_light(
         }
         num_samples = ceil_to_int(num_samples_adjust * light_select_num_samples(kg, i));
         num_all_lights = kernel_data.integrator.num_all_lights;
-        lamp_rng_hash = cmj_hash(state->rng_hash, i);
+        lamp_rng_hash = path_rng_hash(state->rng_hash, i);
         double_pdf = kernel_data.integrator.pdf_triangles != 0.0f;
       }
       /* mesh light sampling */
@@ -85,6 +86,7 @@ ccl_device_noinline_cpu void kernel_branched_path_surface_connect_light(
       light_ray.time = sd->time;
 #    endif
       bool has_emission = false;
+      uint lightgroups;
 
       if (kernel_data.integrator.use_direct_light && (sd->flag & SD_BSDF_HAS_EVAL)) {
         float light_u, light_v;
@@ -101,6 +103,8 @@ ccl_device_noinline_cpu void kernel_branched_path_surface_connect_light(
         LightSample ls ccl_optional_struct_init;
         const int lamp = is_lamp ? i : -1;
         if (light_sample(kg, lamp, light_u, light_v, sd->time, sd->P, state->bounce, &ls)) {
+          lightgroups = ls.groups;
+
           /* The sampling probability returned by lamp_light_sample assumes that all lights were
            * sampled. However, this code only samples lamps, so if the scene also had mesh lights,
            * the real probability is twice as high. */
@@ -124,10 +128,12 @@ ccl_device_noinline_cpu void kernel_branched_path_surface_connect_light(
           path_radiance_accum_light(kg,
                                     L,
                                     state,
+                                    buffer,
                                     throughput * num_samples_inv,
                                     &L_light,
                                     shadow,
                                     num_samples_inv,
+                                    lightgroups,
                                     is_lamp);
         }
         else {
@@ -216,6 +222,7 @@ ccl_device_inline void kernel_path_surface_connect_light(KernelGlobals *kg,
                                                          ShaderData *emission_sd,
                                                          float3 throughput,
                                                          ccl_addr_space PathState *state,
+                                                         ccl_global float *buffer,
                                                          PathRadiance *L)
 {
   PROFILING_INIT(kg, PROFILING_CONNECT_LIGHT);
@@ -223,13 +230,15 @@ ccl_device_inline void kernel_path_surface_connect_light(KernelGlobals *kg,
 #ifdef __EMISSION__
 #  ifdef __SHADOW_TRICKS__
   int all = (state->flag & PATH_RAY_SHADOW_CATCHER);
-  kernel_branched_path_surface_connect_light(kg, sd, emission_sd, state, throughput, 1.0f, L, all);
+  kernel_branched_path_surface_connect_light(
+      kg, sd, emission_sd, state, buffer, throughput, 1.0f, L, all);
 #  else
   /* sample illumination from lights to find path contribution */
   Ray light_ray ccl_optional_struct_init;
   BsdfEval L_light ccl_optional_struct_init;
   bool is_lamp = false;
   bool has_emission = false;
+  uint lightgroups;
 
   light_ray.t = 0.0f;
 #    ifdef __OBJECT_MOTION__
@@ -242,6 +251,7 @@ ccl_device_inline void kernel_path_surface_connect_light(KernelGlobals *kg,
 
     LightSample ls ccl_optional_struct_init;
     if (light_sample(kg, -1, light_u, light_v, sd->time, sd->P, state->bounce, &ls)) {
+      lightgroups = ls.groups;
       float terminate = path_state_rng_light_termination(kg, state);
       has_emission = direct_emission(
           kg, sd, emission_sd, &ls, state, &light_ray, &L_light, &is_lamp, terminate);
@@ -256,7 +266,8 @@ ccl_device_inline void kernel_path_surface_connect_light(KernelGlobals *kg,
   if (has_emission) {
     if (!blocked) {
       /* accumulate */
-      path_radiance_accum_light(kg, L, state, throughput, &L_light, shadow, 1.0f, is_lamp);
+      path_radiance_accum_light(
+          kg, L, state, buffer, throughput, &L_light, shadow, 1.0f, lightgroups, is_lamp);
     }
     else {
       path_radiance_accum_total_light(L, state, throughput, &L_light);
