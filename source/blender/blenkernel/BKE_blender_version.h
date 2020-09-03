@@ -35,11 +35,11 @@ extern "C" {
 /* Blender patch version for bugfix releases. */
 #define BLENDER_VERSION_PATCH 0
 /** Blender release cycle stage: alpha/beta/rc/release. */
-#define BLENDER_VERSION_CYCLE beta
+#define BLENDER_VERSION_CYCLE release
 
 /* Blender file format version. */
 #define BLENDER_FILE_VERSION BLENDER_VERSION
-#define BLENDER_FILE_SUBVERSION 7
+#define BLENDER_FILE_SUBVERSION 8
 
 /* Minimum Blender version that supports reading file written with the current
  * version. Older Blender versions will test this and show a warning if the file
@@ -49,6 +49,9 @@ extern "C" {
 
 /** User readable version string. */
 const char *BKE_blender_version_string(void);
+
+/* Returns true when version cycle is alpha, otherwise (beta, rc) returns false. */
+bool BKE_blender_version_is_alpha(void);
 
 #ifdef __cplusplus
 }

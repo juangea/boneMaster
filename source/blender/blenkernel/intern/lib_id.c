@@ -342,8 +342,11 @@ static int lib_id_expand_local_cb(LibraryIDLinkCallbackData *cb_data)
   }
 
   if (cb_flag & IDWALK_CB_EMBEDDED) {
-    /* Embedded data-blocks need to be made fully local as well. */
-    if (*id_pointer != NULL) {
+    /* Embedded data-blocks need to be made fully local as well.
+     * Note however that in some cases (when owner ID had to be duplicated instead of being made
+     * local directly), its embedded IDs should also have already been duplicated, and hence be
+     * fully local here already. */
+    if (*id_pointer != NULL && ID_IS_LINKED(*id_pointer)) {
       BLI_assert(*id_pointer != id_self);
 
       lib_id_clear_library_data_ex(bmain, *id_pointer);
@@ -640,7 +643,7 @@ ID *BKE_id_copy_for_duplicate(Main *bmain, ID *id, const eDupli_ID_Flags duplica
 
     BKE_animdata_duplicate_id_action(bmain, id_new, duplicate_flags);
     if (key_new != NULL) {
-      BKE_animdata_duplicate_id_action(bmain, id_new, duplicate_flags);
+      BKE_animdata_duplicate_id_action(bmain, key_new, duplicate_flags);
     }
     /* Note that actions of embedded data (root nodetrees and master collections) are handled
      * by `BKE_animdata_duplicate_id_action` as well. */
