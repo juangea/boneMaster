@@ -3052,7 +3052,7 @@ static bool voxelmesher_update_check(bContext *C, wmOperator *op)
 
 static bool voxelmesher_csg_poll(bContext *C)
 {
-  return edit_modifier_poll_generic(C, &RNA_VoxelMesherModifier, 0, true);
+  return edit_modifier_poll_generic(C, &RNA_VoxelMesherModifier, 0, true, true);
 }
 
 static int voxelmesher_csg_add_exec(bContext *C, wmOperator *op)
