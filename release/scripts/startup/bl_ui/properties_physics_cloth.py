@@ -161,6 +161,33 @@ class PHYSICS_PT_cloth_damping(PhysicButtonsPanel, Panel):
         col.prop(cloth, "bending_damping", text="Bending")
 
 
+class PHYSICS_PT_cloth_plasticity(PhysicButtonsPanel, Panel):
+    bl_label = "Plasticity"
+    bl_parent_id = 'PHYSICS_PT_cloth_physical_properties'
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+
+        md = context.cloth
+        cloth = md.settings
+
+        layout.active = cloth_panel_enabled(md)
+
+        flow = layout.grid_flow(row_major=False, columns=0, even_columns=True, even_rows=False, align=True)
+
+        col = flow.column()
+        col.prop(cloth, "structural_plasticity")
+        col = flow.column()
+        col.prop(cloth, "structural_yield_factor")
+
+        if cloth.bending_model == 'ANGULAR':
+            col = flow.column()
+            col.prop(cloth, "bending_plasticity")
+            col = flow.column()
+            col.prop(cloth, "bending_yield_factor")
+
 class PHYSICS_PT_cloth_internal_springs(PhysicButtonsPanel, Panel):
     bl_label = "Internal Springs"
     bl_parent_id = 'PHYSICS_PT_cloth_physical_properties'
@@ -467,6 +494,7 @@ classes = (
     PHYSICS_PT_cloth_physical_properties,
     PHYSICS_PT_cloth_stiffness,
     PHYSICS_PT_cloth_damping,
+    PHYSICS_PT_cloth_plasticity,
     PHYSICS_PT_cloth_internal_springs,
     PHYSICS_PT_cloth_pressure,
     PHYSICS_PT_cloth_cache,
