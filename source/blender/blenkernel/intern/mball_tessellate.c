@@ -420,7 +420,6 @@ static float densfunc(const MetaElem *ball, float x, float y, float z)
  */
 static float metaball(PROCESS *process, float x, float y, float z)
 {
-  int i;
   float dens = 0.0f;
   unsigned int front = 0, back = 0;
   MetaballBVHNode *node;
@@ -430,7 +429,7 @@ static float metaball(PROCESS *process, float x, float y, float z)
   while (front != back) {
     node = process->bvh_queue[back++];
 
-    for (i = 0; i < 2; i++) {
+    for (int i = 0; i < 2; i++) {
       if ((node->bb[i].min[0] <= x) && (node->bb[i].max[0] >= x) && (node->bb[i].min[1] <= y) &&
           (node->bb[i].max[1] >= y) && (node->bb[i].min[2] <= z) && (node->bb[i].max[2] >= z)) {
         if (node->child[i]) {
@@ -843,18 +842,14 @@ static void makecubetable(void)
 
 void BKE_mball_cubeTable_free(void)
 {
-  int i;
-  INTLISTS *lists, *nlists;
-  INTLIST *ints, *nints;
-
-  for (i = 0; i < 256; i++) {
-    lists = cubetable[i];
+  for (int i = 0; i < 256; i++) {
+    INTLISTS *lists = cubetable[i];
     while (lists) {
-      nlists = lists->next;
+      INTLISTS *nlists = lists->next;
 
-      ints = lists->list;
+      INTLIST *ints = lists->list;
       while (ints) {
-        nints = ints->next;
+        INTLIST *nints = ints->next;
         MEM_freeN(ints);
         ints = nints;
       }
@@ -1026,8 +1021,6 @@ static int vertid(PROCESS *process, const CORNER *c1, const CORNER *c2, int inde
  */
 static void converge(PROCESS *process, const CORNER *c1, const CORNER *c2, float r_p[3])
 {
-  float tmp, dens;
-  unsigned int i;
   float c1_value, c1_co[3];
   float c2_value, c2_co[3];
 
@@ -1044,9 +1037,9 @@ static void converge(PROCESS *process, const CORNER *c1, const CORNER *c2, float
     copy_v3_v3(c2_co, c2->co);
   }
 
-  for (i = 0; i < process->converge_res; i++) {
+  for (uint i = 0; i < process->converge_res; i++) {
     interp_v3_v3v3(r_p, c1_co, c2_co, 0.5f);
-    dens = metaball(process, r_p[0], r_p[1], r_p[2]);
+    float dens = metaball(process, r_p[0], r_p[1], r_p[2]);
 
     if (dens > 0.0f) {
       c1_value = dens;
@@ -1058,7 +1051,7 @@ static void converge(PROCESS *process, const CORNER *c1, const CORNER *c2, float
     }
   }
 
-  tmp = -c1_value / (c2_value - c1_value);
+  float tmp = -c1_value / (c2_value - c1_value);
   interp_v3_v3v3(r_p, c1_co, c2_co, tmp);
 }
 
@@ -1167,7 +1160,6 @@ static void find_first_points(PROCESS *process, const unsigned int em)
 static void polygonize(PROCESS *process)
 {
   CUBE c;
-  unsigned int i;
 
   process->centers = MEM_callocN(HASHSIZE * sizeof(CENTERLIST *), "mbproc->centers");
   process->corners = MEM_callocN(HASHSIZE * sizeof(CORNER *), "mbproc->corners");
@@ -1177,7 +1169,7 @@ static void polygonize(PROCESS *process)
 
   makecubetable();
 
-  for (i = 0; i < process->totelem; i++) {
+  for (uint i = 0; i < process->totelem; i++) {
     find_first_points(process, i);
   }
 

@@ -149,7 +149,7 @@ void BLO_write_uint32_array(BlendWriter *writer, int size, const uint32_t *data_
 void BLO_write_float_array(BlendWriter *writer, int size, const float *data_ptr);
 void BLO_write_float3_array(BlendWriter *writer, int size, const float *data_ptr);
 void BLO_write_pointer_array(BlendWriter *writer, int size, const void *data_ptr);
-void BLO_write_string(BlendWriter *writer, const char *data_ptr);
+void BLO_write_string(BlendWriter *writer, const char *str);
 
 /* Misc. */
 bool BLO_write_is_undo(BlendWriter *writer);
@@ -210,7 +210,7 @@ bool BLO_read_data_is_undo(BlendDataReader *reader);
 ID *BLO_read_get_new_id_address(BlendLibReader *reader, struct Library *lib, struct ID *id);
 
 #define BLO_read_id_address(reader, lib, id_ptr_p) \
-  *(id_ptr_p) = (void *)BLO_read_get_new_id_address((reader), (lib), (ID *)*(id_ptr_p))
+  *((void **)id_ptr_p) = (void *)BLO_read_get_new_id_address((reader), (lib), (ID *)*(id_ptr_p))
 
 /* Misc. */
 bool BLO_read_lib_is_undo(BlendLibReader *reader);
