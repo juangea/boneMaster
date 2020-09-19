@@ -100,24 +100,6 @@ static void constraint_plane_calc(TransInfo *t, float r_plane[4])
   r_plane[3] = -dot_v3v3(r_plane, t->center_global);
 }
 
-static void constraintValuesFinal(TransInfo *t, float vec[3])
-{
-  int mode = t->con.mode;
-  if (mode & CON_APPLY) {
-    float nval = (t->flag & T_NULL_ONE) ? 1.0f : 0.0f;
-
-    if ((mode & CON_AXIS0) == 0) {
-      vec[0] = nval;
-    }
-    if ((mode & CON_AXIS1) == 0) {
-      vec[1] = nval;
-    }
-    if ((mode & CON_AXIS2) == 0) {
-      vec[2] = nval;
-    }
-  }
-}
-
 void constraintNumInput(TransInfo *t, float vec[3])
 {
   int mode = t->con.mode;
@@ -161,41 +143,6 @@ void constraintNumInput(TransInfo *t, float vec[3])
       }
     }
   }
-}
-
-static void postConstraintChecks(TransInfo *t, float vec[3])
-{
-  mul_m3_v3(t->spacemtx_inv, vec);
-
-  transform_snap_increment(t, vec);
-
-  if (t->flag & T_NULL_ONE) {
-    if (!(t->con.mode & CON_AXIS0)) {
-      vec[0] = 1.0f;
-    }
-
-    if (!(t->con.mode & CON_AXIS1)) {
-      vec[1] = 1.0f;
-    }
-
-    if (!(t->con.mode & CON_AXIS2)) {
-      vec[2] = 1.0f;
-    }
-  }
-
-  if (applyNumInput(&t->num, vec)) {
-    constraintNumInput(t, vec);
-    removeAspectRatio(t, vec);
-  }
-
-  /* If `t->values` is operator param, use that directly but not if snapping is forced */
-  if (t->flag & T_INPUT_IS_VALUES_FINAL && (t->tsnap.status & SNAP_FORCED) == 0) {
-    copy_v3_v3(vec, t->values);
-    constraintValuesFinal(t, vec);
-    /* inverse transformation at the end */
-  }
-
-  mul_m3_v3(t->spacemtx, vec);
 }
 
 static void viewAxisCorrectCenter(const TransInfo *t, float t_con_center[3])
@@ -432,15 +379,22 @@ static void applyAxisConstraintVec(
 {
   copy_v3_v3(out, in);
   if (!td && t->con.mode & CON_APPLY) {
+    bool is_snap_to_point = false, is_snap_to_edge = false, is_snap_to_face = false;
     mul_m3_v3(t->con.pmtx, out);
-    bool is_snap_to_edge = false, is_snap_to_face = false;
+
     if (activeSnap(t)) {
-      is_snap_to_edge = (t->tsnap.snapElem & SCE_SNAP_MODE_EDGE) != 0;
-      is_snap_to_face = (t->tsnap.snapElem & SCE_SNAP_MODE_FACE) != 0;
+      if (validSnap(t)) {
+        is_snap_to_point = (t->tsnap.snapElem & SCE_SNAP_MODE_VERTEX) != 0;
+        is_snap_to_edge = (t->tsnap.snapElem & SCE_SNAP_MODE_EDGE) != 0;
+        is_snap_to_face = (t->tsnap.snapElem & SCE_SNAP_MODE_FACE) != 0;
+      }
+      else if (t->tsnap.snapElem & SCE_SNAP_MODE_GRID) {
+        is_snap_to_point = true;
+      }
     }
 
     /* With snap points, a projection is alright, no adjustments needed. */
-    if (!validSnap(t) || is_snap_to_edge || is_snap_to_face) {
+    if (!is_snap_to_point || is_snap_to_edge || is_snap_to_face) {
       const int dims = getConstraintSpaceDimension(t);
       if (dims == 2) {
         if (!is_zero_v3(out)) {
@@ -486,7 +440,6 @@ static void applyAxisConstraintVec(
         }
       }
     }
-    postConstraintChecks(t, out);
   }
 }
 
