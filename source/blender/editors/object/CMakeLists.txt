@@ -91,6 +91,11 @@ if(WITH_INTERNATIONAL)
   add_definitions(-DWITH_INTERNATIONAL)
 endif()
 
+if(WITH_EXPERIMENTAL_FEATURES)
+  add_definitions(-DWITH_PARTICLE_NODES)
+  add_definitions(-DWITH_HAIR_NODES)
+endif()
+
 if(WITH_OPENVDB)
   add_definitions(-DWITH_OPENVDB)
   list(APPEND INC
