@@ -1351,6 +1351,20 @@ class CyclesAOVPass(bpy.types.PropertyGroup):
         default=""
     )
 
+class CyclesLightGroup(bpy.types.PropertyGroup):
+    name: StringProperty(
+        name="Name",
+        default="Lightgroup"
+    )
+    collection: PointerProperty(
+        name="Collection",
+        type=bpy.types.Collection
+    )
+    include_world: BoolProperty(
+        name="Include World",
+        default=False
+    )
+
 class CyclesRenderLayerSettings(bpy.types.PropertyGroup):
 
     pass_debug_bvh_traversed_nodes: BoolProperty(
