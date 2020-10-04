@@ -1812,7 +1812,7 @@ void BKE_nla_validate_state(AnimData *adt)
          * - blendmode = REPLACE
          * - all channels the same (this is fiddly to test, so is currently assumed)
          *
-         * Should fix problems such as [#29869]
+         * Should fix problems such as T29869.
          */
         if (strip == fstrip) {
           strip->extendmode = NLASTRIP_EXTEND_HOLD;
@@ -1953,56 +1953,56 @@ void BKE_nla_action_pushdown(AnimData *adt)
 
   /* add a new NLA strip to the track, which references the active action */
   strip = BKE_nlastack_add_strip(adt, adt->action);
-
-  /* do other necessary work on strip */
-  if (strip) {
-    /* clear reference to action now that we've pushed it onto the stack */
-    id_us_min(&adt->action->id);
-    adt->action = NULL;
-
-    /* copy current "action blending" settings from adt to the strip,
-     * as it was keyframed with these settings, so omitting them will
-     * change the effect  [T54233]
-     *
-     * NOTE: We only do this when there are no tracks
-     */
-    if (is_first == false) {
-      strip->blendmode = adt->act_blendmode;
-      strip->influence = adt->act_influence;
-      strip->extendmode = adt->act_extendmode;
-
-      if (adt->act_influence < 1.0f) {
-        /* enable "user-controlled" influence (which will insert a default keyframe)
-         * so that the influence doesn't get lost on the new update
-         *
-         * NOTE: An alternative way would have been to instead hack the influence
-         * to not get always get reset to full strength if NLASTRIP_FLAG_USR_INFLUENCE
-         * is disabled but auto-blending isn't being used. However, that approach
-         * is a bit hacky/hard to discover, and may cause backwards compatibility issues,
-         * so it's better to just do it this way.
-         */
-        strip->flag |= NLASTRIP_FLAG_USR_INFLUENCE;
-        BKE_nlastrip_validate_fcurves(strip);
-      }
-    }
-
-    /* if the strip is the first one in the track it lives in, check if there
-     * are strips in any other tracks that may be before this, and set the extend
-     * mode accordingly
-     */
-    if (nlastrip_is_first(adt, strip) == 0) {
-      /* Not first, so extend mode can only be:
-       * NLASTRIP_EXTEND_HOLD_FORWARD not NLASTRIP_EXTEND_HOLD,
-       * so that it doesn't override strips in previous tracks. */
-      /* FIXME: this needs to be more automated, since user can rearrange strips */
-      if (strip->extendmode == NLASTRIP_EXTEND_HOLD) {
-        strip->extendmode = NLASTRIP_EXTEND_HOLD_FORWARD;
-      }
-    }
-
-    /* make strip the active one... */
-    BKE_nlastrip_set_active(adt, strip);
+  if (strip == NULL) {
+    return;
   }
+
+  /* clear reference to action now that we've pushed it onto the stack */
+  id_us_min(&adt->action->id);
+  adt->action = NULL;
+
+  /* copy current "action blending" settings from adt to the strip,
+   * as it was keyframed with these settings, so omitting them will
+   * change the effect  [T54233]
+   *
+   * NOTE: We only do this when there are no tracks
+   */
+  if (is_first == false) {
+    strip->blendmode = adt->act_blendmode;
+    strip->influence = adt->act_influence;
+    strip->extendmode = adt->act_extendmode;
+
+    if (adt->act_influence < 1.0f) {
+      /* enable "user-controlled" influence (which will insert a default keyframe)
+       * so that the influence doesn't get lost on the new update
+       *
+       * NOTE: An alternative way would have been to instead hack the influence
+       * to not get always get reset to full strength if NLASTRIP_FLAG_USR_INFLUENCE
+       * is disabled but auto-blending isn't being used. However, that approach
+       * is a bit hacky/hard to discover, and may cause backwards compatibility issues,
+       * so it's better to just do it this way.
+       */
+      strip->flag |= NLASTRIP_FLAG_USR_INFLUENCE;
+      BKE_nlastrip_validate_fcurves(strip);
+    }
+  }
+
+  /* if the strip is the first one in the track it lives in, check if there
+   * are strips in any other tracks that may be before this, and set the extend
+   * mode accordingly
+   */
+  if (nlastrip_is_first(adt, strip) == 0) {
+    /* Not first, so extend mode can only be:
+     * NLASTRIP_EXTEND_HOLD_FORWARD not NLASTRIP_EXTEND_HOLD,
+     * so that it doesn't override strips in previous tracks. */
+    /* FIXME: this needs to be more automated, since user can rearrange strips */
+    if (strip->extendmode == NLASTRIP_EXTEND_HOLD) {
+      strip->extendmode = NLASTRIP_EXTEND_HOLD_FORWARD;
+    }
+  }
+
+  /* make strip the active one... */
+  BKE_nlastrip_set_active(adt, strip);
 }
 
 /* Find the active strip + track combo, and set them up as the tweaking track,
@@ -2139,7 +2139,7 @@ void BKE_nla_tweakmode_exit(AnimData *adt)
 
   /* sync the length of the user-strip with the new state of the action
    * but only if the user has explicitly asked for this to happen
-   * (see [#34645] for things to be careful about)
+   * (see T34645 for things to be careful about)
    */
   if ((adt->actstrip) && (adt->actstrip->flag & NLASTRIP_FLAG_SYNC_LENGTH)) {
     strip = adt->actstrip;

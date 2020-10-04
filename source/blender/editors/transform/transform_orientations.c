@@ -40,6 +40,7 @@
 #include "BLI_utildefines.h"
 
 #include "BKE_action.h"
+#include "BKE_armature.h"
 #include "BKE_context.h"
 #include "BKE_curve.h"
 #include "BKE_editmesh.h"
@@ -485,7 +486,7 @@ short ED_transform_calc_orientation_from_type_ex(const bContext *C,
       if (ob) {
         if (ob->mode & OB_MODE_POSE) {
           /* each bone moves on its own local axis, but  to avoid confusion,
-           * use the active pones axis for display [#33575], this works as expected on a single
+           * use the active pones axis for display T33575, this works as expected on a single
            * bone and users who select many bones will understand what's going on and what local
            * means when they start transforming */
           ED_getTransformOrientationMatrix(C, ob, obedit, pivot_point, r_mat);
@@ -616,12 +617,17 @@ const char *transform_orientations_spacename_get(TransInfo *t, const short orien
 
 void transform_orientations_current_set(TransInfo *t, const short orient_index)
 {
+  if (t->orient_curr == orient_index) {
+    return;
+  }
+
   const short orientation = t->orient[orient_index].type;
   const char *spacename = transform_orientations_spacename_get(t, orientation);
 
   BLI_strncpy(t->spacename, spacename, sizeof(t->spacename));
   copy_m3_m3(t->spacemtx, t->orient[orient_index].matrix);
   invert_m3_m3(t->spacemtx_inv, t->spacemtx);
+  t->orient_curr = orient_index;
 }
 
 /**
