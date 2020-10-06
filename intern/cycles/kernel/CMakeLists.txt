@@ -442,6 +442,12 @@ if(WITH_CYCLES_CUDA_BINARIES)
       set(cuda_flags ${cuda_flags} -D __KERNEL_DEBUG__)
     endif()
 
+    if(WITH_NANOVDB)
+      set(cuda_flags ${cuda_flags}
+        -D WITH_NANOVDB
+        -I "${NANOVDB_INCLUDE_DIR}")
+    endif()
+
     if(WITH_CYCLES_CUBIN_COMPILER)
       string(SUBSTRING ${arch} 3 -1 CUDA_ARCH)
 
@@ -536,8 +542,13 @@ if(WITH_CYCLES_DEVICE_OPTIX AND WITH_CYCLES_CUDA_BINARIES)
       set(OPTIX_TARGET 52)
     endif()
 
-    if(WITH_CYCLES_CUBIN_COMPILER)
+    if(WITH_NANOVDB)
+      set(cuda_flags ${cuda_flags}
+        -D WITH_NANOVDB
+        -I "${NANOVDB_INCLUDE_DIR}")
+    endif()
 
+    if(WITH_CYCLES_CUBIN_COMPILER)
       # Needed to find libnvrtc-builtins.so. Can't do it from inside
       # cycles_cubin_cc since the env variable is read before main()
       if(APPLE)
