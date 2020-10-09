@@ -139,6 +139,8 @@ typedef struct ClothSpring {
   int lb;              /* Length of *pb. */
   float restlen;       /* The original length of the spring. */
   float restang;       /* The original angle of the bending springs. */
+  float lenfact;       /* Factor of restlen used for plasticity */
+  float angoffset;     /* Offset of restang used for plasticity */
   int type;            /* Types defined in BKE_cloth.h ("springType"). */
   int flags;           /* Defined in BKE_cloth.h, e.g. deactivated due to tearing. */
   float lin_stiffness; /* Linear stiffness factor from the vertex groups. */
