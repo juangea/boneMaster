@@ -50,6 +50,7 @@
 #include "UI_resources.h"
 
 #include "transform.h"
+#include "transform_orientations.h"
 #include "transform_snap.h"
 
 /* Own include. */
@@ -384,9 +385,9 @@ static void applyAxisConstraintVec(
 
     if (activeSnap(t)) {
       if (validSnap(t)) {
-        is_snap_to_point = (t->tsnap.snapElem & SCE_SNAP_MODE_VERTEX) != 0;
         is_snap_to_edge = (t->tsnap.snapElem & SCE_SNAP_MODE_EDGE) != 0;
         is_snap_to_face = (t->tsnap.snapElem & SCE_SNAP_MODE_FACE) != 0;
+        is_snap_to_point = !is_snap_to_edge && !is_snap_to_face;
       }
       else if (t->tsnap.snapElem & SCE_SNAP_MODE_GRID) {
         is_snap_to_point = true;
@@ -424,7 +425,8 @@ static void applyAxisConstraintVec(
         else if (t->con.mode & CON_AXIS1) {
           copy_v3_v3(c, t->spacemtx[1]);
         }
-        else if (t->con.mode & CON_AXIS2) {
+        else {
+          BLI_assert(t->con.mode & CON_AXIS2);
           copy_v3_v3(c, t->spacemtx[2]);
         }
 

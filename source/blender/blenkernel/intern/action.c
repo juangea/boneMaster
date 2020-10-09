@@ -282,7 +282,7 @@ IDTypeInfo IDType_ID_AC = {
     .name = "Action",
     .name_plural = "actions",
     .translation_context = BLT_I18NCONTEXT_ID_ACTION,
-    .flags = 0,
+    .flags = IDTYPE_FLAGS_NO_ANIMDATA,
 
     .init_data = NULL,
     .copy_data = action_copy_data,
@@ -303,19 +303,12 @@ bAction *BKE_action_add(Main *bmain, const char name[])
 {
   bAction *act;
 
-  act = BKE_libblock_alloc(bmain, ID_AC, name, 0);
+  act = BKE_id_new(bmain, ID_AC, name);
 
   return act;
 }
 
 /* .................................. */
-
-bAction *BKE_action_copy(Main *bmain, const bAction *act_src)
-{
-  bAction *act_copy;
-  BKE_id_copy(bmain, &act_src->id, (ID **)&act_copy);
-  return act_copy;
-}
 
 /* *************** Action Groups *************** */
 

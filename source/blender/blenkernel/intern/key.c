@@ -249,7 +249,7 @@ Key *BKE_key_add(Main *bmain, ID *id) /* common function */
   Key *key;
   char *el;
 
-  key = BKE_libblock_alloc(bmain, ID_KE, "Key", 0);
+  key = BKE_id_new(bmain, ID_KE, "Key");
 
   key->type = KEY_NORMAL;
   key->from = id;
@@ -294,43 +294,6 @@ Key *BKE_key_add(Main *bmain, ID *id) /* common function */
   }
 
   return key;
-}
-
-Key *BKE_key_copy(Main *bmain, const Key *key)
-{
-  Key *key_copy;
-  BKE_id_copy(bmain, &key->id, (ID **)&key_copy);
-  return key_copy;
-}
-
-/* XXX TODO get rid of this! */
-Key *BKE_key_copy_nolib(Key *key)
-{
-  Key *keyn;
-  KeyBlock *kbn, *kb;
-
-  keyn = MEM_dupallocN(key);
-
-  keyn->adt = NULL;
-
-  BLI_duplicatelist(&keyn->block, &key->block);
-
-  kb = key->block.first;
-  kbn = keyn->block.first;
-  while (kbn) {
-
-    if (kbn->data) {
-      kbn->data = MEM_dupallocN(kbn->data);
-    }
-    if (kb == key->refkey) {
-      keyn->refkey = kbn;
-    }
-
-    kbn = kbn->next;
-    kb = kb->next;
-  }
-
-  return keyn;
 }
 
 /* Sort shape keys and Ipo curves after a change.  This assumes that at most
