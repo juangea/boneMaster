@@ -493,8 +493,12 @@ if(WITH_CYCLES_CUDA_BINARIES)
   foreach(arch ${CYCLES_CUDA_BINARIES_ARCH})
     if(${arch} MATCHES "sm_2.")
       message(STATUS "CUDA binaries for ${arch} are no longer supported, skipped.")
+    elseif(${arch} MATCHES "sm_30" AND ${CUDA_VERSION} GREATER 109)
+      message(STATUS "CUDA binaries for ${arch} are no longer supported, skipped.")      
     elseif(${arch} MATCHES "sm_7." AND ${CUDA_VERSION} LESS 100)
       message(STATUS "CUDA binaries for ${arch} require CUDA 10.0+, skipped.")
+    elseif(${arch} MATCHES "sm_8." AND ${CUDA_VERSION} LESS 110)
+      message(STATUS "CUDA binaries for ${arch} require CUDA 11.0+, skipped.")      
     else()
       # Compile regular kernel
       CYCLES_CUDA_KERNEL_ADD(${arch} ${prev_arch} filter "" "${cuda_filter_sources}" FALSE)
@@ -533,6 +537,10 @@ if(WITH_CYCLES_DEVICE_OPTIX AND WITH_CYCLES_CUDA_BINARIES)
       set(cuda_flags ${cuda_flags}
         -D __KERNEL_DEBUG__)
     endif()
+    set(OPTIX_TARGET 30)
+    if(${CUDA_VERSION} GREATER 109) #cuda 11
+      set(OPTIX_TARGET 52)
+    endif()
 
     if(WITH_NANOVDB)
       set(cuda_flags ${cuda_flags}
@@ -565,7 +573,7 @@ if(WITH_CYCLES_DEVICE_OPTIX AND WITH_CYCLES_CUDA_BINARIES)
           ${SRC_UTIL_HEADERS}
         COMMAND ${CUBIN_CC_ENV}
             "$<TARGET_FILE:cycles_cubin_cc>"
-            -target 50
+            -target ${OPTIX_TARGET}
             -ptx
             -i ${CMAKE_CURRENT_SOURCE_DIR}/${input}
             ${cuda_flags}
@@ -589,7 +597,7 @@ if(WITH_CYCLES_DEVICE_OPTIX AND WITH_CYCLES_CUDA_BINARIES)
         COMMAND
           ${CUDA_NVCC_EXECUTABLE}
           --ptx
-          -arch=sm_50
+          -arch=sm_${OPTIX_TARGET}
           ${cuda_flags}
           ${input}
         WORKING_DIRECTORY
@@ -721,17 +729,3 @@ delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "${SRC_SVM_HEADERS}" ${CYCLES_INSTAL
 delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "${SRC_GEOM_HEADERS}" ${CYCLES_INSTALL_PATH}/source/kernel/geom)
 delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "${SRC_UTIL_HEADERS}" ${CYCLES_INSTALL_PATH}/source/util)
 delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "${SRC_SPLIT_HEADERS}" ${CYCLES_INSTALL_PATH}/source/kernel/split)
-
-
-if(WITH_NANOVDB)
-  set(SRC_NANOVDB_HEADERS
-    nanovdb/NanoVDB.h
-    nanovdb/CNanoVDB.h
-  )
-  set(SRC_NANOVDB_UTIL_HEADERS
-    nanovdb/util/CSampleFromVoxels.h
-    nanovdb/util/SampleFromVoxels.h
-  )
-  delayed_install(${NANOVDB_INCLUDE_DIR} "${SRC_NANOVDB_HEADERS}" ${CYCLES_INSTALL_PATH}/source/nanovdb)
-  delayed_install(${NANOVDB_INCLUDE_DIR} "${SRC_NANOVDB_UTIL_HEADERS}" ${CYCLES_INSTALL_PATH}/source/nanovdb/util)
-endif()

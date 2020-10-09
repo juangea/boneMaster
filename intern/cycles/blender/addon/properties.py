@@ -25,6 +25,7 @@ from bpy.props import (
     IntProperty,
     PointerProperty,
     StringProperty,
+    CollectionProperty,
 )
 
 from math import pi
@@ -99,6 +100,7 @@ enum_use_layer_samples = (
 
 enum_sampling_pattern = (
     ('SOBOL', "Sobol", "Use Sobol random sampling pattern"),
+    ('DITHERED_SOBOL', "Dithered Sobol", "Use dithered Sobol random sampling pattern"),
     ('CORRELATED_MUTI_JITTER', "Correlated Multi-Jitter", "Use Correlated Multi-Jitter random sampling pattern"),
     ('PROGRESSIVE_MUTI_JITTER', "Progressive Multi-Jitter", "Use Progressive Multi-Jitter random sampling pattern"),
 )
@@ -295,6 +297,18 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         default=False,
     )
 
+    disable_viewport_scramble: BoolProperty(
+        name="Disable Viewport Scramble",
+        description="Disable Scrambling Distance on viewport preview",
+        default=False,
+    )     
+
+    renderfarm_safe_tiles: BoolProperty(
+        name="Renderfarm Safe Tiles",
+        description="Manage tile size for CPU or GPU, designed for mixed renderfarm use",
+        default=False,
+    ) 
+
     samples: IntProperty(
         name="Samples",
         description="Number of samples to render for each pixel",
@@ -369,6 +383,14 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         items=enum_sampling_pattern,
         default='SOBOL',
     )
+
+    scrambling_distance: FloatProperty(
+        name="Scrambling distance",
+        description="The amount of pixel-dependent scrambling applied to the Sobol sequence,"
+                    "lower values might speed up rendering but can cause visible artifacts",
+        min=0.0, max=1.0,
+        default=1.0,
+    )    
 
     use_layer_samples: EnumProperty(
         name="Layer Samples",
@@ -1329,6 +1351,19 @@ class CyclesAOVPass(bpy.types.PropertyGroup):
         default=""
     )
 
+class CyclesLightGroup(bpy.types.PropertyGroup):
+    name: StringProperty(
+        name="Name",
+        default="Lightgroup"
+    )
+    collection: PointerProperty(
+        name="Collection",
+        type=bpy.types.Collection
+    )
+    include_world: BoolProperty(
+        name="Include World",
+        default=False
+    )
 
 class CyclesRenderLayerSettings(bpy.types.PropertyGroup):
 
@@ -1507,6 +1542,15 @@ class CyclesRenderLayerSettings(bpy.types.PropertyGroup):
         default=0,
         min=0
     )
+
+    lightgroups: CollectionProperty(
+        name="Light Groups",
+        type=CyclesLightGroup,
+        )
+    active_lightgroup: IntProperty(
+        name="Active Light Group",
+        default=0,
+        )
 
     @classmethod
     def register(cls):
@@ -1695,6 +1739,7 @@ def register():
     bpy.utils.register_class(CyclesDeviceSettings)
     bpy.utils.register_class(CyclesPreferences)
     bpy.utils.register_class(CyclesAOVPass)
+    bpy.utils.register_class(CyclesLightGroup)
     bpy.utils.register_class(CyclesRenderLayerSettings)
     bpy.utils.register_class(CyclesView3DShadingSettings)
 
@@ -1717,5 +1762,6 @@ def unregister():
     bpy.utils.unregister_class(CyclesDeviceSettings)
     bpy.utils.unregister_class(CyclesPreferences)
     bpy.utils.unregister_class(CyclesAOVPass)
+    bpy.utils.unregister_class(CyclesLightGroup)
     bpy.utils.unregister_class(CyclesRenderLayerSettings)
     bpy.utils.unregister_class(CyclesView3DShadingSettings)

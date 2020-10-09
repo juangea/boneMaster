@@ -60,6 +60,7 @@ class Object : public Node {
   bool use_holdout;
   bool is_shadow_catcher;
   float shadow_terminator_offset;
+  uint lightgroups;
 
   float3 dupli_generated;
   float2 dupli_uv;

@@ -235,6 +235,7 @@ ccl_device_noinline_cpu float3 indirect_primitive_emission(
 ccl_device_noinline_cpu void indirect_lamp_emission(KernelGlobals *kg,
                                                     ShaderData *emission_sd,
                                                     ccl_addr_space PathState *state,
+                                                    ccl_global float *buffer,
                                                     PathRadiance *L,
                                                     Ray *ray,
                                                     float3 throughput)
@@ -279,7 +280,7 @@ ccl_device_noinline_cpu void indirect_lamp_emission(KernelGlobals *kg,
       lamp_L *= mis_weight;
     }
 
-    path_radiance_accum_emission(kg, L, state, throughput, lamp_L);
+    path_radiance_accum_emission(kg, L, state, buffer, throughput, lamp_L, ls.groups);
   }
 }
 

@@ -17,6 +17,7 @@
  */
 
 #include "render/light.h"
+#include "render/integrator.h"
 
 #include "blender/blender_sync.h"
 #include "blender/blender_util.h"
@@ -155,6 +156,15 @@ void BlenderSync::sync_light(BL::Object &b_parent,
   light->use_transmission = (visibility & PATH_RAY_TRANSMIT) != 0;
   light->use_scatter = (visibility & PATH_RAY_VOLUME_SCATTER) != 0;
 
+  /* light groups */
+  if (lightgroup_map.count(b_ob.name())) {
+    light->lightgroups = lightgroup_map[b_ob.name()];
+  }
+  else {
+    light->lightgroups = LIGHTGROUPS_NONE;
+  }
+
+
   /* tag */
   light->tag_update(scene);
 }
@@ -170,6 +180,15 @@ void BlenderSync::sync_background_light(BL::SpaceView3D &b_v3d, bool use_portal)
     enum SamplingMethod { SAMPLING_NONE = 0, SAMPLING_AUTOMATIC, SAMPLING_MANUAL, SAMPLING_NUM };
     int sampling_method = get_enum(cworld, "sampling_method", SAMPLING_NUM, SAMPLING_AUTOMATIC);
     bool sample_as_light = (sampling_method != SAMPLING_NONE);
+
+    uint lightgroup_mask = 0;
+    for (int i = 0; i < lightgroups.size(); i++) {
+      if (lightgroups[i].second) {
+        lightgroup_mask |= (1 << i);
+      }
+    }
+    scene->integrator->background_lightgroups = lightgroup_mask;
+
 
     if (sample_as_light || use_portal) {
       /* test if we need to sync */
@@ -197,6 +216,8 @@ void BlenderSync::sync_background_light(BL::SpaceView3D &b_v3d, bool use_portal)
           light->samples = samples * samples;
         else
           light->samples = samples;
+
+        light->lightgroups = lightgroup_mask;
 
         light->tag_update(scene);
         light_map.set_recalc(b_world);
