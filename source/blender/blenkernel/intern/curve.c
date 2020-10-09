@@ -418,18 +418,12 @@ Curve *BKE_curve_add(Main *bmain, const char *name, int type)
 {
   Curve *cu;
 
+  /* We cannot use #BKE_id_new here as we need some custom initialization code. */
   cu = BKE_libblock_alloc(bmain, ID_CU, name, 0);
 
   BKE_curve_init(cu, type);
 
   return cu;
-}
-
-Curve *BKE_curve_copy(Main *bmain, const Curve *cu)
-{
-  Curve *cu_copy;
-  BKE_id_copy(bmain, &cu->id, (ID **)&cu_copy);
-  return cu_copy;
 }
 
 /* Get list of nurbs from editnurbs structure */
