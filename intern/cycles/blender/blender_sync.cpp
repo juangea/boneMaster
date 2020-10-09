@@ -316,6 +316,10 @@ void BlenderSync::sync_integrator()
     {
       integrator->scrambling_distance = 1.0f;
     }
+    else
+    {
+      integrator->scrambling_distance = get_float(cscene, "scrambling_distance");
+    }    
   }
   else
   {
@@ -957,6 +961,10 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine &b_engine,
       {
         tile_x = tile_y = 512;
       }
+      else
+      {
+        tile_x = tile_y = 256;
+      }      
     }    
 
     params.tile_size = make_int2(tile_x, tile_y);
