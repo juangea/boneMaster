@@ -1241,7 +1241,12 @@ void do_versions_after_linking_280(Main *bmain, ReportList *UNUSED(reports))
               break;
             }
           }
-          BLI_assert(collection_hidden != NULL);
+          if (collection_hidden == NULL) {
+            /* This should never happen (objects are always supposed to be instantiated in a
+             * scene), but it does sometimes, see e.g. T81168.
+             * Just put them in first hidden collection in those cases. */
+            collection_hidden = &hidden_collection_array[0];
+          }
 
           if (*collection_hidden == NULL) {
             char name[MAX_ID_NAME];
@@ -5074,6 +5079,14 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
     }
   }
 
+  if (!MAIN_VERSION_ATLEAST(bmain, 283, 20)) {
+    for (wmWindowManager *wm = bmain->wm.first; wm; wm = wm->id.next) {
+      /* Don't rotate light with the viewer by default, make it fixed. Shading settings can't be
+       * edited and this flag should always be set. So we can always execute this. */
+      wm->xr.session_settings.shading.flag |= V3D_SHADING_WORLD_ORIENTATION;
+    }
+  }
+
   /**
    * Versioning code until next subversion bump goes here.
    *
@@ -5085,12 +5098,6 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
    * \note Keep this message at the bottom of the function.
    */
   {
-    for (wmWindowManager *wm = bmain->wm.first; wm; wm = wm->id.next) {
-      /* Don't rotate light with the viewer by default, make it fixed. Shading settings can't be
-       * edited and this flag should always be set. So we can always execute this. */
-      wm->xr.session_settings.shading.flag |= V3D_SHADING_WORLD_ORIENTATION;
-    }
-
     /* Keep this block, even when empty. */
   }
 }
