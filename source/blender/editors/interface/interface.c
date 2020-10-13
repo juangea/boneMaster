@@ -2628,7 +2628,7 @@ static void ui_get_but_string_unit(
   int precision;
 
   if (unit->scale_length < 0.0001f) {
-    unit->scale_length = 1.0f;  // XXX do_versions
+    unit->scale_length = 1.0f; /* XXX do_versions */
   }
 
   /* Use precision override? */
@@ -3663,7 +3663,7 @@ static void ui_but_update_ex(uiBut *but, const bool validate)
   }
 
   /* safety is 4 to enable small number buttons (like 'users') */
-  // okwidth = -4 + (BLI_rcti_size_x(&but->rect)); // UNUSED
+  // okwidth = -4 + (BLI_rcti_size_x(&but->rect)); /* UNUSED */
 
   /* name: */
   switch (but->type) {
@@ -3805,7 +3805,7 @@ void UI_block_align_begin(uiBlock *block)
   block->flag |= UI_BUT_ALIGN_DOWN;
   block->alignnr++;
 
-  /* buttons declared after this call will get this align nr */  // XXX flag?
+  /* buttons declared after this call will get this align nr */ /* XXX flag? */
 }
 
 void UI_block_align_end(uiBlock *block)
@@ -4706,24 +4706,8 @@ uiBut *uiDefButImage(
 uiBut *uiDefButAlert(uiBlock *block, int icon, int x, int y, short width, short height)
 {
   struct ImBuf *ibuf = UI_icon_alert_imbuf_get(icon);
-
-  if (icon == ALERT_ICON_BLENDER) {
-    return uiDefButImage(block, ibuf, x, y, width, height, NULL);
-  }
-
-  uchar icon_color[4];
-  ThemeColorID color_id = TH_INFO_WARNING;
-  if (icon == ALERT_ICON_ERROR) {
-    color_id = TH_INFO_ERROR;
-  }
-  else if (icon == ALERT_ICON_INFO) {
-    color_id = TH_INFO_INFO;
-  }
-  else if (icon == ALERT_ICON_QUESTION) {
-    color_id = TH_INFO_PROPERTY;
-  }
-  UI_GetThemeColorType4ubv(color_id, SPACE_INFO, icon_color);
-  return uiDefButImage(block, ibuf, x, y, width, height, icon_color);
+  bTheme *btheme = UI_GetTheme();
+  return uiDefButImage(block, ibuf, x, y, width, height, btheme->tui.wcol_menu_back.text);
 }
 
 /**

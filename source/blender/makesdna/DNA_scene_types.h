@@ -182,8 +182,8 @@ typedef struct FFMpegCodecData {
 /* Audio */
 
 typedef struct AudioData {
-  int mixrate;  // 2.5: now in FFMpegCodecData: audio_mixrate
-  float main;   // 2.5: now in FFMpegCodecData: audio_volume
+  int mixrate; /* 2.5: now in FFMpegCodecData: audio_mixrate */
+  float main;  /* 2.5: now in FFMpegCodecData: audio_volume */
   float speed_of_sound;
   float doppler_factor;
   int distance_model;
@@ -622,7 +622,7 @@ typedef struct RenderData {
   /** Frames to jump during render/playback. */
   int frame_step;
 
-  /** Standalone player stereo settings */  //  XXX deprecated since .2.5
+  /** Standalone player stereo settings */ /* XXX deprecated since .2.5 */
   short stereomode DNA_DEPRECATED;
 
   /** For the dimensions presets menu. */
@@ -1635,8 +1635,10 @@ typedef struct SceneEEVEE {
   int motion_blur_samples DNA_DEPRECATED;
   int motion_blur_max;
   int motion_blur_steps;
+  int motion_blur_position;
   float motion_blur_shutter;
   float motion_blur_depth_scale;
+  char _pad0[4];
 
   int shadow_method DNA_DEPRECATED;
   int shadow_cube_size;
@@ -2181,7 +2183,7 @@ typedef enum eSculptFlags {
 
   SCULPT_FLAG_UNUSED_7 = (1 << 7), /* cleared */
   SCULPT_ONLY_DEFORM = (1 << 8),
-  // SCULPT_SHOW_DIFFUSE = (1 << 9), // deprecated
+  // SCULPT_SHOW_DIFFUSE = (1 << 9), /* deprecated */
 
   /* If set, the mesh will be drawn with smooth-shading in
    * dynamic-topology mode */
@@ -2218,8 +2220,8 @@ enum {
 
 /* ImagePaintSettings.flag */
 #define IMAGEPAINT_DRAWING (1 << 0)
-// #define IMAGEPAINT_DRAW_TOOL         (1 << 1) // deprecated
-// #define IMAGEPAINT_DRAW_TOOL_DRAWING (1 << 2) // deprecated
+// #define IMAGEPAINT_DRAW_TOOL         (1 << 1) /* deprecated */
+// #define IMAGEPAINT_DRAW_TOOL_DRAWING (1 << 2) /* deprecated */
 
 /* projection painting only */
 /* ImagePaintSettings.flag */
@@ -2403,6 +2405,13 @@ enum {
   SHADOW_ESM = 1,
   /* SHADOW_VSM = 2, */        /* UNUSED */
   /* SHADOW_METHOD_MAX = 3, */ /* UNUSED */
+};
+
+/* SceneEEVEE->motion_blur_position */
+enum {
+  SCE_EEVEE_MB_CENTER = 0,
+  SCE_EEVEE_MB_START = 1,
+  SCE_EEVEE_MB_END = 2,
 };
 
 /* SceneDisplay->render_aa, SceneDisplay->viewport_aa */

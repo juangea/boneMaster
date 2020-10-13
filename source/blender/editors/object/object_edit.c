@@ -24,7 +24,7 @@
 #include <ctype.h>
 #include <float.h>
 #include <math.h>
-#include <stddef.h>  //for offsetof
+#include <stddef.h> /* for offsetof */
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -114,7 +114,7 @@
 #include "WM_toolsystem.h"
 #include "WM_types.h"
 
-#include "object_intern.h"  // own include
+#include "object_intern.h" /* own include */
 
 static CLG_LogRef LOG = {"ed.object.edit"};
 
@@ -257,6 +257,7 @@ static int object_hide_view_clear_exec(bContext *C, wmOperator *op)
   BKE_layer_collection_sync(scene, view_layer);
   DEG_id_tag_update(&scene->id, ID_RECALC_BASE_FLAGS);
   WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, scene);
+  WM_event_add_notifier(C, NC_SCENE | ND_OB_VISIBLE, scene);
 
   return OPERATOR_FINISHED;
 }
@@ -314,6 +315,7 @@ static int object_hide_view_set_exec(bContext *C, wmOperator *op)
   BKE_layer_collection_sync(scene, view_layer);
   DEG_id_tag_update(&scene->id, ID_RECALC_BASE_FLAGS);
   WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, scene);
+  WM_event_add_notifier(C, NC_SCENE | ND_OB_VISIBLE, scene);
 
   return OPERATOR_FINISHED;
 }
