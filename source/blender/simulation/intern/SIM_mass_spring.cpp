@@ -536,7 +536,7 @@ BLI_INLINE void cloth_calc_spring_force(ClothModifierData *clmd,
     scaling = parms->bending + s->lin_stiffness * fabsf(parms->max_bend - parms->bending);
     kb = scaling / (20.0f * (parms->avg_spring_len + FLT_EPSILON));
 
-    // Fix for T45084 for cloth stiffness must have cb proportional to kb
+    /* Fix for T45084 for cloth stiffness must have cb proportional to kb */
     cb = kb * parms->bending_damping;
 
     SIM_mass_spring_force_spring_bending(data, s->ij, s->kl, s->restlen, kb, cb);
@@ -555,7 +555,7 @@ BLI_INLINE void cloth_calc_spring_force(ClothModifierData *clmd,
     scaling = s->lin_stiffness * parms->bending;
     kb = scaling / (20.0f * (parms->avg_spring_len + FLT_EPSILON));
 
-    // Fix for T45084 for cloth stiffness must have cb proportional to kb
+    /* Fix for T45084 for cloth stiffness must have cb proportional to kb */
     cb = kb * parms->bending_damping;
 
     /* XXX assuming same restlen for ij and jk segments here,
@@ -847,10 +847,10 @@ static void cloth_calc_force(
     bend_plast = 1.0f - powf(1.0f - bend_plast, 1.0f / clmd->sim_parms->stepsPerFrame);
   }
 
-  // calculate spring forces
+  /* calculate spring forces */
   for (LinkNode *link = cloth->springs; link; link = link->next) {
     ClothSpring *spring = (ClothSpring *)link->link;
-    // only handle active springs
+    /* only handle active springs */
     if (!(spring->flags & CLOTH_SPRING_FLAG_DEACTIVATE)) {
       cloth_calc_spring_force(clmd, spring, struct_plast, bend_plast);
     }
@@ -1339,7 +1339,7 @@ int SIM_cloth_solve(
 
   if (clmd->sim_parms->vgroup_mass > 0) { /* Do goal stuff. */
     for (i = 0; i < mvert_num; i++) {
-      // update velocities with constrained velocities from pinned verts
+      /* update velocities with constrained velocities from pinned verts */
       if (verts[i].flags & CLOTH_VERT_FLAG_PINNED) {
         float v[3];
         sub_v3_v3v3(v, verts[i].xconst, verts[i].xold);
@@ -1364,10 +1364,10 @@ int SIM_cloth_solve(
     /* initialize forces to zero */
     SIM_mass_spring_clear_forces(id);
 
-    // calculate forces
+    /* calculate forces */
     cloth_calc_force(scene, clmd, frame, effectors, step);
 
-    // calculate new velocity and position
+    /* calculate new velocity and position */
     SIM_mass_spring_solve_velocities(id, dt, &result);
     cloth_record_result(clmd, &result, dt);
 

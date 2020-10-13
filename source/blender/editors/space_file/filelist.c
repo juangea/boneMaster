@@ -2504,7 +2504,11 @@ static int filelist_readjob_list_dir(const char *root,
 
       /* Set initial file type and attributes. */
       entry->attributes = BLI_file_attributes(full_path);
-      if (S_ISDIR(files[i].s.st_mode)) {
+      if (S_ISDIR(files[i].s.st_mode)
+#ifdef __APPLE__
+          && !(ED_path_extension_type(full_path) & FILE_TYPE_APPLICATIONBUNDLE)
+#endif
+      ) {
         entry->typeflag = FILE_TYPE_DIR;
       }
 
@@ -2640,7 +2644,7 @@ static void filelist_readjob_main_recursive(Main *bmain, FileList *filelist)
   ListBase *lb;
   int a, fake, idcode, ok, totlib, totbl;
 
-  // filelist->type = FILE_MAIN; // XXX TODO: add modes to filebrowser
+  // filelist->type = FILE_MAIN; /* XXX TODO: add modes to filebrowser */
 
   BLI_assert(filelist->filelist.entries == NULL);
 
