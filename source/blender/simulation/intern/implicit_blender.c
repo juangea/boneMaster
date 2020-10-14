@@ -1740,7 +1740,7 @@ BLI_INLINE float fbstar_jacobi(float length, float L, float kb, float cb)
   return -kb * fbderiv(length, L);
 }
 
-/* calculate elonglation */
+/* calculate elongation */
 BLI_INLINE bool spring_length(Implicit_Data *data,
                               int i,
                               int j,
@@ -1816,7 +1816,7 @@ bool SIM_mass_spring_force_spring_linear(Implicit_Data *data,
 
   restlen = (*lenfact) * restlenorig;
 
-  /* calculate elonglation */
+  /* calculate elongation */
   spring_length(data, i, j, extent, dir, &length, vel);
 
   /* This code computes not only the force, but also its derivative.
@@ -1886,7 +1886,7 @@ bool SIM_mass_spring_force_spring_bending(
 {
   float extent[3], length, dir[3], vel[3];
 
-  /* calculate elonglation */
+  /* calculate elongation */
   spring_length(data, i, j, extent, dir, &length, vel);
 
   if (length < restlen) {
