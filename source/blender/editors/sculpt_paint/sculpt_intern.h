@@ -36,6 +36,7 @@
 #include "BKE_paint.h"
 #include "BKE_pbvh.h"
 
+struct AutomaskingCache;
 struct KeyBlock;
 struct Object;
 struct SculptPoseIKChainSegment;
@@ -64,6 +65,9 @@ typedef enum SculptUpdateType {
 void SCULPT_flush_update_step(bContext *C, SculptUpdateType update_flags);
 void SCULPT_flush_update_done(const bContext *C, Object *ob, SculptUpdateType update_flags);
 void SCULPT_flush_stroke_deform(struct Sculpt *sd, Object *ob, bool is_proxy_used);
+
+/* Should be used after modifying the mask or Face Sets IDs. */
+void SCULPT_tag_update_overlays(bContext *C);
 
 /* Stroke */
 
@@ -185,7 +189,7 @@ bool SCULPT_vertex_is_boundary(const SculptSession *ss, const int index);
 void SCULPT_vertex_visible_set(SculptSession *ss, int index, bool visible);
 bool SCULPT_vertex_visible_get(SculptSession *ss, int index);
 
-void SCULPT_visibility_sync_all_face_sets_to_vertices(struct SculptSession *ss);
+void SCULPT_visibility_sync_all_face_sets_to_vertices(struct Object *ob);
 void SCULPT_visibility_sync_all_vertex_to_face_sets(struct SculptSession *ss);
 
 /* Face Sets API */
@@ -328,11 +332,17 @@ enum eDynTopoWarnFlag SCULPT_dynamic_topology_check(Scene *scene, Object *ob);
 
 void SCULPT_pbvh_clear(Object *ob);
 
-/* Automasking. */
-float SCULPT_automasking_factor_get(SculptSession *ss, int vert);
+/* Auto-masking. */
+float SCULPT_automasking_factor_get(struct AutomaskingCache *automasking,
+                                    SculptSession *ss,
+                                    int vert);
 
-void SCULPT_automasking_init(Sculpt *sd, Object *ob);
-void SCULPT_automasking_end(Object *ob);
+/* Returns the automasking cache depending on the active tool. Used for code that can run both for
+ * brushes and filter. */
+struct AutomaskingCache *SCULPT_automasking_active_cache_get(SculptSession *ss);
+
+struct AutomaskingCache *SCULPT_automasking_cache_init(Sculpt *sd, Brush *brush, Object *ob);
+void SCULPT_automasking_cache_free(struct AutomaskingCache *automasking);
 
 bool SCULPT_is_automasking_mode_enabled(const Sculpt *sd,
                                         const Brush *br,
@@ -743,7 +753,7 @@ typedef struct SculptBrushTest {
   /* For circle (not sphere) projection. */
   float plane_view[4];
 
-  /* Some tool code uses a plane for it's calculateions. */
+  /* Some tool code uses a plane for its calculations. */
   float plane_tool[4];
 
   /* View3d clipping - only set rv3d for clipping */
@@ -799,6 +809,11 @@ float SCULPT_brush_strength_factor(struct SculptSession *ss,
                                    const int vertex_index,
                                    const int thread_id);
 
+/* Tilts a normal by the x and y tilt values using the view axis. */
+void SCULPT_tilt_apply_to_normal(float r_normal[3],
+                                 struct StrokeCache *cache,
+                                 const float tilt_strength);
+
 /* just for vertex paint. */
 bool SCULPT_pbvh_calc_area_normal(const struct Brush *brush,
                                   Object *ob,
@@ -820,6 +835,13 @@ typedef struct AutomaskingSettings {
   int flags;
   int initial_face_set;
 } AutomaskingSettings;
+
+typedef struct AutomaskingCache {
+  AutomaskingSettings settings;
+  /* Precomputed auto-mask factor indexed by vertex, owned by the auto-masking system and
+   * initialized in #SCULPT_automasking_cache_init when needed. */
+  float *factor;
+} AutomaskingCache;
 
 typedef struct StrokeCache {
   /* Invariants */
@@ -849,9 +871,16 @@ typedef struct StrokeCache {
   bool pen_flip;
   bool invert;
   float pressure;
-  float mouse[2];
   float bstrength;
   float normal_weight; /* from brush (with optional override) */
+  float x_tilt;
+  float y_tilt;
+
+  /* Position of the mouse corresponding to the stroke location, modified by the paint_stroke
+   * operator according to the stroke type. */
+  float mouse[2];
+  /* Position of the mouse event in screen space, not modified by the stroke type. */
+  float mouse_event[2];
 
   float (*prev_colors)[4];
 
@@ -958,11 +987,8 @@ typedef struct StrokeCache {
   float true_gravity_direction[3];
   float gravity_direction[3];
 
-  /* Automasking. */
-  AutomaskingSettings automask_settings;
-  /* Precomputed automask factor indexed by vertex, owned by the automasking system and initialized
-   * in SCULPT_automasking_init when needed. */
-  float *automask_factor;
+  /* Auto-masking. */
+  AutomaskingCache *automasking;
 
   float stroke_local_mat[4][4];
   float multiplane_scrape_angle;
@@ -1034,13 +1060,13 @@ typedef struct FilterCache {
   float *prev_mask;
   float mask_expand_initial_co[3];
 
-  /* Used to prevent undesired results on certain mesh filters. */
-  float *automask;
-
   int new_face_set;
   int *prev_face_set;
 
   int active_face_set;
+
+  /* Auto-masking. */
+  AutomaskingCache *automasking;
 } FilterCache;
 
 void SCULPT_cache_calc_brushdata_symm(StrokeCache *cache,

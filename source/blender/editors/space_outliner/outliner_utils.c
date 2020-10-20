@@ -62,7 +62,7 @@ void outliner_viewcontext_init(const bContext *C, TreeViewContext *tvc)
     tvc->ob_edit = OBEDIT_FROM_OBACT(tvc->obact);
 
     if ((tvc->obact->type == OB_ARMATURE) ||
-        /* This could be made into it's own function. */
+        /* This could be made into its own function. */
         ((tvc->obact->type == OB_MESH) && tvc->obact->mode & OB_MODE_WEIGHT_PAINT)) {
       tvc->ob_pose = BKE_object_pose_armature_get(tvc->obact);
     }
@@ -427,6 +427,12 @@ bool outliner_item_is_co_over_name_icons(const TreeElement *te, float view_co_x)
                           (view_co_x > te->xs);
 
   return outside_left && (view_co_x < te->xend);
+}
+
+/* Find if x coordinate is over element name. */
+bool outliner_item_is_co_over_name(const TreeElement *te, float view_co_x)
+{
+  return (view_co_x > (te->xs + UI_UNIT_X * 2)) && (view_co_x < te->xend);
 }
 
 /* Find if x coordinate is over element disclosure toggle */

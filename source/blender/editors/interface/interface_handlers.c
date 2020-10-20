@@ -1433,7 +1433,7 @@ static int ui_drag_toggle_but_pushed_state(bContext *C, uiBut *but)
       return but->pushed_state_func(C, but->pushed_state_arg);
     }
     /* Assume icon identifies a unique state, for buttons that
-     * work though functions callbacks and don't have an boolean
+     * work through functions callbacks and don't have an boolean
      * value that indicates the state. */
     return but->icon + but->iconadd;
   }
@@ -7690,19 +7690,6 @@ static int ui_do_button(bContext *C, uiBlock *block, uiBut *but, const wmEvent *
     case UI_BTYPE_SEPR_SPACER:
     case UI_BTYPE_EXTRA:
       break;
-  }
-
-  /* reset to default (generic function, only use if not handled by switch above) */
-  /* XXX hardcoded keymap check.... */
-  data = but->active;
-  if (data && data->state == BUTTON_STATE_HIGHLIGHT) {
-    if ((retval == WM_UI_HANDLER_CONTINUE) &&
-        (event->type == EVT_BACKSPACEKEY && event->val == KM_PRESS)) {
-      /* ctrl+backspace = reset active button; backspace = reset a whole array*/
-      ui_but_default_set(C, !event->ctrl, true);
-      ED_region_tag_redraw(data->region);
-      retval = WM_UI_HANDLER_BREAK;
-    }
   }
 
 #ifdef USE_DRAG_MULTINUM
