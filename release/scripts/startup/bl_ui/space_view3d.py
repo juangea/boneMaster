@@ -2691,8 +2691,6 @@ class VIEW3D_MT_object_quick_effects(Menu):
         layout.operator("object.quick_explode")
         layout.operator("object.quick_smoke")
         layout.operator("object.quick_liquid")
-        if context.preferences.experimental.use_new_particle_system:
-            layout.operator("object.quick_particles")
 
 
 class VIEW3D_MT_object_showhide(Menu):
@@ -5549,7 +5547,7 @@ class VIEW3D_PT_object_type_visibility(Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'HEADER'
     bl_label = "View Object Types"
-    bl_ui_units_x = 6
+    bl_ui_units_x = 7
 
     def draw(self, context):
         layout = self.layout
@@ -5559,6 +5557,7 @@ class VIEW3D_PT_object_type_visibility(Panel):
         view = context.space_data
 
         layout.label(text="Object Types Visibility")
+        layout.separator()
         col = layout.column()
 
         attr_object_types = (
@@ -5933,6 +5932,7 @@ class VIEW3D_PT_gizmo_display(Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'HEADER'
     bl_label = "Gizmo"
+    bl_ui_units_x = 8
 
     def draw(self, context):
         layout = self.layout
@@ -5942,6 +5942,7 @@ class VIEW3D_PT_gizmo_display(Panel):
 
         col = layout.column()
         col.label(text="Viewport Gizmos")
+        col.separator()
 
         col.active = view.show_gizmo
         colsub = col.column()

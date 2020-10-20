@@ -531,7 +531,7 @@ struct uiBlock {
   void *evil_C;
 
   /** unit system, used a lot for numeric buttons so include here
-   * rather then fetching through the scene every time. */
+   * rather than fetching through the scene every time. */
   struct UnitSettings *unit;
   /** \note only accessed by color picker templates. */
   ColorPickerData color_pickers;
@@ -618,8 +618,6 @@ extern uiBut *ui_but_drag_multi_edit_get(uiBut *but);
 
 void ui_def_but_icon(uiBut *but, const int icon, const int flag);
 void ui_def_but_icon_clear(uiBut *but);
-
-extern void ui_but_default_set(struct bContext *C, const bool all, const bool use_afterfunc);
 
 void ui_but_extra_operator_icons_free(uiBut *but);
 
