@@ -50,6 +50,7 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_blenlib.h"
+#include "BLI_fileops_types.h"
 #include "BLI_linklist.h"
 #include "BLI_system.h"
 #include "BLI_threads.h"
@@ -2368,10 +2369,47 @@ static int wm_open_mainfile_exec(bContext *C, wmOperator *op)
   return wm_open_mainfile__open(C, op);
 }
 
+static char *wm_open_mainfile_description(struct bContext *UNUSED(C),
+                                          struct wmOperatorType *UNUSED(op),
+                                          struct PointerRNA *params)
+{
+  if (!RNA_struct_property_is_set(params, "filepath")) {
+    return NULL;
+  }
+
+  /* Filepath. */
+  char path[FILE_MAX];
+  RNA_string_get(params, "filepath", path);
+
+  BLI_stat_t stats;
+  if (BLI_stat(path, &stats) == -1) {
+    return BLI_sprintfN("%s\n\n%s", path, N_("File Not Found"));
+  }
+
+  /* Date. */
+  char date_st[FILELIST_DIRENTRY_DATE_LEN];
+  char time_st[FILELIST_DIRENTRY_TIME_LEN];
+  bool is_today, is_yesterday;
+  BLI_filelist_entry_datetime_to_string(
+      NULL, (int64_t)stats.st_mtime, false, time_st, date_st, &is_today, &is_yesterday);
+  if (is_today || is_yesterday) {
+    BLI_strncpy(date_st, is_today ? N_("Today") : N_("Yesterday"), sizeof(date_st));
+  }
+
+  /* Size. */
+  char size_str[FILELIST_DIRENTRY_SIZE_LEN];
+  BLI_filelist_entry_size_to_string(NULL, (uint64_t)stats.st_size, false, size_str);
+
+  return BLI_sprintfN(
+      "%s\n\n%s: %s %s\n%s: %s", path, N_("Modified"), date_st, time_st, N_("Size"), size_str);
+}
+
 /* currently fits in a pointer */
 struct FileRuntime {
   bool is_untrusted;
 };
+BLI_STATIC_ASSERT(sizeof(struct FileRuntime) <= sizeof(void *),
+                  "Struct must not exceed pointer size");
 
 static bool wm_open_mainfile_check(bContext *UNUSED(C), wmOperator *op)
 {
@@ -2430,6 +2468,7 @@ void WM_OT_open_mainfile(wmOperatorType *ot)
   ot->name = "Open";
   ot->idname = "WM_OT_open_mainfile";
   ot->description = "Open a Blender file";
+  ot->get_description = wm_open_mainfile_description;
 
   ot->invoke = wm_open_mainfile_invoke;
   ot->exec = wm_open_mainfile_exec;
@@ -2910,6 +2949,9 @@ static uiBlock *block_create_autorun_warning(struct bContext *C,
 {
   wmWindowManager *wm = CTX_wm_manager(C);
   const uiStyle *style = UI_style_get_dpi();
+  const int text_points_max = MAX2(style->widget.points, style->widgetlabel.points);
+  const int dialog_width = text_points_max * 44 * U.dpi_fac;
+
   uiBlock *block = UI_block_begin(C, region, "autorun_warning_popup", UI_EMBOSS);
 
   UI_block_flag_enable(
@@ -2917,15 +2959,8 @@ static uiBlock *block_create_autorun_warning(struct bContext *C,
   UI_block_theme_style_set(block, UI_BLOCK_THEME_STYLE_POPUP);
   UI_block_emboss_set(block, UI_EMBOSS);
 
-  uiLayout *layout = UI_block_layout(block,
-                                     UI_LAYOUT_VERTICAL,
-                                     UI_LAYOUT_PANEL,
-                                     10,
-                                     2,
-                                     U.widget_unit * 24,
-                                     U.widget_unit * 6,
-                                     0,
-                                     style);
+  uiLayout *layout = UI_block_layout(
+      block, UI_LAYOUT_VERTICAL, UI_LAYOUT_PANEL, 10, 2, dialog_width, 0, 0, style);
 
   /* Text and some vertical space */
   uiLayout *col = uiLayoutColumn(layout, true);
@@ -3151,8 +3186,9 @@ static uiBlock *block_create__close_file_dialog(struct bContext *C,
   wmGenericCallback *post_action = (wmGenericCallback *)arg1;
   Main *bmain = CTX_data_main(C);
   const uiStyle *style = UI_style_get_dpi();
-  const int dialog_width = U.widget_unit * 22;
   const short icon_size = 64 * U.dpi_fac;
+  const int text_points_max = MAX2(style->widget.points, style->widgetlabel.points);
+  const int dialog_width = icon_size + (text_points_max * 34 * U.dpi_fac);
 
   /* Calculate icon column factor. */
   const float split_factor = (float)icon_size / (float)(dialog_width - style->columnspace);

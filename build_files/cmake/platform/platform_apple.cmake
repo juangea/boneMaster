@@ -53,6 +53,13 @@ find_package(ZLIB REQUIRED)
 find_package(BZip2 REQUIRED)
 list(APPEND ZLIB_LIBRARIES ${BZIP2_LIBRARIES})
 
+if(WITH_OPENAL)
+  find_package(OpenAL)
+  if(NOT OPENAL_FOUND)
+    set(WITH_OPENAL OFF)
+  endif()
+endif()
+
 if(NOT DEFINED LIBDIR)
   set(LIBDIR ${CMAKE_SOURCE_DIR}/../lib/darwin)
   # Prefer lib directory paths
@@ -70,15 +77,6 @@ endif()
 
 if(EXISTS ${LIBDIR})
   without_system_libs_begin()
-endif()
-
-if(WITH_OPENAL)
-  find_package(OpenAL)
-  if(OPENAL_FOUND)
-    set(WITH_OPENAL ON)
-  else()
-    set(WITH_OPENAL OFF)
-  endif()
 endif()
 
 if(WITH_ALEMBIC)
@@ -227,11 +225,20 @@ if(WITH_SDL)
   set(PLATFORM_LINKFLAGS "${PLATFORM_LINKFLAGS} -framework ForceFeedback")
 endif()
 
+set(PNG_ROOT ${LIBDIR}/png)
 find_package(PNG REQUIRED)
 
+set(JPEG_ROOT ${LIBDIR}/jpeg)
 find_package(JPEG REQUIRED)
 
-find_package(TIFF REQUIRED)
+if(WITH_IMAGE_TIFF)
+  set(TIFF_ROOT ${LIBDIR}/tiff)
+  find_package(TIFF)
+  if(NOT TIFF_FOUND)
+    message(WARNING "TIFF not found, disabling WITH_IMAGE_TIFF")
+    set(WITH_IMAGE_TIFF OFF)
+  endif()
+endif()
 
 if(WITH_BOOST)
   set(Boost_NO_BOOST_CMAKE ON)
