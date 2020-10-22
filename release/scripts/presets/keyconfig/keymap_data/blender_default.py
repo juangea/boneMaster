@@ -2431,7 +2431,7 @@ def km_text(params):
     return keymap
 
 
-def km_sequencercommon(_params):
+def km_sequencercommon(params):
     items = []
     keymap = (
         "SequencerCommon",
@@ -2450,7 +2450,7 @@ def km_sequencercommon(_params):
          {"properties": [("data_path", 'space_data.view_type'), ("value_1", 'SEQUENCER'), ("value_2", 'PREVIEW')]}),
     ])
 
-    if _params.select_mouse == 'LEFTMOUSE' and not _params.legacy:
+    if params.select_mouse == 'LEFTMOUSE' and not params.legacy:
         # Quick switch to select tool, since left select can't easily
         # select with any tool active.
         items.extend([
@@ -4385,6 +4385,8 @@ def km_sculpt(params):
          {"properties": [("mode", 'VALUE'), ("value", 0.0)]}),
         ("paint.mask_flood_fill", {"type": 'I', "value": 'PRESS', "ctrl": True},
          {"properties": [("mode", 'INVERT')]}),
+        ("paint.mask_box_gesture", {"type": 'B', "value": 'PRESS'},
+         {"properties": [("mode", 'VALUE'), ("value", 0.0)]}),
         ("paint.mask_lasso_gesture", {"type": 'LEFTMOUSE', "value": 'PRESS', "shift": True, "ctrl": True}, None),
         ("wm.context_toggle", {"type": 'M', "value": 'PRESS', "ctrl": True},
          {"properties": [("data_path", 'scene.tool_settings.sculpt.show_mask')]}),
