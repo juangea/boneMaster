@@ -589,6 +589,7 @@ typedef struct WalkNavigation {
 } WalkNavigation;
 
 typedef struct UserDef_Runtime {
+  /** Mark as changed so the preferences are saved on exit. */
   char is_dirty;
   char _pad0[7];
 } UserDef_Runtime;
@@ -633,10 +634,9 @@ typedef struct UserDef_Experimental {
   char use_new_hair_type;
   char use_new_point_cloud_type;
   char use_sculpt_vertex_colors;
-  char use_tools_missing_icons;
   char use_switch_object_operator;
   char use_sculpt_tools_tilt;
-  char _pad[6];
+  char _pad[7];
   /** `makesdna` does not allow empty structs. */
 } UserDef_Experimental;
 

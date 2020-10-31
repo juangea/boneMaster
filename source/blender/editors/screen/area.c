@@ -550,10 +550,11 @@ void ED_region_do_draw(bContext *C, ARegion *region)
    * for drawing of borders/gestures etc */
   ED_region_pixelspace(region);
 
+  /* Remove sRGB override by rebinding the framebuffer. */
   GPUFrameBuffer *fb = GPU_framebuffer_active_get();
   GPU_framebuffer_bind(fb);
+
   ED_region_draw_cb_draw(C, region, REGION_DRAW_POST_PIXEL);
-  GPU_framebuffer_bind_no_srgb(fb);
 
   region_draw_azones(area, region);
 
@@ -1868,6 +1869,11 @@ void ED_area_update_region_sizes(wmWindowManager *wm, wmWindow *win, ScrArea *ar
   ED_area_azones_update(area, &win->eventstate->x);
 
   area->flag &= ~AREA_FLAG_REGION_SIZE_UPDATE;
+}
+
+bool ED_area_has_shared_border(struct ScrArea *a, struct ScrArea *b)
+{
+  return area_getorientation(a, b) != -1;
 }
 
 /* called in screen_refresh, or screens_init, also area size changes */

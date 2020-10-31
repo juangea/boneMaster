@@ -57,7 +57,9 @@ typedef enum GpencilModifierMode {
   eGpencilModifierMode_Realtime = (1 << 0),
   eGpencilModifierMode_Render = (1 << 1),
   eGpencilModifierMode_Editmode = (1 << 2),
+#ifdef DNA_DEPRECATED_ALLOW
   eGpencilModifierMode_Expanded_DEPRECATED = (1 << 3),
+#endif
   eGpencilModifierMode_Virtual = (1 << 4),
 } GpencilModifierMode;
 
@@ -72,6 +74,7 @@ typedef struct GpencilModifierData {
   int type, mode;
   char _pad0[4];
   short flag;
+  /* An "expand" bit for each of the modifier's (sub)panels (uiPanelDataExpansion). */
   short ui_expand_flag;
   /** MAX_NAME. */
   char name[64];
@@ -778,6 +781,9 @@ typedef struct TextureGpencilModifierData {
   /** Texture fit options. */
   short fit_method;
   short mode;
+  /** Dot texture rotation */
+  float alignment_rotation;
+  char _pad[4];
 } TextureGpencilModifierData;
 
 typedef enum eTextureGpencil_Flag {

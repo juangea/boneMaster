@@ -379,7 +379,7 @@ const EnumPropertyItem rna_enum_image_type_items[] = {
     {R_IMF_IMTYPE_FFMPEG,
      "FFMPEG",
      ICON_FILE_MOVIE,
-     "FFmpeg video",
+     "FFmpeg Video",
      "The most versatile way to output video files"},
 #endif
     {0, NULL, 0, NULL, NULL},
@@ -2864,13 +2864,13 @@ static void rna_def_tool_settings(BlenderRNA *brna)
   };
 
   static const EnumPropertyItem gpencil_stroke_snap_items[] = {
-      {0, "NONE", 0, "All points", "Snap to all points"},
+      {0, "NONE", 0, "All Points", "Snap to all points"},
       {GP_PROJECT_DEPTH_STROKE_ENDPOINTS,
        "ENDS",
        0,
-       "End points",
+       "End Points",
        "Snap to first and last points and interpolate"},
-      {GP_PROJECT_DEPTH_STROKE_FIRST, "FIRST", 0, "First point", "Snap to first point"},
+      {GP_PROJECT_DEPTH_STROKE_FIRST, "FIRST", 0, "First Point", "Snap to first point"},
       {0, NULL, 0, NULL, NULL},
   };
 
@@ -5510,12 +5510,12 @@ static void rna_def_scene_ffmpeg_settings(BlenderRNA *brna)
        "Constant Bitrate",
        "Configure constant bit rate, rather than constant output quality"},
       {FFM_CRF_LOSSLESS, "LOSSLESS", 0, "Lossless", ""},
-      {FFM_CRF_PERC_LOSSLESS, "PERC_LOSSLESS", 0, "Perceptually lossless", ""},
-      {FFM_CRF_HIGH, "HIGH", 0, "High quality", ""},
-      {FFM_CRF_MEDIUM, "MEDIUM", 0, "Medium quality", ""},
-      {FFM_CRF_LOW, "LOW", 0, "Low quality", ""},
-      {FFM_CRF_VERYLOW, "VERYLOW", 0, "Very low quality", ""},
-      {FFM_CRF_LOWEST, "LOWEST", 0, "Lowest quality", ""},
+      {FFM_CRF_PERC_LOSSLESS, "PERC_LOSSLESS", 0, "Perceptually Lossless", ""},
+      {FFM_CRF_HIGH, "HIGH", 0, "High Quality", ""},
+      {FFM_CRF_MEDIUM, "MEDIUM", 0, "Medium Quality", ""},
+      {FFM_CRF_LOW, "LOW", 0, "Low Quality", ""},
+      {FFM_CRF_VERYLOW, "VERYLOW", 0, "Very Low Quality", ""},
+      {FFM_CRF_LOWEST, "LOWEST", 0, "Lowest Quality", ""},
       {0, NULL, 0, NULL, NULL},
   };
 
@@ -5738,7 +5738,7 @@ static void rna_def_scene_render_data(BlenderRNA *brna)
       {0,
        "AUTO",
        0,
-       "Auto-detect",
+       "Auto-Detect",
        "Automatically determine the number of threads, based on CPUs"},
       {R_FIXED_THREADS, "FIXED", 0, "Fixed", "Manually determine the number of threads"},
       {0, NULL, 0, NULL, NULL},
@@ -7359,9 +7359,9 @@ void RNA_def_scene(BlenderRNA *brna)
   };
 
   static const EnumPropertyItem sync_mode_items[] = {
-      {0, "NONE", 0, "No Sync", "Do not sync, play every frame"},
+      {0, "NONE", 0, "Play Every Frame", "Do not sync, play every frame"},
       {SCE_FRAME_DROP, "FRAME_DROP", 0, "Frame Dropping", "Drop frames if playback is too slow"},
-      {AUDIO_SYNC, "AUDIO_SYNC", 0, "AV-sync", "Sync to audio playback, dropping frames"},
+      {AUDIO_SYNC, "AUDIO_SYNC", 0, "Sync to Audio", "Sync to audio playback, dropping frames"},
       {0, NULL, 0, NULL, NULL},
   };
 
