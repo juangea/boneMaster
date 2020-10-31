@@ -106,8 +106,10 @@ typedef enum ModifierMode {
   eModifierMode_Render = (1 << 1),
   eModifierMode_Editmode = (1 << 2),
   eModifierMode_OnCage = (1 << 3),
-  /* Old modifier box expansion, just for versioning. */
+#ifdef DNA_DEPRECATED_ALLOW
+  /** Old modifier box expansion, just for versioning. */
   eModifierMode_Expanded_DEPRECATED = (1 << 4),
+#endif
   eModifierMode_Virtual = (1 << 5),
   eModifierMode_ApplyOnSpline = (1 << 6),
   eModifierMode_DisableTemporary = (1u << 31),
@@ -119,7 +121,7 @@ typedef struct ModifierData {
   int type, mode;
   char _pad0[4];
   short flag;
-  /* An "expand" bit for each of the modifier's (sub)panels. */
+  /* An "expand" bit for each of the modifier's (sub)panels (uiPanelDataExpansion). */
   short ui_expand_flag;
   /** MAX_NAME. */
   char name[64];
@@ -1047,7 +1049,8 @@ typedef struct MultiresModifierData {
   ModifierData modifier;
 
   char lvl, sculptlvl, renderlvl, totlvl;
-  char simple, flags, _pad[2];
+  char simple DNA_DEPRECATED;
+  char flags, _pad[2];
   short quality;
   short uv_smooth;
   short boundary_smooth;

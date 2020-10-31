@@ -49,7 +49,9 @@ typedef enum ShaderFxMode {
   eShaderFxMode_Realtime = (1 << 0),
   eShaderFxMode_Render = (1 << 1),
   eShaderFxMode_Editmode = (1 << 2),
+#ifdef DNA_DEPRECATED_ALLOW
   eShaderFxMode_Expanded_DEPRECATED = (1 << 3),
+#endif
 } ShaderFxMode;
 
 typedef enum {
@@ -63,7 +65,7 @@ typedef struct ShaderFxData {
   int type, mode;
   char _pad0[4];
   short flag;
-  /* Expansion for shader effect panels and sub-panels. */
+  /* An "expand" bit for each of the constraint's (sub)panels (uiPanelDataExpansion). */
   short ui_expand_flag;
   /** MAX_NAME. */
   char name[64];

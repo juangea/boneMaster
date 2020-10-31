@@ -696,7 +696,7 @@ bool ED_object_parent_set(ReportList *reports,
   /* Preconditions. */
   if (ob == par) {
     /* Parenting an object to itself is impossible. */
-    return true;
+    return false;
   }
 
   if (BKE_object_parent_loop_check(par, ob)) {
@@ -1359,7 +1359,7 @@ enum {
 
 static const EnumPropertyItem prop_make_track_types[] = {
     {CREATE_TRACK_DAMPTRACK, "DAMPTRACK", 0, "Damped Track Constraint", ""},
-    {CREATE_TRACK_TRACKTO, "TRACKTO", 0, "Track To Constraint", ""},
+    {CREATE_TRACK_TRACKTO, "TRACKTO", 0, "Track to Constraint", ""},
     {CREATE_TRACK_LOCKTRACK, "LOCKTRACK", 0, "Lock Track Constraint", ""},
     {0, NULL, 0, NULL, NULL},
 };

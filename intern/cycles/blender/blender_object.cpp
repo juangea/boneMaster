@@ -218,7 +218,7 @@ Object *BlenderSync::sync_object(BL::Depsgraph &b_depsgraph,
   /* test if we need to sync */
   bool object_updated = false;
 
-  if (object_map.add_or_update(scene, &object, b_ob, b_parent, key))
+  if (object_map.add_or_update(&object, b_ob, b_parent, key))
     object_updated = true;
 
   /* mesh sync */
@@ -415,6 +415,11 @@ void BlenderSync::sync_objects(BL::Depsgraph &b_depsgraph,
     /* Load per-object culling data. */
     culling.init_object(scene, b_ob);
 
+    /* Ensure the object geom supporting the hair is processed before adding
+     * the hair processing task to the task pool, calling .to_mesh() on the
+     * same object in parallel does not work. */
+    const bool sync_hair = b_instance.show_particles() && object_has_particle_hair(b_ob);
+
     /* Object itself. */
     if (b_instance.show_self()) {
       sync_object(b_depsgraph,
@@ -425,11 +430,11 @@ void BlenderSync::sync_objects(BL::Depsgraph &b_depsgraph,
                   show_lights,
                   culling,
                   &use_portal,
-                  &geom_task_pool);
+                  sync_hair ? NULL : &geom_task_pool);
     }
 
     /* Particle hair as separate object. */
-    if (b_instance.show_particles() && object_has_particle_hair(b_ob)) {
+    if (sync_hair) {
       sync_object(b_depsgraph,
                   b_view_layer,
                   b_instance,
@@ -452,10 +457,10 @@ void BlenderSync::sync_objects(BL::Depsgraph &b_depsgraph,
     sync_background_light(b_v3d, use_portal);
 
     /* handle removed data and modified pointers */
-    light_map.post_sync(scene);
-    geometry_map.post_sync(scene);
-    object_map.post_sync(scene);
-    particle_system_map.post_sync(scene);
+    light_map.post_sync();
+    geometry_map.post_sync();
+    object_map.post_sync();
+    particle_system_map.post_sync();
   }
 
   if (motion)
