@@ -45,7 +45,8 @@ class USERPREF_HT_header(Header):
             # Show '*' to let users know the preferences have been modified.
             layout.operator(
                 "wm.save_userpref",
-                text="Save Preferences" + (" *" if prefs.is_dirty else ""),
+                text=iface_("Save Preferences") + (" *" if prefs.is_dirty else ""),
+                translate=False,
             )
 
     def draw(self, context):
@@ -2185,7 +2186,6 @@ class USERPREF_PT_experimental_new_features(ExperimentalPanel, Panel):
         self._draw_items(
             context, (
                 ({"property": "use_sculpt_vertex_colors"}, "T71947"),
-                ({"property": "use_tools_missing_icons"}, "T80331"),
                 ({"property": "use_switch_object_operator"}, "T80402"),
                 ({"property": "use_sculpt_tools_tilt"}, "T00000"),
             ),
