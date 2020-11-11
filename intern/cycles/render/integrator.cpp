@@ -299,11 +299,6 @@ void Integrator::device_free(Device *, DeviceScene *dscene)
 	dscene->sobol_dither.free();
 }
 
-bool Integrator::modified(const Integrator &integrator)
-{
-  return !Node::equals(integrator);
-}
-
 void Integrator::tag_update(Scene *scene)
 {
   foreach (Shader *shader, scene->shaders) {

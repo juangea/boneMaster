@@ -305,16 +305,16 @@ void BlenderSync::sync_integrator()
   {
     if (preview)
     {
-      integrator->scrambling_distance = 1.0f;
+      integrator->set_scrambling_distance(1.0f);
     }
     else
     {
-      integrator->scrambling_distance = get_float(cscene, "scrambling_distance");
+      integrator->set_scrambling_distance(get_float(cscene, "scrambling_distance"));
     }    
   }
   else
   {
-    integrator->scrambling_distance = get_float(cscene, "scrambling_distance");
+    integrator->set_scrambling_distance(get_float(cscene, "scrambling_distance"));
   }
 
   integrator->set_sample_clamp_direct(get_float(cscene, "sample_clamp_direct"));
@@ -335,20 +335,21 @@ void BlenderSync::sync_integrator()
   integrator->set_sample_all_lights_indirect(get_boolean(cscene, "sample_all_lights_indirect"));
   integrator->set_light_sampling_threshold(get_float(cscene, "light_sampling_threshold"));
 
-  SamplingPattern sampling_pattern = get_enum(cscene, "sampling_pattern");
-	switch(sampling_pattern) {
+  SamplingPattern sampling_pattern;
+  int sampling_pattern_enum = get_enum(cscene, "sampling_pattern");
+	switch(sampling_pattern_enum) {
 		case 1: /* Dithered Sobol */
-			integrator->sampling_pattern = SAMPLING_PATTERN_SOBOL;
-			integrator->use_dithered_sampling = true;
+      integrator->set_sampling_pattern(SAMPLING_PATTERN_SOBOL);
+			integrator->set_use_dithered_sampling(true);
 			break;
 		case 2: /* Correlated Multi-Jittered */
-			integrator->sampling_pattern = SAMPLING_PATTERN_CMJ;
-			integrator->use_dithered_sampling = false;
+      integrator->set_sampling_pattern(SAMPLING_PATTERN_CMJ);
+			integrator->set_use_dithered_sampling(false);
 			break;
 		case 0: /* Sobol */
 		default:
-			integrator->sampling_pattern = SAMPLING_PATTERN_SOBOL;
-			integrator->use_dithered_sampling = false;
+      integrator->set_sampling_pattern(SAMPLING_PATTERN_SOBOL);
+			integrator->set_use_dithered_sampling(true);
 			break;
 	}
 

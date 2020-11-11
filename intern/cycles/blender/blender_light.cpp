@@ -187,7 +187,7 @@ void BlenderSync::sync_background_light(BL::SpaceView3D &b_v3d, bool use_portal)
         lightgroup_mask |= (1 << i);
       }
     }
-    scene->integrator->background_lightgroups = lightgroup_mask;
+    scene->integrator->set_background_lightgroups(lightgroup_mask);
 
 
     if (sample_as_light || use_portal) {

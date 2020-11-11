@@ -332,10 +332,10 @@ Object *BlenderSync::sync_object(BL::Depsgraph &b_depsgraph,
 
     /* light groups */
     if (lightgroup_map.count(b_ob.name())) {
-      object->lightgroups = lightgroup_map[b_ob.name()];
+      object->set_lightgroups(lightgroup_map[b_ob.name()]);
     }
     else {
-      object->lightgroups = LIGHTGROUPS_NONE;
+      object->set_lightgroups(LIGHTGROUPS_NONE);
     }
 
     object->tag_update(scene);
