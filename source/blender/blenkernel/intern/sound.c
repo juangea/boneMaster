@@ -212,6 +212,8 @@ IDTypeInfo IDType_ID_SO = {
     .blend_read_data = sound_blend_read_data,
     .blend_read_lib = sound_blend_read_lib,
     .blend_read_expand = sound_blend_read_expand,
+
+    .blend_read_undo_preserve = NULL,
 };
 
 #ifdef WITH_AUDASPACE
@@ -1321,7 +1323,10 @@ int BKE_sound_scene_playing(Scene *UNUSED(scene))
 {
   return -1;
 }
-void BKE_sound_read_waveform(Main *bmain, bSound *sound, short *stop)
+void BKE_sound_read_waveform(Main *bmain,
+                             bSound *sound,
+                             /* NOLINTNEXTLINE: readability-non-const-parameter. */
+                             short *stop)
 {
   UNUSED_VARS(sound, stop, bmain);
 }

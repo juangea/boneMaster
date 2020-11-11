@@ -58,7 +58,7 @@
 #include "DEG_depsgraph.h"
 
 #include "RE_pipeline.h"
-#include "RE_render_ext.h"
+#include "RE_texture.h"
 
 #include "SEQ_sequencer.h"
 
@@ -100,7 +100,7 @@ void BKE_blender_free(void)
 
   IMB_moviecache_destruct();
 
-  free_nodesystem();
+  BKE_node_system_exit();
 }
 
 /** \} */
