@@ -317,6 +317,8 @@ void BlenderSync::sync_integrator()
     integrator->set_scrambling_distance(get_float(cscene, "scrambling_distance"));
   }
 
+  integrator->set_scrambling_distance(get_float(cscene, "scrambling_distance"));
+
   integrator->set_sample_clamp_direct(get_float(cscene, "sample_clamp_direct"));
   integrator->set_sample_clamp_indirect(get_float(cscene, "sample_clamp_indirect"));
   if (!preview) {
@@ -409,7 +411,10 @@ void BlenderSync::sync_integrator()
   }
 
   if (integrator->is_modified())
+  {
     integrator->tag_update(scene);
+  }
+    
 }
 
 /* Film */
