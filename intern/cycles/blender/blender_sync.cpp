@@ -265,7 +265,6 @@ void BlenderSync::sync_integrator()
   experimental = (get_enum(cscene, "feature_set") != 0);
 
   Integrator *integrator = scene->integrator;
-  Integrator previntegrator = *integrator;
 
   integrator->set_min_bounce(get_int(cscene, "min_light_bounces"));
   integrator->set_max_bounce(get_int(cscene, "max_bounces"));
@@ -316,8 +315,6 @@ void BlenderSync::sync_integrator()
   {
     integrator->set_scrambling_distance(get_float(cscene, "scrambling_distance"));
   }
-
-  integrator->set_scrambling_distance(get_float(cscene, "scrambling_distance"));
 
   integrator->set_sample_clamp_direct(get_float(cscene, "sample_clamp_direct"));
   integrator->set_sample_clamp_indirect(get_float(cscene, "sample_clamp_indirect"));
@@ -411,9 +408,7 @@ void BlenderSync::sync_integrator()
   }
 
   if (integrator->is_modified())
-  {
     integrator->tag_update(scene);
-  }
     
 }
 
