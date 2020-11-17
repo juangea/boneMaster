@@ -335,20 +335,21 @@ void BlenderSync::sync_integrator()
   integrator->set_light_sampling_threshold(get_float(cscene, "light_sampling_threshold"));
 
   SamplingPattern sampling_pattern;
+  bool use_dithering;
   int sampling_pattern_enum = get_enum(cscene, "sampling_pattern");
 	switch(sampling_pattern_enum) {
 		case 1: /* Dithered Sobol */
-      integrator->set_sampling_pattern(SAMPLING_PATTERN_SOBOL);
-			integrator->set_use_dithered_sampling(true);
+      sampling_pattern = SAMPLING_PATTERN_SOBOL;
+      use_dithering = true;
 			break;
 		case 2: /* Correlated Multi-Jittered */
-      integrator->set_sampling_pattern(SAMPLING_PATTERN_CMJ);
-			integrator->set_use_dithered_sampling(false);
+      sampling_pattern = SAMPLING_PATTERN_CMJ;
+      use_dithering = false;
 			break;
 		case 0: /* Sobol */
 		default:
-      integrator->set_sampling_pattern(SAMPLING_PATTERN_SOBOL);
-			integrator->set_use_dithered_sampling(true);
+      sampling_pattern = SAMPLING_PATTERN_SOBOL;
+      use_dithering = true;      
 			break;
 	}
 
@@ -364,6 +365,7 @@ void BlenderSync::sync_integrator()
   }
 
   integrator->set_sampling_pattern(sampling_pattern);
+  integrator->set_use_dithered_sampling(use_dithering);
 
   int diffuse_samples = get_int(cscene, "diffuse_samples");
   int glossy_samples = get_int(cscene, "glossy_samples");
