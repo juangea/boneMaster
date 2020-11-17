@@ -75,6 +75,8 @@ class Integrator : public Node {
   NODE_SOCKET_API(bool, sample_all_lights_indirect)
   NODE_SOCKET_API(float, light_sampling_threshold)
 
+  NODE_SOCKET_API(uint, background_lightgroups)
+
   NODE_SOCKET_API(int, adaptive_min_samples)
   NODE_SOCKET_API(float, adaptive_threshold)
 
@@ -88,6 +90,11 @@ class Integrator : public Node {
   NODE_SOCKET_API(Method, method)
 
   NODE_SOCKET_API(SamplingPattern, sampling_pattern)
+
+
+  NODE_SOCKET_API(float, scrambling_distance)
+  NODE_SOCKET_API(bool, use_dithered_sampling)
+  NODE_SOCKET_API(bool, disable_viewport_scramble)
 
   Integrator();
   ~Integrator();

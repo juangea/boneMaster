@@ -34,6 +34,8 @@ ccl_device_noinline bool kernel_split_branched_path_volume_indirect_light_iter(K
   ShaderData *sd = kernel_split_sd(sd, ray_index);
   PathRadiance *L = &kernel_split_state.path_radiance[ray_index];
   ShaderData *emission_sd = AS_SHADER_DATA(&kernel_split_state.sd_DL_shadow[ray_index]);
+  uint buffer_offset = kernel_split_state.buffer_offset[ray_index];
+  ccl_global float *buffer = kernel_split_params.tile.buffer + buffer_offset;
 
   /* GPU: no decoupled ray marching, scatter probalistically */
   int num_samples = kernel_data.integrator.volume_samples;
@@ -61,12 +63,12 @@ ccl_device_noinline bool kernel_split_branched_path_volume_indirect_light_iter(K
 
     /* integrate along volume segment with distance sampling */
     VolumeIntegrateResult result = kernel_volume_integrate(
-        kg, ps, sd, &volume_ray, L, tp, step_size);
+        kg, ps, buffer, sd, &volume_ray, L, tp, step_size);
 
 #  ifdef __VOLUME_SCATTER__
     if (result == VOLUME_PATH_SCATTERED) {
       /* direct lighting */
-      kernel_path_volume_connect_light(kg, sd, emission_sd, *tp, &branched_state->path_state, L);
+      kernel_path_volume_connect_light(kg, sd, emission_sd, *tp, &branched_state->path_state, buffer, L);
 
       /* indirect light bounce */
       if (!kernel_path_volume_bounce(kg, sd, tp, ps, &L->state, pray)) {
@@ -148,6 +150,8 @@ ccl_device void kernel_do_volume(KernelGlobals *kg)
     ccl_global Intersection *isect = &kernel_split_state.isect[ray_index];
     ShaderData *sd = kernel_split_sd(sd, ray_index);
     ShaderData *emission_sd = AS_SHADER_DATA(&kernel_split_state.sd_DL_shadow[ray_index]);
+    uint buffer_offset = kernel_split_state.buffer_offset[ray_index];
+    ccl_global float *buffer = kernel_split_params.tile.buffer + buffer_offset;
 
     bool hit = !IS_STATE(ray_state, ray_index, RAY_HIT_BACKGROUND);
 
@@ -169,12 +173,12 @@ ccl_device void kernel_do_volume(KernelGlobals *kg)
         {
           /* integrate along volume segment with distance sampling */
           VolumeIntegrateResult result = kernel_volume_integrate(
-              kg, state, sd, &volume_ray, L, throughput, step_size);
+              kg, state, buffer, sd, &volume_ray, L, throughput, step_size);
 
 #  ifdef __VOLUME_SCATTER__
           if (result == VOLUME_PATH_SCATTERED) {
             /* direct lighting */
-            kernel_path_volume_connect_light(kg, sd, emission_sd, *throughput, state, L);
+            kernel_path_volume_connect_light(kg, sd, emission_sd, *throughput, state, buffer, L);
 
             /* indirect light bounce */
             if (kernel_path_volume_bounce(kg, sd, throughput, state, &L->state, ray)) {

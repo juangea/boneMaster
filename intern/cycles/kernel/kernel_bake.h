@@ -65,7 +65,7 @@ ccl_device_noinline void compute_light_pass(
     /* sample emission */
     if ((pass_filter & BAKE_FILTER_EMISSION) && (sd->flag & SD_EMISSION)) {
       float3 emission = indirect_primitive_emission(kg, sd, 0.0f, state.flag, state.ray_pdf);
-      path_radiance_accum_emission(kg, L, &state, throughput, emission);
+      path_radiance_accum_emission(kg, L, &state, NULL, throughput, emission, LIGHTGROUPS_NONE);
     }
 
     bool is_sss_sample = false;
@@ -78,10 +78,12 @@ ccl_device_noinline void compute_light_pass(
       SubsurfaceIndirectRays ss_indirect;
       kernel_path_subsurface_init_indirect(&ss_indirect);
       if (kernel_path_subsurface_scatter(
-              kg, sd, emission_sd, L, &state, &ray, &throughput, &ss_indirect)) {
+              kg, sd, emission_sd, L, &state, NULL, &ray, &throughput, &ss_indirect)) {
         while (ss_indirect.num_rays) {
-          kernel_path_subsurface_setup_indirect(kg, &ss_indirect, &state, &ray, L, &throughput);
-          kernel_path_indirect(kg, &indirect_sd, emission_sd, &ray, throughput, &state, L);
+          kernel_path_subsurface_setup_indirect(
+              kg, &ss_indirect, &state, &ray, L, &throughput);
+          kernel_path_indirect(
+              kg, &indirect_sd, emission_sd, &ray, throughput, &state, NULL, L);
         }
         is_sss_sample = true;
       }
@@ -90,14 +92,14 @@ ccl_device_noinline void compute_light_pass(
 
     /* sample light and BSDF */
     if (!is_sss_sample && (pass_filter & (BAKE_FILTER_DIRECT | BAKE_FILTER_INDIRECT))) {
-      kernel_path_surface_connect_light(kg, sd, emission_sd, throughput, &state, L);
+      kernel_path_surface_connect_light(kg, sd, emission_sd, throughput, &state, NULL, L);
 
       if (kernel_path_surface_bounce(kg, sd, &throughput, &state, &L->state, &ray)) {
 #  ifdef __LAMP_MIS__
         state.ray_t = 0.0f;
 #  endif
         /* compute indirect light */
-        kernel_path_indirect(kg, &indirect_sd, emission_sd, &ray, throughput, &state, L);
+        kernel_path_indirect(kg, &indirect_sd, emission_sd, &ray, throughput, &state, NULL, L);
 
         /* sum and reset indirect light pass variables for the next samples */
         path_radiance_sum_indirect(L);
@@ -117,7 +119,7 @@ ccl_device_noinline void compute_light_pass(
     /* sample emission */
     if ((pass_filter & BAKE_FILTER_EMISSION) && (sd->flag & SD_EMISSION)) {
       float3 emission = indirect_primitive_emission(kg, sd, 0.0f, state.flag, state.ray_pdf);
-      path_radiance_accum_emission(kg, L, &state, throughput, emission);
+      path_radiance_accum_emission(kg, L, &state, NULL, throughput, emission, LIGHTGROUPS_NONE);
     }
 
 #    ifdef __SUBSURFACE__
@@ -126,7 +128,7 @@ ccl_device_noinline void compute_light_pass(
       /* When mixing BSSRDF and BSDF closures we should skip BSDF lighting
        * if scattering was successful. */
       kernel_branched_path_subsurface_scatter(
-          kg, sd, &indirect_sd, emission_sd, L, &state, &ray, throughput);
+          kg, sd, &indirect_sd, emission_sd, L, &state, NULL, &ray, throughput);
     }
 #    endif
 
@@ -137,13 +139,13 @@ ccl_device_noinline void compute_light_pass(
       if (kernel_data.integrator.use_direct_light) {
         int all = kernel_data.integrator.sample_all_lights_direct;
         kernel_branched_path_surface_connect_light(
-            kg, sd, emission_sd, &state, throughput, 1.0f, L, all);
+            kg, sd, emission_sd, &state, NULL, throughput, 1.0f, L, all);
       }
 #    endif
 
       /* indirect light */
       kernel_branched_path_surface_indirect_light(
-          kg, sd, &indirect_sd, emission_sd, throughput, 1.0f, &state, L);
+          kg, sd, &indirect_sd, emission_sd, throughput, 1.0f, &state, NULL, L);
     }
   }
 #  endif
