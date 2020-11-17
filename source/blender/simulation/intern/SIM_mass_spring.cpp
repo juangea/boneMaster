@@ -365,7 +365,10 @@ static int UNUSED_FUNCTION(cloth_calc_helper_forces)(Object *UNUSED(ob),
   return 1;
 }
 
-BLI_INLINE void cloth_calc_spring_force(ClothModifierData *clmd, ClothSpring *s)
+BLI_INLINE void cloth_calc_spring_force(ClothModifierData *clmd,
+                                        ClothSpring *s,
+                                        float struct_plast,
+                                        float bend_plast)
 {
   Cloth *cloth = clmd->clothObject;
   ClothSimSettings *parms = clmd->sim_parms;
@@ -384,11 +387,22 @@ BLI_INLINE void cloth_calc_spring_force(ClothModifierData *clmd, ClothSpring *s)
     s->flags |= CLOTH_SPRING_FLAG_NEEDED;
 
     scaling = parms->bending + s->ang_stiffness * fabsf(parms->max_bend - parms->bending);
-    k = scaling * s->restlen *
+    k = scaling * s->restlen * s->lenfact *
         0.1f; /* Multiplying by 0.1, just to scale the forces to more reasonable values. */
 
-    SIM_mass_spring_force_spring_angular(
-        data, s->ij, s->kl, s->pa, s->pb, s->la, s->lb, s->restang, k, parms->bending_damping);
+    SIM_mass_spring_force_spring_angular(data,
+                                         s->ij,
+                                         s->kl,
+                                         s->pa,
+                                         s->pb,
+                                         s->la,
+                                         s->lb,
+                                         s->restang,
+                                         &s->angoffset,
+                                         k,
+                                         parms->bending_damping,
+                                         bend_plast,
+                                         parms->bend_yield_fact * M_PI * 2);
 #endif
   }
 
@@ -412,13 +426,16 @@ BLI_INLINE void cloth_calc_spring_force(ClothModifierData *clmd, ClothSpring *s)
                                           s->ij,
                                           s->kl,
                                           s->restlen,
+                                          &s->lenfact,
                                           k_tension,
                                           parms->tension_damp,
                                           0.0f,
                                           0.0f,
                                           false,
                                           false,
-                                          parms->max_sewing);
+                                          parms->max_sewing,
+                                          struct_plast,
+                                          parms->struct_yield_fact);
     }
     else if (s->type & CLOTH_SPRING_TYPE_STRUCTURAL) {
       float k_compression, scaling_compression;
@@ -430,13 +447,16 @@ BLI_INLINE void cloth_calc_spring_force(ClothModifierData *clmd, ClothSpring *s)
                                           s->ij,
                                           s->kl,
                                           s->restlen,
+                                          &s->lenfact,
                                           k_tension,
                                           parms->tension_damp,
                                           k_compression,
                                           parms->compression_damp,
                                           resist_compress,
                                           using_angular,
-                                          0.0f);
+                                          0.0f,
+                                          struct_plast,
+                                          parms->struct_yield_fact);
     }
     else {
       /* CLOTH_SPRING_TYPE_INTERNAL */
@@ -468,13 +488,16 @@ BLI_INLINE void cloth_calc_spring_force(ClothModifierData *clmd, ClothSpring *s)
                                           s->ij,
                                           s->kl,
                                           s->restlen,
+                                          &s->lenfact,
                                           k_tension,
                                           k_tension_damp,
                                           k_compression,
                                           k_compression_damp,
                                           resist_compress,
                                           using_angular,
-                                          0.0f);
+                                          0.0f,
+                                          struct_plast,
+                                          parms->struct_yield_fact);
     }
 #endif
   }
@@ -491,13 +514,16 @@ BLI_INLINE void cloth_calc_spring_force(ClothModifierData *clmd, ClothSpring *s)
                                         s->ij,
                                         s->kl,
                                         s->restlen,
+                                        &s->lenfact,
                                         k,
                                         parms->shear_damp,
                                         0.0f,
                                         0.0f,
                                         resist_compress,
                                         false,
-                                        0.0f);
+                                        0.0f,
+                                        struct_plast,
+                                        parms->struct_yield_fact);
 #endif
   }
   else if (s->type & CLOTH_SPRING_TYPE_BENDING) { /* calculate force of bending springs */
@@ -509,7 +535,7 @@ BLI_INLINE void cloth_calc_spring_force(ClothModifierData *clmd, ClothSpring *s)
     scaling = parms->bending + s->lin_stiffness * fabsf(parms->max_bend - parms->bending);
     kb = scaling / (20.0f * (parms->avg_spring_len + FLT_EPSILON));
 
-    /* Fix for T45084 for cloth stiffness must have cb proportional to kb */
+    // Fix for T45084 for cloth stiffness must have cb proportional to kb
     cb = kb * parms->bending_damping;
 
     SIM_mass_spring_force_spring_bending(data, s->ij, s->kl, s->restlen, kb, cb);
@@ -528,7 +554,7 @@ BLI_INLINE void cloth_calc_spring_force(ClothModifierData *clmd, ClothSpring *s)
     scaling = s->lin_stiffness * parms->bending;
     kb = scaling / (20.0f * (parms->avg_spring_len + FLT_EPSILON));
 
-    /* Fix for T45084 for cloth stiffness must have cb proportional to kb */
+    // Fix for T45084 for cloth stiffness must have cb proportional to kb
     cb = kb * parms->bending_damping;
 
     /* XXX assuming same restlen for ij and jk segments here,
@@ -586,6 +612,7 @@ static void cloth_calc_force(
   const MVertTri *tri = cloth->tri;
   unsigned int mvert_num = cloth->mvert_num;
   ClothVertex *vert;
+  float struct_plast, bend_plast;
 
 #ifdef CLOTH_FORCE_GRAVITY
   /* global acceleration (gravitation) */
@@ -787,12 +814,44 @@ static void cloth_calc_force(
     MEM_freeN(winvec);
   }
 
-  /* calculate spring forces */
+  /* Implementation note:
+   * Plasticity defines how much the springs will retain deformations, after reaching the yield
+   * factor. However, this change accumulates over each time step, so say a spring is stretched
+   * above the yield factor, then at each time step that passes, the rest shape will approach the
+   * current position. This causes simulations with more sub-steps to approach the current shape
+   * faster. This is solved by properly scaling the plasticity value.
+   *
+   * Plasticity progresses according to the sum:
+   * sum_1_to_n((1/x - 1)^(i - 1) / (1/x)^i)
+   * Where 'n' is the number of sub-steps, and 'x' is the plasticity.
+   *
+   * For artistic control, we set sum_1_to_n((x - 1)^(i - 1) / x^i) = a
+   * where the artist now controls 'a', which represents how much the shape
+   * changes in one frame (considering all sub-steps).
+   * This has the partial sum formula:
+   * 1 - ((1/x - 1) * x)^n
+   *
+   * Which we can now set equal to 'a' and easily solve for 'x':
+   * x = 1 - (1-a)^(1/n) */
+
+  struct_plast = clmd->sim_parms->struct_plasticity;
+
+  if (!(struct_plast < FLT_EPSILON || 1.0f - struct_plast < FLT_EPSILON)) {
+    struct_plast = 1.0f - powf(1.0f - struct_plast, 1.0f / clmd->sim_parms->stepsPerFrame);
+  }
+
+  bend_plast = clmd->sim_parms->bend_plasticity;
+
+  if (!(bend_plast < FLT_EPSILON || 1.0f - bend_plast < FLT_EPSILON)) {
+    bend_plast = 1.0f - powf(1.0f - bend_plast, 1.0f / clmd->sim_parms->stepsPerFrame);
+  }
+
+  // calculate spring forces
   for (LinkNode *link = cloth->springs; link; link = link->next) {
     ClothSpring *spring = (ClothSpring *)link->link;
-    /* only handle active springs */
+    // only handle active springs
     if (!(spring->flags & CLOTH_SPRING_FLAG_DEACTIVATE)) {
-      cloth_calc_spring_force(clmd, spring);
+      cloth_calc_spring_force(clmd, spring, struct_plast, bend_plast);
     }
   }
 }
@@ -1289,7 +1348,7 @@ int SIM_cloth_solve(
 
   if (clmd->sim_parms->vgroup_mass > 0) { /* Do goal stuff. */
     for (i = 0; i < mvert_num; i++) {
-      /* update velocities with constrained velocities from pinned verts */
+      // update velocities with constrained velocities from pinned verts
       if (verts[i].flags & CLOTH_VERT_FLAG_PINNED) {
         float v[3];
         sub_v3_v3v3(v, verts[i].xconst, verts[i].xold);
@@ -1314,10 +1373,10 @@ int SIM_cloth_solve(
     /* initialize forces to zero */
     SIM_mass_spring_clear_forces(id);
 
-    /* calculate forces */
+    // calculate forces
     cloth_calc_force(scene, clmd, frame, effectors, step);
 
-    /* calculate new velocity and position */
+    // calculate new velocity and position
     SIM_mass_spring_solve_velocities(id, dt, &result);
     cloth_record_result(clmd, &result, dt);
 

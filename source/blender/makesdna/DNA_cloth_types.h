@@ -175,6 +175,16 @@ typedef struct ClothSimSettings {
   float max_internal_compression;
   char _pad0[4];
 
+  /* Factor of how much the rest length will change after reaching yield point (0-1) */
+  float struct_plasticity;
+  /* Factor of how much length has to change before plastic behavior kicks in (1-inf) */
+  float struct_yield_fact;
+  /* Factor of how much the rest angle will change after reaching yield point (0-1) */
+  float bend_plasticity;
+  /* How much angle has to change as a factor of a full circle before plastic behavior kicks in
+   * (0-1) */
+  float bend_yield_fact;
+
 } ClothSimSettings;
 
 /* SIMULATION FLAGS: goal flags,.. */

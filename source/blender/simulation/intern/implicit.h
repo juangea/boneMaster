@@ -147,14 +147,17 @@ void SIM_mass_spring_force_vertex_wind(struct Implicit_Data *data,
 bool SIM_mass_spring_force_spring_linear(struct Implicit_Data *data,
                                          int i,
                                          int j,
-                                         float restlen,
+                                         float restlenorig,
+                                         float *lenfact,
                                          float stiffness_tension,
                                          float damping_tension,
                                          float stiffness_compression,
                                          float damping_compression,
                                          bool resist_compress,
                                          bool new_compress,
-                                         float clamp_force);
+                                         float clamp_force,
+                                         float plasticity,
+                                         float yield_fact);
 /* Angular spring force between two polygons */
 bool SIM_mass_spring_force_spring_angular(struct Implicit_Data *data,
                                           int i,
@@ -163,9 +166,12 @@ bool SIM_mass_spring_force_spring_angular(struct Implicit_Data *data,
                                           int *i_b,
                                           int len_a,
                                           int len_b,
-                                          float restang,
+                                          float restangorig,
+                                          float *angoffset,
                                           float stiffness,
-                                          float damping);
+                                          float damping,
+                                          float plasticity,
+                                          float yield_ang);
 /* Bending force, forming a triangle at the base of two structural springs */
 bool SIM_mass_spring_force_spring_bending(
     struct Implicit_Data *data, int i, int j, float restlen, float kb, float cb);
