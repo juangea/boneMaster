@@ -292,6 +292,21 @@ void SCULPT_active_vertex_normal_get(SculptSession *ss, float normal[3])
   SCULPT_vertex_normal_get(ss, SCULPT_active_vertex_get(ss), normal);
 }
 
+MVert *SCULPT_mesh_deformed_mverts_get(SculptSession *ss)
+{
+  switch (BKE_pbvh_type(ss->pbvh)) {
+    case PBVH_FACES:
+      if (ss->shapekey_active || ss->deform_modifiers_active) {
+        return BKE_pbvh_get_verts(ss->pbvh);
+      }
+      return ss->mvert;
+    case PBVH_BMESH:
+    case PBVH_GRIDS:
+      return NULL;
+  }
+  return NULL;
+}
+
 float *SCULPT_brush_deform_target_vertex_co_get(SculptSession *ss,
                                                 const int deform_target,
                                                 PBVHVertexIter *iter)
@@ -2804,9 +2819,12 @@ void SCULPT_tilt_apply_to_normal(float r_normal[3], StrokeCache *cache, const fl
   }
   const float rot_max = M_PI_2 * tilt_strength * SCULPT_TILT_SENSITIVITY;
   mul_v3_mat3_m4v3(r_normal, cache->vc->obact->obmat, r_normal);
-  rotate_v3_v3v3fl(r_normal, r_normal, cache->vc->rv3d->viewinv[0], cache->y_tilt * rot_max);
-  rotate_v3_v3v3fl(r_normal, r_normal, cache->vc->rv3d->viewinv[1], cache->x_tilt * rot_max);
-  mul_v3_mat3_m4v3(r_normal, cache->vc->obact->imat, r_normal);
+  float normal_tilt_y[3];
+  rotate_v3_v3v3fl(normal_tilt_y, r_normal, cache->vc->rv3d->viewinv[0], cache->y_tilt * rot_max);
+  float normal_tilt_xy[3];
+  rotate_v3_v3v3fl(
+      normal_tilt_xy, normal_tilt_y, cache->vc->rv3d->viewinv[1], cache->x_tilt * rot_max);
+  mul_v3_mat3_m4v3(r_normal, cache->vc->obact->imat, normal_tilt_xy);
   normalize_v3(r_normal);
 }
 
@@ -6242,7 +6260,9 @@ static void do_tiled(
 
   /* Position of the "prototype" stroke for tiling. */
   float orgLoc[3];
+  float original_initial_location[3];
   copy_v3_v3(orgLoc, cache->location);
+  copy_v3_v3(original_initial_location, cache->initial_location);
 
   for (int dim = 0; dim < 3; dim++) {
     if ((sd->paint.symmetry_flags & (PAINT_TILE_X << dim)) && step[dim] > 0) {
@@ -6273,6 +6293,7 @@ static void do_tiled(
         for (int dim = 0; dim < 3; dim++) {
           cache->location[dim] = cur[dim] * step[dim] + orgLoc[dim];
           cache->plane_offset[dim] = cur[dim] * step[dim];
+          cache->initial_location[dim] = cur[dim] * step[dim] + original_initial_location[dim];
         }
         action(sd, ob, brush, ups);
       }
