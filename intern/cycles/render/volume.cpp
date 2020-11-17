@@ -76,6 +76,7 @@ enum {
   QUAD_Z_MAX = 5,
 };
 
+#ifdef WITH_OPENVDB
 const int quads_indices[6][4] = {
     /* QUAD_X_MIN */
     {4, 0, 3, 7},
@@ -140,6 +141,7 @@ static void create_quad(int3 corners[8],
 
   quads.push_back(quad);
 }
+#endif
 
 /* Create a mesh from a volume.
  *
@@ -284,16 +286,27 @@ void VolumeMeshBuilder::create_mesh(vector<float3> &vertices,
                                     vector<float3> &face_normals,
                                     const float face_overlap_avoidance)
 {
+#ifdef WITH_OPENVDB
   /* We create vertices in index space (is), and only convert them to object
    * space when done. */
   vector<int3> vertices_is;
   vector<QuadData> quads;
+
+  /* make sure we only have leaf nodes in the tree, as tiles are not handled by
+   * this algorithm */
+  topology_grid->tree().voxelizeActiveTiles();
 
   generate_vertices_and_quads(vertices_is, quads);
 
   convert_object_space(vertices_is, vertices, face_overlap_avoidance);
 
   convert_quads_to_tris(quads, indices, face_normals);
+#else
+  (void)vertices;
+  (void)indices;
+  (void)face_normals;
+  (void)face_overlap_avoidance;
+#endif
 }
 
 void VolumeMeshBuilder::generate_vertices_and_quads(vector<ccl::int3> &vertices_is,
@@ -438,10 +451,15 @@ static openvdb::GridBase::ConstPtr openvdb_grid_from_device_texture(device_textu
                                 image_memory->data_width - 1,
                                 image_memory->data_height - 1,
                                 image_memory->data_depth - 1);
+
+  typename GridType::Ptr sparse = GridType::create(ValueType(0.0f));
+  if (dense_bbox.empty()) {
+    return sparse;
+  }
+
   openvdb::tools::Dense<ValueType, openvdb::tools::MemoryLayout::LayoutXYZ> dense(
       dense_bbox, static_cast<ValueType *>(image_memory->host_pointer));
 
-  typename GridType::Ptr sparse = GridType::create(ValueType(0.0f));
   openvdb::tools::copyFromDense(dense, *sparse, ValueType(volume_clipping));
 
   /* #copyFromDense will remove any leaf node that contains constant data and replace it with a
@@ -490,6 +508,37 @@ void GeometryManager::create_volume_mesh(Volume *volume, Progress &progress)
   string msg = string_printf("Computing Volume Mesh %s", volume->name.c_str());
   progress.set_status("Updating Mesh", msg);
 
+  /* Find shader and compute padding based on volume shader interpolation settings. */
+  Shader *volume_shader = NULL;
+  int pad_size = 0;
+
+  foreach (Shader *shader, volume->used_shaders) {
+    if (!shader->has_volume) {
+      continue;
+    }
+
+    volume_shader = shader;
+
+    if (shader->volume_interpolation_method == VOLUME_INTERPOLATION_LINEAR) {
+      pad_size = max(1, pad_size);
+    }
+    else if (shader->volume_interpolation_method == VOLUME_INTERPOLATION_CUBIC) {
+      pad_size = max(2, pad_size);
+    }
+
+    break;
+  }
+
+  /* Clear existing volume mesh, done here in case we early out due to
+   * empty grid or missing volume shader. */
+  volume->clear();
+  volume->need_update_rebuild = true;
+
+  if (!volume_shader) {
+    return;
+  }
+
+  /* Create volume mesh builder. */
   VolumeMeshBuilder builder;
 
 #ifdef WITH_OPENVDB
@@ -536,32 +585,8 @@ void GeometryManager::create_volume_mesh(Volume *volume, Progress &progress)
   }
 #endif
 
+  /* If nothing to build, early out. */
   if (builder.empty_grid()) {
-    return;
-  }
-
-  /* Compute padding. */
-  Shader *volume_shader = NULL;
-  int pad_size = 0;
-
-  foreach (Shader *shader, volume->used_shaders) {
-    if (!shader->has_volume) {
-      continue;
-    }
-
-    volume_shader = shader;
-
-    if (shader->volume_interpolation_method == VOLUME_INTERPOLATION_LINEAR) {
-      pad_size = max(1, pad_size);
-    }
-    else if (shader->volume_interpolation_method == VOLUME_INTERPOLATION_CUBIC) {
-      pad_size = max(2, pad_size);
-    }
-
-    break;
-  }
-
-  if (!volume_shader) {
     return;
   }
 
@@ -580,11 +605,8 @@ void GeometryManager::create_volume_mesh(Volume *volume, Progress &progress)
   vector<float3> face_normals;
   builder.create_mesh(vertices, indices, face_normals, face_overlap_avoidance);
 
-  volume->clear();
   volume->reserve_mesh(vertices.size(), indices.size() / 3);
   volume->used_shaders.push_back(volume_shader);
-  volume->need_update = true;
-  volume->need_update_rebuild = true;
 
   for (size_t i = 0; i < vertices.size(); ++i) {
     volume->add_vertex(vertices[i]);

@@ -59,6 +59,8 @@
 #define BEVEL_SMALL_ANG DEG2RADF(10.0f)
 /** Difference in dot products that corresponds to 10 degree difference between vectors. */
 #define BEVEL_SMALL_ANG_DOT 1 - cosf(BEVEL_SMALL_ANG)
+/** Difference in dot products that corresponds to 2.0 degree difference between vectors. */
+#define BEVEL_EPSILON_ANG_DOT 1 - cosf(BEVEL_EPSILON_ANG)
 #define BEVEL_MAX_ADJUST_PCT 10.0f
 #define BEVEL_MAX_AUTO_ADJUST_PCT 300.0f
 #define BEVEL_MATCH_SPEC_WEIGHT 0.2
@@ -430,6 +432,18 @@ static bool nearly_parallel(const float d1[3], const float d2[3])
   float ang = angle_v3v3(d1, d2);
 
   return (fabsf(ang) < BEVEL_EPSILON_ANG) || (fabsf(ang - (float)M_PI) < BEVEL_EPSILON_ANG);
+}
+
+/**
+ * \return True if d1 and d2 are parallel or nearly parallel.
+ */
+static bool nearly_parallel_normalized(const float d1[3], const float d2[3])
+{
+  BLI_ASSERT_UNIT_V3(d1);
+  BLI_ASSERT_UNIT_V3(d2);
+
+  const float direction_dot = dot_v3v3(d1, d2);
+  return compare_ff(fabsf(direction_dot), 1.0f, BEVEL_EPSILON_ANG_DOT);
 }
 
 /* Make a new BoundVert of the given kind, inserting it at the end of the circular linked
@@ -1096,6 +1110,12 @@ static int edges_angle_kind(EdgeHalf *e1, EdgeHalf *e2, BMVert *v)
   sub_v3_v3v3(dir2, v->co, v2->co);
   normalize_v3(dir1);
   normalize_v3(dir2);
+
+  /* First check for in-line edges using a simpler test. */
+  if (nearly_parallel_normalized(dir1, dir2)) {
+    return ANGLE_STRAIGHT;
+  }
+
   /* Angles are in [0,pi]. Need to compare cross product with normal to see if they are reflex. */
   float cross[3];
   cross_v3_v3v3(cross, dir1, dir2);
@@ -1110,11 +1130,8 @@ static int edges_angle_kind(EdgeHalf *e1, EdgeHalf *e2, BMVert *v)
   else {
     no = v->no;
   }
-  float dot = dot_v3v3(cross, no);
-  if (fabsf(dot) < BEVEL_EPSILON_BIG) {
-    return ANGLE_STRAIGHT;
-  }
-  if (dot < 0.0f) {
+
+  if (dot_v3v3(cross, no) < 0.0f) {
     return ANGLE_LARGER;
   }
   return ANGLE_SMALLER;
@@ -1317,7 +1334,21 @@ static void offset_meet(BevelParams *bp,
       copy_v3_v3(norm_v, f->no);
     }
     else {
-      copy_v3_v3(norm_v, v->no);
+      /* Get average of face norms of faces between e and e2. */
+      int fcount = 0;
+      zero_v3(norm_v);
+      for (EdgeHalf *eloop = e1; eloop != e2; eloop = eloop->next) {
+        if (eloop->fnext != NULL) {
+          add_v3_v3(norm_v, eloop->fnext->no);
+          fcount++;
+        }
+      }
+      if (fcount == 0) {
+        copy_v3_v3(norm_v, v->no);
+      }
+      else {
+        mul_v3_fl(norm_v, 1.0f / fcount);
+      }
     }
     add_v3_v3(dir1, dir2);
     cross_v3_v3v3(norm_perp1, dir1, norm_v);
