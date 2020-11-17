@@ -180,6 +180,14 @@ void wm_event_free(wmEvent *event)
   MEM_freeN(event);
 }
 
+static void wm_event_free_last(wmWindow *win)
+{
+  wmEvent *event = BLI_poptail(&win->queue);
+  if (event != NULL) {
+    wm_event_free(event);
+  }
+}
+
 void wm_event_free_all(wmWindow *win)
 {
   wmEvent *event;
@@ -1731,8 +1739,21 @@ void WM_event_remove_handlers(bContext *C, ListBase *handlers)
     BLI_assert(handler_base->type != 0);
     if (handler_base->type == WM_HANDLER_TYPE_OP) {
       wmEventHandler_Op *handler = (wmEventHandler_Op *)handler_base;
+
       if (handler->op) {
         wmWindow *win = CTX_wm_window(C);
+
+        if (handler->is_fileselect) {
+          /* Exit File Browsers referring to this handler/operator. */
+          LISTBASE_FOREACH (wmWindow *, temp_win, &wm->windows) {
+            ScrArea *file_area = ED_fileselect_handler_area_find(temp_win, handler->op);
+            if (!file_area) {
+              continue;
+            }
+            ED_area_exit(C, file_area);
+          }
+        }
+
         if (handler->op->type->cancel) {
           ScrArea *area = CTX_wm_area(C);
           ARegion *region = CTX_wm_region(C);
@@ -3471,25 +3492,15 @@ void WM_event_add_fileselect(bContext *C, wmOperator *op)
         if (handler->is_fileselect == false) {
           continue;
         }
-        bScreen *screen = CTX_wm_screen(C);
-        bool cancel_handler = true;
 
-        /* Find the area with the file selector for this handler. */
-        ED_screen_areas_iter (win, screen, area) {
-          if (area->spacetype == SPACE_FILE) {
-            SpaceFile *sfile = area->spacedata.first;
+        ScrArea *file_area = ED_fileselect_handler_area_find(win, handler->op);
 
-            if (sfile->op == handler->op) {
-              CTX_wm_area_set(C, area);
-              wm_handler_fileselect_do(C, &win->modalhandlers, handler, EVT_FILESELECT_CANCEL);
-              cancel_handler = false;
-              break;
-            }
-          }
+        if (file_area) {
+          CTX_wm_area_set(C, file_area);
+          wm_handler_fileselect_do(C, &win->modalhandlers, handler, EVT_FILESELECT_CANCEL);
         }
-
         /* If not found we stop the handler without changing the screen. */
-        if (cancel_handler) {
+        else {
           wm_handler_fileselect_do(
               C, &win->modalhandlers, handler, EVT_FILESELECT_EXTERNAL_CANCEL);
         }
@@ -4303,6 +4314,26 @@ static wmEvent *wm_event_add_mousemove(wmWindow *win, const wmEvent *event)
   return event_new;
 }
 
+static wmEvent *wm_event_add_trackpad(wmWindow *win, const wmEvent *event, int deltax, int deltay)
+{
+  /* Ignore in between trackpad events for performance, we only need high accuracy
+   * for painting with mouse moves, for navigation using the accumulated value is ok. */
+  wmEvent *event_last = win->queue.last;
+  if (event_last && event_last->type == event->type) {
+    deltax += event_last->x - event_last->prevx;
+    deltay += event_last->y - event_last->prevy;
+
+    wm_event_free_last(win);
+  }
+
+  /* Set prevx/prevy, the delta is computed from this in operators. */
+  wmEvent *event_new = wm_event_add(win, event);
+  event_new->prevx = event_new->x - deltax;
+  event_new->prevy = event_new->y - deltay;
+
+  return event_new;
+}
+
 /* Windows store own event queues, no bContext here. */
 /* Time is in 1000s of seconds, from Ghost. */
 void wm_event_add_ghostevent(wmWindowManager *wm, wmWindow *win, int type, void *customdata)
@@ -4390,11 +4421,10 @@ void wm_event_add_ghostevent(wmWindowManager *wm, wmWindow *win, int type, void 
       event.y = evt->y = pd->y;
       event.val = KM_NOTHING;
 
-      /* Use prevx/prevy so we can calculate the delta later. */
-      event.prevx = event.x - pd->deltaX;
-      event.prevy = event.y - (-pd->deltaY);
+      /* The direction is inverted from the device due to system preferences. */
+      event.is_direction_inverted = pd->isDirectionInverted;
 
-      wm_event_add(win, &event);
+      wm_event_add_trackpad(win, &event, pd->deltaX, -pd->deltaY);
       break;
     }
     /* Mouse button. */

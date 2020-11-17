@@ -174,6 +174,8 @@ static void collection_foreach_id(ID *id, LibraryForeachIDData *data)
 
 void BKE_collection_blend_write_nolib(BlendWriter *writer, Collection *collection)
 {
+  BKE_id_blend_write(writer, &collection->id);
+
   /* Shared function for collection data-blocks and scene master collection. */
   BKE_previewimg_blend_write(writer, collection->preview);
 
@@ -198,7 +200,6 @@ static void collection_blend_write(BlendWriter *writer, ID *id, const void *id_a
 
     /* write LibData */
     BLO_write_id_struct(writer, Collection, id_address, &collection->id);
-    BKE_id_blend_write(writer, &collection->id);
 
     BKE_collection_blend_write_nolib(writer, collection);
   }
@@ -359,6 +360,8 @@ IDTypeInfo IDType_ID_GR = {
     .blend_read_data = collection_blend_read_data,
     .blend_read_lib = collection_blend_read_lib,
     .blend_read_expand = collection_blend_read_expand,
+
+    .blend_read_undo_preserve = NULL,
 };
 
 /** \} */
@@ -472,6 +475,7 @@ void BKE_collection_add_from_collection(Main *bmain,
 /** Free (or release) any data used by this collection (does not free the collection itself). */
 void BKE_collection_free(Collection *collection)
 {
+  BKE_libblock_free_data(&collection->id, false);
   collection_free_data(&collection->id);
 }
 
@@ -1860,15 +1864,23 @@ bool BKE_collection_move(Main *bmain,
   }
 
   /* Make sure we store the flag of the layer collections before we remove and re-create them.
-   * Otherwise they will get lost and everything will be copied from the new parent collection. */
+   * Otherwise they will get lost and everything will be copied from the new parent collection.
+   * Don't use flag syncing when moving a collection to a different scene, as it no longer exists
+   * in the same view layers anyway. */
+  const bool do_flag_sync = BKE_scene_find_from_collection(bmain, to_parent) ==
+                            BKE_scene_find_from_collection(bmain, collection);
   ListBase layer_flags;
-  layer_collection_flags_store(bmain, collection, &layer_flags);
+  if (do_flag_sync) {
+    layer_collection_flags_store(bmain, collection, &layer_flags);
+  }
 
   /* Create and remove layer collections. */
   BKE_main_collection_sync(bmain);
 
   /* Restore the original layer collection flags. */
-  layer_collection_flags_restore(&layer_flags, collection);
+  if (do_flag_sync) {
+    layer_collection_flags_restore(&layer_flags, collection);
+  }
 
   /* We need to sync it again to pass the correct flags to the collections objects. */
   BKE_main_collection_sync(bmain);

@@ -225,6 +225,8 @@ static int geometry_extract_apply(bContext *C,
   /* Remove the mask from the new object so it can be sculpted directly after extracting. */
   CustomData_free_layers(&new_ob_mesh->vdata, CD_PAINT_MASK, new_ob_mesh->totvert);
 
+  BKE_mesh_copy_settings(new_ob_mesh, mesh);
+
   if (params->apply_shrinkwrap) {
     BKE_shrinkwrap_mesh_nearest_surface_deform(C, new_ob, ob);
   }
@@ -406,7 +408,7 @@ static int face_set_extract_modal(bContext *C, wmOperator *op, const wmEvent *ev
         return geometry_extract_apply(C, op, geometry_extract_tag_face_set, &params);
       }
       break;
-
+    case EVT_ESCKEY:
     case RIGHTMOUSE: {
       WM_cursor_modal_restore(CTX_wm_window(C));
       ED_workspace_status_text(C, NULL);
@@ -556,8 +558,12 @@ static int paint_mask_slice_exec(bContext *C, wmOperator *op)
                                              mesh);
     BM_mesh_free(bm);
 
+    /* Remove the mask from the new object so it can be sculpted directly after slicing. */
+    CustomData_free_layers(&new_ob_mesh->vdata, CD_PAINT_MASK, new_ob_mesh->totvert);
+
     BKE_mesh_nomain_to_mesh(new_ob_mesh, new_ob->data, new_ob, &CD_MASK_MESH, true);
     BKE_mesh_calc_normals(new_ob->data);
+    BKE_mesh_copy_settings(new_ob->data, mesh);
     WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, new_ob);
     BKE_mesh_batch_cache_dirty_tag(new_ob->data, BKE_MESH_BATCH_DIRTY_ALL);
     DEG_relations_tag_update(bmain);

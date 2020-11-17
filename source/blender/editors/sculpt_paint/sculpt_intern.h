@@ -170,6 +170,10 @@ int SCULPT_active_vertex_get(SculptSession *ss);
 const float *SCULPT_active_vertex_co_get(SculptSession *ss);
 void SCULPT_active_vertex_normal_get(SculptSession *ss, float normal[3]);
 
+/* Returns PBVH deformed vertices array if shape keys or deform modifiers are used, otherwise
+ * returns mesh original vertices array. */
+struct MVert *SCULPT_mesh_deformed_mverts_get(SculptSession *ss);
+
 /* Fake Neighbors */
 
 #define FAKE_NEIGHBOR_NONE -1
@@ -1081,7 +1085,7 @@ void SCULPT_cache_free(StrokeCache *cache);
 SculptUndoNode *SCULPT_undo_push_node(Object *ob, PBVHNode *node, SculptUndoType type);
 SculptUndoNode *SCULPT_undo_get_node(PBVHNode *node);
 SculptUndoNode *SCULPT_undo_get_first_node(void);
-void SCULPT_undo_push_begin(const char *name);
+void SCULPT_undo_push_begin(struct Object *ob, const char *name);
 void SCULPT_undo_push_end(void);
 void SCULPT_undo_push_end_ex(const bool use_nested_undo);
 

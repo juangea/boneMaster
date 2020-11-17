@@ -298,6 +298,21 @@ void SCULPT_active_vertex_normal_get(SculptSession *ss, float normal[3])
   SCULPT_vertex_normal_get(ss, SCULPT_active_vertex_get(ss), normal);
 }
 
+MVert *SCULPT_mesh_deformed_mverts_get(SculptSession *ss)
+{
+  switch (BKE_pbvh_type(ss->pbvh)) {
+    case PBVH_FACES:
+      if (ss->shapekey_active || ss->deform_modifiers_active) {
+        return BKE_pbvh_get_verts(ss->pbvh);
+      }
+      return ss->mvert;
+    case PBVH_BMESH:
+    case PBVH_GRIDS:
+      return NULL;
+  }
+  return NULL;
+}
+
 float *SCULPT_brush_deform_target_vertex_co_get(SculptSession *ss,
                                                 const int deform_target,
                                                 PBVHVertexIter *iter)
@@ -2347,7 +2362,7 @@ static float brush_strength(const Sculpt *sd,
       final_pressure = pressure * pressure;
       return final_pressure * overlap * feather;
     case SCULPT_TOOL_SMEAR:
-      return pressure * overlap * feather;
+      return alpha * pressure * overlap * feather;
     case SCULPT_TOOL_CLAY_STRIPS:
       /* Clay Strips needs less strength to compensate the curve. */
       final_pressure = powf(pressure, 1.5f);
@@ -2813,9 +2828,12 @@ void SCULPT_tilt_apply_to_normal(float r_normal[3], StrokeCache *cache, const fl
   }
   const float rot_max = M_PI_2 * tilt_strength * SCULPT_TILT_SENSITIVITY;
   mul_v3_mat3_m4v3(r_normal, cache->vc->obact->obmat, r_normal);
-  rotate_v3_v3v3fl(r_normal, r_normal, cache->vc->rv3d->viewinv[0], cache->y_tilt * rot_max);
-  rotate_v3_v3v3fl(r_normal, r_normal, cache->vc->rv3d->viewinv[1], cache->x_tilt * rot_max);
-  mul_v3_mat3_m4v3(r_normal, cache->vc->obact->imat, r_normal);
+  float normal_tilt_y[3];
+  rotate_v3_v3v3fl(normal_tilt_y, r_normal, cache->vc->rv3d->viewinv[0], cache->y_tilt * rot_max);
+  float normal_tilt_xy[3];
+  rotate_v3_v3v3fl(
+      normal_tilt_xy, normal_tilt_y, cache->vc->rv3d->viewinv[1], cache->x_tilt * rot_max);
+  mul_v3_mat3_m4v3(r_normal, cache->vc->obact->imat, normal_tilt_xy);
   normalize_v3(r_normal);
 }
 
@@ -3907,7 +3925,7 @@ static void do_elastic_deform_brush_task_cb_ex(void *__restrict userdata,
 
   if (brush->elastic_deform_type == BRUSH_ELASTIC_DEFORM_TWIST) {
     int symm = ss->cache->mirror_symmetry_pass;
-    if (symm == 1 || symm == 2 || symm == 4 || symm == 7) {
+    if (ELEM(symm, 1, 2, 4, 7)) {
       dir = -dir;
     }
   }
@@ -6258,7 +6276,9 @@ static void do_tiled(
 
   /* Position of the "prototype" stroke for tiling. */
   float orgLoc[3];
+  float original_initial_location[3];
   copy_v3_v3(orgLoc, cache->location);
+  copy_v3_v3(original_initial_location, cache->initial_location);
 
   for (int dim = 0; dim < 3; dim++) {
     if ((sd->paint.symmetry_flags & (PAINT_TILE_X << dim)) && step[dim] > 0) {
@@ -6289,6 +6309,7 @@ static void do_tiled(
         for (int dim = 0; dim < 3; dim++) {
           cache->location[dim] = cur[dim] * step[dim] + orgLoc[dim];
           cache->plane_offset[dim] = cur[dim] * step[dim];
+          cache->initial_location[dim] = cur[dim] * step[dim] + original_initial_location[dim];
         }
         action(sd, ob, brush, ups);
       }
@@ -7677,7 +7698,7 @@ static bool sculpt_stroke_test_start(bContext *C, struct wmOperator *op, const f
 
     sculpt_update_cache_invariants(C, sd, ss, op, mouse);
 
-    SCULPT_undo_push_begin(sculpt_tool_name(sd));
+    SCULPT_undo_push_begin(ob, sculpt_tool_name(sd));
 
     return true;
   }
@@ -8036,7 +8057,7 @@ static int sculpt_symmetrize_exec(bContext *C, wmOperator *op)
        * as deleted, then after symmetrize operation all BMesh elements
        * are logged as added (as opposed to attempting to store just the
        * parts that symmetrize modifies). */
-      SCULPT_undo_push_begin("Dynamic topology symmetrize");
+      SCULPT_undo_push_begin(ob, "Dynamic topology symmetrize");
       SCULPT_undo_push_node(ob, NULL, SCULPT_UNDO_DYNTOPO_SYMMETRIZE);
       BM_log_before_all_removed(ss->bm, ss->bm_log);
 
@@ -8276,7 +8297,7 @@ void ED_object_sculptmode_enter_ex(Main *bmain,
       bool has_undo = wm->undo_stack != NULL;
       /* Undo push is needed to prevent memory leak. */
       if (has_undo) {
-        SCULPT_undo_push_begin("Dynamic topology enable");
+        SCULPT_undo_push_begin(ob, "Dynamic topology enable");
       }
       SCULPT_dynamic_topology_enable_ex(bmain, depsgraph, scene, ob);
       if (has_undo) {
@@ -8392,7 +8413,7 @@ static int sculpt_mode_toggle_exec(bContext *C, wmOperator *op)
          * while it works it causes lag when undoing the first undo step, see T71564. */
         wmWindowManager *wm = CTX_wm_manager(C);
         if (wm->op_undo_depth <= 1) {
-          SCULPT_undo_push_begin(op->type->name);
+          SCULPT_undo_push_begin(ob, op->type->name);
         }
       }
     }
@@ -9185,7 +9206,7 @@ static int sculpt_mask_by_color_invoke(bContext *C, wmOperator *op, const wmEven
   mouse[1] = event->mval[1];
   SCULPT_cursor_geometry_info_update(C, &sgi, mouse, false);
 
-  SCULPT_undo_push_begin("Mask by color");
+  SCULPT_undo_push_begin(ob, "Mask by color");
 
   const int active_vertex = SCULPT_active_vertex_get(ss);
   const float threshold = RNA_float_get(op->ptr, "threshold");
@@ -9359,8 +9380,9 @@ static void dyntopo_detail_size_edit_draw(const bContext *UNUSED(C),
       pos3d, cd, cd->preview_tri[0], cd->preview_tri[1], true, 120.0f);
   dyntopo_detail_size_parallel_lines_draw(
       pos3d, cd, cd->preview_tri[0], cd->preview_tri[2], false, -60.0f);
-  GPU_matrix_pop();
 
+  immUnbindProgram();
+  GPU_matrix_pop();
   GPU_blend(GPU_BLEND_NONE);
   GPU_line_smooth(false);
 }
@@ -9511,7 +9533,16 @@ static int dyntopo_detail_size_edit_invoke(bContext *C, wmOperator *op, const wm
   copy_m4_m4(cursor_trans, active_object->obmat);
   translate_m4(
       cursor_trans, ss->cursor_location[0], ss->cursor_location[1], ss->cursor_location[2]);
-  rotation_between_vecs_to_quat(quat, z_axis, ss->cursor_normal);
+
+  float cursor_normal[3];
+  if (!is_zero_v3(ss->cursor_sampled_normal)) {
+    copy_v3_v3(cursor_normal, ss->cursor_sampled_normal);
+  }
+  else {
+    copy_v3_v3(cursor_normal, ss->cursor_normal);
+  }
+
+  rotation_between_vecs_to_quat(quat, z_axis, cursor_normal);
   quat_to_mat4(cursor_rot, quat);
   copy_m4_m4(cd->gizmo_mat, cursor_trans);
   mul_m4_m4_post(cd->gizmo_mat, cursor_rot);

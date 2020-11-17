@@ -234,6 +234,9 @@ typedef enum eSpaceButtons_Flag {
 /** \name Outliner
  * \{ */
 
+/* Defined in `outliner_intern.h`. */
+typedef struct SpaceOutliner_Runtime SpaceOutliner_Runtime;
+
 /* Outliner */
 typedef struct SpaceOutliner {
   SpaceLink *next, *prev;
@@ -276,6 +279,8 @@ typedef struct SpaceOutliner {
    * Pointers to treestore elements, grouped by (id, type, nr)
    * in hashtable for faster searching */
   void *treehash;
+
+  SpaceOutliner_Runtime *runtime;
 } SpaceOutliner;
 
 /* SpaceOutliner.flag */
@@ -305,11 +310,11 @@ typedef enum eSpaceOutliner_Filter {
   SO_FILTER_NO_OB_CAMERA = (1 << 10),
   SO_FILTER_NO_OB_OTHERS = (1 << 11),
 
-  SO_FILTER_UNUSED_12 = (1 << 12),         /* cleared */
-  SO_FILTER_OB_STATE_VISIBLE = (1 << 13),  /* Not set via DNA. */
-  SO_FILTER_OB_STATE_HIDDEN = (1 << 14),   /* Not set via DNA. */
-  SO_FILTER_OB_STATE_SELECTED = (1 << 15), /* Not set via DNA. */
-  SO_FILTER_OB_STATE_ACTIVE = (1 << 16),   /* Not set via DNA. */
+  SO_FILTER_OB_STATE_SELECTABLE = (1 << 12), /* Not set via DNA. */
+  SO_FILTER_OB_STATE_VISIBLE = (1 << 13),    /* Not set via DNA. */
+  SO_FILTER_OB_STATE_HIDDEN = (1 << 14),     /* Not set via DNA. */
+  SO_FILTER_OB_STATE_SELECTED = (1 << 15),   /* Not set via DNA. */
+  SO_FILTER_OB_STATE_ACTIVE = (1 << 16),     /* Not set via DNA. */
   SO_FILTER_NO_COLLECTION = (1 << 17),
 
   SO_FILTER_ID_TYPE = (1 << 18),
@@ -321,7 +326,7 @@ typedef enum eSpaceOutliner_Filter {
 
 #define SO_FILTER_OB_STATE \
   (SO_FILTER_OB_STATE_VISIBLE | SO_FILTER_OB_STATE_HIDDEN | SO_FILTER_OB_STATE_SELECTED | \
-   SO_FILTER_OB_STATE_ACTIVE)
+   SO_FILTER_OB_STATE_ACTIVE | SO_FILTER_OB_STATE_SELECTABLE)
 
 #define SO_FILTER_ANY \
   (SO_FILTER_NO_OB_CONTENT | SO_FILTER_NO_CHILDREN | SO_FILTER_OB_TYPE | SO_FILTER_OB_STATE | \
@@ -334,6 +339,7 @@ typedef enum eSpaceOutliner_StateFilter {
   SO_FILTER_OB_HIDDEN = 2,
   SO_FILTER_OB_SELECTED = 3,
   SO_FILTER_OB_ACTIVE = 4,
+  SO_FILTER_OB_SELECTABLE = 5,
 } eSpaceOutliner_StateFilter;
 
 /* SpaceOutliner.show_restrict_flags */
@@ -464,7 +470,7 @@ typedef enum eGraphEdit_Flag {
   /* don't draw curves with AA ("beauty-draw") for performance */
   SIPO_BEAUTYDRAW_OFF = (1 << 12),
   /* draw grouped channels with colors set in group */
-  SIPO_NODRAWGCOLORS = (1 << 13),
+  /* SIPO_NODRAWGCOLORS = (1 << 13), DEPRECATED */
   /* normalize curves on display */
   SIPO_NORMALIZE = (1 << 14),
   SIPO_NORMALIZE_FREEZE = (1 << 15),
@@ -760,7 +766,13 @@ typedef struct SpaceFile {
 
 /* FileSelectParams.display */
 enum eFileDisplayType {
+  /** Internal (not exposed to users): Keep whatever display type was used during the last File
+   * Browser use, or the default if no such record is found. Use this unless there's a good reason
+   * to set a specific display type. */
   FILE_DEFAULTDISPLAY = 0,
+
+  /* User selectable choices. */
+
   FILE_VERTICALDISPLAY = 1,
   FILE_HORIZONTALDISPLAY = 2,
   FILE_IMGDISPLAY = 3,
@@ -768,7 +780,13 @@ enum eFileDisplayType {
 
 /* FileSelectParams.sort */
 enum eFileSortType {
-  FILE_SORT_NONE = 0,
+  /** Internal (not exposed to users): Sort by whatever was sorted by during the last File Browser
+   * use, or the default if no such record is found. Use this unless there's a good reason to set a
+   * specific sort order. */
+  FILE_SORT_DEFAULT = 0,
+
+  /* User selectable choices. */
+
   FILE_SORT_ALPHA = 1,
   FILE_SORT_EXTENSION = 2,
   FILE_SORT_TIME = 3,

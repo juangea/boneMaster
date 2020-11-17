@@ -737,8 +737,10 @@ static int order_render_passes(const void *a, const void *b)
   return (rpa->view_id < rpb->view_id);
 }
 
-/* From imbuf, if a handle was returned and
- * it's not a singlelayer multiview we convert this to render result. */
+/**
+ * From imbuf, if a handle was returned and
+ * it's not a single-layer multi-view we convert this to render result.
+ */
 RenderResult *render_result_new_from_exr(
     void *exrhandle, const char *colorspace, bool predivide, int rectx, int recty)
 {
@@ -992,9 +994,7 @@ bool RE_WriteRenderResult(ReportList *reports,
       /* We only store RGBA passes as half float, for
        * others precision loss can be problematic. */
       bool pass_half_float = half_float &&
-                             (STREQ(rp->chan_id, "RGB") || STREQ(rp->chan_id, "RGBA") ||
-                              STREQ(rp->chan_id, "R") || STREQ(rp->chan_id, "G") ||
-                              STREQ(rp->chan_id, "B") || STREQ(rp->chan_id, "A"));
+                             (STR_ELEM(rp->chan_id, "RGB", "RGBA", "R", "G", "B", "A"));
 
       for (int a = 0; a < rp->channels; a++) {
         /* Save Combined as RGBA if single layer save. */

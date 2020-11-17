@@ -37,8 +37,8 @@ struct PointerRNA;
 struct Scene;
 struct SpaceLink;
 struct SpaceType;
-struct uiLayout;
 struct uiBlock;
+struct uiLayout;
 struct wmDrawBuffer;
 struct wmTimer;
 struct wmTooltipState;
@@ -170,9 +170,8 @@ typedef struct Panel {
   /** Panel size excluding children. */
   int blocksizex, blocksizey;
   short labelofs;
-  char _pad[4];
   short flag, runtime_flag;
-  short snap;
+  char _pad[6];
   /** Panels are aligned according to increasing sort-order. */
   int sortorder;
   /** Runtime for panel manipulation. */
@@ -570,28 +569,6 @@ enum {
   PNL_POPOVER = (1 << 6),
   /** The panel has been drag-drop reordered and the instanced panel list needs to be rebuilt. */
   PNL_INSTANCED_LIST_ORDER_CHANGED = (1 << 7),
-};
-
-/** #Panel.snap - for snapping to screen edges */
-#define PNL_SNAP_NONE 0
-/* #define PNL_SNAP_TOP     1 */
-/* #define PNL_SNAP_RIGHT       2 */
-#define PNL_SNAP_BOTTOM 4
-/* #define PNL_SNAP_LEFT        8 */
-
-/* #define PNL_SNAP_DIST        9.0 */
-
-/* paneltype flag */
-enum {
-  PNL_DEFAULT_CLOSED = (1 << 0),
-  PNL_NO_HEADER = (1 << 1),
-  /** Makes buttons in the header shrink/stretch to fill full layout width. */
-  PNL_LAYOUT_HEADER_EXPAND = (1 << 2),
-  PNL_LAYOUT_VERT_BAR = (1 << 3),
-  /** This panel type represents data external to the UI. */
-  PNL_INSTANCED = (1 << 4),
-  /** Draw panel like a box widget. */
-  PNL_DRAW_BOX = (1 << 6),
 };
 
 /* Fallback panel category (only for old scripts which need updating) */

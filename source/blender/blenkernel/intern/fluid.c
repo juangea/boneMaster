@@ -80,7 +80,7 @@
 #  include "DEG_depsgraph.h"
 #  include "DEG_depsgraph_query.h"
 
-#  include "RE_shader_ext.h"
+#  include "RE_texture.h"
 
 #  include "CLG_log.h"
 
@@ -1993,7 +1993,7 @@ static void sample_mesh(FluidFlowSettings *ffs,
       /* Convert xyz velocities flow settings from world to grid space. */
       float convert_vel[3];
       copy_v3_v3(convert_vel, ffs->vel_coord);
-      float time_mult = 1.0 / (25.f * DT_DEFAULT);
+      float time_mult = 1.0 / (25.0f * DT_DEFAULT);
       float size_mult = MAX3(base_res[0], base_res[1], base_res[2]) /
                         MAX3(global_size[0], global_size[1], global_size[2]);
       mul_v3_v3fl(convert_vel, ffs->vel_coord, size_mult * time_mult);
@@ -3201,10 +3201,18 @@ static void update_effectors_task_cb(void *__restrict userdata,
       normalize_v3(retvel);
       mul_v3_fl(retvel, mag);
 
-      /* Constrain forces to interval -1 to 1. */
-      data->force_x[index] = min_ff(max_ff(-1.0f, retvel[0] * 0.2f), 1.0f);
-      data->force_y[index] = min_ff(max_ff(-1.0f, retvel[1] * 0.2f), 1.0f);
-      data->force_z[index] = min_ff(max_ff(-1.0f, retvel[2] * 0.2f), 1.0f);
+      /* Copy computed force to fluid solver forces. */
+      data->force_x[index] = retvel[0];
+      data->force_y[index] = retvel[1];
+      data->force_z[index] = retvel[2];
+
+#  ifdef DEBUG_PRINT
+      /* Debugging: Print forces. */
+      printf("setting force: [%f, %f, %f]\n",
+             data->force_x[index],
+             data->force_y[index],
+             data->force_z[index]);
+#  endif
     }
   }
 }
@@ -3293,7 +3301,7 @@ static Mesh *create_liquid_geometry(FluidDomainSettings *fds, Mesh *orgmesh, Obj
   /* If needed, vertex velocities will be read too. */
   bool use_speedvectors = fds->flags & FLUID_DOMAIN_USE_SPEED_VECTORS;
   FluidDomainVertexVelocity *velarray = NULL;
-  float time_mult = 25.f * DT_DEFAULT;
+  float time_mult = 25.0f * DT_DEFAULT;
 
   if (use_speedvectors) {
     if (fds->mesh_velocities) {
@@ -4430,7 +4438,7 @@ float BKE_fluid_get_velocity_at(struct Object *ob, float position[3], float velo
 
   if (fmd && (fmd->type & MOD_FLUID_TYPE_DOMAIN) && fmd->domain && fmd->domain->fluid) {
     FluidDomainSettings *fds = fmd->domain;
-    float time_mult = 25.f * DT_DEFAULT;
+    float time_mult = 25.0f * DT_DEFAULT;
     float size_mult = MAX3(fds->global_size[0], fds->global_size[1], fds->global_size[2]) /
                       MAX3(fds->base_res[0], fds->base_res[1], fds->base_res[2]);
     float vel_mag;
@@ -4697,9 +4705,11 @@ void BKE_fluid_fields_sanitize(FluidDomainSettings *settings)
   const char data_depth = settings->openvdb_data_depth;
 
   if (settings->type == FLUID_DOMAIN_TYPE_GAS) {
-    if (coba_field == FLUID_DOMAIN_FIELD_PHI || coba_field == FLUID_DOMAIN_FIELD_PHI_IN ||
-        coba_field == FLUID_DOMAIN_FIELD_PHI_OUT ||
-        coba_field == FLUID_DOMAIN_FIELD_PHI_OBSTACLE) {
+    if (ELEM(coba_field,
+             FLUID_DOMAIN_FIELD_PHI,
+             FLUID_DOMAIN_FIELD_PHI_IN,
+             FLUID_DOMAIN_FIELD_PHI_OUT,
+             FLUID_DOMAIN_FIELD_PHI_OBSTACLE)) {
       /* Defaulted to density for gas domain. */
       settings->coba_field = FLUID_DOMAIN_FIELD_DENSITY;
     }
@@ -4710,10 +4720,14 @@ void BKE_fluid_fields_sanitize(FluidDomainSettings *settings)
     }
   }
   else if (settings->type == FLUID_DOMAIN_TYPE_LIQUID) {
-    if (coba_field == FLUID_DOMAIN_FIELD_COLOR_R || coba_field == FLUID_DOMAIN_FIELD_COLOR_G ||
-        coba_field == FLUID_DOMAIN_FIELD_COLOR_B || coba_field == FLUID_DOMAIN_FIELD_DENSITY ||
-        coba_field == FLUID_DOMAIN_FIELD_FLAME || coba_field == FLUID_DOMAIN_FIELD_FUEL ||
-        coba_field == FLUID_DOMAIN_FIELD_HEAT) {
+    if (ELEM(coba_field,
+             FLUID_DOMAIN_FIELD_COLOR_R,
+             FLUID_DOMAIN_FIELD_COLOR_G,
+             FLUID_DOMAIN_FIELD_COLOR_B,
+             FLUID_DOMAIN_FIELD_DENSITY,
+             FLUID_DOMAIN_FIELD_FLAME,
+             FLUID_DOMAIN_FIELD_FUEL,
+             FLUID_DOMAIN_FIELD_HEAT)) {
       /* Defaulted to phi for liquid domain. */
       settings->coba_field = FLUID_DOMAIN_FIELD_PHI;
     }

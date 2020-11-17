@@ -359,14 +359,12 @@ static void gpencil_draw_datablock(tGPDfill *tgpf, const float ink[4])
       tgpw.custonion = true;
 
       /* normal strokes */
-      if ((tgpf->fill_draw_mode == GP_FILL_DMODE_STROKE) ||
-          (tgpf->fill_draw_mode == GP_FILL_DMODE_BOTH)) {
+      if (ELEM(tgpf->fill_draw_mode, GP_FILL_DMODE_STROKE, GP_FILL_DMODE_BOTH)) {
         ED_gpencil_draw_fill(&tgpw);
       }
 
       /* 3D Lines with basic shapes and invisible lines */
-      if ((tgpf->fill_draw_mode == GP_FILL_DMODE_CONTROL) ||
-          (tgpf->fill_draw_mode == GP_FILL_DMODE_BOTH)) {
+      if (ELEM(tgpf->fill_draw_mode, GP_FILL_DMODE_CONTROL, GP_FILL_DMODE_BOTH)) {
         gpencil_draw_basic_stroke(tgpf,
                                   gps,
                                   tgpw.diff_mat,
@@ -1301,11 +1299,11 @@ static void gpencil_stroke_from_buffer(tGPDfill *tgpf)
 
   /* simplify stroke */
   for (int b = 0; b < tgpf->fill_simplylvl; b++) {
-    BKE_gpencil_stroke_simplify_fixed(gps);
+    BKE_gpencil_stroke_simplify_fixed(tgpf->gpd, gps);
   }
 
   /* Calc geometry data. */
-  BKE_gpencil_stroke_geometry_update(gps);
+  BKE_gpencil_stroke_geometry_update(tgpf->gpd, gps);
 }
 
 /* ----------------------- */

@@ -467,6 +467,8 @@ static void drw_viewport_cache_resize(void)
     BLI_memblock_clear(DST.vmempool->passes, NULL);
     BLI_memblock_clear(DST.vmempool->views, NULL);
     BLI_memblock_clear(DST.vmempool->images, NULL);
+
+    DRW_uniform_attrs_pool_clear_all(DST.vmempool->obattrs_ubo_pool);
   }
 
   DRW_instance_data_list_free_unused(DST.idatalist);
@@ -592,6 +594,9 @@ static void drw_viewport_var_init(void)
     }
     if (DST.vmempool->images == NULL) {
       DST.vmempool->images = BLI_memblock_create(sizeof(GPUTexture *));
+    }
+    if (DST.vmempool->obattrs_ubo_pool == NULL) {
+      DST.vmempool->obattrs_ubo_pool = DRW_uniform_attrs_pool_new();
     }
 
     DST.resource_handle = 0;
@@ -1735,11 +1740,10 @@ static void DRW_render_gpencil_to_image(RenderEngine *engine,
 
 void DRW_render_gpencil(struct RenderEngine *engine, struct Depsgraph *depsgraph)
 {
-  /* Early out if there are no grease pencil objects, especially important
-   * to avoid failing in in background renders without OpenGL context. */
-  if (!DRW_render_check_grease_pencil(depsgraph)) {
-    return;
-  }
+  /* This function should only be called if there are are grease pencil objects,
+   * especially important to avoid failing in in background renders without OpenGL
+   * context. */
+  BLI_assert(DRW_render_check_grease_pencil(depsgraph));
 
   Scene *scene = DEG_get_evaluated_scene(depsgraph);
   ViewLayer *view_layer = DEG_get_evaluated_view_layer(depsgraph);

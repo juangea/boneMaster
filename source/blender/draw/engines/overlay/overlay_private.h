@@ -77,6 +77,7 @@ typedef struct OVERLAY_PassList {
   DRWPass *edit_curve_handle_ps;
   DRWPass *edit_gpencil_ps;
   DRWPass *edit_gpencil_gizmos_ps;
+  DRWPass *edit_gpencil_curve_ps;
   DRWPass *edit_lattice_ps;
   DRWPass *edit_mesh_depth_ps[2];
   DRWPass *edit_mesh_verts_ps[2];
@@ -103,11 +104,13 @@ typedef struct OVERLAY_PassList {
   DRWPass *fade_ps[2];
   DRWPass *grid_ps;
   DRWPass *image_background_ps;
+  DRWPass *image_background_scene_ps;
   DRWPass *image_empties_ps;
   DRWPass *image_empties_back_ps;
   DRWPass *image_empties_blend_ps;
   DRWPass *image_empties_front_ps;
   DRWPass *image_foreground_ps;
+  DRWPass *image_foreground_scene_ps;
   DRWPass *metaball_ps[2];
   DRWPass *motion_paths_ps;
   DRWPass *outlines_prepass_ps;
@@ -138,6 +141,7 @@ typedef struct OVERLAY_ShadingData {
   int zneg_flag;
   /** Wireframe */
   float wire_step_param;
+  float wire_opacity;
   /** Edit Curve */
   float edit_curve_normal_length;
   /** Edit Mesh */
@@ -249,6 +253,8 @@ typedef struct OVERLAY_PrivateData {
   DRWShadingGroup *edit_lattice_wires_grp;
   DRWShadingGroup *edit_gpencil_points_grp;
   DRWShadingGroup *edit_gpencil_wires_grp;
+  DRWShadingGroup *edit_gpencil_curve_handle_grp;
+  DRWShadingGroup *edit_gpencil_curve_points_grp;
   DRWShadingGroup *edit_mesh_depth_grp[2];
   DRWShadingGroup *edit_mesh_faces_grp[2];
   DRWShadingGroup *edit_mesh_faces_cage_grp[2];
@@ -592,6 +598,7 @@ void OVERLAY_image_empty_cache_populate(OVERLAY_Data *vedata, Object *ob);
 void OVERLAY_image_cache_finish(OVERLAY_Data *vedata);
 void OVERLAY_image_draw(OVERLAY_Data *vedata);
 void OVERLAY_image_background_draw(OVERLAY_Data *vedata);
+void OVERLAY_image_scene_background_draw(OVERLAY_Data *vedata);
 void OVERLAY_image_in_front_draw(OVERLAY_Data *vedata);
 
 void OVERLAY_metaball_cache_init(OVERLAY_Data *vedata);

@@ -504,7 +504,7 @@ bool ui_but_is_editing(const uiBut *but)
 void ui_pan_to_scroll(const wmEvent *event, int *type, int *val)
 {
   static int lastdy = 0;
-  int dy = event->prevy - event->y;
+  int dy = WM_event_absolute_delta_y(event);
 
   /* This event should be originally from event->type,
    * converting wrong event into wheel is bad, see T33803. */
@@ -518,10 +518,6 @@ void ui_pan_to_scroll(const wmEvent *event, int *type, int *val)
     lastdy += dy;
 
     if (abs(lastdy) > (int)UI_UNIT_Y) {
-      if (U.uiflag2 & USER_TRACKPAD_NATURAL) {
-        dy = -dy;
-      }
-
       *val = KM_PRESS;
 
       if (dy > 0) {
@@ -1024,7 +1020,7 @@ static void ui_apply_but_TOG(bContext *C, uiBut *but, uiHandleButtonData *data)
   }
 
   ui_but_value_set(but, (double)value_toggle);
-  if (but->type == UI_BTYPE_ICON_TOGGLE || but->type == UI_BTYPE_ICON_TOGGLE_N) {
+  if (ELEM(but->type, UI_BTYPE_ICON_TOGGLE, UI_BTYPE_ICON_TOGGLE_N)) {
     ui_but_update_edited(but);
   }
 
@@ -3564,7 +3560,7 @@ static void ui_do_but_textedit(
 
       /* for double click: we do a press again for when you first click on button
        * (selects all text, no cursor pos) */
-      if (event->val == KM_PRESS || event->val == KM_DBL_CLICK) {
+      if (ELEM(event->val, KM_PRESS, KM_DBL_CLICK)) {
         float mx = event->x;
         float my = event->y;
         ui_window_to_block_fl(data->region, block, &mx, &my);
@@ -4740,7 +4736,7 @@ static float ui_numedit_apply_snap(int temp,
                                    float softmax,
                                    const enum eSnapType snap)
 {
-  if (temp == softmin || temp == softmax) {
+  if (ELEM(temp, softmin, softmax)) {
     return temp;
   }
 
@@ -5052,7 +5048,7 @@ static int ui_do_but_NUM(
     }
   }
   else if (data->state == BUTTON_STATE_NUM_EDITING) {
-    if (event->type == EVT_ESCKEY || event->type == RIGHTMOUSE) {
+    if (ELEM(event->type, EVT_ESCKEY, RIGHTMOUSE)) {
       if (event->val == KM_PRESS) {
         data->cancel = true;
         data->escapecancel = true;
@@ -5244,13 +5240,13 @@ static bool ui_numedit_but_SLI(uiBut *but,
   temp = round_fl_to_int(tempf);
 
   if (snap) {
-    if (tempf == softmin || tempf == softmax) {
+    if (ELEM(tempf, softmin, softmax)) {
       /* pass */
     }
     else if (ui_but_is_float(but)) {
 
       if (shift) {
-        if (tempf == softmin || tempf == softmax) {
+        if (ELEM(tempf, softmin, softmax)) {
         }
         else if (softrange < 2.10f) {
           tempf = roundf(tempf * 100.0f) * 0.01f;
@@ -5374,7 +5370,7 @@ static int ui_do_but_SLI(
 #endif
   }
   else if (data->state == BUTTON_STATE_NUM_EDITING) {
-    if (event->type == EVT_ESCKEY || event->type == RIGHTMOUSE) {
+    if (ELEM(event->type, EVT_ESCKEY, RIGHTMOUSE)) {
       if (event->val == KM_PRESS) {
         data->cancel = true;
         data->escapecancel = true;
@@ -5997,7 +5993,7 @@ static int ui_do_but_UNITVEC(
         }
       }
     }
-    else if (event->type == EVT_ESCKEY || event->type == RIGHTMOUSE) {
+    else if (ELEM(event->type, EVT_ESCKEY, RIGHTMOUSE)) {
       if (event->val == KM_PRESS) {
         data->cancel = true;
         data->escapecancel = true;
@@ -6328,7 +6324,7 @@ static int ui_do_but_HSVCUBE(
     }
   }
   else if (data->state == BUTTON_STATE_NUM_EDITING) {
-    if (event->type == EVT_ESCKEY || event->type == RIGHTMOUSE) {
+    if (ELEM(event->type, EVT_ESCKEY, RIGHTMOUSE)) {
       if (event->val == KM_PRESS) {
         data->cancel = true;
         data->escapecancel = true;
@@ -6396,7 +6392,7 @@ static bool ui_numedit_but_HSVCIRCLE(uiBut *but,
    * allow choosing a hue for black values, by giving a tiny increment */
   if (cpicker->use_color_lock) {
     if (U.color_picker_type == USER_CP_CIRCLE_HSV) { /* lock */
-      if (hsv[2] == 0.f) {
+      if (hsv[2] == 0.0f) {
         hsv[2] = 0.0001f;
       }
     }
@@ -6499,15 +6495,15 @@ static void ui_ndofedit_but_HSVCIRCLE(uiBut *but,
    * allow choosing a hue for black values, by giving a tiny increment */
   if (cpicker->use_color_lock) {
     if (U.color_picker_type == USER_CP_CIRCLE_HSV) { /* lock */
-      if (hsv[2] == 0.f) {
+      if (hsv[2] == 0.0f) {
         hsv[2] = 0.0001f;
       }
     }
     else {
-      if (hsv[2] == 0.f) {
+      if (hsv[2] == 0.0f) {
         hsv[2] = 0.0001f;
       }
-      if (hsv[2] == 1.f) {
+      if (hsv[2] == 1.0f) {
         hsv[2] = 0.9999f;
       }
     }
@@ -6602,7 +6598,7 @@ static int ui_do_but_HSVCIRCLE(
     }
   }
   else if (data->state == BUTTON_STATE_NUM_EDITING) {
-    if (event->type == EVT_ESCKEY || event->type == RIGHTMOUSE) {
+    if (ELEM(event->type, EVT_ESCKEY, RIGHTMOUSE)) {
       if (event->val == KM_PRESS) {
         data->cancel = true;
         data->escapecancel = true;
@@ -7315,7 +7311,7 @@ static bool ui_numedit_but_HISTOGRAM(uiBut *but, uiHandleButtonData *data, int m
   hist->ymax += (dy * 0.1f) * yfac;
 
   /* 0.1 allows us to see HDR colors up to 10 */
-  CLAMP(hist->ymax, 0.1f, 100.f);
+  CLAMP(hist->ymax, 0.1f, 100.0f);
 
   data->draglastx = mx;
   data->draglasty = my;
@@ -7348,7 +7344,7 @@ static int ui_do_but_HISTOGRAM(
     /* XXX hardcoded keymap check.... */
     if (event->type == EVT_BACKSPACEKEY && event->val == KM_PRESS) {
       Histogram *hist = (Histogram *)but->poin;
-      hist->ymax = 1.f;
+      hist->ymax = 1.0f;
 
       button_activate_state(C, but, BUTTON_STATE_EXIT);
       return WM_UI_HANDLER_BREAK;
@@ -7421,7 +7417,7 @@ static int ui_do_but_WAVEFORM(
     /* XXX hardcoded keymap check.... */
     if (event->type == EVT_BACKSPACEKEY && event->val == KM_PRESS) {
       Scopes *scopes = (Scopes *)but->poin;
-      scopes->wavefrm_yfac = 1.f;
+      scopes->wavefrm_yfac = 1.0f;
 
       button_activate_state(C, but, BUTTON_STATE_EXIT);
       return WM_UI_HANDLER_BREAK;

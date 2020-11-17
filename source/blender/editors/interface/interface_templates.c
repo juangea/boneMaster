@@ -1931,7 +1931,7 @@ void uiTemplateModifiers(uiLayout *UNUSED(layout), bContext *C)
       }
 
       /* Move to the next instanced panel corresponding to the next modifier. */
-      while ((panel->type == NULL) || !(panel->type->flag & PNL_INSTANCED)) {
+      while ((panel->type == NULL) || !(panel->type->flag & PANEL_TYPE_INSTANCED)) {
         panel = panel->next;
         BLI_assert(panel != NULL); /* There shouldn't be fewer panels than modifiers with UIs. */
       }
@@ -2096,7 +2096,7 @@ void uiTemplateConstraints(uiLayout *UNUSED(layout), bContext *C, bool use_bone_
       }
 
       /* Move to the next instanced panel corresponding to the next constraint. */
-      while ((panel->type == NULL) || !(panel->type->flag & PNL_INSTANCED)) {
+      while ((panel->type == NULL) || !(panel->type->flag & PANEL_TYPE_INSTANCED)) {
         panel = panel->next;
         BLI_assert(panel != NULL); /* There shouldn't be fewer panels than constraint panels. */
       }
@@ -2166,7 +2166,7 @@ void uiTemplateGpencilModifiers(uiLayout *UNUSED(layout), bContext *C)
       }
 
       /* Move to the next instanced panel corresponding to the next modifier. */
-      while ((panel->type == NULL) || !(panel->type->flag & PNL_INSTANCED)) {
+      while ((panel->type == NULL) || !(panel->type->flag & PANEL_TYPE_INSTANCED)) {
         panel = panel->next;
         BLI_assert(panel != NULL); /* There shouldn't be fewer panels than modifiers with UIs. */
       }
@@ -2237,7 +2237,7 @@ void uiTemplateShaderFx(uiLayout *UNUSED(layout), bContext *C)
       }
 
       /* Move to the next instanced panel corresponding to the next modifier. */
-      while ((panel->type == NULL) || !(panel->type->flag & PNL_INSTANCED)) {
+      while ((panel->type == NULL) || !(panel->type->flag & PANEL_TYPE_INSTANCED)) {
         panel = panel->next;
         BLI_assert(panel != NULL); /* There shouldn't be fewer panels than modifiers with UIs. */
       }
@@ -3304,7 +3304,6 @@ static void colorband_buttons_layout(uiLayout *layout,
       row = uiLayoutRow(split, false);
       uiItemR(row, &ptr, "position", 0, IFACE_("Pos"), ICON_NONE);
       bt = block->buttons.last;
-      bt->a1 = 1.0f; /* gives a bit more precision for modifying position */
       UI_but_func_set(bt, colorband_update_cb, bt, coba);
 
       row = uiLayoutRow(layout, false);
@@ -3336,7 +3335,6 @@ static void colorband_buttons_layout(uiLayout *layout,
       row = uiLayoutRow(subsplit, false);
       uiItemR(row, &ptr, "position", UI_ITEM_R_SLIDER, IFACE_("Pos"), ICON_NONE);
       bt = block->buttons.last;
-      bt->a1 = 1.0f; /* gives a bit more precision for modifying position */
       UI_but_func_set(bt, colorband_update_cb, bt, coba);
 
       row = uiLayoutRow(split, false);
@@ -4971,7 +4969,7 @@ static void CurveProfile_buttons_layout(uiLayout *layout, PointerRNA *ptr, RNAUp
       selection_y = &point->h2_loc[1];
     }
   }
-  if (i == 0 || i == profile->path_len - 1) {
+  if (ELEM(i, 0, profile->path_len - 1)) {
     point_last_or_first = true;
   }
 

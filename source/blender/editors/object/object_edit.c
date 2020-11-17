@@ -451,7 +451,7 @@ static int object_hide_collection_invoke(bContext *C, wmOperator *op, const wmEv
 
   /* Open popup menu. */
   const char *title = CTX_IFACE_(op->type->translation_context, op->type->name);
-  uiPopupMenu *pup = UI_popup_menu_begin(C, title, ICON_GROUP);
+  uiPopupMenu *pup = UI_popup_menu_begin(C, title, ICON_OUTLINER_COLLECTION);
   uiLayout *layout = UI_popup_menu_layout(pup);
 
   ED_collection_hide_menu_draw(C, layout);
@@ -761,7 +761,7 @@ bool ED_object_editmode_enter_ex(Main *bmain, Scene *scene, Object *ob, int flag
 
     WM_main_add_notifier(NC_SCENE | ND_MODE | NS_EDITMODE_LATTICE, scene);
   }
-  else if (ob->type == OB_SURF || ob->type == OB_CURVE) {
+  else if (ELEM(ob->type, OB_SURF, OB_CURVE)) {
     ok = 1;
     ED_curve_editnurb_make(ob);
 
