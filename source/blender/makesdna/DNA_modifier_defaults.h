@@ -138,6 +138,7 @@
     .bending_damping = 0.5f, \
     .voxel_cell_size = 0.1f, \
     .stepsPerFrame = 5, \
+    .struct_yield_fact = 1.0f, \
     .flags = CLOTH_SIMSETTINGS_FLAG_INTERNAL_SPRINGS_NORMAL, \
     .maxspringlen = 10, \
     .solver_type = 0, \
