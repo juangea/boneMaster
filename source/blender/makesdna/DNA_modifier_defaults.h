@@ -137,6 +137,7 @@
     .vgroup_pressure = 0, \
     .bending_damping = 0.5f, \
     .voxel_cell_size = 0.1f, \
+    .struct_yield_fact = 1.0f, \
     .stepsPerFrame = 5, \
     .flags = CLOTH_SIMSETTINGS_FLAG_INTERNAL_SPRINGS_NORMAL, \
     .maxspringlen = 10, \
