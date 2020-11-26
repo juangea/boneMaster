@@ -136,6 +136,7 @@
     .fluid_density = 0.0f, \
     .vgroup_pressure = 0, \
     .bending_damping = 0.5f, \
+    .struct_yield_fact = 1.0f, \
     .voxel_cell_size = 0.1f, \
     .stepsPerFrame = 5, \
     .flags = CLOTH_SIMSETTINGS_FLAG_INTERNAL_SPRINGS_NORMAL, \
