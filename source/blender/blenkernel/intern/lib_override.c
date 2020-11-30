@@ -551,6 +551,10 @@ static void lib_override_library_create_post_process(
       if (ob_reference != NULL) {
         BKE_collection_add_from_object(bmain, scene, ob_reference, collection_new);
       }
+      else if (id_reference != NULL) {
+        BKE_collection_add_from_collection(
+            bmain, scene, ((Collection *)id_reference), collection_new);
+      }
       else {
         BKE_collection_add_from_collection(bmain, scene, ((Collection *)id_root), collection_new);
       }
@@ -841,6 +845,10 @@ bool BKE_lib_override_library_resync(Main *bmain, Scene *scene, ViewLayer *view_
   id_root = id_root_reference->newid;
 
   /* Essentially ensures that potentially new overrides of new objects will be instantiated. */
+  /* Note: Here 'reference' collection and 'newly added' collection are the same, which is fine
+   * since we already relinked old root override collection to new resync'ed one above. So this
+   * call is not expected to instantiate this new resync'ed collection anywhere, just to ensure
+   * that we do not have any stray objects. */
   lib_override_library_create_post_process(bmain, scene, view_layer, id_root_reference, id_root);
 
   /* Cleanup. */
@@ -1817,7 +1825,7 @@ void BKE_lib_override_library_main_update(Main *bmain)
   G_MAIN = bmain;
 
   FOREACH_MAIN_ID_BEGIN (bmain, id) {
-    if (id->override_library != NULL && id->lib == NULL) {
+    if (id->override_library != NULL) {
       BKE_lib_override_library_update(bmain, id);
     }
   }
