@@ -1387,8 +1387,6 @@ static void do_outliner_item_activate_tree_element(bContext *C,
                              extend ? OL_SETSEL_EXTEND : OL_SETSEL_NORMAL,
                              recursive);
   }
-
-  outliner_set_properties_tab(C, te, tselem);
 }
 
 /* Select the item using the set flags */
@@ -1565,8 +1563,9 @@ static int outliner_item_do_activate_from_cursor(bContext *C,
   else {
     /* The row may also contain children, if one is hovered we want this instead of current te. */
     bool merged_elements = false;
+    bool is_over_icon = false;
     TreeElement *activate_te = outliner_find_item_at_x_in_row(
-        space_outliner, te, view_mval[0], &merged_elements);
+        space_outliner, te, view_mval[0], &merged_elements, &is_over_icon);
 
     /* If the selected icon was an aggregate of multiple elements, run the search popup */
     if (merged_elements) {
@@ -1591,6 +1590,11 @@ static int outliner_item_do_activate_from_cursor(bContext *C,
                                 (extend ? OL_ITEM_EXTEND : 0);
 
       outliner_item_select(C, space_outliner, activate_te, select_flag);
+
+      /* Only switch properties editor tabs when icons are selected. */
+      if (is_over_icon) {
+        outliner_set_properties_tab(C, activate_te, activate_tselem);
+      }
     }
 
     changed = true;
