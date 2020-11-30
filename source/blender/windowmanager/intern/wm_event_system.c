@@ -1492,16 +1492,11 @@ static int wm_operator_call_internal(bContext *C,
         }
 
         if (!(region && region->regiontype == type) && area) {
-          ARegion *ar1;
-          if (type == RGN_TYPE_WINDOW) {
-            ar1 = BKE_area_find_region_active_win(area);
-          }
-          else {
-            ar1 = BKE_area_find_region_type(area, type);
-          }
-
-          if (ar1) {
-            CTX_wm_region_set(C, ar1);
+          ARegion *region_other = (type == RGN_TYPE_WINDOW) ?
+                                      BKE_area_find_region_active_win(area) :
+                                      BKE_area_find_region_type(area, type);
+          if (region_other) {
+            CTX_wm_region_set(C, region_other);
           }
         }
 
@@ -1914,6 +1909,13 @@ static wmKeyMapItem *wm_eventmatch_modal_keymap_items(const wmKeyMap *keymap,
     }
   }
   return NULL;
+}
+
+wmKeyMapItem *WM_event_match_modal_keymap_item(const wmKeyMap *keymap,
+                                               wmOperator *op,
+                                               const wmEvent *event)
+{
+  return wm_eventmatch_modal_keymap_items(keymap, op, event);
 }
 
 /**
