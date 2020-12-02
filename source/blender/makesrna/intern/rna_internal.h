@@ -421,7 +421,7 @@ void RNA_api_space_node(struct StructRNA *srna);
 void RNA_api_space_text(struct StructRNA *srna);
 void RNA_api_region_view3d(struct StructRNA *srna);
 void RNA_api_texture(struct StructRNA *srna);
-void RNA_api_sequences(BlenderRNA *brna, PropertyRNA *cprop);
+void RNA_api_sequences(BlenderRNA *brna, PropertyRNA *cprop, const bool metastrip);
 void RNA_api_sequence_elements(BlenderRNA *brna, PropertyRNA *cprop);
 void RNA_api_sound(struct StructRNA *srna);
 void RNA_api_vfont(struct StructRNA *srna);
@@ -466,9 +466,7 @@ void RNA_def_main_lightprobes(BlenderRNA *brna, PropertyRNA *cprop);
 #ifdef WITH_HAIR_NODES
 void RNA_def_main_hairs(BlenderRNA *brna, PropertyRNA *cprop);
 #endif
-#ifdef WITH_POINT_CLOUD
 void RNA_def_main_pointclouds(BlenderRNA *brna, PropertyRNA *cprop);
-#endif
 void RNA_def_main_volumes(BlenderRNA *brna, PropertyRNA *cprop);
 #ifdef WITH_GEOMETRY_NODES
 void RNA_def_main_simulations(BlenderRNA *brna, PropertyRNA *cprop);
