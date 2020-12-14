@@ -1857,10 +1857,6 @@ class CYCLES_RENDER_PT_bake(CyclesButtonsPanel, Panel):
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {'CYCLES'}
 
-    @classmethod
-    def poll(cls, context):
-        return CyclesButtonsPanel.poll(context) and not use_optix(context)
-
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = True
@@ -1870,6 +1866,9 @@ class CYCLES_RENDER_PT_bake(CyclesButtonsPanel, Panel):
         cscene = scene.cycles
         cbk = scene.render.bake
         rd = scene.render
+
+        if use_optix(context):
+            layout.label(text="Baking is performed using CUDA instead of OptiX", icon='INFO')
 
         if rd.use_bake_multires:
             layout.operator("object.bake_image", icon='RENDER_STILL')
