@@ -36,10 +36,10 @@ set(INC
   ../makesrna
   ../modifiers
   ../nodes
+  ../render
   ../sequencer
   ../shader_fx
   ../simulation
-  ../render
   ../../../intern/ghost
   ../../../intern/glew-mx
   ../../../intern/guardedalloc
@@ -66,7 +66,7 @@ set(SRC
   intern/CCGSubSurf.c
   intern/CCGSubSurf_legacy.c
   intern/CCGSubSurf_util.c
-  intern/DerivedMesh.c
+  intern/DerivedMesh.cc
   intern/action.c
   intern/addon.c
   intern/anim_data.c
@@ -726,8 +726,8 @@ if(WITH_GTESTS)
     intern/armature_test.cc
     intern/fcurve_test.cc
     intern/lattice_deform_test.cc
-    intern/tracking_test.cc
     intern/layer_test.cc
+    intern/tracking_test.cc
   )
   set(TEST_INC
     ../editors/include
