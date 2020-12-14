@@ -207,7 +207,7 @@ class USERPREF_PT_interface_display(InterfacePanel, CenterAlignMixIn, Panel):
         col.prop(view, "ui_line_width", text="Line Width")
         col.prop(view, "show_splash", text="Splash Screen")
         col.prop(view, "show_developer_ui")
-        
+
         col.separator()
 
         col = layout.column(heading="Tooltips", align=True)
@@ -1542,8 +1542,6 @@ class USERPREF_PT_navigation_zoom(NavigationPanel, CenterAlignMixIn, Panel):
         else:
             col.prop(inputs, "use_zoom_to_mouse")
             col.prop(inputs, "invert_zoom_wheel", text="Invert Wheel Zoom Direction")
-
-        # sub.prop(view, "wheel_scroll_lines", text="Scroll Lines")
 
 
 class USERPREF_PT_navigation_fly_walk(NavigationPanel, CenterAlignMixIn, Panel):

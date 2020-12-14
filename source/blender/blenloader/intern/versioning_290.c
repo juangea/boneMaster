@@ -181,7 +181,7 @@ static void seq_convert_transform_crop(const Scene *scene,
   /* Convert offset animation, but only if crop is not used. */
   if ((seq->flag & use_transform_flag) != 0 && (seq->flag & use_crop_flag) == 0) {
     char name_esc[(sizeof(seq->name) - 2) * 2], *path;
-    BLI_strescape(name_esc, seq->name + 2, sizeof(name_esc));
+    BLI_str_escape(name_esc, seq->name + 2, sizeof(name_esc));
 
     path = BLI_sprintfN("sequence_editor.sequences_all[\"%s\"].transform.offset_x", name_esc);
     seq_convert_transform_animation(scene, path, image_size_x);
@@ -408,7 +408,7 @@ void do_versions_after_linking_290(Main *bmain, ReportList *UNUSED(reports))
             const size_t node_name_escaped_max_length = (node_name_length * 2);
             char *node_name_escaped = MEM_mallocN(node_name_escaped_max_length + 1,
                                                   "escaped name");
-            BLI_strescape(node_name_escaped, node->name, node_name_escaped_max_length);
+            BLI_str_escape(node_name_escaped, node->name, node_name_escaped_max_length);
             char *rna_path_prefix = BLI_sprintfN("nodes[\"%s\"].inputs", node_name_escaped);
 
             BKE_animdata_fix_paths_rename_all_ex(
@@ -1243,5 +1243,42 @@ void blo_do_versions_290(FileData *fd, Library *UNUSED(lib), Main *bmain)
    */
   {
     /* Keep this block, even when empty. */
+
+    /* Make all IDProperties used as interface of geometry node trees overridable. */
+    LISTBASE_FOREACH (Object *, ob, &bmain->objects) {
+      LISTBASE_FOREACH (ModifierData *, md, &ob->modifiers) {
+        if (md->type == eModifierType_Nodes) {
+          NodesModifierData *nmd = (NodesModifierData *)md;
+          IDProperty *nmd_properties = nmd->settings.properties;
+
+          BLI_assert(nmd_properties->type == IDP_GROUP);
+          LISTBASE_FOREACH (IDProperty *, nmd_socket_idprop, &nmd_properties->data.group) {
+            nmd_socket_idprop->flag |= IDP_FLAG_OVERRIDABLE_LIBRARY;
+          }
+        }
+      }
+    }
+
+    /* EEVEE/Cycles Volumes consistency */
+    for (Scene *scene = bmain->scenes.first; scene; scene = scene->id.next) {
+      /* Remove Volume Transmittance render pass from each view layer. */
+      LISTBASE_FOREACH (ViewLayer *, view_layer, &scene->view_layers) {
+        view_layer->eevee.render_passes &= ~EEVEE_RENDER_PASS_UNUSED_8;
+      }
+
+      /* Rename Renderlayer Socket `VolumeScatterCol` to `VolumeDir` */
+      if (scene->nodetree) {
+        LISTBASE_FOREACH (bNode *, node, &scene->nodetree->nodes) {
+          if (node->type == CMP_NODE_R_LAYERS) {
+            LISTBASE_FOREACH (bNodeSocket *, output_socket, &node->outputs) {
+              const char *volume_scatter = "VolumeScatterCol";
+              if (STREQLEN(output_socket->name, volume_scatter, MAX_NAME)) {
+                BLI_strncpy(output_socket->name, RE_PASSNAME_VOLUME_LIGHT, MAX_NAME);
+              }
+            }
+          }
+        }
+      }
+    }
   }
 }

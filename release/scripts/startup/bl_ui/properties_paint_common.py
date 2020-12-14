@@ -643,6 +643,11 @@ def brush_settings(layout, context, brush, popover=False):
             layout.prop(brush, "elastic_deform_volume_preservation", slider=True)
             layout.separator()
 
+        elif sculpt_tool == 'SNAKE_HOOK':
+            layout.separator()
+            layout.prop(brush, "snake_hook_deform_type")
+            layout.separator()
+
         elif sculpt_tool == 'POSE':
             layout.separator()
             layout.prop(brush, "deform_target")
@@ -1189,6 +1194,7 @@ def brush_basic_gpencil_paint_settings(layout, context, brush, *, compact=False)
         row.prop(brush, "size", text="Radius")
         row.prop(gp_settings, "use_pressure", text="", icon='STYLUS_PRESSURE')
         row.prop(gp_settings, "use_occlude_eraser", text="", icon='XRAY')
+        row.prop(gp_settings, "use_default_eraser", text="")
 
         row = layout.row(align=True)
         row.prop(gp_settings, "eraser_mode", expand=True)

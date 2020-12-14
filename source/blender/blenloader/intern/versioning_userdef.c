@@ -255,6 +255,10 @@ static void do_versions_theme(const UserDef *userdef, bTheme *btheme)
     FROM_DEFAULT_V4_UCHAR(space_node.nodeclass_attribute);
   }
 
+  if (!USER_VERSION_ATLEAST(292, 6)) {
+    FROM_DEFAULT_V4_UCHAR(space_node.nodeclass_shader);
+  }
+
   /**
    * Versioning code until next subversion bump goes here.
    *
@@ -324,9 +328,6 @@ void blo_do_versions_userdef(UserDef *userdef)
 #define USER_VERSION_ATLEAST(ver, subver) MAIN_VERSION_ATLEAST(userdef, ver, subver)
 
   /* the UserDef struct is not corrected with do_versions() .... ugh! */
-  if (userdef->wheellinescroll == 0) {
-    userdef->wheellinescroll = 3;
-  }
   if (userdef->menuthreshold1 == 0) {
     userdef->menuthreshold1 = 5;
     userdef->menuthreshold2 = 2;
