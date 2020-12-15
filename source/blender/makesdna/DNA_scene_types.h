@@ -33,15 +33,10 @@
 #define USE_SETSCENE_CHECK
 
 #include "DNA_ID.h"
-#include "DNA_collection_types.h"
-#include "DNA_color_types.h" /* color management */
-#include "DNA_curveprofile_types.h"
+#include "DNA_color_types.h"      /* color management */
 #include "DNA_customdata_types.h" /* Scene's runtime cddata masks. */
-#include "DNA_freestyle_types.h"
 #include "DNA_layer_types.h"
 #include "DNA_listBase.h"
-#include "DNA_material_types.h"
-#include "DNA_userdef_types.h"
 #include "DNA_vec_types.h"
 #include "DNA_view3d_types.h"
 
@@ -1782,7 +1777,7 @@ typedef struct Scene {
 
   ListBase view_layers;
   /* Not an actual datablock, but memory owned by scene. */
-  Collection *master_collection;
+  struct Collection *master_collection;
   struct SceneCollection *collection DNA_DEPRECATED;
 
   /** Settings to be override by workspaces. */
