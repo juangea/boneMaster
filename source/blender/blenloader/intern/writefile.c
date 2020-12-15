@@ -93,6 +93,7 @@
 /* allow writefile to use deprecated functionality (for forward compatibility code) */
 #define DNA_DEPRECATED_ALLOW
 
+#include "DNA_collection_types.h"
 #include "DNA_fileglobal_types.h"
 #include "DNA_genfile.h"
 #include "DNA_sdna_types.h"
@@ -753,6 +754,10 @@ static void write_userdef(BlendWriter *writer, const UserDef *userdef)
 
   LISTBASE_FOREACH (const bPathCompare *, path_cmp, &userdef->autoexec_paths) {
     BLO_write_struct(writer, bPathCompare, path_cmp);
+  }
+
+  LISTBASE_FOREACH (const bUserAssetLibrary *, asset_library, &userdef->asset_libraries) {
+    BLO_write_struct(writer, bUserAssetLibrary, asset_library);
   }
 
   LISTBASE_FOREACH (const uiStyle *, style, &userdef->uistyles) {
