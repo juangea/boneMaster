@@ -25,9 +25,8 @@
 
 #include "DNA_ID.h"
 #include "DNA_listBase.h"
-#include "DNA_scene_types.h"
-#include "DNA_texture_types.h"
-#include "DNA_vec_types.h"
+#include "DNA_scene_types.h" /* for #ImageFormatData */
+#include "DNA_vec_types.h"   /* for #rctf */
 
 #ifdef __cplusplus
 extern "C" {

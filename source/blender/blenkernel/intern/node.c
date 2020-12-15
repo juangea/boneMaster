@@ -35,6 +35,7 @@
 
 #include "DNA_action_types.h"
 #include "DNA_anim_types.h"
+#include "DNA_collection_types.h"
 #include "DNA_gpencil_types.h"
 #include "DNA_light_types.h"
 #include "DNA_linestyle_types.h"
@@ -59,6 +60,7 @@
 #include "BKE_anim_data.h"
 #include "BKE_animsys.h"
 #include "BKE_colortools.h"
+#include "BKE_cryptomatte.h"
 #include "BKE_global.h"
 #include "BKE_idprop.h"
 #include "BKE_idtype.h"
@@ -490,10 +492,18 @@ void ntreeBlendWrite(BlendWriter *writer, bNodeTree *ntree)
       }
       else if ((ntree->type == NTREE_COMPOSIT) && (node->type == CMP_NODE_CRYPTOMATTE)) {
         NodeCryptomatte *nc = (NodeCryptomatte *)node->storage;
+        /* Update the matte_id so the files can be opened in versions that don't
+         * use `CryptomatteEntry`. */
+        MEM_SAFE_FREE(nc->matte_id);
+        nc->matte_id = BKE_cryptomatte_entries_to_matte_id(nc);
         if (nc->matte_id) {
           BLO_write_string(writer, nc->matte_id);
         }
+        LISTBASE_FOREACH (CryptomatteEntry *, entry, &nc->entries) {
+          BLO_write_struct(writer, CryptomatteEntry, entry);
+        }
         BLO_write_struct_by_name(writer, node->typeinfo->storagename, node->storage);
+        MEM_SAFE_FREE(nc->matte_id);
       }
       else if (node->typeinfo != &NodeTypeUndefined) {
         BLO_write_struct_by_name(writer, node->typeinfo->storagename, node->storage);
@@ -645,6 +655,7 @@ void ntreeBlendReadData(BlendDataReader *reader, bNodeTree *ntree)
         case CMP_NODE_CRYPTOMATTE: {
           NodeCryptomatte *nc = (NodeCryptomatte *)node->storage;
           BLO_read_data_address(reader, &nc->matte_id);
+          BLO_read_list(reader, &nc->entries);
           break;
         }
         case TEX_NODE_IMAGE: {
