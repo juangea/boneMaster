@@ -73,6 +73,7 @@ set(SRC
   composite/nodes/node_composite_distanceMatte.c
   composite/nodes/node_composite_doubleEdgeMask.c
   composite/nodes/node_composite_ellipsemask.c
+  composite/nodes/node_composite_exposure.c
   composite/nodes/node_composite_filter.c
   composite/nodes/node_composite_flip.c
   composite/nodes/node_composite_gamma.c
@@ -133,6 +134,7 @@ set(SRC
   function/nodes/node_fn_combine_strings.cc
   function/nodes/node_fn_float_compare.cc
   function/nodes/node_fn_group_instance_id.cc
+  function/nodes/node_fn_input_vector.cc
   function/nodes/node_fn_object_transforms.cc
   function/nodes/node_fn_random_float.cc
   function/nodes/node_fn_switch.cc

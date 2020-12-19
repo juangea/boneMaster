@@ -1204,6 +1204,7 @@ void ntreeGPUMaterialNodes(struct bNodeTree *localtree,
 #define CMP_NODE_SWITCH_VIEW 322
 #define CMP_NODE_CRYPTOMATTE 323
 #define CMP_NODE_DENOISE 324
+#define CMP_NODE_EXPOSURE 325
 
 /* channel toggles */
 #define CMP_CHAN_RGB 1
@@ -1369,6 +1370,7 @@ int ntreeTexExecTree(struct bNodeTree *ntree,
 #define FN_NODE_COMBINE_STRINGS 1204
 #define FN_NODE_OBJECT_TRANSFORMS 1205
 #define FN_NODE_RANDOM_FLOAT 1206
+#define FN_NODE_INPUT_VECTOR 1207
 
 /** \} */
 
