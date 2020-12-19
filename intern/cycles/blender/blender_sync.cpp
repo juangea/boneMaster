@@ -349,7 +349,7 @@ void BlenderSync::sync_integrator()
 		case 0: /* Sobol */
 		default:
       sampling_pattern = SAMPLING_PATTERN_SOBOL;
-      use_dithering = true;      
+      use_dithering = false;      
 			break;
 	}
 
