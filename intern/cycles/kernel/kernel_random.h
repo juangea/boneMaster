@@ -84,6 +84,7 @@ ccl_device_forceinline float path_rng_1D(
 
     float shift;
 
+
     if(kernel_data.integrator.dither_size > 0) {
       int size = kernel_data.integrator.dither_size;
       /* Extract the pixel coordinates from rng and wrap them into the dither matrix. */
@@ -92,6 +93,7 @@ ccl_device_forceinline float path_rng_1D(
       float2 shifts = kernel_tex_fetch(__sobol_dither, y*size + x);
       shift = (dimension & 1)? shifts.y: shifts.x;
     }
+    
     else {
       /* Hash rng with dimension to solve correlation issues.
       * See T38710, T50116.
