@@ -1491,13 +1491,11 @@ void blo_do_versions_290(FileData *fd, Library *UNUSED(lib), Main *bmain)
 
   if (!MAIN_VERSION_ATLEAST(bmain, 292, 10)) {
     if (!DNA_struct_find(fd->filesdna, "NodeSetAlpha")) {
-      LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
-        bNodeTree *nodetree = scene->nodetree;
-        if (nodetree == NULL) {
+      LISTBASE_FOREACH (bNodeTree *, ntree, &bmain->nodetrees) {
+        if (ntree->type != NTREE_COMPOSIT) {
           continue;
         }
-
-        LISTBASE_FOREACH (bNode *, node, &nodetree->nodes) {
+        LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
           if (node->type != CMP_NODE_SETALPHA) {
             continue;
           }
@@ -1507,15 +1505,33 @@ void blo_do_versions_290(FileData *fd, Library *UNUSED(lib), Main *bmain)
         }
       }
     }
+
+    LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
+      Editing *ed = SEQ_editing_get(scene, false);
+      if (ed == NULL) {
+        continue;
+      }
+      ed->cache_flag = (SEQ_CACHE_STORE_RAW | SEQ_CACHE_STORE_FINAL_OUT);
+      do_versions_strip_cache_settings_recursive(&ed->seqbase);
+    }
   }
 
-  LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
-    Editing *ed = SEQ_editing_get(scene, false);
-    if (ed == NULL) {
-      continue;
+  /* Enable "Save as Render" option for file output node by default (apply view transform to image
+   * on save) */
+  if (!MAIN_VERSION_ATLEAST(bmain, 292, 11)) {
+    FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
+      if (ntree->type == NTREE_COMPOSIT) {
+        LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+          if (node->type == CMP_NODE_OUTPUT_FILE) {
+            LISTBASE_FOREACH (bNodeSocket *, sock, &node->inputs) {
+              NodeImageMultiFileSocket *simf = sock->storage;
+              simf->save_as_render = true;
+            }
+          }
+        }
+      }
     }
-    ed->cache_flag = (SEQ_CACHE_STORE_RAW | SEQ_CACHE_STORE_FINAL_OUT);
-    do_versions_strip_cache_settings_recursive(&ed->seqbase);
+    FOREACH_NODETREE_END;
   }
 
   /**
