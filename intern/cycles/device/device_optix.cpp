@@ -771,12 +771,14 @@ class OptiXDevice : public CUDADevice {
 
     const CUDAContextScope scope(cuContext);
 
-    int update_delay = 0;
-
-    for (int sample = rtile.start_sample; sample < end_sample; sample += step_samples) {
+    for (int sample = rtile.start_sample; sample < end_sample;) {
       // Copy work tile information to device
-      wtile.num_samples = min(step_samples, end_sample - sample);
       wtile.start_sample = sample;
+      wtile.num_samples = step_samples;
+      if (task.adaptive_sampling.use) {
+        wtile.num_samples = task.adaptive_sampling.align_samples(sample, step_samples);
+      }
+      wtile.num_samples = min(wtile.num_samples, end_sample - sample);
       device_ptr d_wtile_ptr = launch_params_ptr + offsetof(KernelParams, tile);
       check_result_cuda(
           cuMemcpyHtoDAsync(d_wtile_ptr, &wtile, sizeof(wtile), cuda_stream[thread_index]));
@@ -814,21 +816,14 @@ class OptiXDevice : public CUDADevice {
         adaptive_sampling_filter(filter_sample, &wtile, d_wtile_ptr, cuda_stream[thread_index]);
       }
 
-      if (update_delay == rtile.num_samples-1) {
-        // Wait for launch to finish
-        check_result_cuda(cuStreamSynchronize(cuda_stream[thread_index]));
+      // Wait for launch to finish
+      check_result_cuda(cuStreamSynchronize(cuda_stream[thread_index]));
 
-        // Update current sample, so it is displayed correctly
-        rtile.sample = wtile.start_sample + wtile.num_samples;
-        // Update task progress after the kernel completed rendering
-        task.update_progress(&rtile, wtile.w * wtile.h * wtile.num_samples);
-        update_delay = 0;
-      }
-      else
-      {
-        update_delay += 1;
-      }
-      
+      // Update current sample, so it is displayed correctly
+      sample += wtile.num_samples;
+      rtile.sample = sample;
+      // Update task progress after the kernel completed rendering
+      task.update_progress(&rtile, wtile.w * wtile.h * wtile.num_samples);
 
       if (task.get_cancel() && !task.need_finish_queue)
         return;  // Cancel rendering
@@ -1525,16 +1520,19 @@ class OptiXDevice : public CUDADevice {
     }
     else {
       unsigned int num_instances = 0;
+      unsigned int max_num_instances = 0xFFFFFFFF;
 
       bvh_optix->as_data.free();
       bvh_optix->traversable_handle = 0;
       bvh_optix->motion_transform_data.free();
 
-#  if OPTIX_ABI_VERSION < 23
-      if (bvh->objects.size() > 0x7FFFFF) {
-#  else
-      if (bvh->objects.size() > 0x7FFFFFF) {
-#  endif
+      optixDeviceContextGetProperty(context,
+                                    OPTIX_DEVICE_PROPERTY_LIMIT_MAX_INSTANCE_ID,
+                                    &max_num_instances,
+                                    sizeof(max_num_instances));
+      // Do not count first bit, which is used to distinguish instanced and non-instanced objects
+      max_num_instances >>= 1;
+      if (bvh->objects.size() > max_num_instances) {
         progress.set_error(
             "Failed to build OptiX acceleration structure because there are too many instances");
         return;
@@ -1593,8 +1591,8 @@ class OptiXDevice : public CUDADevice {
         instance.transform[5] = 1.0f;
         instance.transform[10] = 1.0f;
 
-        // Set user instance ID to object index
-        instance.instanceId = ob->get_device_index();
+        // Set user instance ID to object index (but leave low bit blank)
+        instance.instanceId = ob->get_device_index() << 1;
 
         // Have to have at least one bit in the mask, or else instance would always be culled
         instance.visibilityMask = 1;
@@ -1700,13 +1698,9 @@ class OptiXDevice : public CUDADevice {
           else {
             // Disable instance transform if geometry already has it applied to vertex data
             instance.flags = OPTIX_INSTANCE_FLAG_DISABLE_TRANSFORM;
-            // Non-instanced objects read ID from prim_object, so
-            // distinguish them from instanced objects with high bit set
-#  if OPTIX_ABI_VERSION < 23
-            instance.instanceId |= 0x800000;
-#  else
-            instance.instanceId |= 0x8000000;
-#  endif
+            // Non-instanced objects read ID from 'prim_object', so distinguish
+            // them from instanced objects with the low bit set
+            instance.instanceId |= 1;
           }
         }
       }

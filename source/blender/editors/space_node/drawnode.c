@@ -1884,6 +1884,7 @@ static void node_composit_buts_file_output_ex(uiLayout *layout, bContext *C, Poi
   PointerRNA active_input_ptr, op_ptr;
   uiLayout *row, *col;
   const bool multilayer = RNA_enum_get(&imfptr, "file_format") == R_IMF_IMTYPE_MULTILAYER;
+  const bool is_exr = RNA_enum_get(&imfptr, "file_format") == R_IMF_IMTYPE_OPENEXR;
   const bool is_multiview = (scene->r.scemode & R_MULTIVIEW) != 0;
 
   node_composit_buts_file_output(layout, C, ptr);
@@ -1991,8 +1992,15 @@ static void node_composit_buts_file_output_ex(uiLayout *layout, bContext *C, Poi
       uiItemL(col, IFACE_("Format:"), ICON_NONE);
       uiItemR(col, &active_input_ptr, "use_node_format", DEFAULT_FLAGS, NULL, ICON_NONE);
 
+      const bool is_socket_exr = RNA_enum_get(&imfptr, "file_format") == R_IMF_IMTYPE_OPENEXR;
+      const bool use_node_format = RNA_boolean_get(&active_input_ptr, "use_node_format");
+
+      if ((!is_exr && use_node_format) || (!is_socket_exr && !use_node_format)) {
+        uiItemR(col, &active_input_ptr, "save_as_render", DEFAULT_FLAGS, NULL, ICON_NONE);
+      }
+
       col = uiLayoutColumn(layout, false);
-      uiLayoutSetActive(col, RNA_boolean_get(&active_input_ptr, "use_node_format") == false);
+      uiLayoutSetActive(col, use_node_format == false);
       uiTemplateImageSettings(col, &imfptr, false);
 
       if (is_multiview) {
@@ -3228,6 +3236,35 @@ static void node_geometry_buts_attribute_math(uiLayout *layout,
   uiItemR(layout, ptr, "input_type_b", DEFAULT_FLAGS, IFACE_("Type B"), ICON_NONE);
 }
 
+static void node_geometry_buts_attribute_vector_math(uiLayout *layout,
+                                                     bContext *UNUSED(C),
+                                                     PointerRNA *ptr)
+{
+  bNode *node = (bNode *)ptr->data;
+  NodeAttributeVectorMath *node_storage = (NodeAttributeVectorMath *)node->storage;
+
+  uiItemR(layout, ptr, "operation", DEFAULT_FLAGS, "", ICON_NONE);
+  uiItemR(layout, ptr, "input_type_a", DEFAULT_FLAGS, IFACE_("Type A"), ICON_NONE);
+
+  /* These "use input b / c" checks are copied from the node's code.
+   * They could be de-duplicated if the drawing code was moved to the node's file. */
+  if (!ELEM(node_storage->operation,
+            NODE_VECTOR_MATH_NORMALIZE,
+            NODE_VECTOR_MATH_FLOOR,
+            NODE_VECTOR_MATH_CEIL,
+            NODE_VECTOR_MATH_FRACTION,
+            NODE_VECTOR_MATH_ABSOLUTE,
+            NODE_VECTOR_MATH_SINE,
+            NODE_VECTOR_MATH_COSINE,
+            NODE_VECTOR_MATH_TANGENT,
+            NODE_VECTOR_MATH_LENGTH)) {
+    uiItemR(layout, ptr, "input_type_b", DEFAULT_FLAGS, IFACE_("Type B"), ICON_NONE);
+  }
+  if (ELEM(node_storage->operation, NODE_VECTOR_MATH_WRAP)) {
+    uiItemR(layout, ptr, "input_type_c", DEFAULT_FLAGS, IFACE_("Type C"), ICON_NONE);
+  }
+}
+
 static void node_geometry_buts_point_instance(uiLayout *layout,
                                               bContext *UNUSED(C),
                                               PointerRNA *ptr)
@@ -3290,6 +3327,16 @@ static void node_geometry_buts_rotate_points(uiLayout *layout,
   }
 }
 
+static void node_geometry_buts_align_rotation_to_vector(uiLayout *layout,
+                                                        bContext *UNUSED(C),
+                                                        PointerRNA *ptr)
+{
+  uiItemR(layout, ptr, "axis", DEFAULT_FLAGS | UI_ITEM_R_EXPAND, NULL, ICON_NONE);
+  uiLayout *col = uiLayoutColumn(layout, false);
+  uiItemR(col, ptr, "input_type_factor", DEFAULT_FLAGS, IFACE_("Factor"), ICON_NONE);
+  uiItemR(col, ptr, "input_type_vector", DEFAULT_FLAGS, IFACE_("Vector"), ICON_NONE);
+}
+
 static void node_geometry_set_butfunc(bNodeType *ntype)
 {
   switch (ntype->type) {
@@ -3320,6 +3367,9 @@ static void node_geometry_set_butfunc(bNodeType *ntype)
     case GEO_NODE_ATTRIBUTE_MIX:
       ntype->draw_buttons = node_geometry_buts_attribute_mix;
       break;
+    case GEO_NODE_ATTRIBUTE_VECTOR_MATH:
+      ntype->draw_buttons = node_geometry_buts_attribute_vector_math;
+      break;
     case GEO_NODE_POINT_DISTRIBUTE:
       ntype->draw_buttons = node_geometry_buts_attribute_point_distribute;
       break;
@@ -3328,6 +3378,9 @@ static void node_geometry_set_butfunc(bNodeType *ntype)
       break;
     case GEO_NODE_ROTATE_POINTS:
       ntype->draw_buttons = node_geometry_buts_rotate_points;
+      break;
+    case GEO_NODE_ALIGN_ROTATION_TO_VECTOR:
+      ntype->draw_buttons = node_geometry_buts_align_rotation_to_vector;
       break;
   }
 }
@@ -3665,37 +3718,35 @@ static void std_node_socket_interface_draw(bContext *UNUSED(C), uiLayout *layout
 {
   bNodeSocket *sock = ptr->data;
   int type = sock->typeinfo->type;
-  /*int subtype = sock->typeinfo->subtype;*/
+
+  uiLayout *col = uiLayoutColumn(layout, false);
 
   switch (type) {
     case SOCK_FLOAT: {
-      uiLayout *row;
-      uiItemR(layout, ptr, "default_value", DEFAULT_FLAGS, NULL, 0);
-      row = uiLayoutRow(layout, true);
-      uiItemR(row, ptr, "min_value", DEFAULT_FLAGS, IFACE_("Min"), 0);
-      uiItemR(row, ptr, "max_value", DEFAULT_FLAGS, IFACE_("Max"), 0);
+      uiItemR(col, ptr, "default_value", DEFAULT_FLAGS, IFACE_("Default"), ICON_NONE);
+      uiLayout *sub = uiLayoutColumn(col, true);
+      uiItemR(sub, ptr, "min_value", DEFAULT_FLAGS, IFACE_("Min"), ICON_NONE);
+      uiItemR(sub, ptr, "max_value", DEFAULT_FLAGS, IFACE_("Max"), ICON_NONE);
       break;
     }
     case SOCK_INT: {
-      uiLayout *row;
-      uiItemR(layout, ptr, "default_value", DEFAULT_FLAGS, NULL, 0);
-      row = uiLayoutRow(layout, true);
-      uiItemR(row, ptr, "min_value", DEFAULT_FLAGS, IFACE_("Min"), 0);
-      uiItemR(row, ptr, "max_value", DEFAULT_FLAGS, IFACE_("Max"), 0);
+      uiItemR(col, ptr, "default_value", DEFAULT_FLAGS, IFACE_("Default"), ICON_NONE);
+      uiLayout *sub = uiLayoutColumn(col, true);
+      uiItemR(sub, ptr, "min_value", DEFAULT_FLAGS, IFACE_("Min"), ICON_NONE);
+      uiItemR(sub, ptr, "max_value", DEFAULT_FLAGS, IFACE_("Max"), ICON_NONE);
       break;
     }
     case SOCK_VECTOR: {
-      uiLayout *row;
-      uiItemR(layout, ptr, "default_value", UI_ITEM_R_EXPAND, NULL, DEFAULT_FLAGS);
-      row = uiLayoutRow(layout, true);
-      uiItemR(row, ptr, "min_value", DEFAULT_FLAGS, IFACE_("Min"), 0);
-      uiItemR(row, ptr, "max_value", DEFAULT_FLAGS, IFACE_("Max"), 0);
+      uiItemR(col, ptr, "default_value", UI_ITEM_R_EXPAND, IFACE_("Default"), ICON_NONE);
+      uiLayout *sub = uiLayoutColumn(col, true);
+      uiItemR(sub, ptr, "min_value", DEFAULT_FLAGS, IFACE_("Min"), ICON_NONE);
+      uiItemR(sub, ptr, "max_value", DEFAULT_FLAGS, IFACE_("Max"), ICON_NONE);
       break;
     }
     case SOCK_BOOLEAN:
     case SOCK_RGBA:
     case SOCK_STRING: {
-      uiItemR(layout, ptr, "default_value", DEFAULT_FLAGS, NULL, 0);
+      uiItemR(col, ptr, "default_value", DEFAULT_FLAGS, IFACE_("Default"), 0);
       break;
     }
   }
