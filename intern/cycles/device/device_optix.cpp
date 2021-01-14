@@ -761,9 +761,6 @@ class OptiXDevice : public CUDADevice {
     // Keep this number reasonable to avoid running into TDRs
     //int step_samples = (info.display_device ? 1 : 1);
     int step_samples = 1;
-    if (task.adaptive_sampling.use) {
-      step_samples = task.adaptive_sampling.align_static_samples(step_samples);
-    }
 
     // Offset into launch params buffer so that streams use separate data
     device_ptr launch_params_ptr = launch_params.device_pointer +
