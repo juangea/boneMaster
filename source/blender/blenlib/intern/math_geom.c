@@ -17,8 +17,7 @@
  * All rights reserved.
  *
  * The Original Code is: some of this file.
- *
- * */
+ */
 
 /** \file
  * \ingroup bli
@@ -3887,7 +3886,7 @@ void interp_weights_quad_v3(float w[4],
  * - 0 if the point is outside of triangle.
  * - 1 if the point is inside triangle.
  * - 2 if it's on the edge.
- * */
+ */
 int barycentric_inside_triangle_v2(const float w[3])
 {
   if (IN_RANGE(w[0], 0.0f, 1.0f) && IN_RANGE(w[1], 0.0f, 1.0f) && IN_RANGE(w[2], 0.0f, 1.0f)) {
@@ -6295,7 +6294,7 @@ float geodesic_distance_propagate_across_triangle(
     }
   }
 
-  /* Fall back to Dijsktra approximaton in trivial case, or if no valid source
+  /* Fall back to Dijsktra approximation in trivial case, or if no valid source
    * point found that connects to v0 across the triangle. */
   return min_ff(dist1 + len_v3(v10), dist2 + len_v3v3(v0, v2));
 }
