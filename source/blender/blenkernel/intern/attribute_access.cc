@@ -825,7 +825,8 @@ blender::bke::ReadAttributePtr GeometryComponent::attribute_get_constant_for_rea
 
 OutputAttributePtr GeometryComponent::attribute_try_get_for_output(const StringRef attribute_name,
                                                                    const AttributeDomain domain,
-                                                                   const CustomDataType data_type)
+                                                                   const CustomDataType data_type,
+                                                                   const void *default_value)
 {
   BLI_assert(this->attribute_domain_with_type_supported(domain, data_type));
 
@@ -838,6 +839,11 @@ OutputAttributePtr GeometryComponent::attribute_try_get_for_output(const StringR
   if (!attribute) {
     this->attribute_try_create(attribute_name, domain, data_type);
     attribute = this->attribute_try_get_for_write(attribute_name);
+    if (default_value != nullptr) {
+      void *data = attribute->get_span_for_write_only().data();
+      cpp_type->fill_initialized(default_value, data, attribute->size());
+      attribute->apply_span();
+    }
     return OutputAttributePtr(std::move(attribute));
   }
 
@@ -1195,6 +1201,11 @@ WriteAttributePtr MeshComponent::attribute_try_get_for_write(const StringRef att
   if (vertex_group_index >= 0) {
     if (mesh_->dvert == nullptr) {
       BKE_object_defgroup_data_create(&mesh_->id);
+    }
+    else {
+      /* Copy the data layer if it is shared with some other mesh. */
+      mesh_->dvert = (MDeformVert *)CustomData_duplicate_referenced_layer(
+          &mesh_->vdata, CD_MDEFORMVERT, mesh_->totvert);
     }
     return std::make_unique<blender::bke::VertexWeightWriteAttribute>(
         mesh_->dvert, mesh_->totvert, vertex_group_index);

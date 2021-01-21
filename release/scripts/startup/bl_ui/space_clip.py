@@ -502,7 +502,9 @@ class CLIP_PT_tools_tracking(CLIP_PT_tracking_panel, Panel):
         col = layout.column(align=True)
         row = col.row(align=True)
         row.label(text="Merge:")
-        row.operator("clip.join_tracks", text="Join Tracks")
+        sub = row.column()
+        sub.operator("clip.join_tracks", text="Join Tracks")
+        sub.operator("clip.average_tracks", text="Average Tracks")
 
 
 class CLIP_PT_tools_plane_tracking(CLIP_PT_tracking_panel, Panel):
@@ -1418,7 +1420,7 @@ class CLIP_MT_track_refine(Menu):
         props = layout.operator("clip.refine_markers", text="Backwards")
         props.backwards = True
 
-        props = layout.operator("clip.refine_markers", text="Fowards")
+        props = layout.operator("clip.refine_markers", text="Forwards")
         props.backwards = False
 
 
@@ -1482,6 +1484,7 @@ class CLIP_MT_track(Menu):
         layout.separator()
 
         layout.operator("clip.join_tracks")
+        layout.operator("clip.average_tracks")
 
         layout.separator()
 
@@ -1608,6 +1611,7 @@ class CLIP_MT_tracking_context_menu(Menu):
             layout.separator()
 
             layout.operator("clip.join_tracks")
+            layout.operator("clip.average_tracks")
 
             layout.separator()
 

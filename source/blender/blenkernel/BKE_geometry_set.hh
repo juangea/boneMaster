@@ -36,6 +36,7 @@ struct Collection;
 struct Mesh;
 struct Object;
 struct PointCloud;
+struct Volume;
 
 /* Each geometry component has a specific type. The type determines what kind of data the component
  * stores. Functions modifying a geometry will usually just modify a subset of the component types.
@@ -44,6 +45,7 @@ enum class GeometryComponentType {
   Mesh = 0,
   PointCloud = 1,
   Instances = 2,
+  Volume = 3,
 };
 
 enum class GeometryOwnershipType {
@@ -242,7 +244,8 @@ class GeometryComponent {
 
   /**
    * If an attribute with the given params exist, it is returned.
-   * If no attribute with the given name exists, it is created and returned.
+   * If no attribute with the given name exists, create it and
+   * fill it with the default value if it is provided.
    * If an attribute with the given name but different domain or type exists, a temporary attribute
    * is created that has to be saved after the output has been computed. This avoids deleting
    * another attribute, before a computation is finished.
@@ -251,7 +254,8 @@ class GeometryComponent {
    */
   OutputAttributePtr attribute_try_get_for_output(const blender::StringRef attribute_name,
                                                   const AttributeDomain domain,
-                                                  const CustomDataType data_type);
+                                                  const CustomDataType data_type,
+                                                  const void *default_value = nullptr);
 };
 
 template<typename T>
@@ -317,10 +321,13 @@ struct GeometrySet {
   bool has_mesh() const;
   bool has_pointcloud() const;
   bool has_instances() const;
+  bool has_volume() const;
   const Mesh *get_mesh_for_read() const;
   const PointCloud *get_pointcloud_for_read() const;
+  const Volume *get_volume_for_read() const;
   Mesh *get_mesh_for_write();
   PointCloud *get_pointcloud_for_write();
+  Volume *get_volume_for_write();
 
   /* Utility methods for replacement. */
   void replace_mesh(Mesh *mesh, GeometryOwnershipType ownership = GeometryOwnershipType::Owned);
@@ -454,9 +461,33 @@ class InstancesComponent : public GeometryComponent {
   blender::Span<blender::float3> scales() const;
   blender::Span<int> ids() const;
   blender::MutableSpan<blender::float3> positions();
+  blender::MutableSpan<blender::float3> rotations();
+  blender::MutableSpan<blender::float3> scales();
   int instances_amount() const;
 
   bool is_empty() const final;
 
   static constexpr inline GeometryComponentType static_type = GeometryComponentType::Instances;
+};
+
+/** A geometry component that stores volume grids. */
+class VolumeComponent : public GeometryComponent {
+ private:
+  Volume *volume_ = nullptr;
+  GeometryOwnershipType ownership_ = GeometryOwnershipType::Owned;
+
+ public:
+  VolumeComponent();
+  ~VolumeComponent();
+  GeometryComponent *copy() const override;
+
+  void clear();
+  bool has_volume() const;
+  void replace(Volume *volume, GeometryOwnershipType ownership = GeometryOwnershipType::Owned);
+  Volume *release();
+
+  const Volume *get_for_read() const;
+  Volume *get_for_write();
+
+  static constexpr inline GeometryComponentType static_type = GeometryComponentType::Volume;
 };
