@@ -193,6 +193,10 @@ enum {
   IDOVERRIDE_LIBRARY_FLAG_MANDATORY = 1 << 0,
   /** User cannot change that override operation. */
   IDOVERRIDE_LIBRARY_FLAG_LOCKED = 1 << 1,
+
+  /** For overrides of ID pointers: this override still matches (follows) the hierarchy of the
+   *  reference linked data. */
+  IDOVERRIDE_LIBRARY_FLAG_IDPOINTER_MATCH_REFERENCE = 1 << 8,
 };
 
 /** A single overridden property, contain all operations on this one. */
@@ -685,7 +689,7 @@ typedef enum IDRecalcFlag {
    * redraw update in that case. */
 
   /* Selection of the ID itself or its components (for example, vertices) did
-   * change, and all the drawing data is to eb updated. */
+   * change, and all the drawing data is to be updated. */
   ID_RECALC_SELECT = (1 << 9),
   /* Flags on the base did change, and is to be copied onto all the copies of
    * corresponding objects. */

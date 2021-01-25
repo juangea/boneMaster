@@ -24,6 +24,7 @@
 #include "render/mesh.h"
 #include "render/nodes.h"
 #include "render/object.h"
+#include "render/procedural.h"
 #include "render/scene.h"
 #include "render/shader.h"
 
@@ -132,9 +133,8 @@ void BlenderSync::sync_recalc(BL::Depsgraph &b_depsgraph, BL::SpaceView3D &b_v3d
   }
 
   /* Iterate over all IDs in this depsgraph. */
-  BL::Depsgraph::updates_iterator b_update;
-  for (b_depsgraph.updates.begin(b_update); b_update != b_depsgraph.updates.end(); ++b_update) {
-    BL::ID b_id(b_update->id());
+  for (BL::DepsgraphUpdate &b_update : b_depsgraph.updates) {
+    BL::ID b_id(b_update.id());
 
     /* Material */
     if (b_id.is_a(&RNA_Material)) {
@@ -152,17 +152,17 @@ void BlenderSync::sync_recalc(BL::Depsgraph &b_depsgraph, BL::SpaceView3D &b_v3d
       const bool is_geometry = object_is_geometry(b_ob);
       const bool is_light = !is_geometry && object_is_light(b_ob);
 
-      if (b_ob.is_instancer() && b_update->is_updated_shading()) {
+      if (b_ob.is_instancer() && b_update.is_updated_shading()) {
         /* Needed for e.g. object color updates on instancer. */
         object_map.set_recalc(b_ob);
       }
 
       if (is_geometry || is_light) {
-        const bool updated_geometry = b_update->is_updated_geometry();
+        const bool updated_geometry = b_update.is_updated_geometry();
 
         /* Geometry (mesh, hair, volume). */
         if (is_geometry) {
-          if (b_update->is_updated_transform() || b_update->is_updated_shading()) {
+          if (b_update.is_updated_transform() || b_update.is_updated_shading()) {
             object_map.set_recalc(b_ob);
           }
 
@@ -182,7 +182,7 @@ void BlenderSync::sync_recalc(BL::Depsgraph &b_depsgraph, BL::SpaceView3D &b_v3d
         }
         /* Light */
         else if (is_light) {
-          if (b_update->is_updated_transform() || b_update->is_updated_shading()) {
+          if (b_update.is_updated_transform() || b_update.is_updated_shading()) {
             object_map.set_recalc(b_ob);
             light_map.set_recalc(b_ob);
           }
@@ -409,9 +409,8 @@ void BlenderSync::sync_integrator()
     integrator->set_ao_bounces(0);
   }
 
-  if (integrator->is_modified())
-    integrator->tag_update(scene);
-    
+  /* UPDATE_NONE as we don't want to tag the integrator as modified, just tag dependent things */
+  integrator->tag_update(scene, Integrator::UPDATE_NONE);
 }
 
 /* Film */
@@ -506,16 +505,15 @@ void BlenderSync::sync_images()
     return;
   }
   /* Free buffers used by images which are not needed for render. */
-  BL::BlendData::images_iterator b_image;
-  for (b_data.images.begin(b_image); b_image != b_data.images.end(); ++b_image) {
+  for (BL::Image &b_image : b_data.images) {
     /* TODO(sergey): Consider making it an utility function to check
      * whether image is considered builtin.
      */
-    const bool is_builtin = b_image->packed_file() ||
-                            b_image->source() == BL::Image::source_GENERATED ||
-                            b_image->source() == BL::Image::source_MOVIE || b_engine.is_preview();
+    const bool is_builtin = b_image.packed_file() ||
+                            b_image.source() == BL::Image::source_GENERATED ||
+                            b_image.source() == BL::Image::source_MOVIE || b_engine.is_preview();
     if (is_builtin == false) {
-      b_image->buffers_free();
+      b_image.buffers_free();
     }
     /* TODO(sergey): Free builtin images not used by any shader. */
   }
@@ -619,10 +617,7 @@ vector<Pass> BlenderSync::sync_render_passes(BL::RenderLayer &b_rlay,
   vector<Pass> passes;
 
   /* loop over passes */
-  BL::RenderLayer::passes_iterator b_pass_iter;
-
-  for (b_rlay.passes.begin(b_pass_iter); b_pass_iter != b_rlay.passes.end(); ++b_pass_iter) {
-    BL::RenderPass b_pass(*b_pass_iter);
+  for (BL::RenderPass &b_pass : b_rlay.passes) {
     PassType pass_type = get_pass_type(b_pass);
 
     if (pass_type == PASS_MOTION && scene->integrator->get_motion_blur())
@@ -790,7 +785,7 @@ vector<Pass> BlenderSync::sync_render_passes(BL::RenderLayer &b_rlay,
 
   scene->film->set_pass_alpha_threshold(b_view_layer.pass_alpha_threshold());
   scene->film->tag_passes_update(scene, passes);
-  scene->integrator->tag_update(scene);
+  scene->integrator->tag_update(scene, Integrator::UPDATE_ALL);
 
   return passes;
 }
@@ -813,9 +808,8 @@ void BlenderSync::free_data_after_sync(BL::Depsgraph &b_depsgraph)
   /* TODO(sergey): We can actually remove the whole dependency graph,
    * but that will need some API support first.
    */
-  BL::Depsgraph::objects_iterator b_ob;
-  for (b_depsgraph.objects.begin(b_ob); b_ob != b_depsgraph.objects.end(); ++b_ob) {
-    b_ob->cache_release();
+  for (BL::Object &b_ob : b_depsgraph.objects) {
+    b_ob.cache_release();
   }
 }
 

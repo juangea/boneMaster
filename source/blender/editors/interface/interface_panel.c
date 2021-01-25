@@ -583,7 +583,7 @@ static void set_panels_list_data_expand_flag(const bContext *C, const ARegion *r
 /** \name Panels
  * \{ */
 
-static bool panel_use_active_highlight(const Panel *panel)
+static bool panel_custom_data_active_get(const Panel *panel)
 {
   /* The caller should make sure the panel is active and has a type. */
   BLI_assert(UI_panel_is_active(panel));
@@ -597,6 +597,21 @@ static bool panel_use_active_highlight(const Panel *panel)
   }
 
   return false;
+}
+
+static void panel_custom_data_active_set(Panel *panel)
+{
+  /* Since the panel is interacted with, it should be active and have a type. */
+  BLI_assert(UI_panel_is_active(panel));
+  BLI_assert(panel->type != NULL);
+
+  if (panel->type->active_property[0] != '\0') {
+    PointerRNA *ptr = UI_panel_custom_data_get(panel);
+    BLI_assert(RNA_struct_find_property(ptr, panel->type->active_property) != NULL);
+    if (ptr != NULL && !RNA_pointer_is_null(ptr)) {
+      RNA_boolean_set(ptr, panel->type->active_property, true);
+    }
+  }
 }
 
 /**
@@ -1107,13 +1122,16 @@ static void panel_draw_highlight_border(const Panel *panel,
   /* Abuse the property search theme color for now. */
   float color[4];
   UI_GetThemeColor4fv(TH_MATCH, color);
-  UI_draw_roundbox_aa(false,
-                      rect->xmin,
-                      UI_panel_is_closed(panel) ? header_rect->ymin : rect->ymin,
-                      rect->xmax,
-                      header_rect->ymax,
-                      radius,
-                      color);
+  UI_draw_roundbox_aa(
+      &(const rctf){
+          .xmin = rect->xmin,
+          .xmax = rect->xmax,
+          .ymin = UI_panel_is_closed(panel) ? header_rect->ymin : rect->ymin,
+          .ymax = header_rect->ymax,
+      },
+      false,
+      radius,
+      color);
 }
 
 static void panel_draw_aligned_widgets(const uiStyle *style,
@@ -1239,13 +1257,16 @@ static void panel_draw_aligned_backdrop(const Panel *panel,
         float color[4];
         UI_GetThemeColor4fv(TH_PANEL_SUB_BACK, color);
         /* Change the width a little bit to line up with sides. */
-        UI_draw_roundbox_aa(true,
-                            rect->xmin + U.pixelsize,
-                            rect->ymin + U.pixelsize,
-                            rect->xmax - U.pixelsize,
-                            rect->ymax,
-                            box_wcol->roundness * U.widget_unit,
-                            color);
+        UI_draw_roundbox_aa(
+            &(const rctf){
+                .xmin = rect->xmin + U.pixelsize,
+                .xmax = rect->xmax - U.pixelsize,
+                .ymin = rect->ymin + U.pixelsize,
+                .ymax = rect->ymax,
+            },
+            true,
+            box_wcol->roundness * U.widget_unit,
+            color);
       }
       else {
         immBindBuiltinProgram(GPU_SHADER_2D_UNIFORM_COLOR);
@@ -1342,7 +1363,7 @@ void ui_draw_aligned_panel(const uiStyle *style,
                                region_search_filter_active);
   }
 
-  if (panel_use_active_highlight(panel)) {
+  if (panel_custom_data_active_get(panel)) {
     panel_draw_highlight_border(panel, rect, &header_rect);
   }
 }
@@ -1530,20 +1551,26 @@ void UI_panel_category_draw_all(ARegion *region, const char *category_id_active)
     {
       /* Draw filled rectangle and outline for tab. */
       UI_draw_roundbox_corner_set(roundboxtype);
-      UI_draw_roundbox_4fv(true,
-                           rct->xmin,
-                           rct->ymin,
-                           rct->xmax,
-                           rct->ymax,
-                           tab_curve_radius,
-                           is_active ? theme_col_tab_active : theme_col_tab_inactive);
-      UI_draw_roundbox_4fv(false,
-                           rct->xmin,
-                           rct->ymin,
-                           rct->xmax,
-                           rct->ymax,
-                           tab_curve_radius,
-                           theme_col_tab_outline);
+      UI_draw_roundbox_4fv(
+          &(const rctf){
+              .xmin = rct->xmin,
+              .xmax = rct->xmax,
+              .ymin = rct->ymin,
+              .ymax = rct->ymax,
+          },
+          true,
+          tab_curve_radius,
+          is_active ? theme_col_tab_active : theme_col_tab_inactive);
+      UI_draw_roundbox_4fv(
+          &(const rctf){
+              .xmin = rct->xmin,
+              .xmax = rct->xmax,
+              .ymin = rct->ymin,
+              .ymax = rct->ymax,
+          },
+          false,
+          tab_curve_radius,
+          theme_col_tab_outline);
 
       /* Disguise the outline on one side to join the tab to the panel. */
       pos = GPU_vertformat_attr_add(
@@ -2169,6 +2196,12 @@ static void ui_handle_panel_header(const bContext *C,
       ui_panel_drag_collapse_handler_add(C, UI_panel_is_closed(panel));
     }
 
+    /* Set panel custom data (modifier) active when expanding subpanels, but not top-level
+     * panels to allow collapsing and expanding without setting the active element. */
+    if (is_subpanel) {
+      panel_custom_data_active_set(panel);
+    }
+
     set_panels_list_data_expand_flag(C, region);
     panel_activate_state(C, panel, PANEL_STATE_ANIMATION);
     return;
@@ -2607,6 +2640,8 @@ static void panel_activate_state(const bContext *C, Panel *panel, const uiHandle
   }
 
   if (state == PANEL_STATE_DRAG) {
+    panel_custom_data_active_set(panel);
+
     panel_set_flag_recursive(panel, PNL_SELECT, true);
     panel_set_runtime_flag_recursive(panel, PANEL_IS_DRAG_DROP, true);
 

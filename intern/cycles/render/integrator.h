@@ -91,6 +91,15 @@ class Integrator : public Node {
 
   NODE_SOCKET_API(SamplingPattern, sampling_pattern)
 
+  enum : uint32_t {
+    AO_PASS_MODIFIED = (1 << 0),
+    BACKGROUND_AO_MODIFIED = (1 << 1),
+
+    /* tag everything in the manager for an update */
+    UPDATE_ALL = ~0u,
+
+    UPDATE_NONE = 0u,
+  };
 
   NODE_SOCKET_API(float, scrambling_distance)
   NODE_SOCKET_API(bool, use_dithered_sampling)
@@ -100,9 +109,9 @@ class Integrator : public Node {
   ~Integrator();
 
   void device_update(Device *device, DeviceScene *dscene, Scene *scene);
-  void device_free(Device *device, DeviceScene *dscene);
+  void device_free(Device *device, DeviceScene *dscene, bool force_free = false);
 
-  void tag_update(Scene *scene);
+  void tag_update(Scene *scene, uint32_t flag);
 };
 
 CCL_NAMESPACE_END
