@@ -697,13 +697,13 @@ static void namebutton_fn(bContext *C, void *tsep, char *oldname)
             DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
           }
           DEG_id_tag_update(&ob->id, ID_RECALC_COPY_ON_WRITE);
-          WM_event_add_notifier(C, NC_ID | NA_RENAME, NULL);
           break;
         }
         default:
-          WM_event_add_notifier(C, NC_ID | NA_RENAME, NULL);
           break;
       }
+      WM_event_add_notifier(C, NC_ID | NA_RENAME, NULL);
+
       /* Check the library target exists */
       if (te->idcode == ID_LI) {
         Library *lib = (Library *)tselem->id;
@@ -2695,13 +2695,16 @@ static void outliner_draw_iconrow_number(const uiFontStyle *fstyle,
   float offset_x = (float)offsx + UI_UNIT_X * 0.35f;
 
   UI_draw_roundbox_corner_set(UI_CNR_ALL);
-  UI_draw_roundbox_aa(true,
-                      offset_x + ufac,
-                      (float)ys - UI_UNIT_Y * 0.2f + ufac,
-                      offset_x + UI_UNIT_X - ufac,
-                      (float)ys - UI_UNIT_Y * 0.2f + UI_UNIT_Y - ufac,
-                      (float)UI_UNIT_Y / 2.0f - ufac,
-                      color);
+  UI_draw_roundbox_aa(
+      &(const rctf){
+          .xmin = offset_x + ufac,
+          .xmax = offset_x + UI_UNIT_X - ufac,
+          .ymin = (float)ys - UI_UNIT_Y * 0.2f + ufac,
+          .ymax = (float)ys - UI_UNIT_Y * 0.2f + UI_UNIT_Y - ufac,
+      },
+      true,
+      (float)UI_UNIT_Y / 2.0f - ufac,
+      color);
 
   /* Now the numbers. */
   uchar text_col[4];
@@ -2751,8 +2754,26 @@ static void outliner_draw_active_indicator(const float minx,
   const float radius = UI_UNIT_Y / 4.0f;
 
   UI_draw_roundbox_corner_set(UI_CNR_ALL);
-  UI_draw_roundbox_aa(true, minx, miny + ufac, maxx, maxy - ufac, radius, icon_color);
-  UI_draw_roundbox_aa(false, minx, miny + ufac, maxx, maxy - ufac, radius, icon_border);
+  UI_draw_roundbox_aa(
+      &(const rctf){
+          .xmin = minx,
+          .xmax = maxx,
+          .ymin = miny + ufac,
+          .ymax = maxy - ufac,
+      },
+      true,
+      radius,
+      icon_color);
+  UI_draw_roundbox_aa(
+      &(const rctf){
+          .xmin = minx,
+          .xmax = maxx,
+          .ymin = miny + ufac,
+          .ymax = maxy - ufac,
+      },
+      false,
+      radius,
+      icon_border);
   GPU_blend(GPU_BLEND_ALPHA); /* Roundbox disables. */
 }
 

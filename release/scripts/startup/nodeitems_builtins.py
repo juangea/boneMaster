@@ -489,6 +489,7 @@ geometry_node_categories = [
         NodeItem("GeometryNodeAttributeMix"),
         NodeItem("GeometryNodeAttributeColorRamp"),
         NodeItem("GeometryNodeAttributeVectorMath"),
+        NodeItem("GeometryNodeAttributeSampleTexture"),
     ]),
     GeometryNodeCategory("GEO_COLOR", "Color", items=[
         NodeItem("ShaderNodeValToRGB"),
@@ -519,6 +520,9 @@ geometry_node_categories = [
         NodeItem("GeometryNodePointTranslate"),
         NodeItem("GeometryNodeRotatePoints"),
         NodeItem("GeometryNodeAlignRotationToVector"),
+    ]),
+    GeometryNodeCategory("GEO_VOLUME", "Volume", items=[
+        NodeItem("GeometryNodePointsToVolume"),
     ]),
     GeometryNodeCategory("GEO_UTILITIES", "Utilities", items=[
         NodeItem("ShaderNodeMapRange"),

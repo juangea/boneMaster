@@ -463,6 +463,12 @@ static void file_main_region_listener(const wmRegionListenerParams *params)
           break;
       }
       break;
+    case NC_ID:
+      if (ELEM(wmn->action, NA_RENAME)) {
+        /* In case the filelist shows ID names. */
+        ED_region_tag_redraw(region);
+      }
+      break;
   }
 }
 
@@ -650,6 +656,21 @@ static void file_tools_region_listener(const wmRegionListenerParams *UNUSED(para
 {
 }
 
+static void file_tool_props_region_listener(const wmRegionListenerParams *params)
+{
+  const wmNotifier *wmn = params->notifier;
+  ARegion *region = params->region;
+
+  switch (wmn->category) {
+    case NC_ID:
+      if (ELEM(wmn->action, NA_RENAME)) {
+        /* In case the filelist shows ID names. */
+        ED_region_tag_redraw(region);
+      }
+      break;
+  }
+}
+
 /* add handlers, stuff you only do once or on area/region changes */
 static void file_header_region_init(wmWindowManager *wm, ARegion *region)
 {
@@ -773,7 +794,7 @@ static void file_space_subtype_item_extend(bContext *UNUSED(C),
   }
 }
 
-static const char *file_context_dir[] = {"active_file", "active_id", NULL};
+static const char *file_context_dir[] = {"active_file", "id", NULL};
 
 static int /*eContextResult*/ file_context(const bContext *C,
                                            const char *member,
@@ -916,7 +937,7 @@ void ED_spacetype_file(void)
   art->prefsizex = 240;
   art->prefsizey = 60;
   art->keymapflag = ED_KEYMAP_UI;
-  art->listener = file_tools_region_listener;
+  art->listener = file_tool_props_region_listener;
   art->init = file_tools_region_init;
   art->draw = file_tools_region_draw;
   BLI_addhead(&st->regiontypes, art);

@@ -146,6 +146,7 @@ set(SRC
   geometry/nodes/node_geo_attribute_fill.cc
   geometry/nodes/node_geo_attribute_math.cc
   geometry/nodes/node_geo_attribute_mix.cc
+  geometry/nodes/node_geo_attribute_sample_texture.cc
   geometry/nodes/node_geo_attribute_randomize.cc
   geometry/nodes/node_geo_attribute_vector_math.cc
   geometry/nodes/node_geo_boolean.cc
@@ -159,6 +160,7 @@ set(SRC
   geometry/nodes/node_geo_point_scale.cc
   geometry/nodes/node_geo_point_separate.cc
   geometry/nodes/node_geo_point_translate.cc
+  geometry/nodes/node_geo_points_to_volume.cc
   geometry/nodes/node_geo_subdivision_surface.cc
   geometry/nodes/node_geo_transform.cc
   geometry/nodes/node_geo_triangulate.cc
