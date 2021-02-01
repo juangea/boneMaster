@@ -69,7 +69,7 @@ static void geo_node_object_info_exec(GeoNodeExecParams params)
     quat_to_eul(rotation, quaternion);
 
     if (object != self_object) {
-      if (object->type == OB_MESH) {
+      if (object->type == OB_MESH || OB_CURVE) {
         Mesh *mesh = BKE_modifier_get_evaluated_mesh_from_evaluated_object(object, false);
         if (mesh != nullptr) {
           BKE_mesh_wrapper_ensure_mdata(mesh);
