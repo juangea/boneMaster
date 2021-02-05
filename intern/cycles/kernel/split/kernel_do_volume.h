@@ -37,7 +37,7 @@ ccl_device_noinline bool kernel_split_branched_path_volume_indirect_light_iter(K
   uint buffer_offset = kernel_split_state.buffer_offset[ray_index];
   ccl_global float *buffer = kernel_split_params.tile.buffer + buffer_offset;
 
-  /* GPU: no decoupled ray marching, scatter probalistically */
+  /* GPU: no decoupled ray marching, scatter probabilistically. */
   int num_samples = kernel_data.integrator.volume_samples;
   float num_samples_inv = 1.0f / num_samples;
 
