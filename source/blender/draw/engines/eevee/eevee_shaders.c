@@ -258,7 +258,7 @@ static void eevee_shader_library_ensure(void)
 {
   if (e_data.lib == NULL) {
     e_data.lib = DRW_shader_library_create();
-    /* NOTE: Theses needs to be ordered by dependencies. */
+    /* NOTE: These need to be ordered by dependencies. */
     DRW_SHADER_LIB_ADD(e_data.lib, common_math_lib);
     DRW_SHADER_LIB_ADD(e_data.lib, common_math_geom_lib);
     DRW_SHADER_LIB_ADD(e_data.lib, common_hair_lib);
@@ -438,7 +438,7 @@ GPUShader *EEVEE_shaders_probe_planar_display_sh_get(void)
 }
 
 /* -------------------------------------------------------------------- */
-/** \name Downsampling
+/** \name Down-sampling
  * \{ */
 
 GPUShader *EEVEE_shaders_effect_downsample_sh_get(void)

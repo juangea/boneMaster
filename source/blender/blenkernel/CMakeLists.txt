@@ -78,9 +78,10 @@ set(SRC
   intern/armature.c
   intern/armature_deform.c
   intern/armature_update.c
-  intern/asset.c
+  intern/asset.cc
   intern/attribute.c
   intern/attribute_access.cc
+  intern/attribute_math.cc
   intern/autoexec.c
   intern/blender.c
   intern/blender_copybuffer.c
