@@ -161,6 +161,14 @@ void EEVEE_cryptomatte_output_init(EEVEE_ViewLayerData *UNUSED(sldata),
     g_data->cryptomatte_download_buffer = MEM_malloc_arrayN(
         sizeof(float), buffer_size * num_cryptomatte_layers, __func__);
   }
+  else {
+    /* During multiview rendering the `cryptomatte_accum_buffer` is deallocated after all views
+     * have been rendered. Clear it here to be reused by the next view. */
+    memset(g_data->cryptomatte_accum_buffer,
+           0,
+           buffer_size * eevee_cryptomatte_pixel_stride(view_layer) *
+               sizeof(EEVEE_CryptomatteSample));
+  }
 
   DRW_texture_ensure_fullscreen_2d(&txl->cryptomatte, format, 0);
   GPU_framebuffer_ensure_config(&fbl->cryptomatte_fb,
@@ -495,7 +503,7 @@ static void eevee_cryptomatte_postprocess_weights(EEVEE_Data *vedata)
     volumetric_transmittance_buffer = GPU_texture_read(
         txl->volume_transmittance_accum, GPU_DATA_FLOAT, 0);
   }
-  const int num_samples = effects->taa_current_sample;
+  const int num_samples = effects->taa_current_sample - 1;
 
   int accum_pixel_index = 0;
   int accum_pixel_stride = eevee_cryptomatte_pixel_stride(view_layer);

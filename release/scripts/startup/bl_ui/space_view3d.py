@@ -158,7 +158,7 @@ class VIEW3D_HT_tool_header(Header):
         elif mode_string == 'POSE':
             _row, sub = row_for_mirror()
             sub.prop(context.object.pose, "use_mirror_x", text="X", toggle=True)
-        elif mode_string in {'EDIT_MESH', 'PAINT_WEIGHT', 'SCULPT', 'PAINT_VERTEX'}:
+        elif mode_string in {'EDIT_MESH', 'PAINT_WEIGHT', 'SCULPT', 'PAINT_VERTEX', 'PAINT_TEXTURE'}:
             # Mesh Modes, Use Mesh Symmetry
             row, sub = row_for_mirror()
             sub.prop(context.object.data, "use_mirror_x", text="X", toggle=True)
@@ -2499,6 +2499,7 @@ class VIEW3D_MT_object_context_menu(Menu):
             props = layout.operator("wm.context_modal_mouse", text="Power")
             props.data_path_iter = "selected_editable_objects"
             props.data_path_item = "data.energy"
+            props.input_scale = 1.0
             props.header_text = "Light Power: %.3f"
 
             if light.type == 'AREA':
@@ -6226,17 +6227,20 @@ class VIEW3D_PT_overlay_edit_mesh(Panel):
         overlay = view.overlay
         display_all = overlay.show_overlays
 
+        is_any_solid_shading = not (shading.show_xray or (shading.type == 'WIREFRAME'))
+
         col = layout.column()
         col.active = display_all
 
         split = col.split()
 
         sub = split.column()
-        sub.active = not ((shading.type == 'WIREFRAME') or shading.show_xray)
+        sub.active = is_any_solid_shading
         sub.prop(overlay, "show_edges", text="Edges")
         sub = split.column()
         sub.prop(overlay, "show_faces", text="Faces")
         sub = split.column()
+        sub.active = is_any_solid_shading
         sub.prop(overlay, "show_face_center", text="Center")
 
         row = col.row(align=True)

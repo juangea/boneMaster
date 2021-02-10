@@ -583,7 +583,7 @@ static void set_panels_list_data_expand_flag(const bContext *C, const ARegion *r
 /** \name Panels
  * \{ */
 
-static bool panel_use_active_highlight(const Panel *panel)
+static bool panel_custom_data_active_get(const Panel *panel)
 {
   /* The caller should make sure the panel is active and has a type. */
   BLI_assert(UI_panel_is_active(panel));
@@ -597,6 +597,21 @@ static bool panel_use_active_highlight(const Panel *panel)
   }
 
   return false;
+}
+
+static void panel_custom_data_active_set(Panel *panel)
+{
+  /* Since the panel is interacted with, it should be active and have a type. */
+  BLI_assert(UI_panel_is_active(panel));
+  BLI_assert(panel->type != NULL);
+
+  if (panel->type->active_property[0] != '\0') {
+    PointerRNA *ptr = UI_panel_custom_data_get(panel);
+    BLI_assert(RNA_struct_find_property(ptr, panel->type->active_property) != NULL);
+    if (ptr != NULL && !RNA_pointer_is_null(ptr)) {
+      RNA_boolean_set(ptr, panel->type->active_property, true);
+    }
+  }
 }
 
 /**
@@ -1104,16 +1119,15 @@ static void panel_draw_highlight_border(const Panel *panel,
     radius = 0.0f;
   }
 
-  /* Abuse the property search theme color for now. */
   float color[4];
-  UI_GetThemeColor4fv(TH_MATCH, color);
-  UI_draw_roundbox_aa(false,
-                      rect->xmin,
-                      UI_panel_is_closed(panel) ? header_rect->ymin : rect->ymin,
-                      rect->xmax,
-                      header_rect->ymax,
-                      radius,
-                      color);
+  UI_GetThemeColor4fv(TH_SELECT_ACTIVE, color);
+  UI_draw_roundbox_4fv(false,
+                       rect->xmin,
+                       UI_panel_is_closed(panel) ? header_rect->ymin : rect->ymin,
+                       rect->xmax,
+                       header_rect->ymax,
+                       radius,
+                       color);
 }
 
 static void panel_draw_aligned_widgets(const uiStyle *style,
@@ -1342,7 +1356,7 @@ void ui_draw_aligned_panel(const uiStyle *style,
                                region_search_filter_active);
   }
 
-  if (panel_use_active_highlight(panel)) {
+  if (panel_custom_data_active_get(panel)) {
     panel_draw_highlight_border(panel, rect, &header_rect);
   }
 }
@@ -2169,6 +2183,12 @@ static void ui_handle_panel_header(const bContext *C,
       ui_panel_drag_collapse_handler_add(C, UI_panel_is_closed(panel));
     }
 
+    /* Set panel custom data (modifier) active when expanding subpanels, but not top-level
+     * panels to allow collapsing and expanding without setting the active element. */
+    if (is_subpanel) {
+      panel_custom_data_active_set(panel);
+    }
+
     set_panels_list_data_expand_flag(C, region);
     panel_activate_state(C, panel, PANEL_STATE_ANIMATION);
     return;
@@ -2607,6 +2627,8 @@ static void panel_activate_state(const bContext *C, Panel *panel, const uiHandle
   }
 
   if (state == PANEL_STATE_DRAG) {
+    panel_custom_data_active_set(panel);
+
     panel_set_flag_recursive(panel, PNL_SELECT, true);
     panel_set_runtime_flag_recursive(panel, PANEL_IS_DRAG_DROP, true);
 

@@ -678,7 +678,7 @@ bool SCULPT_vertex_has_unique_face_set(SculptSession *ss, int index)
       return sculpt_check_unique_face_set_in_base_mesh(ss, index);
     }
     case PBVH_BMESH:
-      return false;
+      return true;
     case PBVH_GRIDS: {
       const CCGKey *key = BKE_pbvh_get_grid_key(ss->pbvh);
       const int grid_index = index / key->grid_area;
@@ -2721,11 +2721,11 @@ static void update_sculpt_normal(Sculpt *sd, Object *ob, PBVHNode **nodes, int t
   const Brush *brush = BKE_paint_brush(&sd->paint);
   StrokeCache *cache = ob->sculpt->cache;
   /* Grab brush does not update the sculpt normal during a stroke. */
-  const bool update_normal = !(brush->flag & BRUSH_ORIGINAL_NORMAL) &&
-                             !(brush->sculpt_tool == SCULPT_TOOL_GRAB) &&
-                             !(brush->sculpt_tool == SCULPT_TOOL_ELASTIC_DEFORM) &&
-                             !(brush->sculpt_tool == SCULPT_TOOL_SNAKE_HOOK &&
-                               cache->normal_weight > 0.0f);
+  const bool update_normal =
+      !(brush->flag & BRUSH_ORIGINAL_NORMAL) && !(brush->sculpt_tool == SCULPT_TOOL_GRAB) &&
+      !(brush->sculpt_tool == SCULPT_TOOL_THUMB && !(brush->flag & BRUSH_ANCHORED)) &&
+      !(brush->sculpt_tool == SCULPT_TOOL_ELASTIC_DEFORM) &&
+      !(brush->sculpt_tool == SCULPT_TOOL_SNAKE_HOOK && cache->normal_weight > 0.0f);
 
   if (cache->mirror_symmetry_pass == 0 && cache->radial_symmetry_pass == 0 &&
       (SCULPT_stroke_is_first_brush_step_of_symmetry_pass(cache) || update_normal)) {
@@ -7237,7 +7237,8 @@ static bool sculpt_needs_connectivity_info(const Sculpt *sd,
           (brush->sculpt_tool == SCULPT_TOOL_BOUNDARY) ||
           (brush->sculpt_tool == SCULPT_TOOL_SLIDE_RELAX) ||
           (brush->sculpt_tool == SCULPT_TOOL_CLOTH) || (brush->sculpt_tool == SCULPT_TOOL_SMEAR) ||
-          (brush->sculpt_tool == SCULPT_TOOL_DRAW_FACE_SETS));
+          (brush->sculpt_tool == SCULPT_TOOL_DRAW_FACE_SETS) ||
+          (brush->sculpt_tool == SCULPT_TOOL_DISPLACEMENT_SMEAR));
 }
 
 void SCULPT_stroke_modifiers_check(const bContext *C, Object *ob, const Brush *brush)

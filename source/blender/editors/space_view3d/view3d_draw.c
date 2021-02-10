@@ -1667,6 +1667,7 @@ void ED_view3d_draw_offscreen(Depsgraph *depsgraph,
                               bool draw_background,
                               const char *viewname,
                               const bool do_color_management,
+                              const bool restore_rv3d_mats,
                               GPUOffScreen *ofs,
                               GPUViewport *viewport)
 {
@@ -1755,7 +1756,11 @@ void ED_view3d_draw_offscreen(Depsgraph *depsgraph,
   region->winy = orig.region_winy;
   region->winrct = orig.region_winrct;
 
-  ED_view3d_mats_rv3d_restore(region->regiondata, orig.rv3d_mats);
+  /* Optionally do _not_ restore rv3d matrices (e.g. they are used/stored in the ImBuff for
+   * reprojection, see texture_paint_image_from_view_exec(). */
+  if (restore_rv3d_mats) {
+    ED_view3d_mats_rv3d_restore(region->regiondata, orig.rv3d_mats);
+  }
   MEM_freeN(orig.rv3d_mats);
 
   UI_Theme_Restore(&orig.theme_state);
@@ -1847,6 +1852,7 @@ void ED_view3d_draw_offscreen_simple(Depsgraph *depsgraph,
                            draw_background,
                            viewname,
                            do_color_management,
+                           true,
                            ofs,
                            viewport);
 }
@@ -1867,6 +1873,7 @@ ImBuf *ED_view3d_draw_offscreen_imbuf(Depsgraph *depsgraph,
                                       eImBufFlags imbuf_flag,
                                       int alpha_mode,
                                       const char *viewname,
+                                      const bool restore_rv3d_mats,
                                       /* output vars */
                                       GPUOffScreen *ofs,
                                       char err_out[256])
@@ -1950,6 +1957,16 @@ ImBuf *ED_view3d_draw_offscreen_imbuf(Depsgraph *depsgraph,
     }
   }
 
+  /* XXX(jbakker): `do_color_management` should be controlled by the caller. Currently when doing a
+   * viewport render animation and saving to an 8bit file format, color management would be applied
+   * twice. Once here, and once when saving the saving to disk. In this case the Save As Render
+   * option cannot be controlled either. But when doing an offscreen render you want to do the
+   * color management here.
+   *
+   * This option was added here to increase the performance when rendering for a playblast. When
+   * using workbench the color differences haven't been reported as a bug. But users also use the
+   * viewport rendering to render Eevee scenes. In the later situation the saved colors
+   * are totally wrong. */
   const bool do_color_management = (ibuf->rect_float == NULL);
   ED_view3d_draw_offscreen(depsgraph,
                            scene,
@@ -1964,6 +1981,7 @@ ImBuf *ED_view3d_draw_offscreen_imbuf(Depsgraph *depsgraph,
                            draw_sky,
                            viewname,
                            do_color_management,
+                           restore_rv3d_mats,
                            ofs,
                            NULL);
 
@@ -2089,6 +2107,7 @@ ImBuf *ED_view3d_draw_offscreen_imbuf_simple(Depsgraph *depsgraph,
                                         imbuf_flag,
                                         alpha_mode,
                                         viewname,
+                                        true,
                                         ofs,
                                         err_out);
 }

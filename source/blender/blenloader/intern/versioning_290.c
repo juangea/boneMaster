@@ -1504,7 +1504,7 @@ void blo_do_versions_290(FileData *fd, Library *UNUSED(lib), Main *bmain)
 
   if (!MAIN_VERSION_ATLEAST(bmain, 292, 10)) {
     if (!DNA_struct_find(fd->filesdna, "NodeSetAlpha")) {
-      LISTBASE_FOREACH (bNodeTree *, ntree, &bmain->nodetrees) {
+      FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
         if (ntree->type != NTREE_COMPOSIT) {
           continue;
         }
@@ -1517,6 +1517,7 @@ void blo_do_versions_290(FileData *fd, Library *UNUSED(lib), Main *bmain)
           node->storage = storage;
         }
       }
+      FOREACH_NODETREE_END;
     }
 
     LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
@@ -1600,5 +1601,17 @@ void blo_do_versions_290(FileData *fd, Library *UNUSED(lib), Main *bmain)
    */
   {
     /* Keep this block, even when empty. */
+
+    /* UV/Image Max resolution images in image editor. */
+    LISTBASE_FOREACH (bScreen *, screen, &bmain->screens) {
+      LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+        LISTBASE_FOREACH (SpaceLink *, space, &area->spacedata) {
+          if (space->spacetype == SPACE_IMAGE) {
+            SpaceImage *sima = (SpaceImage *)space;
+            sima->iuser.flag |= IMA_SHOW_MAX_RESOLUTION;
+          }
+        }
+      }
+    }
   }
 }
