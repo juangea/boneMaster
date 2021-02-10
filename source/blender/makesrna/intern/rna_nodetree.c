@@ -5381,7 +5381,7 @@ static void def_sh_tex_pointdensity(StructRNA *srna)
   func = RNA_def_function(srna, "calc_point_density", "rna_ShaderNodePointDensity_density_calc");
   RNA_def_function_ui_description(func, "Calculate point density");
   RNA_def_pointer(func, "depsgraph", "Depsgraph", "", "");
-  /* TODO, See how array size of 0 works, this shouldnt be used. */
+  /* TODO, See how array size of 0 works, this shouldn't be used. */
   parm = RNA_def_float_array(func, "rgba_values", 1, NULL, 0, 0, "", "RGBA Values", 0, 0);
   RNA_def_parameter_flags(parm, PROP_DYNAMIC, 0);
   RNA_def_function_output(func, parm);
@@ -9029,6 +9029,39 @@ static void def_geo_volume_to_mesh(StructRNA *srna)
   prop = RNA_def_property(srna, "resolution_mode", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_items(prop, resolution_mode_items);
   RNA_def_property_ui_text(prop, "Resolution Mode", "How the voxel size is specified");
+}
+
+static void def_geo_attribute_combine_xyz(StructRNA *srna)
+{
+  PropertyRNA *prop;
+
+  RNA_def_struct_sdna_from(srna, "NodeAttributeCombineXYZ", "storage");
+
+  prop = RNA_def_property(srna, "input_type_x", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, rna_node_geometry_attribute_input_type_items_float);
+  RNA_def_property_ui_text(prop, "Input Type X", "");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_socket_update");
+
+  prop = RNA_def_property(srna, "input_type_y", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, rna_node_geometry_attribute_input_type_items_float);
+  RNA_def_property_ui_text(prop, "Input Type Y", "");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_socket_update");
+
+  prop = RNA_def_property(srna, "input_type_z", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, rna_node_geometry_attribute_input_type_items_float);
+  RNA_def_property_ui_text(prop, "Input Type Z", "");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_socket_update");
+}
+
+static void def_geo_attribute_separate_xyz(StructRNA *srna)
+{
+  PropertyRNA *prop;
+
+  RNA_def_struct_sdna_from(srna, "NodeAttributeSeparateXYZ", "storage");
+
+  prop = RNA_def_property(srna, "input_type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, rna_node_geometry_attribute_input_type_items_vector);
+  RNA_def_property_ui_text(prop, "Input Type", "");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_socket_update");
 }
 
