@@ -131,13 +131,13 @@ typedef struct ClothVertex {
  * The definition of a spring.
  */
 typedef struct ClothSpring {
-  int ij;              /* Pij from the paper, one end of the spring.   */
-  int kl;              /* Pkl from the paper, one end of the spring.   */
+  int ij;              /* `Pij` from the paper, one end of the spring. */
+  int kl;              /* `Pkl` from the paper, one end of the spring. */
   int mn;              /* For hair springs: third vertex index; For bending springs: edge index; */
   int *pa;             /* Array of vert indices for poly a (for bending springs). */
   int *pb;             /* Array of vert indices for poly b (for bending springs). */
-  int la;              /* Length of *pa. */
-  int lb;              /* Length of *pb. */
+  int la;              /* Length of `*pa`. */
+  int lb;              /* Length of `*pb`. */
   float restlen;       /* The original length of the spring. */
   float restang;       /* The original angle of the bending springs. */
   float lenfact;       /* Factor of restlen used for plasticity */
@@ -210,7 +210,7 @@ typedef enum {
 /* SPRING FLAGS */
 typedef enum {
   CLOTH_SPRING_FLAG_DEACTIVATE = (1 << 1),
-  CLOTH_SPRING_FLAG_NEEDED = (1 << 2),  // springs has values to be applied
+  CLOTH_SPRING_FLAG_NEEDED = (1 << 2), /* Springs has values to be applied. */
 } CLOTH_SPRINGS_FLAGS;
 
 /////////////////////////////////////////////////
