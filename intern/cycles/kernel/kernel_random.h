@@ -37,6 +37,17 @@ CCL_NAMESPACE_BEGIN
  */
 #  define SOBOL_SKIP 64
 
+/* The MSB of RNG stores whether dithering should be used.
+ * If it is set, RNG[0:14] stores the x pixel coordinate and RNG[15:29] the y coordinate, RNG[30] is unused.
+ * If it isn't set, RNG[0:15] and RNG[16:30] are directly used for scrambling (note that the second one only has 15 bits).
+ *
+ * This distinction is needed because some parts of the code hash the RNG to get multiple decorrelated samples (mainly branched path tracing).
+ * That operation isn't well defined for the dithered scrambling, so the code falls back to the regular scrambling (see path_rng_hash).
+*/
+#define DITHER_MASK 0x80000000
+#define DITHER_COORD_MASK 0x7fff
+#define DITHER_Y_SHIFT 15
+
 ccl_device uint sobol_dimension(KernelGlobals *kg, int index, int dimension)
 {
   uint result = 0;
@@ -50,6 +61,9 @@ ccl_device uint sobol_dimension(KernelGlobals *kg, int index, int dimension)
 
 #endif /* __SOBOL__ */
 
+#define NUM_PJ_SAMPLES 64 * 64
+#define NUM_PJ_PATTERNS 48
+
 ccl_device_forceinline float path_rng_1D(
     KernelGlobals *kg, uint rng_hash, int sample, int num_samples, int dimension)
 {
@@ -57,7 +71,38 @@ ccl_device_forceinline float path_rng_1D(
   return (float)drand48();
 #endif
   if (kernel_data.integrator.sampling_pattern == SAMPLING_PATTERN_PMJ) {
-    return pmj_sample_1D(kg, sample, rng_hash, dimension);
+    //return pmj_sample_1D(kg, sample, rng_hash, dimension);
+
+    float r;
+    if(sample > NUM_PJ_SAMPLES) {
+      r = cmj_randfloat(sample, dimension);
+    }
+
+    int index = ((dimension % NUM_PJ_PATTERNS) * NUM_PJ_SAMPLES + sample) * 2 + (dimension & 1);
+    r = __uint_as_float(kernel_tex_fetch(__sample_pattern_lut, index)) - 1.0f;
+    /* Cranly-Patterson rotation using rng seed */    
+
+    float shift;
+
+    if(kernel_data.integrator.dither_size > 0) {
+      int size = kernel_data.integrator.dither_size;
+      /* Extract the pixel coordinates from rng and wrap them into the dither matrix. */
+      int x = (rng_hash & DITHER_COORD_MASK) % size;
+      int y = ((rng_hash >> DITHER_Y_SHIFT) & DITHER_COORD_MASK) % size;
+      float2 shifts = kernel_tex_fetch(__sobol_dither, y*size + x);
+      shift = (dimension & 1)? shifts.y: shifts.x;
+    }
+    else {
+      /* Hash rng with dimension to solve correlation issues.
+      * See T38710, T50116.
+      */
+      uint tmp_rng = cmj_hash_simple(dimension, rng_hash);
+      shift = tmp_rng * (1.0f/(float)0xFFFFFFFF);
+    }
+
+    shift *= kernel_data.integrator.scrambling_distance;
+
+    return r + shift - floorf(r + shift);    
   }
 #ifdef __CMJ__
 #  ifdef __SOBOL__
@@ -78,11 +123,23 @@ ccl_device_forceinline float path_rng_1D(
   /* Cranly-Patterson rotation using rng seed */
   float shift;
 
-  /* Hash rng with dimension to solve correlation issues.
-   * See T38710, T50116.
-   */
-  uint tmp_rng = cmj_hash_simple(dimension, rng_hash);
-  shift = tmp_rng * (1.0f / (float)0xFFFFFFFF);
+	if(kernel_data.integrator.dither_size > 0) {
+		int size = kernel_data.integrator.dither_size;
+		/* Extract the pixel coordinates from rng and wrap them into the dither matrix. */
+		int x = (rng_hash & DITHER_COORD_MASK) % size;
+		int y = ((rng_hash >> DITHER_Y_SHIFT) & DITHER_COORD_MASK) % size;
+		float2 shifts = kernel_tex_fetch(__sobol_dither, y*size + x);
+		shift = (dimension & 1)? shifts.y: shifts.x;
+	}
+	else {
+		/* Hash rng with dimension to solve correlation issues.
+		* See T38710, T50116.
+		*/
+		uint tmp_rng = cmj_hash_simple(dimension, rng_hash);
+		shift = tmp_rng * (1.0f / (float)0xFFFFFFFF);
+	}
+
+  shift *= kernel_data.integrator.scrambling_distance;
 
   return r + shift - floorf(r + shift);
 #endif
@@ -102,9 +159,11 @@ ccl_device_forceinline void path_rng_2D(KernelGlobals *kg,
   return;
 #endif
   if (kernel_data.integrator.sampling_pattern == SAMPLING_PATTERN_PMJ) {
-    const float2 f = pmj_sample_2D(kg, sample, rng_hash, dimension);
-    *fx = f.x;
-    *fy = f.y;
+    //const float2 f = pmj_sample_2D(kg, sample, rng_hash, dimension);
+    //*fx = f.x;
+    //*fy = f.y;
+    *fx = path_rng_1D(kg, rng_hash, sample, num_samples, dimension);
+    *fy = path_rng_1D(kg, rng_hash, sample, num_samples, dimension + 1);    
     return;
   }
 #ifdef __CMJ__
@@ -136,8 +195,13 @@ ccl_device_inline void path_rng_init(KernelGlobals *kg,
                                      float *fy)
 {
   /* load state */
-  *rng_hash = hash_uint2(x, y);
-  *rng_hash ^= kernel_data.integrator.seed;
+	if(kernel_data.integrator.dither_size > 0) {
+		*rng_hash = ((y & DITHER_COORD_MASK) << DITHER_Y_SHIFT) | (x & DITHER_COORD_MASK) | DITHER_MASK;
+	}
+	else {
+    *rng_hash = hash_uint2(x, y);
+    *rng_hash ^= kernel_data.integrator.seed;
+	}  
 
 #ifdef __DEBUG_CORRELATION__
   srand48(*rng_hash + sample);
@@ -208,14 +272,14 @@ ccl_device_inline float path_state_rng_1D_hash(KernelGlobals *kg,
                                                const ccl_addr_space PathState *state,
                                                uint hash)
 {
-  /* Use a hash instead of dimension, this is not great but avoids adding
-   * more dimensions to each bounce which reduces quality of dimensions we
-   * are already using. */
-  return path_rng_1D(kg,
-                     cmj_hash_simple(state->rng_hash, hash),
-                     state->sample,
-                     state->num_samples,
-                     state->rng_offset);
+	/* Use a hash instead of dimension, this is not great but avoids adding
+	 * more dimensions to each bounce which reduces quality of dimensions we
+	 * are already using. */
+	return path_rng_1D(kg,
+	                   cmj_hash_simple(state->rng_hash, hash),
+	                   state->sample,
+        		   state->num_samples,
+	                   state->rng_offset);
 }
 
 ccl_device_inline float path_branched_rng_1D(KernelGlobals *kg,
@@ -276,12 +340,12 @@ ccl_device_inline float path_branched_rng_light_termination(KernelGlobals *kg,
 
 ccl_device_inline uint lcg_state_init(PathState *state, uint scramble)
 {
-  return lcg_init(state->rng_hash + state->rng_offset + state->sample * scramble);
+	return lcg_init(state->rng_hash + state->rng_offset + state->sample*scramble);
 }
 
 ccl_device_inline uint lcg_state_init_addrspace(ccl_addr_space PathState *state, uint scramble)
 {
-  return lcg_init(state->rng_hash + state->rng_offset + state->sample * scramble);
+	return lcg_init(state->rng_hash + state->rng_offset + state->sample*scramble);
 }
 
 ccl_device float lcg_step_float_addrspace(ccl_addr_space uint *rng)
@@ -316,6 +380,12 @@ ccl_device_inline bool sample_is_even(int pattern, int sample)
     /* TODO(Stefan): Are there reliable ways of dividing CMJ and Sobol into two classes? */
     return sample & 0x1;
   }
+}
+
+ccl_device_inline uint path_rng_hash(uint rng_hash, int i)
+{
+	/* Fall back to the regular scrambling after hashing. */
+	return cmj_hash(rng_hash, i) & (~DITHER_MASK);
 }
 
 CCL_NAMESPACE_END

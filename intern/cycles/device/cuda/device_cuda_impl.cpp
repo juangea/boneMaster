@@ -1929,6 +1929,11 @@ void CUDADevice::render(DeviceTask &task, RenderTile &rtile, device_vector<WorkT
   /* Render all samples. */
   int start_sample = rtile.start_sample;
   int end_sample = rtile.start_sample + rtile.num_samples;
+  step_samples = end_sample;
+  if (end_sample > 4352)
+  {
+      step_samples = 4352;
+  }
 
   for (int sample = start_sample; sample < end_sample;) {
     /* Setup and copy work tile to device. */

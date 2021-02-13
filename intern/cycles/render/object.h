@@ -65,6 +65,7 @@ class Object : public Node {
   NODE_SOCKET_API(bool, use_holdout)
   NODE_SOCKET_API(bool, is_shadow_catcher)
   NODE_SOCKET_API(float, shadow_terminator_offset)
+  NODE_SOCKET_API(uint, lightgroups)
 
   NODE_SOCKET_API(float3, dupli_generated)
   NODE_SOCKET_API(float2, dupli_uv)

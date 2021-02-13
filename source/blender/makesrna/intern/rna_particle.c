@@ -2898,7 +2898,7 @@ static void rna_def_particle_settings(BlenderRNA *brna)
   RNA_def_property_update(prop, 0, "rna_Particle_reset");
 
   prop = RNA_def_property(srna, "lifetime", PROP_FLOAT, PROP_TIME);
-  RNA_def_property_range(prop, 1.0f, MAXFRAMEF);
+  RNA_def_property_range(prop, 0.0f, MAXFRAMEF);
   RNA_def_property_ui_text(prop, "Lifetime", "Life span of the particles");
   RNA_def_property_update(prop, 0, "rna_Particle_reset");
 

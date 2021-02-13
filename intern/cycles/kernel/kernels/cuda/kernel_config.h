@@ -70,7 +70,7 @@
 #  endif
 #  define CUDA_KERNEL_BRANCHED_MAX_REGISTERS 63
 
-/* 7.x, 8.x */
+/* 7.x / 8.x */
 #elif __CUDA_ARCH__ <= 899
 #  define CUDA_MULTIPRESSOR_MAX_REGISTERS 65536
 #  define CUDA_MULTIPROCESSOR_MAX_BLOCKS 32

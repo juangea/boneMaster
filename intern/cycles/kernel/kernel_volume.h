@@ -454,6 +454,7 @@ ccl_device int kernel_volume_sample_channel(float3 albedo,
 ccl_device VolumeIntegrateResult
 kernel_volume_integrate_homogeneous(KernelGlobals *kg,
                                     ccl_addr_space PathState *state,
+                                    ccl_global float *buffer,
                                     Ray *ray,
                                     ShaderData *sd,
                                     PathRadiance *L,
@@ -536,7 +537,7 @@ kernel_volume_integrate_homogeneous(KernelGlobals *kg,
     float3 transmittance = volume_color_transmittance(coeff.sigma_t, ray->t);
     float3 emission = kernel_volume_emission_integrate(
         &coeff, closure_flag, transmittance, ray->t);
-    path_radiance_accum_emission(kg, L, state, *throughput, emission);
+    path_radiance_accum_emission(kg, L, state, buffer, *throughput, emission, LIGHTGROUPS_NONE);
   }
 
   /* modify throughput */
@@ -562,6 +563,7 @@ kernel_volume_integrate_homogeneous(KernelGlobals *kg,
 ccl_device VolumeIntegrateResult
 kernel_volume_integrate_heterogeneous_distance(KernelGlobals *kg,
                                                ccl_addr_space PathState *state,
+                                               ccl_global float *buffer,
                                                Ray *ray,
                                                ShaderData *sd,
                                                PathRadiance *L,
@@ -662,7 +664,7 @@ kernel_volume_integrate_heterogeneous_distance(KernelGlobals *kg,
       if (L && (closure_flag & SD_EMISSION)) {
         float3 emission = kernel_volume_emission_integrate(
             &coeff, closure_flag, transmittance, dt);
-        path_radiance_accum_emission(kg, L, state, tp, emission);
+        path_radiance_accum_emission(kg, L, state, buffer, tp, emission, LIGHTGROUPS_NONE);
       }
 
       /* modify throughput */
@@ -708,6 +710,7 @@ kernel_volume_integrate_heterogeneous_distance(KernelGlobals *kg,
 ccl_device_noinline_cpu VolumeIntegrateResult
 kernel_volume_integrate(KernelGlobals *kg,
                         ccl_addr_space PathState *state,
+                        ccl_global float *buffer,
                         ShaderData *sd,
                         Ray *ray,
                         PathRadiance *L,
@@ -718,9 +721,9 @@ kernel_volume_integrate(KernelGlobals *kg,
 
   if (step_size != FLT_MAX)
     return kernel_volume_integrate_heterogeneous_distance(
-        kg, state, ray, sd, L, throughput, step_size);
+        kg, state, buffer, ray, sd, L, throughput, step_size);
   else
-    return kernel_volume_integrate_homogeneous(kg, state, ray, sd, L, throughput, true);
+    return kernel_volume_integrate_homogeneous(kg, state, buffer, ray, sd, L, throughput, true);
 }
 
 #  ifndef __SPLIT_KERNEL__
