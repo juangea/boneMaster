@@ -77,7 +77,10 @@ static void geo_node_object_info_exec(GeoNodeExecParams params)
     quat_to_eul(rotation, quaternion);
 
     if (object != self_object) {
-      InstancesComponent &instances = geometry_set.get_component_for_write<InstancesComponent>();
+      if (object->type == OB_MESH || OB_CURVE)) {
+        Mesh *mesh = BKE_modifier_get_evaluated_mesh_from_evaluated_object(object, false);
+        if (mesh != nullptr) {
+          BKE_mesh_wrapper_ensure_mdata(mesh);
 
       if (transform_space_relative) {
         instances.add_instance(object, transform);
