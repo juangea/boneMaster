@@ -44,36 +44,6 @@ class CYCLES_OT_use_shading_nodes(Operator):
         return {'FINISHED'}
 
 
-class CYCLES_OT_add_aov(bpy.types.Operator):
-    """Add an AOV pass"""
-    bl_idname = "cycles.add_aov"
-    bl_label = "Add AOV"
-
-    def execute(self, context):
-        view_layer = context.view_layer
-        cycles_view_layer = view_layer.cycles
-
-        cycles_view_layer.aovs.add()
-
-        view_layer.update_render_passes()
-        return {'FINISHED'}
-
-
-class CYCLES_OT_remove_aov(bpy.types.Operator):
-    """Remove an AOV pass"""
-    bl_idname = "cycles.remove_aov"
-    bl_label = "Remove AOV"
-
-    def execute(self, context):
-        view_layer = context.view_layer
-        cycles_view_layer = view_layer.cycles
-
-        cycles_view_layer.aovs.remove(cycles_view_layer.active_aov)
-
-        view_layer.update_render_passes()
-        return {'FINISHED'}
-
-
 class CYCLES_OT_lightgroup_add(bpy.types.Operator):
     """Add a lightgroup"""
     bl_idname="cycles.lightgroup_add"
@@ -278,8 +248,6 @@ class CYCLES_OT_merge_images(Operator):
 
 classes = (
     CYCLES_OT_use_shading_nodes,
-    CYCLES_OT_add_aov,
-    CYCLES_OT_remove_aov,
     CYCLES_OT_denoise_animation,
     CYCLES_OT_lightgroup_add,
     CYCLES_OT_lightgroup_remove,
