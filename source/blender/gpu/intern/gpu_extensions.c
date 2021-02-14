@@ -99,6 +99,7 @@ static struct GPUGlobal {
   /* Intel drivers exhibit artifacts when using glCopyImageSubData & workbench antialiasing.
    * (see T76273) */
   bool texture_copy_workaround;
+  bool use_hq_normals_workaround;
 } GG = {1, 0};
 
 static void gpu_detect_mip_render_workaround(void)
@@ -238,6 +239,11 @@ bool GPU_crappy_amd_driver(void)
   return GG.broken_amd_driver;
 }
 
+bool GPU_use_hq_normals_workaround(void)
+{
+  return GG.use_hq_normals_workaround;
+}
+
 void gpu_extensions_init(void)
 {
   /* during 2.8 development each platform has its own OpenGL minimum requirements
@@ -314,6 +320,25 @@ void gpu_extensions_init(void)
      * This fixes some issues with workbench antialiasing on Win + Intel GPU. (see T76273) */
     if (!GLEW_VERSION_4_5) {
       GG.texture_copy_workaround = true;
+    }
+  }
+
+  /* See T82856: AMD drivers since 20.11 running on a polaris architecture doesn't support the
+   * `GL_INT_2_10_10_10_REV` data type correctly. This data type is used to pack normals and flags.
+   * The work around uses `GPU_RGBA16I` but that is only possible for loop normals.
+   *
+   * Vertex and Face normals would still render resulting in undefined behavior during selection
+   * and rendering. */
+  if (GPU_type_matches(GPU_DEVICE_ATI, GPU_OS_ANY, GPU_DRIVER_OFFICIAL)) {
+    /* On Linux the driver does not report its version. Test the OpenGL version in stead. */
+    if (strstr(renderer, " RX 460 ") || strstr(renderer, " RX 470 ") ||
+        strstr(renderer, " RX 480 ") || strstr(renderer, " RX 490 ") ||
+        strstr(renderer, " RX 560 ") || strstr(renderer, " RX 560X ") ||
+        strstr(renderer, " RX 570 ") || strstr(renderer, " RX 580 ") ||
+        strstr(renderer, " RX 590 ") || strstr(renderer, " RX550/550 ") ||
+        strstr(renderer, " (TM) 520  ") || strstr(renderer, " (TM) 530  ") ||
+        strstr(renderer, " R5 ") || strstr(renderer, " R7 ") || strstr(renderer, " R9 ")) {
+      GG.use_hq_normals_workaround = true;
     }
   }
 

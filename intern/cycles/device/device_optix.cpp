@@ -37,8 +37,8 @@
 // Do not use CUDA SDK headers when using CUEW
 #    define OPTIX_DONT_INCLUDE_CUDA
 #  endif
-#  include <optix_stubs.h>
 #  include <optix_function_table_definition.h>
+#  include <optix_stubs.h>
 
 // TODO(pmours): Disable this once drivers have native support
 #  define OPTIX_DENOISER_NO_PIXEL_STRIDE 1
@@ -634,7 +634,7 @@ class OptiXDevice : public CUDADevice {
 
     const int end_sample = rtile.start_sample + rtile.num_samples;
     // Keep this number reasonable to avoid running into TDRs
-    int step_samples = (info.display_device ? 2 : 4);
+    int step_samples = (info.display_device ? 1 : 1);
     if (task.adaptive_sampling.use) {
       step_samples = task.adaptive_sampling.align_static_samples(step_samples);
     }
@@ -1537,34 +1537,22 @@ bool device_optix_init()
 
 void device_optix_info(const vector<DeviceInfo> &cuda_devices, vector<DeviceInfo> &devices)
 {
+  devices.reserve(cuda_devices.size());
+
   // Simply add all supported CUDA devices as OptiX devices again
-  for (const DeviceInfo &cuda_info : cuda_devices) {
-    DeviceInfo info = cuda_info;
+  for (DeviceInfo info : cuda_devices) {
     assert(info.type == DEVICE_CUDA);
+
+    int major;
+    cuDeviceGetAttribute(&major, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, info.num);
+    if (major < 5) {
+      continue;  // Only Maxwell and up are supported by OptiX
+    }
+
     info.type = DEVICE_OPTIX;
     info.id += "_OptiX";
 
-    // Figure out RTX support
-    CUdevice cuda_device = 0;
-    CUcontext cuda_context = NULL;
-    unsigned int rtcore_version = 0;
-    if (cuDeviceGet(&cuda_device, info.num) == CUDA_SUCCESS &&
-        cuDevicePrimaryCtxRetain(&cuda_context, cuda_device) == CUDA_SUCCESS) {
-      OptixDeviceContext optix_context = NULL;
-      if (optixDeviceContextCreate(cuda_context, nullptr, &optix_context) == OPTIX_SUCCESS) {
-        optixDeviceContextGetProperty(optix_context,
-                                      OPTIX_DEVICE_PROPERTY_RTCORE_VERSION,
-                                      &rtcore_version,
-                                      sizeof(rtcore_version));
-        optixDeviceContextDestroy(optix_context);
-      }
-      cuDevicePrimaryCtxRelease(cuda_device);
-    }
-
-    // Only add devices with RTX support
-    if (rtcore_version != 1 || getenv("CYCLES_OPTIX_TEST")) {
-      devices.push_back(info);
-    }
+    devices.push_back(info);
   }
 }
 
