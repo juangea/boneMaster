@@ -98,9 +98,9 @@ static void greasepencil_copy_data(Main *UNUSED(bmain),
     /* Apply local layer transform to all frames. Calc the active frame is not enough
      * because onion skin can use more frames. This is more slow but required here. */
     if (gpl_dst->actframe != NULL) {
-      bool transfomed = ((!is_zero_v3(gpl_dst->location)) || (!is_zero_v3(gpl_dst->rotation)) ||
-                         (!is_one_v3(gpl_dst->scale)));
-      if (transfomed) {
+      bool transformed = ((!is_zero_v3(gpl_dst->location)) || (!is_zero_v3(gpl_dst->rotation)) ||
+                          (!is_one_v3(gpl_dst->scale)));
+      if (transformed) {
         loc_eul_size_to_mat4(
             gpl_dst->layer_mat, gpl_dst->location, gpl_dst->rotation, gpl_dst->scale);
         bool do_onion = ((gpl_dst->onion_flag & GP_LAYER_ONIONSKIN) != 0);
@@ -1134,7 +1134,7 @@ bGPdata *BKE_gpencil_data_duplicate(Main *bmain, const bGPdata *gpd_src, bool in
  * Ensure selection status of stroke is in sync with its points.
  * \param gps: Grease pencil stroke
  */
-void BKE_gpencil_stroke_sync_selection(bGPDstroke *gps)
+void BKE_gpencil_stroke_sync_selection(bGPdata *gpd, bGPDstroke *gps)
 {
   bGPDspoint *pt;
   int i;
@@ -1148,6 +1148,7 @@ void BKE_gpencil_stroke_sync_selection(bGPDstroke *gps)
    * so initially, we must deselect
    */
   gps->flag &= ~GP_STROKE_SELECT;
+  BKE_gpencil_stroke_select_index_reset(gps);
 
   for (i = 0, pt = gps->points; i < gps->totpoints; i++, pt++) {
     if (pt->flag & GP_SPOINT_SELECT) {
@@ -1155,9 +1156,13 @@ void BKE_gpencil_stroke_sync_selection(bGPDstroke *gps)
       break;
     }
   }
+
+  if (gps->flag & GP_STROKE_SELECT) {
+    BKE_gpencil_stroke_select_index_set(gpd, gps);
+  }
 }
 
-void BKE_gpencil_curve_sync_selection(bGPDstroke *gps)
+void BKE_gpencil_curve_sync_selection(bGPdata *gpd, bGPDstroke *gps)
 {
   bGPDcurve *gpc = gps->editcurve;
   if (gpc == NULL) {
@@ -1165,6 +1170,7 @@ void BKE_gpencil_curve_sync_selection(bGPDstroke *gps)
   }
 
   gps->flag &= ~GP_STROKE_SELECT;
+  BKE_gpencil_stroke_select_index_reset(gps);
   gpc->flag &= ~GP_CURVE_SELECT;
 
   bool is_selected = false;
@@ -1187,7 +1193,21 @@ void BKE_gpencil_curve_sync_selection(bGPDstroke *gps)
   if (is_selected) {
     gpc->flag |= GP_CURVE_SELECT;
     gps->flag |= GP_STROKE_SELECT;
+    BKE_gpencil_stroke_select_index_set(gpd, gps);
   }
+}
+
+/* Assign unique stroke ID for selection. */
+void BKE_gpencil_stroke_select_index_set(bGPdata *gpd, bGPDstroke *gps)
+{
+  gpd->select_last_index++;
+  gps->select_index = gpd->select_last_index;
+}
+
+/* Reset unique stroke ID for selection. */
+void BKE_gpencil_stroke_select_index_reset(bGPDstroke *gps)
+{
+  gps->select_index = 0;
 }
 
 /* ************************************************** */
@@ -2512,6 +2532,11 @@ bool BKE_gpencil_from_image(
           pt->flag |= GP_SPOINT_SELECT;
         }
       }
+
+      if (gps->flag & GP_STROKE_SELECT) {
+        BKE_gpencil_stroke_select_index_set(gpd, gps);
+      }
+
       BKE_gpencil_stroke_geometry_update(gpd, gps);
     }
   }
@@ -2605,7 +2630,7 @@ void BKE_gpencil_visible_stroke_iter(ViewLayer *view_layer,
       sta_gpf = end_gpf = NULL;
       /* Check the whole range and tag the editable frames. */
       LISTBASE_FOREACH (bGPDframe *, gpf, &gpl->frames) {
-        if (gpf == act_gpf || (gpf->flag & GP_FRAME_SELECT)) {
+        if (act_gpf != NULL && (gpf == act_gpf || (gpf->flag & GP_FRAME_SELECT))) {
           gpf->runtime.onion_id = 0;
           if (do_onion) {
             if (gpf->framenum < act_gpf->framenum) {
@@ -2902,14 +2927,14 @@ void BKE_gpencil_update_layer_transforms(const Depsgraph *depsgraph, Object *ob)
       }
 
       /* Calc local layer transform. */
-      bool transfomed = ((!is_zero_v3(gpl->location)) || (!is_zero_v3(gpl->rotation)) ||
-                         (!is_one_v3(gpl->scale)));
-      if (transfomed) {
+      bool transformed = ((!is_zero_v3(gpl->location)) || (!is_zero_v3(gpl->rotation)) ||
+                          (!is_one_v3(gpl->scale)));
+      if (transformed) {
         loc_eul_size_to_mat4(gpl->layer_mat, gpl->location, gpl->rotation, gpl->scale);
       }
 
       /* only redo if any change */
-      if (changed || transfomed) {
+      if (changed || transformed) {
         LISTBASE_FOREACH (bGPDstroke *, gps, &gpl->actframe->strokes) {
           bGPDspoint *pt;
           int i;
@@ -2919,7 +2944,7 @@ void BKE_gpencil_update_layer_transforms(const Depsgraph *depsgraph, Object *ob)
               mul_m4_v3(cur_mat, &pt->x);
             }
 
-            if (transfomed) {
+            if (transformed) {
               mul_m4_v3(gpl->layer_mat, &pt->x);
             }
           }
