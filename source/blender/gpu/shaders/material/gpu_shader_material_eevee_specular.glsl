@@ -32,27 +32,29 @@ void node_eevee_specular(vec4 diffuse,
 
   result = CLOSURE_DEFAULT;
 
+  vec3 V = cameraVec(worldPosition);
+
   {
     /* Diffuse. */
     out_Diffuse_0.radiance = render_pass_diffuse_mask(vec3(1), out_Diffuse_0.radiance);
     out_Diffuse_0.radiance *= in_Diffuse_0.albedo;
-    result += out_Diffuse_0.radiance;
+    result.radiance += out_Diffuse_0.radiance;
   }
   {
     /* Glossy. */
-    float NV = dot(in_Glossy_1.N, cameraVec);
+    float NV = dot(in_Glossy_1.N, V);
     vec2 split_sum = brdf_lut(NV, in_Glossy_1.roughness);
     vec3 brdf = F_brdf_single_scatter(specular.rgb, vec3(1.0), split_sum);
 
     out_Glossy_1.radiance = closure_mask_ssr_radiance(out_Glossy_1.radiance, ssr_id);
     out_Glossy_1.radiance *= brdf;
-    out_Glossy_1.radiance = render_pass_glossy_mask(spec_color, out_Glossy_1.radiance);
+    out_Glossy_1.radiance = render_pass_glossy_mask(specular.rgb, out_Glossy_1.radiance);
     closure_load_ssr_data(
         out_Glossy_1.radiance, in_Glossy_1.roughness, in_Glossy_1.N, ssr_id, result);
   }
   {
     /* Clearcoat. */
-    float NV = dot(in_Glossy_2.N, cameraVec);
+    float NV = dot(in_Glossy_2.N, V);
     vec2 split_sum = brdf_lut(NV, in_Glossy_2.roughness);
     vec3 brdf = F_brdf_single_scatter(vec3(0.04), vec3(1.0), split_sum);
 
@@ -62,12 +64,12 @@ void node_eevee_specular(vec4 diffuse,
   }
   {
     /* Emission. */
-    vec3 out_emission_radiance = render_pass_emission_mask(emission.rgb);
+    vec3 out_emission_radiance = render_pass_emission_mask(emissive.rgb);
     result.radiance += out_emission_radiance;
   }
 
-  float trans = 1.0 - trans;
-  result.transmittance = vec3(trans);
+  float alpha = 1.0 - transp;
+  result.transmittance = vec3(transp);
   result.radiance *= alpha;
   result.ssr_data.rgb *= alpha;
 }
