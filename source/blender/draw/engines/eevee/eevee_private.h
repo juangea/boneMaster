@@ -205,8 +205,7 @@ enum {
 typedef enum EEVEE_SSRShaderOptions {
   SSR_RESOLVE = (1 << 0),
   SSR_FULL_TRACE = (1 << 1),
-  SSR_AO = (1 << 3),
-  SSR_MAX_SHADER = (1 << 4),
+  SSR_MAX_SHADER = (1 << 2),
 } EEVEE_SSRShaderOptions;
 
 /* DOF Gather pass shader variations */
@@ -1342,7 +1341,6 @@ void EEVEE_cryptomatte_output_init(EEVEE_ViewLayerData *sldata,
                                    int tot_samples);
 void EEVEE_cryptomatte_cache_init(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata);
 void EEVEE_cryptomatte_cache_populate(EEVEE_Data *vedata, EEVEE_ViewLayerData *sldata, Object *ob);
-void EEVEE_cryptomatte_cache_finish(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata);
 void EEVEE_cryptomatte_particle_hair_cache_populate(EEVEE_Data *vedata,
                                                     EEVEE_ViewLayerData *sldata,
                                                     Object *ob);
