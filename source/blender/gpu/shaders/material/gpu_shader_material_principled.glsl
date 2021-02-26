@@ -2,7 +2,7 @@
 vec3 tint_from_color(vec3 color)
 {
   float lum = dot(color, vec3(0.3, 0.6, 0.1));  /* luminance approx. */
-  return (lum > 0.0) ? color / lum : vec3(0.0); /* normalize lum. to isolate hue+sat */
+  return (lum > 0.0) ? color / lum : vec3(1.0); /* normalize lum. to isolate hue+sat */
 }
 
 float principled_sheen(float NV)
@@ -86,8 +86,10 @@ void node_bsdf_principled(vec4 base_color,
     out_Refraction_3.radiance = vec3(0);
   }
 
+  vec3 V = cameraVec(worldPosition);
+
   /* Glossy_1 will always be evaluated. */
-  float NV = dot(in_Glossy_1.N, cameraVec);
+  float NV = dot(in_Glossy_1.N, V);
 
   vec3 base_color_tint = tint_from_color(base_color.rgb);
 
@@ -172,7 +174,7 @@ void node_bsdf_principled(vec4 base_color,
   }
 
   if (clearcoat > 1e-5) {
-    float NV = dot(in_Glossy_2.N, cameraVec);
+    float NV = dot(in_Glossy_2.N, V);
     vec2 split_sum = brdf_lut(NV, in_Glossy_2.roughness);
     vec3 brdf = F_brdf_single_scatter(vec3(0.04), vec3(1.0), split_sum);
 
