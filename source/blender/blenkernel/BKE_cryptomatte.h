@@ -31,13 +31,13 @@ extern "C" {
 #endif
 
 struct CryptomatteSession;
-struct ID;
-struct Main;
 struct Material;
 struct Object;
 struct RenderResult;
 
 struct CryptomatteSession *BKE_cryptomatte_init(void);
+struct CryptomatteSession *BKE_cryptomatte_init_from_render_result(
+    const struct RenderResult *render_result);
 void BKE_cryptomatte_free(struct CryptomatteSession *session);
 void BKE_cryptomatte_add_layer(struct CryptomatteSession *session, const char *layer_name);
 
