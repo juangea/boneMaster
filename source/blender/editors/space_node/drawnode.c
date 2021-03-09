@@ -3385,11 +3385,24 @@ static void std_node_socket_draw(
         }
       }
       break;
-    case SOCK_RGBA:
-    case SOCK_STRING: {
+    case SOCK_RGBA: {
       uiLayout *row = uiLayoutSplit(layout, 0.5f, false);
       uiItemL(row, text, 0);
       uiItemR(row, ptr, "default_value", DEFAULT_FLAGS, "", 0);
+      break;
+    }
+    case SOCK_STRING: {
+      uiLayout *row = uiLayoutSplit(layout, 0.5f, false);
+      uiItemL(row, text, 0);
+
+      const bNodeTree *node_tree = (const bNodeTree *)node_ptr->owner_id;
+      if (node_tree->type == NTREE_GEOMETRY) {
+        node_geometry_add_attribute_search_button(node_tree, node, ptr, row);
+      }
+      else {
+        uiItemR(row, ptr, "default_value", DEFAULT_FLAGS, "", 0);
+      }
+
       break;
     }
     case SOCK_OBJECT: {
