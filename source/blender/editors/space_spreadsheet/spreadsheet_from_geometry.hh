@@ -14,39 +14,19 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
-/** \file
- * \ingroup spoutliner
- */
-
 #pragma once
 
-#include "tree_element.hh"
+#include "BKE_geometry_set.hh"
 
-struct NlaTrack;
+#include "BLI_resource_collector.hh"
 
-namespace blender::ed::outliner {
+#include "spreadsheet_draw.hh"
 
-class TreeElementNLA final : public AbstractTreeElement {
-  AnimData &anim_data_;
+struct bContext;
 
- public:
-  TreeElementNLA(TreeElement &legacy_te, AnimData &anim_data);
+namespace blender::ed::spreadsheet {
 
-  void expand(SpaceOutliner &space_outliner) const override;
-};
+std::unique_ptr<SpreadsheetDrawer> spreadsheet_drawer_from_geometry_attributes(
+    const bContext *C, Object *object_eval);
 
-class TreeElementNLATrack final : public AbstractTreeElement {
-  NlaTrack &track_;
-
- public:
-  TreeElementNLATrack(TreeElement &legacy_te, NlaTrack &track);
-
-  void expand(SpaceOutliner &space_outliner) const override;
-};
-
-class TreeElementNLAAction final : public AbstractTreeElement {
- public:
-  TreeElementNLAAction(TreeElement &legacy_te, const bAction &action);
-};
-
-}  // namespace blender::ed::outliner
+}  // namespace blender::ed::spreadsheet
