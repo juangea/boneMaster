@@ -39,7 +39,7 @@ using blender::bke::ReadAttributePtr;
 /** \name Geometry Component Implementation
  * \{ */
 
-MeshComponent::MeshComponent() : GeometryComponent(GeometryComponentType::Mesh)
+MeshComponent::MeshComponent() : GeometryComponent(GEO_COMPONENT_TYPE_MESH)
 {
 }
 
@@ -256,6 +256,157 @@ static ReadAttributePtr adapt_mesh_domain_point_to_corner(const Mesh &mesh,
   return new_attribute;
 }
 
+/**
+ * \note Theoretically this interpolation does not need to compute all values at once.
+ * However, doing that makes the implementation simpler, and this can be optimized in the future if
+ * only some values are required.
+ */
+template<typename T>
+static void adapt_mesh_domain_corner_to_polygon_impl(const Mesh &mesh,
+                                                     Span<T> old_values,
+                                                     MutableSpan<T> r_values)
+{
+  BLI_assert(r_values.size() == mesh.totpoly);
+  attribute_math::DefaultMixer<T> mixer(r_values);
+
+  for (const int poly_index : IndexRange(mesh.totpoly)) {
+    const MPoly &poly = mesh.mpoly[poly_index];
+    for (const int loop_index : IndexRange(poly.loopstart, poly.totloop)) {
+      const T value = old_values[loop_index];
+      mixer.mix_in(poly_index, value);
+    }
+  }
+
+  mixer.finalize();
+}
+
+static ReadAttributePtr adapt_mesh_domain_corner_to_polygon(const Mesh &mesh,
+                                                            ReadAttributePtr attribute)
+{
+  ReadAttributePtr new_attribute;
+  const CustomDataType data_type = attribute->custom_data_type();
+  attribute_math::convert_to_static_type(data_type, [&](auto dummy) {
+    using T = decltype(dummy);
+    if constexpr (!std::is_void_v<attribute_math::DefaultMixer<T>>) {
+      Array<T> values(mesh.totpoly);
+      adapt_mesh_domain_corner_to_polygon_impl<T>(mesh, attribute->get_span<T>(), values);
+      new_attribute = std::make_unique<OwnedArrayReadAttribute<T>>(ATTR_DOMAIN_POINT,
+                                                                   std::move(values));
+    }
+  });
+  return new_attribute;
+}
+
+template<typename T>
+void adapt_mesh_domain_polygon_to_point_impl(const Mesh &mesh,
+                                             Span<T> old_values,
+                                             MutableSpan<T> r_values)
+{
+  BLI_assert(r_values.size() == mesh.totvert);
+  attribute_math::DefaultMixer<T> mixer(r_values);
+
+  for (const int poly_index : IndexRange(mesh.totpoly)) {
+    const MPoly &poly = mesh.mpoly[poly_index];
+    const T value = old_values[poly_index];
+    for (const int loop_index : IndexRange(poly.loopstart, poly.totloop)) {
+      const MLoop &loop = mesh.mloop[loop_index];
+      const int point_index = loop.v;
+      mixer.mix_in(point_index, value);
+    }
+  }
+
+  mixer.finalize();
+}
+
+static ReadAttributePtr adapt_mesh_domain_polygon_to_point(const Mesh &mesh,
+                                                           ReadAttributePtr attribute)
+{
+  ReadAttributePtr new_attribute;
+  const CustomDataType data_type = attribute->custom_data_type();
+  attribute_math::convert_to_static_type(data_type, [&](auto dummy) {
+    using T = decltype(dummy);
+    if constexpr (!std::is_void_v<attribute_math::DefaultMixer<T>>) {
+      Array<T> values(mesh.totvert);
+      adapt_mesh_domain_polygon_to_point_impl<T>(mesh, attribute->get_span<T>(), values);
+      new_attribute = std::make_unique<OwnedArrayReadAttribute<T>>(ATTR_DOMAIN_POINT,
+                                                                   std::move(values));
+    }
+  });
+  return new_attribute;
+}
+
+template<typename T>
+void adapt_mesh_domain_polygon_to_corner_impl(const Mesh &mesh,
+                                              const Span<T> old_values,
+                                              MutableSpan<T> r_values)
+{
+  BLI_assert(r_values.size() == mesh.totloop);
+
+  for (const int poly_index : IndexRange(mesh.totpoly)) {
+    const MPoly &poly = mesh.mpoly[poly_index];
+    MutableSpan<T> poly_corner_values = r_values.slice(poly.loopstart, poly.totloop);
+    poly_corner_values.fill(old_values[poly_index]);
+  }
+}
+
+static ReadAttributePtr adapt_mesh_domain_polygon_to_corner(const Mesh &mesh,
+                                                            ReadAttributePtr attribute)
+{
+  ReadAttributePtr new_attribute;
+  const CustomDataType data_type = attribute->custom_data_type();
+  attribute_math::convert_to_static_type(data_type, [&](auto dummy) {
+    using T = decltype(dummy);
+    if constexpr (!std::is_void_v<attribute_math::DefaultMixer<T>>) {
+      Array<T> values(mesh.totloop);
+      adapt_mesh_domain_polygon_to_corner_impl<T>(mesh, attribute->get_span<T>(), values);
+      new_attribute = std::make_unique<OwnedArrayReadAttribute<T>>(ATTR_DOMAIN_POINT,
+                                                                   std::move(values));
+    }
+  });
+  return new_attribute;
+}
+
+/**
+ * \note Theoretically this interpolation does not need to compute all values at once.
+ * However, doing that makes the implementation simpler, and this can be optimized in the future if
+ * only some values are required.
+ */
+template<typename T>
+static void adapt_mesh_domain_point_to_polygon_impl(const Mesh &mesh,
+                                                    const Span<T> old_values,
+                                                    MutableSpan<T> r_values)
+{
+  BLI_assert(r_values.size() == mesh.totpoly);
+  attribute_math::DefaultMixer<T> mixer(r_values);
+
+  for (const int poly_index : IndexRange(mesh.totpoly)) {
+    const MPoly &poly = mesh.mpoly[poly_index];
+    for (const int loop_index : IndexRange(poly.loopstart, poly.totloop)) {
+      MLoop &loop = mesh.mloop[loop_index];
+      const int point_index = loop.v;
+      mixer.mix_in(poly_index, old_values[point_index]);
+    }
+  }
+  mixer.finalize();
+}
+
+static ReadAttributePtr adapt_mesh_domain_point_to_polygon(const Mesh &mesh,
+                                                           ReadAttributePtr attribute)
+{
+  ReadAttributePtr new_attribute;
+  const CustomDataType data_type = attribute->custom_data_type();
+  attribute_math::convert_to_static_type(data_type, [&](auto dummy) {
+    using T = decltype(dummy);
+    if constexpr (!std::is_void_v<attribute_math::DefaultMixer<T>>) {
+      Array<T> values(mesh.totpoly);
+      adapt_mesh_domain_point_to_polygon_impl<T>(mesh, attribute->get_span<T>(), values);
+      new_attribute = std::make_unique<OwnedArrayReadAttribute<T>>(ATTR_DOMAIN_POINT,
+                                                                   std::move(values));
+    }
+  });
+  return new_attribute;
+}
+
 }  // namespace blender::bke
 
 ReadAttributePtr MeshComponent::attribute_try_adapt_domain(ReadAttributePtr attribute,
@@ -277,6 +428,8 @@ ReadAttributePtr MeshComponent::attribute_try_adapt_domain(ReadAttributePtr attr
       switch (new_domain) {
         case ATTR_DOMAIN_POINT:
           return blender::bke::adapt_mesh_domain_corner_to_point(*mesh_, std::move(attribute));
+        case ATTR_DOMAIN_POLYGON:
+          return blender::bke::adapt_mesh_domain_corner_to_polygon(*mesh_, std::move(attribute));
         default:
           break;
       }
@@ -286,9 +439,23 @@ ReadAttributePtr MeshComponent::attribute_try_adapt_domain(ReadAttributePtr attr
       switch (new_domain) {
         case ATTR_DOMAIN_CORNER:
           return blender::bke::adapt_mesh_domain_point_to_corner(*mesh_, std::move(attribute));
+        case ATTR_DOMAIN_POLYGON:
+          return blender::bke::adapt_mesh_domain_point_to_polygon(*mesh_, std::move(attribute));
         default:
           break;
       }
+      break;
+    }
+    case ATTR_DOMAIN_POLYGON: {
+      switch (new_domain) {
+        case ATTR_DOMAIN_POINT:
+          return blender::bke::adapt_mesh_domain_polygon_to_point(*mesh_, std::move(attribute));
+        case ATTR_DOMAIN_CORNER:
+          return blender::bke::adapt_mesh_domain_polygon_to_corner(*mesh_, std::move(attribute));
+        default:
+          break;
+      }
+      break;
     }
     default:
       break;
@@ -299,14 +466,14 @@ ReadAttributePtr MeshComponent::attribute_try_adapt_domain(ReadAttributePtr attr
 
 static Mesh *get_mesh_from_component_for_write(GeometryComponent &component)
 {
-  BLI_assert(component.type() == GeometryComponentType::Mesh);
+  BLI_assert(component.type() == GEO_COMPONENT_TYPE_MESH);
   MeshComponent &mesh_component = static_cast<MeshComponent &>(component);
   return mesh_component.get_for_write();
 }
 
 static const Mesh *get_mesh_from_component_for_read(const GeometryComponent &component)
 {
-  BLI_assert(component.type() == GeometryComponentType::Mesh);
+  BLI_assert(component.type() == GEO_COMPONENT_TYPE_MESH);
   const MeshComponent &mesh_component = static_cast<const MeshComponent &>(component);
   return mesh_component.get_for_read();
 }
@@ -546,7 +713,7 @@ class VertexGroupsAttributeProvider final : public DynamicAttributesProvider {
   ReadAttributePtr try_get_for_read(const GeometryComponent &component,
                                     const StringRef attribute_name) const final
   {
-    BLI_assert(component.type() == GeometryComponentType::Mesh);
+    BLI_assert(component.type() == GEO_COMPONENT_TYPE_MESH);
     const MeshComponent &mesh_component = static_cast<const MeshComponent &>(component);
     const Mesh *mesh = mesh_component.get_for_read();
     const int vertex_group_index = mesh_component.vertex_group_names().lookup_default_as(
@@ -566,7 +733,7 @@ class VertexGroupsAttributeProvider final : public DynamicAttributesProvider {
   WriteAttributePtr try_get_for_write(GeometryComponent &component,
                                       const StringRef attribute_name) const final
   {
-    BLI_assert(component.type() == GeometryComponentType::Mesh);
+    BLI_assert(component.type() == GEO_COMPONENT_TYPE_MESH);
     MeshComponent &mesh_component = static_cast<MeshComponent &>(component);
     Mesh *mesh = mesh_component.get_for_write();
     if (mesh == nullptr) {
@@ -591,7 +758,7 @@ class VertexGroupsAttributeProvider final : public DynamicAttributesProvider {
 
   bool try_delete(GeometryComponent &component, const StringRef attribute_name) const final
   {
-    BLI_assert(component.type() == GeometryComponentType::Mesh);
+    BLI_assert(component.type() == GEO_COMPONENT_TYPE_MESH);
     MeshComponent &mesh_component = static_cast<MeshComponent &>(component);
 
     const int vertex_group_index = mesh_component.vertex_group_names().pop_default_as(
@@ -616,7 +783,7 @@ class VertexGroupsAttributeProvider final : public DynamicAttributesProvider {
   bool foreach_attribute(const GeometryComponent &component,
                          const AttributeForeachCallback callback) const final
   {
-    BLI_assert(component.type() == GeometryComponentType::Mesh);
+    BLI_assert(component.type() == GEO_COMPONENT_TYPE_MESH);
     const MeshComponent &mesh_component = static_cast<const MeshComponent &>(component);
     for (const auto item : mesh_component.vertex_group_names().items()) {
       const StringRefNull name = item.key;
