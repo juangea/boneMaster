@@ -140,7 +140,7 @@ static void setup_app_data(bContext *C,
 {
   Main *bmain = G_MAIN;
   Scene *curscene = NULL;
-  const bool recover = (G.fileflags & G_FILE_RECOVER) != 0;
+  const bool recover = (G.fileflags & G_FILE_RECOVER_READ) != 0;
   const bool is_startup = params->is_startup;
   enum {
     LOAD_UI = 1,
@@ -395,7 +395,7 @@ static void setup_app_data(bContext *C,
     BKE_main_id_refcount_recompute(bmain, false);
   }
 
-  if (mode != LOAD_UNDO) {
+  if (mode != LOAD_UNDO && !USER_EXPERIMENTAL_TEST(&U, no_override_auto_resync)) {
     BKE_lib_override_library_main_resync(
         bmain,
         curscene,
