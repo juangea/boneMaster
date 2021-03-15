@@ -69,6 +69,9 @@ typedef struct SpaceNode_Runtime SpaceNode_Runtime;
 /* Defined in `file_intern.h`. */
 typedef struct SpaceFile_Runtime SpaceFile_Runtime;
 
+/* Defined in `spreadsheet_intern.hh`. */
+typedef struct SpaceSpreadsheet_Runtime SpaceSpreadsheet_Runtime;
+
 /* -------------------------------------------------------------------- */
 /** \name SpaceLink (Base)
  * \{ */
@@ -694,7 +697,7 @@ typedef enum eSpaceSeq_OverlayType {
  * custom library. Otherwise idname is not used.
  */
 typedef struct FileSelectAssetLibraryUID {
-  short type;
+  short type; /* eFileAssetLibrary_Type */
   char _pad[2];
   /**
    * If showing a custom asset library (#FILE_ASSET_LIBRARY_CUSTOM), this is the index of the
@@ -1864,6 +1867,8 @@ typedef struct SpaceSpreadsheet {
   uint8_t attribute_domain;
 
   char _pad1[5];
+
+  SpaceSpreadsheet_Runtime *runtime;
 } SpaceSpreadsheet;
 
 /** \} */

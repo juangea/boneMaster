@@ -146,6 +146,7 @@ set(SRC
   geometry/nodes/node_geo_attribute_color_ramp.cc
   geometry/nodes/node_geo_attribute_combine_xyz.cc
   geometry/nodes/node_geo_attribute_compare.cc
+  geometry/nodes/node_geo_attribute_convert.cc
   geometry/nodes/node_geo_attribute_fill.cc
   geometry/nodes/node_geo_attribute_math.cc
   geometry/nodes/node_geo_attribute_mix.cc
@@ -154,6 +155,7 @@ set(SRC
   geometry/nodes/node_geo_attribute_sample_texture.cc
   geometry/nodes/node_geo_attribute_separate_xyz.cc
   geometry/nodes/node_geo_attribute_vector_math.cc
+  geometry/nodes/node_geo_attribute_remove.cc
   geometry/nodes/node_geo_boolean.cc
   geometry/nodes/node_geo_collection_info.cc
   geometry/nodes/node_geo_common.cc
