@@ -25,58 +25,45 @@
 #include "BLI_listbase.h"
 #include "BLI_math.h"
 
-#include "BKE_customdata.h"
-#include "BKE_object.h"
-
-#include "DEG_depsgraph_query.h"
-
-#include "DNA_camera_types.h"
-#include "DNA_lineart_types.h"
-#include "DNA_mesh_types.h"
-#include "DNA_meshdata_types.h"
-#include "DNA_scene_types.h"
-
 #include "MOD_lineart.h"
-
-#include "bmesh.h"
 
 #include "lineart_intern.h"
 
 #include <math.h>
 
-#define LRT_OTHER_RV(rl, rv) ((rv) == (rl)->l ? (rl)->r : ((rv) == (rl)->r ? (rl)->l : NULL))
+#define LRT_OTHER_RV(e, rv) ((rv) == (e)->v1 ? (e)->v2 : ((rv) == (e)->v2 ? (e)->v1 : NULL))
 
 /* Get a connected line, only for lines who has the exact given vert, or (in the case of
  * intersection lines) who has a vert that has the exact same position. */
-static LineartLine *lineart_line_get_connected(LineartBoundingArea *ba,
+static LineartEdge *lineart_line_get_connected(LineartBoundingArea *ba,
                                                LineartVert *rv,
                                                LineartVert **new_rv,
                                                int match_flag)
 {
   LISTBASE_FOREACH (LinkData *, lip, &ba->linked_lines) {
-    LineartLine *nrl = lip->data;
+    LineartEdge *n_e = lip->data;
 
-    if ((!(nrl->flags & LRT_EDGE_FLAG_ALL_TYPE)) || (nrl->flags & LRT_EDGE_FLAG_CHAIN_PICKED)) {
+    if ((!(n_e->flags & LRT_EDGE_FLAG_ALL_TYPE)) || (n_e->flags & LRT_EDGE_FLAG_CHAIN_PICKED)) {
       continue;
     }
 
-    if (match_flag && ((nrl->flags & LRT_EDGE_FLAG_ALL_TYPE) & match_flag) == 0) {
+    if (match_flag && ((n_e->flags & LRT_EDGE_FLAG_ALL_TYPE) & match_flag) == 0) {
       continue;
     }
 
-    *new_rv = LRT_OTHER_RV(nrl, rv);
+    *new_rv = LRT_OTHER_RV(n_e, rv);
     if (*new_rv) {
-      return nrl;
+      return n_e;
     }
 
-    if (nrl->flags & LRT_EDGE_FLAG_INTERSECTION) {
-      if (rv->fbcoord[0] == nrl->l->fbcoord[0] && rv->fbcoord[1] == nrl->l->fbcoord[1]) {
-        *new_rv = LRT_OTHER_RV(nrl, nrl->l);
-        return nrl;
+    if (n_e->flags & LRT_EDGE_FLAG_INTERSECTION) {
+      if (rv->fbcoord[0] == n_e->v1->fbcoord[0] && rv->fbcoord[1] == n_e->v1->fbcoord[1]) {
+        *new_rv = LRT_OTHER_RV(n_e, n_e->v1);
+        return n_e;
       }
-      if (rv->fbcoord[0] == nrl->r->fbcoord[0] && rv->fbcoord[1] == nrl->r->fbcoord[1]) {
-        *new_rv = LRT_OTHER_RV(nrl, nrl->r);
-        return nrl;
+      if (rv->fbcoord[0] == n_e->v2->fbcoord[0] && rv->fbcoord[1] == n_e->v2->fbcoord[1]) {
+        *new_rv = LRT_OTHER_RV(n_e, n_e->v2);
+        return n_e;
       }
     }
   }
@@ -198,216 +185,216 @@ void MOD_lineart_chain_feature_lines(LineartRenderBuffer *rb)
 
   LRT_ITER_ALL_LINES_BEGIN
   {
-    if ((!(rl->flags & LRT_EDGE_FLAG_ALL_TYPE)) || (rl->flags & LRT_EDGE_FLAG_CHAIN_PICKED)) {
+    if ((!(e->flags & LRT_EDGE_FLAG_ALL_TYPE)) || (e->flags & LRT_EDGE_FLAG_CHAIN_PICKED)) {
       LRT_ITER_ALL_LINES_NEXT
       continue;
     }
 
-    rl->flags |= LRT_EDGE_FLAG_CHAIN_PICKED;
+    e->flags |= LRT_EDGE_FLAG_CHAIN_PICKED;
 
     rlc = lineart_chain_create(rb);
 
     /* One chain can only have one object_ref,
      * so we assign it based on the first segment we found. */
-    rlc->object_ref = rl->object_ref;
+    rlc->object_ref = e->object_ref;
 
-    LineartLine *new_rl = rl;
+    LineartEdge *new_e = e;
     LineartVert *new_rv;
     float N[3] = {0};
 
-    if (rl->tl) {
-      N[0] += rl->tl->gn[0];
-      N[1] += rl->tl->gn[1];
-      N[2] += rl->tl->gn[2];
+    if (e->t1) {
+      N[0] += e->t1->gn[0];
+      N[1] += e->t1->gn[1];
+      N[2] += e->t1->gn[2];
     }
-    if (rl->tr) {
-      N[0] += rl->tr->gn[0];
-      N[1] += rl->tr->gn[1];
-      N[2] += rl->tr->gn[2];
+    if (e->t2) {
+      N[0] += e->t2->gn[0];
+      N[1] += e->t2->gn[1];
+      N[2] += e->t2->gn[2];
     }
-    if (rl->tl || rl->tr) {
+    if (e->t1 || e->t2) {
       normalize_v3(N);
     }
 
     /*  Step 1: grow left. */
-    ba = MOD_lineart_get_bounding_area(rb, rl->l->fbcoord[0], rl->l->fbcoord[1]);
-    new_rv = rl->l;
-    rls = rl->segments.first;
+    ba = MOD_lineart_get_bounding_area(rb, e->v1->fbcoord[0], e->v1->fbcoord[1]);
+    new_rv = e->v1;
+    rls = e->segments.first;
     VERT_COORD_TO_FLOAT(new_rv);
     lineart_chain_prepend_point(rb,
                                 rlc,
                                 use_fbcoord,
                                 use_gpos,
                                 N,
-                                rl->flags,
+                                e->flags,
                                 rls->occlusion,
                                 rls->transparency_mask,
-                                rl->l_obindex);
-    while (ba && (new_rl = lineart_line_get_connected(ba, new_rv, &new_rv, rl->flags))) {
-      new_rl->flags |= LRT_EDGE_FLAG_CHAIN_PICKED;
+                                e->v1_obindex);
+    while (ba && (new_e = lineart_line_get_connected(ba, new_rv, &new_rv, e->flags))) {
+      new_e->flags |= LRT_EDGE_FLAG_CHAIN_PICKED;
 
-      if (new_rl->tl || new_rl->tr) {
+      if (new_e->t1 || new_e->t2) {
         zero_v3(N);
-        if (new_rl->tl) {
-          N[0] += new_rl->tl->gn[0];
-          N[1] += new_rl->tl->gn[1];
-          N[2] += new_rl->tl->gn[2];
+        if (new_e->t1) {
+          N[0] += new_e->t1->gn[0];
+          N[1] += new_e->t1->gn[1];
+          N[2] += new_e->t1->gn[2];
         }
-        if (new_rl->tr) {
-          N[0] += new_rl->tr->gn[0];
-          N[1] += new_rl->tr->gn[1];
-          N[2] += new_rl->tr->gn[2];
+        if (new_e->t2) {
+          N[0] += new_e->t2->gn[0];
+          N[1] += new_e->t2->gn[1];
+          N[2] += new_e->t2->gn[2];
         }
         normalize_v3(N);
       }
 
-      if (new_rv == new_rl->l) {
-        for (rls = new_rl->segments.last; rls; rls = rls->prev) {
+      if (new_rv == new_e->v1) {
+        for (rls = new_e->segments.last; rls; rls = rls->prev) {
           double gpos[3], lpos[3];
-          double *lfb = new_rl->l->fbcoord, *rfb = new_rl->r->fbcoord;
+          double *lfb = new_e->v1->fbcoord, *rfb = new_e->v2->fbcoord;
           double global_at = lfb[3] * rls->at / (rls->at * lfb[3] + (1 - rls->at) * rfb[3]);
-          interp_v3_v3v3_db(lpos, new_rl->l->fbcoord, new_rl->r->fbcoord, rls->at);
-          interp_v3_v3v3_db(gpos, new_rl->l->gloc, new_rl->r->gloc, global_at);
+          interp_v3_v3v3_db(lpos, new_e->v1->fbcoord, new_e->v2->fbcoord, rls->at);
+          interp_v3_v3v3_db(gpos, new_e->v1->gloc, new_e->v2->gloc, global_at);
           POS_TO_FLOAT(lpos, gpos)
           lineart_chain_prepend_point(rb,
                                       rlc,
                                       use_fbcoord,
                                       use_gpos,
                                       N,
-                                      new_rl->flags,
+                                      new_e->flags,
                                       rls->occlusion,
                                       rls->transparency_mask,
-                                      new_rl->l_obindex);
+                                      new_e->v1_obindex);
           last_occlusion = rls->occlusion;
           last_transparency = rls->transparency_mask;
         }
       }
-      else if (new_rv == new_rl->r) {
-        rls = new_rl->segments.first;
+      else if (new_rv == new_e->v2) {
+        rls = new_e->segments.first;
         last_occlusion = rls->occlusion;
         last_transparency = rls->transparency_mask;
         rls = rls->next;
         for (; rls; rls = rls->next) {
           double gpos[3], lpos[3];
-          double *lfb = new_rl->l->fbcoord, *rfb = new_rl->r->fbcoord;
+          double *lfb = new_e->v1->fbcoord, *rfb = new_e->v2->fbcoord;
           double global_at = lfb[3] * rls->at / (rls->at * lfb[3] + (1 - rls->at) * rfb[3]);
-          interp_v3_v3v3_db(lpos, new_rl->l->fbcoord, new_rl->r->fbcoord, rls->at);
-          interp_v3_v3v3_db(gpos, new_rl->l->gloc, new_rl->r->gloc, global_at);
+          interp_v3_v3v3_db(lpos, new_e->v1->fbcoord, new_e->v2->fbcoord, rls->at);
+          interp_v3_v3v3_db(gpos, new_e->v1->gloc, new_e->v2->gloc, global_at);
           POS_TO_FLOAT(lpos, gpos)
           lineart_chain_prepend_point(rb,
                                       rlc,
                                       use_fbcoord,
                                       use_gpos,
                                       N,
-                                      new_rl->flags,
+                                      new_e->flags,
                                       last_occlusion,
                                       last_transparency,
-                                      new_rl->r_obindex);
+                                      new_e->v2_obindex);
           last_occlusion = rls->occlusion;
           last_transparency = rls->transparency_mask;
         }
-        VERT_COORD_TO_FLOAT(new_rl->r);
+        VERT_COORD_TO_FLOAT(new_e->v2);
         lineart_chain_prepend_point(rb,
                                     rlc,
                                     use_fbcoord,
                                     use_gpos,
                                     N,
-                                    new_rl->flags,
+                                    new_e->flags,
                                     last_occlusion,
                                     last_transparency,
-                                    new_rl->r_obindex);
+                                    new_e->v2_obindex);
       }
       ba = MOD_lineart_get_bounding_area(rb, new_rv->fbcoord[0], new_rv->fbcoord[1]);
     }
 
     /* Restore normal value. */
-    if (rl->tl || rl->tr) {
+    if (e->t1 || e->t2) {
       zero_v3(N);
-      if (rl->tl) {
-        N[0] += rl->tl->gn[0];
-        N[1] += rl->tl->gn[1];
-        N[2] += rl->tl->gn[2];
+      if (e->t1) {
+        N[0] += e->t1->gn[0];
+        N[1] += e->t1->gn[1];
+        N[2] += e->t1->gn[2];
       }
-      if (rl->tr) {
-        N[0] += rl->tr->gn[0];
-        N[1] += rl->tr->gn[1];
-        N[2] += rl->tr->gn[2];
+      if (e->t2) {
+        N[0] += e->t2->gn[0];
+        N[1] += e->t2->gn[1];
+        N[2] += e->t2->gn[2];
       }
       normalize_v3(N);
     }
     /*  Step 2: Adding all cuts from the given line, so we can continue connecting the right side
      * of the line. */
-    rls = rl->segments.first;
+    rls = e->segments.first;
     last_occlusion = ((LineartLineSegment *)rls)->occlusion;
     last_transparency = ((LineartLineSegment *)rls)->transparency_mask;
     for (rls = rls->next; rls; rls = rls->next) {
       double gpos[3], lpos[3];
-      double *lfb = rl->l->fbcoord, *rfb = rl->r->fbcoord;
+      double *lfb = e->v1->fbcoord, *rfb = e->v2->fbcoord;
       double global_at = lfb[3] * rls->at / (rls->at * lfb[3] + (1 - rls->at) * rfb[3]);
-      interp_v3_v3v3_db(lpos, rl->l->fbcoord, rl->r->fbcoord, rls->at);
-      interp_v3_v3v3_db(gpos, rl->l->gloc, rl->r->gloc, global_at);
+      interp_v3_v3v3_db(lpos, e->v1->fbcoord, e->v2->fbcoord, rls->at);
+      interp_v3_v3v3_db(gpos, e->v1->gloc, e->v2->gloc, global_at);
       POS_TO_FLOAT(lpos, gpos)
       lineart_chain_append_point(rb,
                                  rlc,
                                  use_fbcoord,
                                  use_gpos,
                                  N,
-                                 rl->flags,
+                                 e->flags,
                                  rls->occlusion,
                                  rls->transparency_mask,
-                                 rl->l_obindex);
+                                 e->v1_obindex);
       last_occlusion = rls->occlusion;
       last_transparency = rls->transparency_mask;
     }
-    VERT_COORD_TO_FLOAT(rl->r)
+    VERT_COORD_TO_FLOAT(e->v2)
     lineart_chain_append_point(rb,
                                rlc,
                                use_fbcoord,
                                use_gpos,
                                N,
-                               rl->flags,
+                               e->flags,
                                last_occlusion,
                                last_transparency,
-                               rl->r_obindex);
+                               e->v2_obindex);
 
     /*  Step 3: grow right. */
-    ba = MOD_lineart_get_bounding_area(rb, rl->r->fbcoord[0], rl->r->fbcoord[1]);
-    new_rv = rl->r;
-    while (ba && (new_rl = lineart_line_get_connected(ba, new_rv, &new_rv, rl->flags))) {
-      new_rl->flags |= LRT_EDGE_FLAG_CHAIN_PICKED;
+    ba = MOD_lineart_get_bounding_area(rb, e->v2->fbcoord[0], e->v2->fbcoord[1]);
+    new_rv = e->v2;
+    while (ba && (new_e = lineart_line_get_connected(ba, new_rv, &new_rv, e->flags))) {
+      new_e->flags |= LRT_EDGE_FLAG_CHAIN_PICKED;
 
-      if (new_rl->tl || new_rl->tr) {
+      if (new_e->t1 || new_e->t2) {
         zero_v3(N);
-        if (new_rl->tl) {
-          N[0] += new_rl->tl->gn[0];
-          N[1] += new_rl->tl->gn[1];
-          N[2] += new_rl->tl->gn[2];
+        if (new_e->t1) {
+          N[0] += new_e->t1->gn[0];
+          N[1] += new_e->t1->gn[1];
+          N[2] += new_e->t1->gn[2];
         }
-        if (new_rl->tr) {
-          N[0] += new_rl->tr->gn[0];
-          N[1] += new_rl->tr->gn[1];
-          N[2] += new_rl->tr->gn[2];
+        if (new_e->t2) {
+          N[0] += new_e->t2->gn[0];
+          N[1] += new_e->t2->gn[1];
+          N[2] += new_e->t2->gn[2];
         }
         normalize_v3(N);
       }
 
       /* Fix leading vertex type. */
       rlci = rlc->chain.last;
-      rlci->line_type = new_rl->flags & LRT_EDGE_FLAG_ALL_TYPE;
+      rlci->line_type = new_e->flags & LRT_EDGE_FLAG_ALL_TYPE;
 
-      if (new_rv == new_rl->l) {
-        rls = new_rl->segments.last;
+      if (new_rv == new_e->v1) {
+        rls = new_e->segments.last;
         last_occlusion = rls->occlusion;
         last_transparency = rls->transparency_mask;
         /* Fix leading vertex occlusion. */
         rlci->occlusion = last_occlusion;
         rlci->transparency_mask = last_transparency;
-        for (rls = new_rl->segments.last; rls; rls = rls->prev) {
+        for (rls = new_e->segments.last; rls; rls = rls->prev) {
           double gpos[3], lpos[3];
-          double *lfb = new_rl->l->fbcoord, *rfb = new_rl->r->fbcoord;
+          double *lfb = new_e->v1->fbcoord, *rfb = new_e->v2->fbcoord;
           double global_at = lfb[3] * rls->at / (rls->at * lfb[3] + (1 - rls->at) * rfb[3]);
-          interp_v3_v3v3_db(lpos, new_rl->l->fbcoord, new_rl->r->fbcoord, rls->at);
-          interp_v3_v3v3_db(gpos, new_rl->l->gloc, new_rl->r->gloc, global_at);
+          interp_v3_v3v3_db(lpos, new_e->v1->fbcoord, new_e->v2->fbcoord, rls->at);
+          interp_v3_v3v3_db(gpos, new_e->v1->gloc, new_e->v2->gloc, global_at);
           last_occlusion = rls->prev ? rls->prev->occlusion : last_occlusion;
           last_transparency = rls->prev ? rls->prev->transparency_mask : last_transparency;
           POS_TO_FLOAT(lpos, gpos)
@@ -416,14 +403,14 @@ void MOD_lineart_chain_feature_lines(LineartRenderBuffer *rb)
                                      use_fbcoord,
                                      use_gpos,
                                      N,
-                                     new_rl->flags,
+                                     new_e->flags,
                                      last_occlusion,
                                      last_transparency,
-                                     new_rl->l_obindex);
+                                     new_e->v1_obindex);
         }
       }
-      else if (new_rv == new_rl->r) {
-        rls = new_rl->segments.first;
+      else if (new_rv == new_e->v2) {
+        rls = new_e->segments.first;
         last_occlusion = rls->occlusion;
         last_transparency = rls->transparency_mask;
         rlci->occlusion = last_occlusion;
@@ -431,33 +418,33 @@ void MOD_lineart_chain_feature_lines(LineartRenderBuffer *rb)
         rls = rls->next;
         for (; rls; rls = rls->next) {
           double gpos[3], lpos[3];
-          double *lfb = new_rl->l->fbcoord, *rfb = new_rl->r->fbcoord;
+          double *lfb = new_e->v1->fbcoord, *rfb = new_e->v2->fbcoord;
           double global_at = lfb[3] * rls->at / (rls->at * lfb[3] + (1 - rls->at) * rfb[3]);
-          interp_v3_v3v3_db(lpos, new_rl->l->fbcoord, new_rl->r->fbcoord, rls->at);
-          interp_v3_v3v3_db(gpos, new_rl->l->gloc, new_rl->r->gloc, global_at);
+          interp_v3_v3v3_db(lpos, new_e->v1->fbcoord, new_e->v2->fbcoord, rls->at);
+          interp_v3_v3v3_db(gpos, new_e->v1->gloc, new_e->v2->gloc, global_at);
           POS_TO_FLOAT(lpos, gpos)
           lineart_chain_append_point(rb,
                                      rlc,
                                      use_fbcoord,
                                      use_gpos,
                                      N,
-                                     new_rl->flags,
+                                     new_e->flags,
                                      rls->occlusion,
                                      rls->transparency_mask,
-                                     new_rl->r_obindex);
+                                     new_e->v2_obindex);
           last_occlusion = rls->occlusion;
           last_transparency = rls->transparency_mask;
         }
-        VERT_COORD_TO_FLOAT(new_rl->r)
+        VERT_COORD_TO_FLOAT(new_e->v2)
         lineart_chain_append_point(rb,
                                    rlc,
                                    use_fbcoord,
                                    use_gpos,
                                    N,
-                                   new_rl->flags,
+                                   new_e->flags,
                                    last_occlusion,
                                    last_transparency,
-                                   new_rl->r_obindex);
+                                   new_e->v2_obindex);
       }
       ba = MOD_lineart_get_bounding_area(rb, new_rv->fbcoord[0], new_rv->fbcoord[1]);
     }
@@ -465,7 +452,7 @@ void MOD_lineart_chain_feature_lines(LineartRenderBuffer *rb)
       rlc->type = LRT_EDGE_FLAG_CONTOUR;
     }
     else {
-      rlc->type = (rl->flags & LRT_EDGE_FLAG_ALL_TYPE);
+      rlc->type = (e->flags & LRT_EDGE_FLAG_ALL_TYPE);
     }
   }
   LRT_ITER_ALL_LINES_END
@@ -512,10 +499,12 @@ static LineartBoundingArea *lineart_bounding_area_get_end_point(LineartRenderBuf
   return lineart_bounding_area_get_rlci_recursive(rb, root, rlci);
 }
 
-/* Here we will try to connect geometry space chains together in image space. However we can't
+/**
+ * Here we will try to connect geometry space chains together in image space. However we can't
  * chain two chains together if their end and start points lie on the border between two bounding
  * areas, this happens either when 1) the geometry is way too dense, or 2) the chaining threshold
- * is too big that it covers multiple small bounding areas. */
+ * is too big that it covers multiple small bounding areas.
+ */
 static void lineart_bounding_area_link_point_recursive(LineartRenderBuffer *rb,
                                                        LineartBoundingArea *root,
                                                        LineartLineChain *rlc,
@@ -636,7 +625,9 @@ void MOD_lineart_chain_split_for_fixed_occlusion(LineartRenderBuffer *rb)
   }
 }
 
-/* Note: segment type (crease/material/contour...) is ambiguous after this. */
+/**
+ * Note: segment type (crease/material/contour...) is ambiguous after this.
+ */
 static void lineart_chain_connect(LineartRenderBuffer *UNUSED(rb),
                                   LineartLineChain *onto,
                                   LineartLineChain *sub,
@@ -694,14 +685,13 @@ static LineartChainRegisterEntry *lineart_chain_get_closest_cre(LineartRenderBuf
                                                                 int occlusion,
                                                                 unsigned char transparency_mask,
                                                                 float dist,
-                                                                int do_geometry_space,
                                                                 float *result_new_len,
                                                                 LineartBoundingArea *caller_ba)
 {
 
   LineartChainRegisterEntry *closest_cre = NULL;
 
-  /* Keep using for loop because cre could be removed from the iteration before getting to the
+  /* Keep using for loop because `cre` could be removed from the iteration before getting to the
    * next one. */
   LISTBASE_FOREACH_MUTABLE (LineartChainRegisterEntry *, cre, &ba->linked_chains) {
     if (cre->rlc->object_ref != rlc->object_ref) {
@@ -730,7 +720,7 @@ static LineartChainRegisterEntry *lineart_chain_get_closest_cre(LineartRenderBuf
         if (rb->fuzzy_intersections) {
           if (!(cre->rlc->type == LRT_EDGE_FLAG_INTERSECTION ||
                 rlc->type == LRT_EDGE_FLAG_INTERSECTION)) {
-            continue; /* Fuzzy intersetions but no intersection line found. */
+            continue; /* Fuzzy intersections but no intersection line found. */
           }
         }
         else { /* Line type different but no fuzzy. */
@@ -739,8 +729,7 @@ static LineartChainRegisterEntry *lineart_chain_get_closest_cre(LineartRenderBuf
       }
     }
 
-    float new_len = do_geometry_space ? len_v3v3(cre->rlci->gpos, rlci->gpos) :
-                                        len_v2v2(cre->rlci->pos, rlci->pos);
+    float new_len = len_v2v2(cre->rlci->pos, rlci->pos);
     if (new_len < dist) {
       closest_cre = cre;
       dist = new_len;
@@ -758,23 +747,15 @@ static LineartChainRegisterEntry *lineart_chain_get_closest_cre(LineartRenderBuf
   if (dist_to < dist && dist_to > 0) { \
     LISTBASE_FOREACH (LinkData *, ld, list) { \
       LineartBoundingArea *sba = (LineartBoundingArea *)ld->data; \
-      adjacent_closest = lineart_chain_get_closest_cre(rb, \
-                                                       sba, \
-                                                       rlc, \
-                                                       rlci, \
-                                                       occlusion, \
-                                                       transparency_mask, \
-                                                       dist, \
-                                                       do_geometry_space, \
-                                                       &adjacent_new_len, \
-                                                       ba); \
+      adjacent_closest = lineart_chain_get_closest_cre( \
+          rb, sba, rlc, rlci, occlusion, transparency_mask, dist, &adjacent_new_len, ba); \
       if (adjacent_new_len < dist) { \
         dist = adjacent_new_len; \
         closest_cre = adjacent_closest; \
       } \
     } \
   }
-  if (!do_geometry_space && !caller_ba) {
+  if (!caller_ba) {
     LRT_TEST_ADJACENT_AREAS(rlci->pos[0] - ba->l, &ba->lp);
     LRT_TEST_ADJACENT_AREAS(ba->r - rlci->pos[0], &ba->rp);
     LRT_TEST_ADJACENT_AREAS(ba->u - rlci->pos[1], &ba->up);
@@ -786,23 +767,24 @@ static LineartChainRegisterEntry *lineart_chain_get_closest_cre(LineartRenderBuf
   return closest_cre;
 }
 
-/* This function only connects two different chains. It will not do any clean up or smart chaining.
+/**
+ * This function only connects two different chains. It will not do any clean up or smart chaining.
  * So no: removing overlapping chains, removal of short isolated segments, and no loop reduction is
- * implemented yet. */
-void MOD_lineart_chain_connect(LineartRenderBuffer *rb, const bool do_geometry_space)
+ * implemented yet.
+ */
+void MOD_lineart_chain_connect(LineartRenderBuffer *rb)
 {
   LineartLineChain *rlc;
   LineartLineChainItem *rlci_l, *rlci_r;
   LineartBoundingArea *ba_l, *ba_r;
   LineartChainRegisterEntry *closest_cre_l, *closest_cre_r, *closest_cre;
-  float dist = do_geometry_space ? rb->chaining_geometry_threshold : rb->chaining_image_threshold;
+  float dist = rb->chaining_image_threshold;
   float dist_l, dist_r;
   int occlusion, reverse_main;
   unsigned char transparency_mask;
   ListBase swap = {0};
 
-  if ((!do_geometry_space && rb->chaining_image_threshold < 0.0001) ||
-      (do_geometry_space && rb->chaining_geometry_threshold < 0.0001)) {
+  if (rb->chaining_image_threshold < 0.0001) {
     return;
   }
 
@@ -825,26 +807,10 @@ void MOD_lineart_chain_connect(LineartRenderBuffer *rb, const bool do_geometry_s
     rlci_r = rlc->chain.last;
     while ((ba_l = lineart_bounding_area_get_end_point(rb, rlci_l)) &&
            (ba_r = lineart_bounding_area_get_end_point(rb, rlci_r))) {
-      closest_cre_l = lineart_chain_get_closest_cre(rb,
-                                                    ba_l,
-                                                    rlc,
-                                                    rlci_l,
-                                                    occlusion,
-                                                    transparency_mask,
-                                                    dist,
-                                                    do_geometry_space,
-                                                    &dist_l,
-                                                    NULL);
-      closest_cre_r = lineart_chain_get_closest_cre(rb,
-                                                    ba_r,
-                                                    rlc,
-                                                    rlci_r,
-                                                    occlusion,
-                                                    transparency_mask,
-                                                    dist,
-                                                    do_geometry_space,
-                                                    &dist_r,
-                                                    NULL);
+      closest_cre_l = lineart_chain_get_closest_cre(
+          rb, ba_l, rlc, rlci_l, occlusion, transparency_mask, dist, &dist_l, NULL);
+      closest_cre_r = lineart_chain_get_closest_cre(
+          rb, ba_r, rlc, rlci_r, occlusion, transparency_mask, dist, &dist_r, NULL);
       if (closest_cre_l && closest_cre_r) {
         if (dist_l < dist_r) {
           closest_cre = closest_cre_l;
@@ -883,7 +849,9 @@ void MOD_lineart_chain_connect(LineartRenderBuffer *rb, const bool do_geometry_s
   }
 }
 
-/* Length is in image space. */
+/**
+ * Length is in image space.
+ */
 float MOD_lineart_chain_compute_length(LineartLineChain *rlc)
 {
   LineartLineChainItem *rlci;
@@ -931,8 +899,10 @@ void MOD_lineart_chain_clear_picked_flag(LineartRenderBuffer *rb)
   }
 }
 
-/* This should always be the last stage!, see the end of
- * MOD_lineart_chain_split_for_fixed_occlusion().*/
+/**
+ * This should always be the last stage!, see the end of
+ * #MOD_lineart_chain_split_for_fixed_occlusion().
+ */
 void MOD_lineart_chain_split_angle(LineartRenderBuffer *rb, float angle_threshold_rad)
 {
   LineartLineChain *rlc, *new_rlc;

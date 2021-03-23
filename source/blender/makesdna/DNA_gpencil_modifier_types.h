@@ -832,7 +832,7 @@ typedef enum eLineartGpencilTransparencyFlags {
 typedef struct LineartGpencilModifierData {
   GpencilModifierData modifier;
 
-  short line_types; /* line type enable flags, bits in eLineartEdgeFlag */
+  short edge_types; /* line type enable flags, bits in eLineartEdgeFlag */
 
   char source_type; /* Object or Collection, from eLineartGpencilModifierSource */
 
@@ -846,8 +846,10 @@ typedef struct LineartGpencilModifierData {
   struct Material *target_material;
   char target_layer[64];
 
-  /** These two variables are to pass on vertex group information from mesh to strokes.
-   * vgname specifies which vertex groups our strokes from source_vertex_group will go to. */
+  /**
+   * These two variables are to pass on vertex group information from mesh to strokes.
+   * `vgname` specifies which vertex groups our strokes from source_vertex_group will go to.
+   */
   char source_vertex_group[64];
   char vgname[64];
 
@@ -857,25 +859,22 @@ typedef struct LineartGpencilModifierData {
   unsigned char transparency_flags; /* eLineartGpencilTransparencyFlags */
   unsigned char transparency_mask;
 
-  /** 0-1 range for cosine angle */
+  /** `0..1` range for cosine angle */
   float crease_threshold;
 
-  /**  0-PI angle, for splitting strokes at sharp points */
+  /** `0..PI` angle, for splitting strokes at sharp points. */
   float angle_splitting_threshold;
 
   /* CPU mode */
-  float chaining_geometry_threshold;
   float chaining_image_threshold;
 
-  float pre_sample_length;
+  float resample_length;
 
   /* Ported from SceneLineArt flags. */
   int calculation_flags;
 
   /* Additional Switches. */
   int flags;
-
-  int _pad;
 
   /* Runtime only. */
   void *render_buffer;
