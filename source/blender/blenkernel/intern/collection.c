@@ -485,6 +485,11 @@ void BKE_collection_add_from_collection(Main *bmain,
       collection_child_add(collection, collection_dst, 0, true);
       is_instantiated = true;
     }
+    else if (!is_instantiated && collection_find_child(collection, collection_dst)) {
+      /* If given collection_dst is already instantiated in scene, even if its 'model' src one is
+       * not, do not add it to master scene collection. */
+      is_instantiated = true;
+    }
   }
   FOREACH_SCENE_COLLECTION_END;
 
@@ -1612,18 +1617,23 @@ bool BKE_collection_child_remove(Main *bmain, Collection *parent, Collection *ch
  */
 void BKE_collection_parent_relations_rebuild(Collection *collection)
 {
-  for (CollectionChild *child = collection->children.first, *child_next = NULL; child;
-       child = child_next) {
-    child_next = child->next;
+  LISTBASE_FOREACH_MUTABLE (CollectionChild *, child, &collection->children) {
+    /* Check for duplicated children (can happen with remapping e.g.). */
+    CollectionChild *other_child = collection_find_child(collection, child->collection);
+    if (other_child != child) {
+      BLI_freelinkN(&collection->children, child);
+      continue;
+    }
 
+    /* Invalid child, either without a collection, or because it creates a dependency cycle. */
     if (child->collection == NULL || BKE_collection_cycle_find(collection, child->collection)) {
       BLI_freelinkN(&collection->children, child);
+      continue;
     }
-    else {
-      CollectionParent *cparent = MEM_callocN(sizeof(CollectionParent), __func__);
-      cparent->collection = collection;
-      BLI_addtail(&child->collection->parents, cparent);
-    }
+
+    CollectionParent *cparent = MEM_callocN(sizeof(CollectionParent), __func__);
+    cparent->collection = collection;
+    BLI_addtail(&child->collection->parents, cparent);
   }
 }
 

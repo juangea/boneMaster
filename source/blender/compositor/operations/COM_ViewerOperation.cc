@@ -44,9 +44,9 @@ ViewerOperation::ViewerOperation()
   this->m_displaySettings = nullptr;
   this->m_useAlphaInput = false;
 
-  this->addInputSocket(COM_DT_COLOR);
-  this->addInputSocket(COM_DT_VALUE);
-  this->addInputSocket(COM_DT_VALUE);
+  this->addInputSocket(DataType::Color);
+  this->addInputSocket(DataType::Value);
+  this->addInputSocket(DataType::Value);
 
   this->m_imageInput = nullptr;
   this->m_alphaInput = nullptr;
@@ -116,6 +116,17 @@ void ViewerOperation::executeRegion(rcti *rect, unsigned int /*tileNumber*/)
     offset4 += offsetadd4;
   }
   updateImage(rect);
+}
+
+void ViewerOperation::determineResolution(unsigned int resolution[2],
+                                          unsigned int /*preferredResolution*/[2])
+{
+  const int sceneRenderWidth = this->m_rd->xsch * this->m_rd->size / 100;
+  const int sceneRenderHeight = this->m_rd->ysch * this->m_rd->size / 100;
+
+  unsigned int localPrefRes[2] = {static_cast<unsigned int>(sceneRenderWidth),
+                                  static_cast<unsigned int>(sceneRenderHeight)};
+  NodeOperation::determineResolution(resolution, localPrefRes);
 }
 
 void ViewerOperation::initImage()
@@ -197,8 +208,8 @@ void ViewerOperation::updateImage(rcti *rect)
 CompositorPriority ViewerOperation::getRenderPriority() const
 {
   if (this->isActiveViewerOutput()) {
-    return COM_PRIORITY_HIGH;
+    return CompositorPriority::High;
   }
 
-  return COM_PRIORITY_LOW;
+  return CompositorPriority::Low;
 }
