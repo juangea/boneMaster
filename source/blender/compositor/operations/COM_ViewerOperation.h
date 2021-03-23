@@ -32,7 +32,7 @@ class ViewerOperation : public NodeOperation {
   bool m_active;
   float m_centerX;
   float m_centerY;
-  OrderOfChunks m_chunkOrder;
+  ChunkOrdering m_chunkOrder;
   bool m_doDepthBuffer;
   ImBuf *m_ibuf;
   bool m_useAlphaInput;
@@ -51,6 +51,7 @@ class ViewerOperation : public NodeOperation {
   void initExecution();
   void deinitExecution();
   void executeRegion(rcti *rect, unsigned int tileNumber);
+  void determineResolution(unsigned int resolution[2], unsigned int preferredResolution[2]);
   bool isOutputOperation(bool /*rendering*/) const
   {
     if (G.background) {
@@ -82,7 +83,7 @@ class ViewerOperation : public NodeOperation {
   {
     this->m_centerY = centerY;
   }
-  void setChunkOrder(OrderOfChunks tileOrder)
+  void setChunkOrder(ChunkOrdering tileOrder)
   {
     this->m_chunkOrder = tileOrder;
   }
@@ -94,7 +95,7 @@ class ViewerOperation : public NodeOperation {
   {
     return this->m_centerY;
   }
-  OrderOfChunks getChunkOrder() const
+  ChunkOrdering getChunkOrder() const
   {
     return this->m_chunkOrder;
   }
