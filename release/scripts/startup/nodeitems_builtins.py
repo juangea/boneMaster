@@ -484,6 +484,7 @@ geometry_node_categories = [
     GeometryNodeCategory("GEO_ATTRIBUTE", "Attribute", items=[
         NodeItem("GeometryNodeAttributeRandomize"),
         NodeItem("GeometryNodeAttributeMath"),
+        NodeItem("GeometryNodeAttributeClamp"),
         NodeItem("GeometryNodeAttributeCompare"),
         NodeItem("GeometryNodeAttributeConvert"),
         NodeItem("GeometryNodeAttributeFill"),
@@ -495,6 +496,7 @@ geometry_node_categories = [
         NodeItem("GeometryNodeAttributeCombineXYZ"),
         NodeItem("GeometryNodeAttributeSeparateXYZ"),
         NodeItem("GeometryNodeAttributeRemove"),
+        NodeItem("GeometryNodeAttributeMapRange"),
     ]),
     GeometryNodeCategory("GEO_COLOR", "Color", items=[
         NodeItem("ShaderNodeValToRGB"),
