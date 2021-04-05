@@ -179,7 +179,6 @@ class SceneParams {
   int num_bvh_time_steps;
   int hair_subdivisions;
   CurveShapeType hair_shape;
-  bool persistent_data;
   int texture_limit;
 
   bool background;
@@ -194,7 +193,6 @@ class SceneParams {
     num_bvh_time_steps = 0;
     hair_subdivisions = 3;
     hair_shape = CURVE_RIBBON;
-    persistent_data = false;
     texture_limit = 0;
     background = true;
   }
@@ -207,7 +205,7 @@ class SceneParams {
              use_bvh_unaligned_nodes == params.use_bvh_unaligned_nodes &&
              num_bvh_time_steps == params.num_bvh_time_steps &&
              hair_subdivisions == params.hair_subdivisions && hair_shape == params.hair_shape &&
-             persistent_data == params.persistent_data && texture_limit == params.texture_limit);
+             texture_limit == params.texture_limit);
   }
 
   int curve_subdivisions()
@@ -302,7 +300,7 @@ class Scene : public NodeOwner {
    * node array (e.g. Scene::geometry for Geometry nodes) and tag the appropriate
    * manager for an update.
    */
-  template<typename T, typename... Args> T *create_node(Args &&... args)
+  template<typename T, typename... Args> T *create_node(Args &&...args)
   {
     T *node = new T(args...);
     node->set_owner(this);
