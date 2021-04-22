@@ -167,7 +167,9 @@ void EEVEE_volumes_init(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata)
   }
 
   if (do_taa) {
-    common_data->vol_history_alpha = 0.0f;
+    if (!(scene_eval->eevee.flag & SCE_EEVEE_VOLUMETRIC_BLENDING)) { /* BoneMaster, Force to use frostbite's paper solution (blend from last frame) to avoid ugly banding */
+      common_data->vol_history_alpha = 0.0f;
+    }
     current_sample = effects->taa_current_sample - 1;
     effects->volume_current_sample = -1;
   }
