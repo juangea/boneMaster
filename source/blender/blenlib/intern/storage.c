@@ -266,7 +266,8 @@ eFileAttributes BLI_file_attributes(const char *path)
   if (attr & FILE_ATTRIBUTE_SPARSE_FILE) {
     ret |= FILE_ATTR_SPARSE_FILE;
   }
-  if (attr & FILE_ATTRIBUTE_OFFLINE) {
+  if (attr & FILE_ATTRIBUTE_OFFLINE || attr & FILE_ATTRIBUTE_RECALL_ON_OPEN ||
+      attr & FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS) {
     ret |= FILE_ATTR_OFFLINE;
   }
   if (attr & FILE_ATTRIBUTE_REPARSE_POINT) {
@@ -299,12 +300,16 @@ bool BLI_file_alias_target(const char *filepath,
     return false;
   }
 
-  IShellLinkW *Shortcut = NULL;
-  bool success = false;
-  CoInitializeEx(NULL, COINIT_MULTITHREADED);
+  HRESULT hr = CoInitializeEx(NULL, COINIT_MULTITHREADED);
+  if (FAILED(hr)) {
+    return false;
+  }
 
-  HRESULT hr = CoCreateInstance(
+  IShellLinkW *Shortcut = NULL;
+  hr = CoCreateInstance(
       &CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, &IID_IShellLinkW, (LPVOID *)&Shortcut);
+
+  bool success = false;
   if (SUCCEEDED(hr)) {
     IPersistFile *PersistFile;
     hr = Shortcut->lpVtbl->QueryInterface(Shortcut, &IID_IPersistFile, (LPVOID *)&PersistFile);
@@ -328,6 +333,7 @@ bool BLI_file_alias_target(const char *filepath,
     Shortcut->lpVtbl->Release(Shortcut);
   }
 
+  CoUninitialize();
   return (success && r_targetpath[0]);
 #  else
   UNUSED_VARS(r_targetpath, filepath);

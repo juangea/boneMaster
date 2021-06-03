@@ -653,9 +653,13 @@ bGPDframe *BKE_gpencil_frame_addcopy(bGPDlayer *gpl, int cframe)
  * \param gpd: Grease pencil data-block
  * \param name: Name of the layer
  * \param setactive: Set as active
+ * \param add_to_header: Used to force the layer added at header
  * \return Pointer to new layer
  */
-bGPDlayer *BKE_gpencil_layer_addnew(bGPdata *gpd, const char *name, bool setactive)
+bGPDlayer *BKE_gpencil_layer_addnew(bGPdata *gpd,
+                                    const char *name,
+                                    const bool setactive,
+                                    const bool add_to_header)
 {
   bGPDlayer *gpl = NULL;
   bGPDlayer *gpl_active = NULL;
@@ -671,14 +675,18 @@ bGPDlayer *BKE_gpencil_layer_addnew(bGPdata *gpd, const char *name, bool setacti
   gpl_active = BKE_gpencil_layer_active_get(gpd);
 
   /* Add to data-block. */
-  if (gpl_active == NULL) {
-    BLI_addtail(&gpd->layers, gpl);
+  if (add_to_header) {
+    BLI_addhead(&gpd->layers, gpl);
   }
   else {
-    /* if active layer, add after that layer */
-    BLI_insertlinkafter(&gpd->layers, gpl_active, gpl);
+    if (gpl_active == NULL) {
+      BLI_addtail(&gpd->layers, gpl);
+    }
+    else {
+      /* if active layer, add after that layer */
+      BLI_insertlinkafter(&gpd->layers, gpl_active, gpl);
+    }
   }
-
   /* annotation vs GP Object behavior is slightly different */
   if (gpd->flag & GP_DATA_ANNOTATIONS) {
     /* set default color of new strokes for this layer */
@@ -2616,6 +2624,11 @@ static bool gpencil_is_layer_mask(ViewLayer *view_layer, bGPdata *gpd, bGPDlayer
       continue;
     }
 
+    /* Skip if masks are disabled for this view layer. */
+    if (gpl->flag & GP_LAYER_DISABLE_MASKS_IN_VIEWLAYER) {
+      continue;
+    }
+
     LISTBASE_FOREACH (bGPDlayer_Mask *, mask, &gpl->mask_layers) {
       if (STREQ(gpl_mask->info, mask->name)) {
         return true;
@@ -2659,6 +2672,7 @@ void BKE_gpencil_visible_stroke_iter(ViewLayer *view_layer,
     bGPDframe *act_gpf = gpl->actframe;
     bGPDframe *sta_gpf = act_gpf;
     bGPDframe *end_gpf = act_gpf ? act_gpf->next : NULL;
+    float prev_opacity = gpl->opacity;
 
     if (gpl->flag & GP_LAYER_HIDE) {
       continue;
@@ -2674,9 +2688,12 @@ void BKE_gpencil_visible_stroke_iter(ViewLayer *view_layer,
      * This is used only in final render and never in Viewport. */
     if ((view_layer != NULL) && (gpl->viewlayername[0] != '\0') &&
         (!STREQ(view_layer->name, gpl->viewlayername))) {
-      /* If the layer is used as mask, cannot be filtered or the masking system
-       * will crash because needs the mask layer in the draw pipeline. */
-      if (!gpencil_is_layer_mask(view_layer, gpd, gpl)) {
+      /* Do not skip masks when rendering the view-layer so that it can still be used to clip
+       * other layers. Instead set their opacity to zero. */
+      if (gpencil_is_layer_mask(view_layer, gpd, gpl)) {
+        gpl->opacity = 0.0f;
+      }
+      else {
         continue;
       }
     }
@@ -2771,6 +2788,7 @@ void BKE_gpencil_visible_stroke_iter(ViewLayer *view_layer,
       if (layer_cb) {
         layer_cb(gpl, act_gpf, NULL, thunk);
       }
+      gpl->opacity = prev_opacity;
       continue;
     }
 
@@ -2808,6 +2826,7 @@ void BKE_gpencil_visible_stroke_iter(ViewLayer *view_layer,
       /* If layer solo mode and Paint mode, only keyframes with data are displayed. */
       if (GPENCIL_PAINT_MODE(gpd) && (gpl->flag & GP_LAYER_SOLO_MODE) &&
           (act_gpf->framenum != cfra)) {
+        gpl->opacity = prev_opacity;
         continue;
       }
 
@@ -2818,6 +2837,9 @@ void BKE_gpencil_visible_stroke_iter(ViewLayer *view_layer,
         stroke_cb(gpl, act_gpf, gps, thunk);
       }
     }
+
+    /* Restore the opacity in case it was overwritten (used to hide masks in render). */
+    gpl->opacity = prev_opacity;
   }
 }
 

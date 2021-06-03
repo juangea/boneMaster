@@ -556,7 +556,9 @@ class CYCLES_RENDER_PT_light_paths_fast_gi(CyclesButtonsPanel, Panel):
 
         if world:
           light = world.light_settings
-          layout.prop(light, "distance", text="AO Distance")
+          col = layout.column(align=True)
+          col.prop(light, "ao_factor", text="AO Factor")
+          col.prop(light, "distance", text="AO Distance")
 
 
 class CYCLES_RENDER_PT_motion_blur(CyclesButtonsPanel, Panel):
@@ -728,7 +730,7 @@ class CYCLES_RENDER_PT_performance_tiles(CyclesButtonsPanel, Panel):
         col.prop(cscene, "renderfarm_safe_tiles", text="Renderfarm Safe Tiles")
 
         sub = col.column()
-        sub.active = not rd.use_save_buffers
+        sub.active = not rd.use_save_buffers and not cscene.use_adaptive_sampling
         sub.prop(cscene, "use_progressive_refine")
 
 

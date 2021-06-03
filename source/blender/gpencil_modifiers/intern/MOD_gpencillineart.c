@@ -194,6 +194,24 @@ static bool isDisabled(GpencilModifierData *md, int UNUSED(userRenderParams))
   return isModifierDisabled(md);
 }
 
+static void add_this_collection(Collection *c,
+                                const ModifierUpdateDepsgraphContext *ctx,
+                                const int mode)
+{
+  FOREACH_COLLECTION_VISIBLE_OBJECT_RECURSIVE_BEGIN (c, ob, mode) {
+    if (ELEM(ob->type, OB_MESH, OB_MBALL, OB_CURVE, OB_SURF, OB_FONT)) {
+      if (ob->lineart.usage != OBJECT_LRT_EXCLUDE) {
+        DEG_add_object_relation(ctx->node, ob, DEG_OB_COMP_GEOMETRY, "Line Art Modifier");
+        DEG_add_object_relation(ctx->node, ob, DEG_OB_COMP_TRANSFORM, "Line Art Modifier");
+      }
+    }
+    if (ob->type == OB_EMPTY && (ob->transflag & OB_DUPLICOLLECTION)) {
+      add_this_collection(ob->instance_collection, ctx, mode);
+    }
+  }
+  FOREACH_COLLECTION_VISIBLE_OBJECT_RECURSIVE_END;
+}
+
 static void updateDepsgraph(GpencilModifierData *md,
                             const ModifierUpdateDepsgraphContext *ctx,
                             const int mode)
@@ -208,15 +226,7 @@ static void updateDepsgraph(GpencilModifierData *md,
         ctx->node, lmd->source_object, DEG_OB_COMP_TRANSFORM, "Line Art Modifier");
   }
   else {
-    FOREACH_COLLECTION_VISIBLE_OBJECT_RECURSIVE_BEGIN (ctx->scene->master_collection, ob, mode) {
-      if (ELEM(ob->type, OB_MESH, OB_MBALL, OB_CURVE, OB_SURF, OB_FONT)) {
-        if (ob->lineart.usage != OBJECT_LRT_EXCLUDE) {
-          DEG_add_object_relation(ctx->node, ob, DEG_OB_COMP_GEOMETRY, "Line Art Modifier");
-          DEG_add_object_relation(ctx->node, ob, DEG_OB_COMP_TRANSFORM, "Line Art Modifier");
-        }
-      }
-    }
-    FOREACH_COLLECTION_VISIBLE_OBJECT_RECURSIVE_END;
+    add_this_collection(ctx->scene->master_collection, ctx, mode);
   }
   DEG_add_object_relation(
       ctx->node, ctx->scene->camera, DEG_OB_COMP_TRANSFORM, "Line Art Modifier");
@@ -335,7 +345,7 @@ static void occlusion_panel_draw(const bContext *UNUSED(C), Panel *panel)
   if (use_multiple_levels) {
     uiLayout *col = uiLayoutColumn(layout, true);
     uiItemR(col, ptr, "level_start", 0, NULL, ICON_NONE);
-    uiItemR(col, ptr, "level_end", 0, NULL, ICON_NONE);
+    uiItemR(col, ptr, "level_end", 0, IFACE_("End"), ICON_NONE);
   }
   else {
     uiItemR(layout, ptr, "level_start", 0, IFACE_("Level"), ICON_NONE);
@@ -367,7 +377,7 @@ static void transparency_panel_draw(const bContext *UNUSED(C), Panel *panel)
 
   uiLayout *row = uiLayoutRow(layout, true);
   uiLayoutSetPropDecorate(row, false);
-  uiLayout *sub = uiLayoutRow(row, true);
+  uiLayout *sub = uiLayoutRowWithHeading(row, true, IFACE_("Masks"));
   char text[2] = "0";
 
   PropertyRNA *prop = RNA_struct_find_property(ptr, "use_transparency_mask");

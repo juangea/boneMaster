@@ -366,7 +366,7 @@ typedef struct Library {
 
   struct PackedFile *packedfile;
 
-  /* Temp data needed by read/write code. */
+  /* Temp data needed by read/write code, and liboverride recursive resync. */
   int temp_index;
   /** See BLENDER_FILE_VERSION, BLENDER_FILE_SUBVERSION, needed for do_versions. */
   short versionfile, subversionfile;
@@ -555,8 +555,15 @@ enum {
   /* RESET_AFTER_USE tag existing data before linking so we know what is new. */
   LIB_TAG_PRE_EXISTING = 1 << 11,
 
-  /* The data-block is a copy-on-write/localized version. */
+  /**
+   * The data-block is a copy-on-write/localized version.
+   *
+   * \warning This should not be cleared on existing data.
+   * If support for this is needed, see T88026 as this flag controls memory ownership
+   * of physics *shared* pointers.
+   */
   LIB_TAG_COPIED_ON_WRITE = 1 << 12,
+
   LIB_TAG_COPIED_ON_WRITE_EVAL_RESULT = 1 << 13,
   LIB_TAG_LOCALIZED = 1 << 14,
 
@@ -591,14 +598,16 @@ typedef enum IDRecalcFlag {
   /* ** Object transformation changed. ** */
   ID_RECALC_TRANSFORM = (1 << 0),
 
-  /* ** Object geometry changed. **
+  /* ** Geometry changed. **
    *
    * When object of armature type gets tagged with this flag, its pose is
    * re-evaluated.
    * When object of other type is tagged with this flag it makes the modifier
    * stack to be re-evaluated.
    * When object data type (mesh, curve, ...) gets tagged with this flag it
-   * makes all objects which shares this data-block to be updated. */
+   * makes all objects which shares this data-block to be updated.
+   * When a collection gets tagged with this flag, all objects depending on the geometry and
+   * transforms on any of the objects in the collection are updated. */
   ID_RECALC_GEOMETRY = (1 << 1),
 
   /* ** Animation or time changed and animation is to be re-evaluated. ** */

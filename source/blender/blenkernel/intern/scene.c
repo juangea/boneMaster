@@ -742,7 +742,8 @@ static void scene_foreach_id(ID *id, LibraryForeachIDData *data)
     BKE_LIB_FOREACHID_PROCESS(data, view_layer->mat_override, IDWALK_CB_USER);
 
     LISTBASE_FOREACH (Base *, base, &view_layer->object_bases) {
-      BKE_LIB_FOREACHID_PROCESS(data, base->object, IDWALK_CB_NOP);
+      BKE_LIB_FOREACHID_PROCESS(
+          data, base->object, IDWALK_CB_NOP | IDWALK_CB_OVERRIDE_LIBRARY_NOT_OVERRIDABLE);
     }
 
     scene_foreach_layer_collection(data, &view_layer->layer_collections);
@@ -1984,8 +1985,7 @@ Scene *BKE_scene_duplicate(Main *bmain, Scene *sce, eSceneCopyMethod type)
     const bool is_subprocess = false;
 
     if (!is_subprocess) {
-      BKE_main_id_tag_all(bmain, LIB_TAG_NEW, false);
-      BKE_main_id_clear_newpoins(bmain);
+      BKE_main_id_newptr_and_tag_clear(bmain);
       /* In case root duplicated ID is linked, assume we want to get a local copy of it and
        * duplicate all expected linked data. */
       if (ID_IS_LINKED(sce)) {
@@ -2026,8 +2026,7 @@ Scene *BKE_scene_duplicate(Main *bmain, Scene *sce, eSceneCopyMethod type)
 #endif
 
       /* Cleanup. */
-      BKE_main_id_tag_all(bmain, LIB_TAG_NEW, false);
-      BKE_main_id_clear_newpoins(bmain);
+      BKE_main_id_newptr_and_tag_clear(bmain);
 
       BKE_main_collection_sync(bmain);
     }
@@ -2636,6 +2635,7 @@ static void scene_graph_update_tagged(Depsgraph *depsgraph, Main *bmain, bool on
 
   Scene *scene = DEG_get_input_scene(depsgraph);
   ViewLayer *view_layer = DEG_get_input_view_layer(depsgraph);
+  bool used_multiple_passes = false;
 
   bool run_callbacks = DEG_id_type_any_updated(depsgraph);
   if (run_callbacks) {
@@ -2672,8 +2672,6 @@ static void scene_graph_update_tagged(Depsgraph *depsgraph, Main *bmain, bool on
        * If there are no relations changed by the callback this call will do nothing. */
       DEG_graph_relations_update(depsgraph);
     }
-    /* Inform editors about possible changes. */
-    DEG_editors_update(bmain, depsgraph, scene, view_layer, false);
 
     /* If user callback did not tag anything for update we can skip second iteration.
      * Otherwise we update scene once again, but without running callbacks to bring
@@ -2682,8 +2680,22 @@ static void scene_graph_update_tagged(Depsgraph *depsgraph, Main *bmain, bool on
       break;
     }
 
+    /* Clear recalc flags for second pass, but back them up for editors update. */
+    const bool backup = true;
+    DEG_ids_clear_recalc(depsgraph, backup);
+    used_multiple_passes = true;
     run_callbacks = false;
   }
+
+  /* Inform editors about changes, using recalc flags from both passes. */
+  if (used_multiple_passes) {
+    DEG_ids_restore_recalc(depsgraph);
+  }
+  const bool is_time_update = false;
+  DEG_editors_update(depsgraph, is_time_update);
+
+  const bool backup = false;
+  DEG_ids_clear_recalc(depsgraph, backup);
 }
 
 void BKE_scene_graph_update_tagged(Depsgraph *depsgraph, Main *bmain)
@@ -2697,11 +2709,11 @@ void BKE_scene_graph_evaluated_ensure(Depsgraph *depsgraph, Main *bmain)
 }
 
 /* applies changes right away, does all sets too */
-void BKE_scene_graph_update_for_newframe(Depsgraph *depsgraph)
+void BKE_scene_graph_update_for_newframe_ex(Depsgraph *depsgraph, const bool clear_recalc)
 {
   Scene *scene = DEG_get_input_scene(depsgraph);
-  ViewLayer *view_layer = DEG_get_input_view_layer(depsgraph);
   Main *bmain = DEG_get_bmain(depsgraph);
+  bool used_multiple_passes = false;
 
   /* Keep this first. */
   BKE_callback_exec_id(bmain, &scene->id, BKE_CB_EVT_FRAME_CHANGE_PRE);
@@ -2738,16 +2750,38 @@ void BKE_scene_graph_update_for_newframe(Depsgraph *depsgraph)
       DEG_graph_relations_update(depsgraph);
     }
 
-    /* Inform editors about possible changes. */
-    DEG_editors_update(bmain, depsgraph, scene, view_layer, true);
-
     /* If user callback did not tag anything for update we can skip second iteration.
      * Otherwise we update scene once again, but without running callbacks to bring
      * scene to a fully evaluated state with user modifications taken into account. */
     if (DEG_is_fully_evaluated(depsgraph)) {
       break;
     }
+
+    /* Clear recalc flags for second pass, but back them up for editors update. */
+    const bool backup = true;
+    DEG_ids_clear_recalc(depsgraph, backup);
+    used_multiple_passes = true;
   }
+
+  /* Inform editors about changes, using recalc flags from both passes. */
+  if (used_multiple_passes) {
+    DEG_ids_restore_recalc(depsgraph);
+  }
+
+  const bool is_time_update = true;
+  DEG_editors_update(depsgraph, is_time_update);
+
+  /* Clear recalc flags, can be skipped for e.g. renderers that will read these
+   * and clear the flags later. */
+  if (clear_recalc) {
+    const bool backup = false;
+    DEG_ids_clear_recalc(depsgraph, backup);
+  }
+}
+
+void BKE_scene_graph_update_for_newframe(Depsgraph *depsgraph)
+{
+  BKE_scene_graph_update_for_newframe_ex(depsgraph, true);
 }
 
 /**
@@ -3507,8 +3541,8 @@ GHash *BKE_scene_undo_depsgraphs_extract(Main *bmain)
 
   for (Scene *scene = bmain->scenes.first; scene != NULL; scene = scene->id.next) {
     if (scene->depsgraph_hash == NULL) {
-      /* In some cases, e.g. when undo has to perform multiple steps at once, no depsgraph will be
-       * built so this pointer may be NULL. */
+      /* In some cases, e.g. when undo has to perform multiple steps at once, no depsgraph will
+       * be built so this pointer may be NULL. */
       continue;
     }
     for (ViewLayer *view_layer = scene->view_layers.first; view_layer != NULL;

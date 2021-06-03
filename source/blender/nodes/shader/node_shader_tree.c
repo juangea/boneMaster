@@ -184,6 +184,12 @@ static bool shader_validate_link(bNodeTree *UNUSED(ntree), bNodeLink *link)
   return true;
 }
 
+static bool shader_node_tree_socket_type_valid(eNodeSocketDatatype socket_type,
+                                               bNodeTreeType *UNUSED(ntreetype))
+{
+  return ELEM(socket_type, SOCK_FLOAT, SOCK_VECTOR, SOCK_RGBA, SOCK_SHADER);
+}
+
 bNodeTreeType *ntreeType_Shader;
 
 void register_node_tree_type_sh(void)
@@ -205,6 +211,7 @@ void register_node_tree_type_sh(void)
   tt->poll = shader_tree_poll;
   tt->get_from_context = shader_get_from_context;
   tt->validate_link = shader_validate_link;
+  tt->valid_socket_type = shader_node_tree_socket_type_valid;
 
   tt->rna_ext.srna = &RNA_ShaderNodeTree;
 
@@ -557,12 +564,14 @@ static bool ntree_shader_has_displacement(bNodeTree *ntree,
     /* Non-cycles node is used as an output. */
     return false;
   }
+
   if ((displacement->link != NULL) && !(displacement->link->flag & NODE_LINK_MUTED)) {
     *r_node = displacement->link->fromnode;
     *r_socket = displacement->link->fromsock;
     *r_link = displacement->link;
+    return true;
   }
-  return displacement->link != NULL;
+  return false;
 }
 
 static void ntree_shader_relink_node_normal(bNodeTree *ntree,

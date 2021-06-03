@@ -299,8 +299,8 @@ void ED_view3d_clipping_calc(
     float xs = (ELEM(val, 0, 3)) ? rect->xmin : rect->xmax;
     float ys = (ELEM(val, 0, 1)) ? rect->ymin : rect->ymax;
 
-    ED_view3d_unproject(region, xs, ys, 0.0, bb->vec[val]);
-    ED_view3d_unproject(region, xs, ys, 1.0, bb->vec[4 + val]);
+    ED_view3d_unproject_v3(region, xs, ys, 0.0, bb->vec[val]);
+    ED_view3d_unproject_v3(region, xs, ys, 1.0, bb->vec[4 + val]);
   }
 
   /* optionally transform to object space */
@@ -1057,7 +1057,7 @@ bool ED_view3d_autodist(Depsgraph *depsgraph,
     float centx = (float)mval[0] + 0.5f;
     float centy = (float)mval[1] + 0.5f;
 
-    if (ED_view3d_unproject(region, centx, centy, depth_close, mouse_worldloc)) {
+    if (ED_view3d_unproject_v3(region, centx, centy, depth_close, mouse_worldloc)) {
       return true;
     }
   }
@@ -1091,7 +1091,7 @@ bool ED_view3d_autodist_simple(ARegion *region,
 
   float centx = (float)mval[0] + 0.5f;
   float centy = (float)mval[1] + 0.5f;
-  return ED_view3d_unproject(region, centx, centy, depth, mouse_worldloc);
+  return ED_view3d_unproject_v3(region, centx, centy, depth, mouse_worldloc);
 }
 
 bool ED_view3d_autodist_depth(ARegion *region, const int mval[2], int margin, float *depth)
@@ -1630,12 +1630,23 @@ bool ED_view3d_camera_to_view_selected(struct Main *bmain,
 /** \name Depth Buffer Utilities
  * \{ */
 
+struct ReadData {
+  int count;
+  int count_max;
+  float r_depth;
+};
+
 static bool depth_read_test_fn(const void *value, void *userdata)
 {
-  float *r_depth = userdata;
+  struct ReadData *data = userdata;
   float depth = *(float *)value;
-  if (depth < *r_depth) {
-    *r_depth = depth;
+  if (depth < data->r_depth) {
+    data->r_depth = depth;
+  }
+
+  if ((++data->count) >= data->count_max) {
+    /* Outside the margin. */
+    return true;
   }
   return false;
 }
@@ -1657,9 +1668,18 @@ bool ED_view3d_depth_read_cached(const ViewDepths *vd,
 
   float depth = 1.0f;
   if (margin) {
-    /* TODO: No need to go spiral. */
     int shape[2] = {vd->w, vd->h};
-    BLI_array_iter_spiral_square(vd->depths, shape, mval, depth_read_test_fn, &depth);
+    int pixel_count = (min_ii(x + margin + 1, shape[1]) - max_ii(x - margin, 0)) *
+                      (min_ii(y + margin + 1, shape[0]) - max_ii(y - margin, 0));
+
+    struct ReadData data;
+    data.count = 0;
+    data.count_max = pixel_count;
+    data.r_depth = 1.0f;
+
+    /* TODO: No need to go spiral. */
+    BLI_array_iter_spiral_square(vd->depths, shape, mval, depth_read_test_fn, &data);
+    depth = data.r_depth;
   }
   else {
     depth = vd->depths[y * vd->w + x];
@@ -1696,7 +1716,7 @@ bool ED_view3d_depth_read_cached_normal(const ViewContext *vc,
       ED_view3d_depth_read_cached(depths, mval_ofs, 0, &depth_fl);
       const double depth = (double)depth_fl;
       if ((depth > depths->depth_range[0]) && (depth < depths->depth_range[1])) {
-        if (ED_view3d_depth_unproject(region, mval_ofs, depth, coords[i])) {
+        if (ED_view3d_depth_unproject_v3(region, mval_ofs, depth, coords[i])) {
           depths_valid[i] = true;
         }
       }
@@ -1731,14 +1751,14 @@ bool ED_view3d_depth_read_cached_normal(const ViewContext *vc,
   return false;
 }
 
-bool ED_view3d_depth_unproject(const ARegion *region,
-                               const int mval[2],
-                               const double depth,
-                               float r_location_world[3])
+bool ED_view3d_depth_unproject_v3(const ARegion *region,
+                                  const int mval[2],
+                                  const double depth,
+                                  float r_location_world[3])
 {
   float centx = (float)mval[0] + 0.5f;
   float centy = (float)mval[1] + 0.5f;
-  return ED_view3d_unproject(region, centx, centy, depth, r_location_world);
+  return ED_view3d_unproject_v3(region, centx, centy, depth, r_location_world);
 }
 
 void ED_view3d_depth_tag_update(RegionView3D *rv3d)

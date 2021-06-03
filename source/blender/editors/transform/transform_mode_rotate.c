@@ -217,7 +217,7 @@ static void applyRotation(TransInfo *t, const int UNUSED(mval[2]))
 
   t->values_final[0] = final;
 
-  headerRotation(t, str, final);
+  headerRotation(t, str, sizeof(str), final);
 
   const bool is_large_rotation = hasNumInput(&t->num);
   applyRotationValue(t, final, axis_final, is_large_rotation);
@@ -249,5 +249,7 @@ void initRotation(TransInfo *t)
   if (t->flag & T_2D_EDIT) {
     t->flag |= T_NO_CONSTRAINT;
   }
+
+  transform_mode_default_modal_orientation_set(t, V3D_ORIENT_VIEW);
 }
 /** \} */

@@ -63,6 +63,7 @@
 #include "BKE_lattice.h"
 #include "BKE_lib_id.h"
 #include "BKE_main.h"
+#include "BKE_material.h"
 #include "BKE_mesh.h"
 #include "BKE_mesh_mapping.h"
 #include "BKE_mesh_runtime.h"
@@ -210,7 +211,7 @@ ModifierData *ED_object_modifier_add(
     /* special cases */
     if (type == eModifierType_Softbody) {
       if (!ob->soft) {
-        ob->soft = sbNew(scene);
+        ob->soft = sbNew();
         ob->softflag |= OB_SB_GOAL | OB_SB_EDGES;
       }
     }
@@ -772,6 +773,8 @@ static bool modifier_apply_obdata(
         return false;
       }
 
+      Main *bmain = DEG_get_bmain(depsgraph);
+      BKE_object_material_from_eval_data(bmain, ob, &mesh_applied->id);
       BKE_mesh_nomain_to_mesh(mesh_applied, me, ob, &CD_MASK_MESH, true);
 
       if (md_eval->type == eModifierType_Multires) {
@@ -1116,17 +1119,24 @@ bool edit_modifier_invoke_properties(bContext *C, wmOperator *op)
 }
 
 /**
- * If the "modifier" property is not set,fill the modifier property with the name of the modifier
- * with a UI panel below the mouse cursor, without checking the context pointer. Used in order to
- * apply modifier operators on hover over their panels. If this checked the context pointer then it
- * would always use the active modifier, which isn't desired.
+ * If the "modifier" property is not set, fill the modifier property with the name of the modifier
+ * with a UI panel below the mouse cursor, unless a specific modifier is set with a context
+ * pointer. Used in order to apply modifier operators on hover over their panels.
  */
-bool edit_modifier_invoke_properties_with_hover_no_active(bContext *C,
-                                                          wmOperator *op,
-                                                          const wmEvent *event,
-                                                          int *r_retval)
+static bool edit_modifier_invoke_properties_with_hover(bContext *C,
+                                                       wmOperator *op,
+                                                       const wmEvent *event,
+                                                       int *r_retval)
 {
   if (RNA_struct_property_is_set(op->ptr, "modifier")) {
+    return true;
+  }
+
+  /* Note that the context pointer is *not* the active modifier, it is set in UI layouts. */
+  PointerRNA ctx_ptr = CTX_data_pointer_get_type(C, "modifier", &RNA_Modifier);
+  if (ctx_ptr.data != NULL) {
+    ModifierData *md = ctx_ptr.data;
+    RNA_string_set(op->ptr, "modifier", md->name);
     return true;
   }
 
@@ -1211,7 +1221,7 @@ static int modifier_remove_exec(bContext *C, wmOperator *op)
 static int modifier_remove_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   int retval;
-  if (edit_modifier_invoke_properties_with_hover_no_active(C, op, event, &retval)) {
+  if (edit_modifier_invoke_properties_with_hover(C, op, event, &retval)) {
     return modifier_remove_exec(C, op);
   }
   return retval;
@@ -1257,7 +1267,7 @@ static int modifier_move_up_exec(bContext *C, wmOperator *op)
 static int modifier_move_up_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   int retval;
-  if (edit_modifier_invoke_properties_with_hover_no_active(C, op, event, &retval)) {
+  if (edit_modifier_invoke_properties_with_hover(C, op, event, &retval)) {
     return modifier_move_up_exec(C, op);
   }
   return retval;
@@ -1302,7 +1312,7 @@ static int modifier_move_down_exec(bContext *C, wmOperator *op)
 static int modifier_move_down_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   int retval;
-  if (edit_modifier_invoke_properties_with_hover_no_active(C, op, event, &retval)) {
+  if (edit_modifier_invoke_properties_with_hover(C, op, event, &retval)) {
     return modifier_move_down_exec(C, op);
   }
   return retval;
@@ -1345,7 +1355,7 @@ static int modifier_move_to_index_exec(bContext *C, wmOperator *op)
 static int modifier_move_to_index_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   int retval;
-  if (edit_modifier_invoke_properties_with_hover_no_active(C, op, event, &retval)) {
+  if (edit_modifier_invoke_properties_with_hover(C, op, event, &retval)) {
     return modifier_move_to_index_exec(C, op);
   }
   return retval;
@@ -1458,7 +1468,7 @@ static int modifier_apply_exec(bContext *C, wmOperator *op)
 static int modifier_apply_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   int retval;
-  if (edit_modifier_invoke_properties_with_hover_no_active(C, op, event, &retval)) {
+  if (edit_modifier_invoke_properties_with_hover(C, op, event, &retval)) {
     return modifier_apply_exec(C, op);
   }
   return retval;
@@ -1502,7 +1512,7 @@ static int modifier_apply_as_shapekey_exec(bContext *C, wmOperator *op)
 static int modifier_apply_as_shapekey_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   int retval;
-  if (edit_modifier_invoke_properties_with_hover_no_active(C, op, event, &retval)) {
+  if (edit_modifier_invoke_properties_with_hover(C, op, event, &retval)) {
     return modifier_apply_as_shapekey_exec(C, op);
   }
   return retval;
@@ -1614,7 +1624,7 @@ static int modifier_copy_exec(bContext *C, wmOperator *op)
 static int modifier_copy_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   int retval;
-  if (edit_modifier_invoke_properties_with_hover_no_active(C, op, event, &retval)) {
+  if (edit_modifier_invoke_properties_with_hover(C, op, event, &retval)) {
     return modifier_copy_exec(C, op);
   }
   return retval;
@@ -1657,7 +1667,7 @@ static int modifier_set_active_exec(bContext *C, wmOperator *op)
 static int modifier_set_active_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   int retval;
-  if (edit_modifier_invoke_properties_with_hover_no_active(C, op, event, &retval)) {
+  if (edit_modifier_invoke_properties_with_hover(C, op, event, &retval)) {
     return modifier_set_active_exec(C, op);
   }
   return retval;
@@ -1749,8 +1759,8 @@ static int modifier_copy_to_selected_exec(bContext *C, wmOperator *op)
 static int modifier_copy_to_selected_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   int retval;
-  if (edit_modifier_invoke_properties_with_hover_no_active(C, op, event, &retval)) {
-    return modifier_set_active_exec(C, op);
+  if (edit_modifier_invoke_properties_with_hover(C, op, event, &retval)) {
+    return modifier_copy_to_selected_exec(C, op);
   }
   return retval;
 }

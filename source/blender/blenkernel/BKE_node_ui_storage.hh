@@ -100,8 +100,8 @@ struct NodeUIStorage {
 };
 
 struct NodeTreeUIStorage {
+  std::mutex mutex;
   blender::Map<NodeTreeEvaluationContext, blender::Map<std::string, NodeUIStorage>> context_map;
-  std::mutex context_map_mutex;
 
   /**
    * Attribute search uses this to store the fake info for the string typed into a node, in order

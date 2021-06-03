@@ -14,9 +14,11 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
+#include "BKE_material.h"
 #include "BKE_mesh.h"
 #include "BKE_mesh_runtime.h"
 #include "BKE_pointcloud.h"
+#include "BKE_spline.hh"
 
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
@@ -56,6 +58,8 @@ static Mesh *join_mesh_topology_and_builtin_attributes(Span<const MeshComponent 
   int64_t cd_dirty_edge = 0;
   int64_t cd_dirty_loop = 0;
 
+  VectorSet<Material *> materials;
+
   for (const MeshComponent *mesh_component : src_components) {
     const Mesh *mesh = mesh_component->get_for_read();
     totverts += mesh->totvert;
@@ -66,11 +70,21 @@ static Mesh *join_mesh_topology_and_builtin_attributes(Span<const MeshComponent 
     cd_dirty_poly |= mesh->runtime.cd_dirty_poly;
     cd_dirty_edge |= mesh->runtime.cd_dirty_edge;
     cd_dirty_loop |= mesh->runtime.cd_dirty_loop;
+
+    for (const int slot_index : IndexRange(mesh->totcol)) {
+      Material *material = mesh->mat[slot_index];
+      materials.add(material);
+    }
   }
 
   const Mesh *first_input_mesh = src_components[0]->get_for_read();
   Mesh *new_mesh = BKE_mesh_new_nomain(totverts, totedges, 0, totloops, totpolys);
   BKE_mesh_copy_settings(new_mesh, first_input_mesh);
+
+  for (const int i : IndexRange(materials.size())) {
+    Material *material = materials[i];
+    BKE_id_material_eval_assign(&new_mesh->id, i + 1, material);
+  }
 
   new_mesh->runtime.cd_dirty_vert = cd_dirty_vert;
   new_mesh->runtime.cd_dirty_poly = cd_dirty_poly;
@@ -85,6 +99,13 @@ static Mesh *join_mesh_topology_and_builtin_attributes(Span<const MeshComponent 
     const Mesh *mesh = mesh_component->get_for_read();
     if (mesh == nullptr) {
       continue;
+    }
+
+    Array<int> material_index_map(mesh->totcol);
+    for (const int i : IndexRange(mesh->totcol)) {
+      Material *material = mesh->mat[i];
+      const int new_material_index = materials.index_of(material);
+      material_index_map[i] = new_material_index;
     }
 
     for (const int i : IndexRange(mesh->totvert)) {
@@ -112,6 +133,13 @@ static Mesh *join_mesh_topology_and_builtin_attributes(Span<const MeshComponent 
       MPoly &new_poly = new_mesh->mpoly[poly_offset + i];
       new_poly = old_poly;
       new_poly.loopstart += loop_offset;
+      if (old_poly.mat_nr >= 0 && old_poly.mat_nr < mesh->totcol) {
+        new_poly.mat_nr = material_index_map[new_poly.mat_nr];
+      }
+      else {
+        /* The material index was invalid before. */
+        new_poly.mat_nr = 0;
+      }
     }
 
     vert_offset += mesh->totvert;
@@ -149,10 +177,10 @@ static void determine_final_data_type_and_domain(Span<const GeometryComponent *>
   Vector<CustomDataType> data_types;
   Vector<AttributeDomain> domains;
   for (const GeometryComponent *component : components) {
-    ReadAttributePtr attribute = component->attribute_try_get_for_read(attribute_name);
+    ReadAttributeLookup attribute = component->attribute_try_get_for_read(attribute_name);
     if (attribute) {
-      data_types.append(attribute->custom_data_type());
-      domains.append(attribute->domain());
+      data_types.append(bke::cpp_type_to_custom_data_type(attribute.varray->type()));
+      domains.append(attribute.domain);
     }
   }
 
@@ -164,7 +192,7 @@ static void fill_new_attribute(Span<const GeometryComponent *> src_components,
                                StringRef attribute_name,
                                const CustomDataType data_type,
                                const AttributeDomain domain,
-                               fn::GMutableSpan dst_span)
+                               GMutableSpan dst_span)
 {
   const CPPType *cpp_type = bke::custom_data_type_to_cpp_type(data_type);
   BLI_assert(cpp_type != nullptr);
@@ -175,10 +203,10 @@ static void fill_new_attribute(Span<const GeometryComponent *> src_components,
     if (domain_size == 0) {
       continue;
     }
-    ReadAttributePtr read_attribute = component->attribute_get_for_read(
+    GVArrayPtr read_attribute = component->attribute_get_for_read(
         attribute_name, domain, data_type, nullptr);
 
-    fn::GSpan src_span = read_attribute->get_span();
+    GVArray_GSpan src_span{*read_attribute};
     const void *src_buffer = src_span.data();
     void *dst_buffer = dst_span[offset];
     cpp_type->copy_to_initialized_n(src_buffer, dst_buffer, domain_size);
@@ -201,16 +229,14 @@ static void join_attributes(Span<const GeometryComponent *> src_components,
     AttributeDomain domain;
     determine_final_data_type_and_domain(src_components, attribute_name, &data_type, &domain);
 
-    OutputAttributePtr write_attribute = result.attribute_try_get_for_output(
+    OutputAttribute write_attribute = result.attribute_try_get_for_output_only(
         attribute_name, domain, data_type);
-    if (!write_attribute ||
-        &write_attribute->cpp_type() != bke::custom_data_type_to_cpp_type(data_type) ||
-        write_attribute->domain() != domain) {
+    if (!write_attribute) {
       continue;
     }
-    fn::GMutableSpan dst_span = write_attribute->get_span_for_write_only();
+    GMutableSpan dst_span = write_attribute.as_span();
     fill_new_attribute(src_components, attribute_name, data_type, domain, dst_span);
-    write_attribute.apply_span_and_save();
+    write_attribute.save();
   }
 }
 
@@ -244,12 +270,30 @@ static void join_components(Span<const PointCloudComponent *> src_components, Ge
 static void join_components(Span<const InstancesComponent *> src_components, GeometrySet &result)
 {
   InstancesComponent &dst_component = result.get_component_for_write<InstancesComponent>();
-  for (const InstancesComponent *component : src_components) {
-    const int size = component->instances_amount();
-    Span<InstancedData> instanced_data = component->instanced_data();
-    Span<float4x4> transforms = component->transforms();
-    for (const int i : IndexRange(size)) {
-      dst_component.add_instance(instanced_data[i], transforms[i]);
+
+  int tot_instances = 0;
+  for (const InstancesComponent *src_component : src_components) {
+    tot_instances += src_component->instances_amount();
+  }
+  dst_component.reserve(tot_instances);
+
+  for (const InstancesComponent *src_component : src_components) {
+    Span<InstanceReference> src_references = src_component->references();
+    Array<int> handle_map(src_references.size());
+    for (const int src_handle : src_references.index_range()) {
+      handle_map[src_handle] = dst_component.add_reference(src_references[src_handle]);
+    }
+
+    Span<float4x4> src_transforms = src_component->instance_transforms();
+    Span<int> src_ids = src_component->instance_ids();
+    Span<int> src_reference_handles = src_component->instance_reference_handles();
+
+    for (const int i : src_transforms.index_range()) {
+      const int src_handle = src_reference_handles[i];
+      const int dst_handle = handle_map[src_handle];
+      const float4x4 &transform = src_transforms[i];
+      const int id = src_ids[i];
+      dst_component.add_instance(dst_handle, transform, id);
     }
   }
 }
@@ -260,6 +304,48 @@ static void join_components(Span<const VolumeComponent *> src_components, Geomet
    * of the grids. The cell size of the resulting volume has to be determined somehow. */
   VolumeComponent &dst_component = result.get_component_for_write<VolumeComponent>();
   UNUSED_VARS(src_components, dst_component);
+}
+
+static void join_curve_components(MutableSpan<GeometrySet> src_geometry_sets, GeometrySet &result)
+{
+  Vector<CurveComponent *> src_components;
+  for (GeometrySet &geometry_set : src_geometry_sets) {
+    if (geometry_set.has_curve()) {
+      /* Retrieving with write access seems counterintuitive, but it can allow avoiding a copy
+       * in the case where the input spline has no other users, because the splines can be
+       * moved from the source curve rather than copied from a read-only source. Retrieving
+       * the curve for write will make a copy only when it has a user elsewhere. */
+      CurveComponent &component = geometry_set.get_component_for_write<CurveComponent>();
+      src_components.append(&component);
+    }
+  }
+
+  if (src_components.size() == 0) {
+    return;
+  }
+  if (src_components.size() == 1) {
+    result.add(*src_components[0]);
+    return;
+  }
+
+  CurveComponent &dst_component = result.get_component_for_write<CurveComponent>();
+  CurveEval *dst_curve = new CurveEval();
+  for (CurveComponent *component : src_components) {
+    CurveEval *src_curve = component->get_for_write();
+    for (SplinePtr &spline : src_curve->splines()) {
+      dst_curve->add_spline(std::move(spline));
+    }
+  }
+
+  /* For now, remove all custom attributes, since they might have different types,
+   * or an attribute might not exist on all splines. */
+  dst_curve->attributes.reallocate(dst_curve->splines().size());
+  CustomData_reset(&dst_curve->attributes.data);
+  for (SplinePtr &spline : dst_curve->splines()) {
+    CustomData_reset(&spline->attributes.data);
+  }
+
+  dst_component.replace(dst_curve);
 }
 
 template<typename Component>
@@ -292,6 +378,7 @@ static void geo_node_join_geometry_exec(GeoNodeExecParams params)
   join_component_type<PointCloudComponent>(geometry_sets, geometry_set_result);
   join_component_type<InstancesComponent>(geometry_sets, geometry_set_result);
   join_component_type<VolumeComponent>(geometry_sets, geometry_set_result);
+  join_curve_components(geometry_sets, geometry_set_result);
 
   params.set_output("Geometry", std::move(geometry_set_result));
 }

@@ -41,6 +41,7 @@
 #include "BKE_gpencil_geom.h"
 #include "BKE_main.h"
 #include "BKE_material.h"
+#include "BKE_scene.h"
 
 #include "UI_view2d.h"
 
@@ -69,7 +70,21 @@ GpencilIO::GpencilIO(const GpencilIOParams *iparams)
   cfra_ = iparams->frame_cur;
 
   /* Calculate camera matrix. */
-  Object *cam_ob = params_.v3d->camera;
+  prepare_camera_params(scene_, iparams);
+}
+
+void GpencilIO::prepare_camera_params(Scene *scene, const GpencilIOParams *iparams)
+{
+  params_ = *iparams;
+  const bool is_pdf = params_.mode == GP_EXPORT_TO_PDF;
+  const bool any_camera = (params_.v3d->camera != nullptr);
+  const bool force_camera_view = is_pdf && any_camera;
+
+  /* Ensure camera switch is applied. */
+  BKE_scene_camera_switch_update(scene);
+
+  /* Calculate camera matrix. */
+  Object *cam_ob = scene->camera;
   if (cam_ob != nullptr) {
     /* Set up parameters. */
     CameraParams params;
@@ -96,7 +111,7 @@ GpencilIO::GpencilIO(const GpencilIOParams *iparams)
   winy_ = params_.region->winy;
 
   /* Camera rectangle. */
-  if (rv3d_->persp == RV3D_CAMOB) {
+  if ((rv3d_->persp == RV3D_CAMOB) || (force_camera_view)) {
     render_x_ = (scene_->r.xsch * scene_->r.size) / 100;
     render_y_ = (scene_->r.ysch * scene_->r.size) / 100;
 

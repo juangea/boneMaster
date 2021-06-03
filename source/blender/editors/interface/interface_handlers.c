@@ -126,6 +126,24 @@
 #define UI_MAX_PASSWORD_STR 128
 
 /**
+ * This is a lower limit on the soft minimum of the range.
+ * Usually the derived lower limit from the visible precision is higher,
+ * so this number is the backup minimum.
+ *
+ * Logarithmic scale does not work with a minimum value of zero,
+ * but we want to support it anyway. It is set to 0.5e... for
+ * correct rounding since when the tweaked value is lower than
+ * the log minimum (lower limit), it will snap to 0.
+ */
+#define UI_PROP_SCALE_LOG_MIN 0.5e-8f
+/**
+ * This constant defines an offset for the precision change in
+ * snap rounding, when going to higher values. It is set to
+ * `0.5 - log10(3) = 0.03` to make the switch at `0.3` values.
+ */
+#define UI_PROP_SCALE_LOG_SNAP_OFFSET 0.03f
+
+/**
  * When #USER_CONTINUOUS_MOUSE is disabled or tablet input is used,
  * Use this as a maximum soft range for mapping cursor motion to the value.
  * Otherwise min/max of #FLT_MAX, #INT_MAX cause small adjustments to jump to large numbers.
@@ -477,6 +495,7 @@ static bool ui_do_but_extra_operator_icon(bContext *C,
 static void ui_do_but_extra_operator_icons_mousemove(uiBut *but,
                                                      uiHandleButtonData *data,
                                                      const wmEvent *event);
+static void ui_numedit_begin_set_values(uiBut *but, uiHandleButtonData *data);
 
 #ifdef USE_DRAG_MULTINUM
 static void ui_multibut_restore(bContext *C, uiHandleButtonData *data, uiBlock *block);
@@ -1114,6 +1133,13 @@ static void ui_apply_but_TAB(bContext *C, uiBut *but, uiHandleButtonData *data)
 static void ui_apply_but_NUM(bContext *C, uiBut *but, uiHandleButtonData *data)
 {
   if (data->str) {
+    double value;
+    /* Check if the string value is a number and cancel if it's equal to the startvalue. */
+    if (ui_but_string_eval_number(C, but, data->str, &value) && (value == data->startvalue)) {
+      data->cancel = true;
+      return;
+    }
+
     if (ui_but_string_set(C, but, data->str)) {
       data->value = ui_but_value_get(but);
     }
@@ -2320,16 +2346,16 @@ static int get_but_property_array_length(uiBut *but)
 }
 
 static void ui_but_set_float_array(
-    bContext *C, uiBut *but, uiHandleButtonData *data, float *values, int array_length)
+    bContext *C, uiBut *but, uiHandleButtonData *data, const float *values, const int values_len)
 {
   button_activate_state(C, but, BUTTON_STATE_NUM_EDITING);
 
-  for (int i = 0; i < array_length; i++) {
+  for (int i = 0; i < values_len; i++) {
     RNA_property_float_set_index(&but->rnapoin, but->rnaprop, i, values[i]);
   }
   if (data) {
     if (but->type == UI_BTYPE_UNITVEC) {
-      BLI_assert(array_length == 3);
+      BLI_assert(values_len == 3);
       copy_v3_v3(data->vec, values);
     }
     else {
@@ -2340,56 +2366,39 @@ static void ui_but_set_float_array(
   button_activate_state(C, but, BUTTON_STATE_EXIT);
 }
 
-static void float_array_to_string(float *values,
-                                  int array_length,
+static void float_array_to_string(const float *values,
+                                  const int values_len,
                                   char *output,
                                   int output_len_max)
 {
-  /* to avoid buffer overflow attacks; numbers are quite arbitrary */
-  BLI_assert(output_len_max > 15);
-  output_len_max -= 10;
-
-  int current_index = 0;
-  output[current_index] = '[';
-  current_index++;
-
-  for (int i = 0; i < array_length; i++) {
-    int length = BLI_snprintf(
-        output + current_index, output_len_max - current_index, "%f", values[i]);
-    current_index += length;
-
-    if (i < array_length - 1) {
-      if (current_index < output_len_max) {
-        output[current_index + 0] = ',';
-        output[current_index + 1] = ' ';
-        current_index += 2;
-      }
-    }
+  const int values_end = values_len - 1;
+  int ofs = 0;
+  output[ofs++] = '[';
+  for (int i = 0; i < values_len; i++) {
+    ofs += BLI_snprintf_rlen(
+        output + ofs, output_len_max - ofs, (i != values_end) ? "%f, " : "%f]", values[i]);
   }
-
-  output[current_index + 0] = ']';
-  output[current_index + 1] = '\0';
 }
 
 static void ui_but_copy_numeric_array(uiBut *but, char *output, int output_len_max)
 {
-  const int array_length = get_but_property_array_length(but);
-  float *values = alloca(array_length * sizeof(float));
+  const int values_len = get_but_property_array_length(but);
+  float *values = alloca(values_len * sizeof(float));
   RNA_property_float_get_array(&but->rnapoin, but->rnaprop, values);
-  float_array_to_string(values, array_length, output, output_len_max);
+  float_array_to_string(values, values_len, output, output_len_max);
 }
 
-static bool parse_float_array(char *text, float *values, int expected_length)
+static bool parse_float_array(char *text, float *values, int values_len_expected)
 {
   /* can parse max 4 floats for now */
-  BLI_assert(0 <= expected_length && expected_length <= 4);
+  BLI_assert(0 <= values_len_expected && values_len_expected <= 4);
 
   float v[5];
-  const int actual_length = sscanf(
+  const int values_len_actual = sscanf(
       text, "[%f, %f, %f, %f, %f]", &v[0], &v[1], &v[2], &v[3], &v[4]);
 
-  if (actual_length == expected_length) {
-    memcpy(values, v, sizeof(float) * expected_length);
+  if (values_len_actual == values_len_expected) {
+    memcpy(values, v, sizeof(float) * values_len_expected);
     return true;
   }
   return false;
@@ -2400,16 +2409,16 @@ static void ui_but_paste_numeric_array(bContext *C,
                                        uiHandleButtonData *data,
                                        char *buf_paste)
 {
-  const int array_length = get_but_property_array_length(but);
-  if (array_length > 4) {
+  const int values_len = get_but_property_array_length(but);
+  if (values_len > 4) {
     /* not supported for now */
     return;
   }
 
-  float *values = alloca(sizeof(float) * array_length);
+  float *values = alloca(sizeof(float) * values_len);
 
-  if (parse_float_array(buf_paste, values, array_length)) {
-    ui_but_set_float_array(C, but, data, values, array_length);
+  if (parse_float_array(buf_paste, values, values_len)) {
+    ui_but_set_float_array(C, but, data, values, values_len);
   }
   else {
     WM_report(RPT_ERROR, "Expected an array of numbers: [n, n, ...]");
@@ -3354,6 +3363,8 @@ static void ui_textedit_begin(bContext *C, uiBut *but, uiHandleButtonData *data)
   if (is_num_but) {
     BLI_assert(data->is_str_dynamic == false);
     ui_but_convert_to_unit_alt_name(but, data->str, data->maxlen);
+
+    ui_numedit_begin_set_values(but, data);
   }
 
   /* won't change from now on */
@@ -3890,6 +3901,14 @@ static void ui_do_but_textedit_select(
 /** \name Button Number Editing (various types)
  * \{ */
 
+static void ui_numedit_begin_set_values(uiBut *but, uiHandleButtonData *data)
+{
+  data->startvalue = ui_but_value_get(but);
+  data->origvalue = data->startvalue;
+  data->value = data->origvalue;
+  but->editval = &data->value;
+}
+
 static void ui_numedit_begin(uiBut *but, uiHandleButtonData *data)
 {
   if (but->type == UI_BTYPE_CURVE) {
@@ -3915,19 +3934,21 @@ static void ui_numedit_begin(uiBut *but, uiHandleButtonData *data)
     but->editvec = data->vec;
   }
   else {
-    float softrange, softmin, softmax;
+    ui_numedit_begin_set_values(but, data);
 
-    data->startvalue = ui_but_value_get(but);
-    data->origvalue = data->startvalue;
-    data->value = data->origvalue;
-    but->editval = &data->value;
+    float softmin = but->softmin;
+    float softmax = but->softmax;
+    float softrange = softmax - softmin;
+    const PropertyScaleType scale_type = ui_but_scale_type(but);
 
-    softmin = but->softmin;
-    softmax = but->softmax;
-    softrange = softmax - softmin;
+    float log_min = (scale_type == PROP_SCALE_LOG) ? max_ff(softmin, UI_PROP_SCALE_LOG_MIN) : 0.0f;
 
     if ((but->type == UI_BTYPE_NUM) && (ui_but_is_cursor_warp(but) == false)) {
       uiButNumber *number_but = (uiButNumber *)but;
+
+      if (scale_type == PROP_SCALE_LOG) {
+        log_min = max_ff(log_min, powf(10, -number_but->precision) * 0.5f);
+      }
       /* Use a minimum so we have a predictable range,
        * otherwise some float buttons get a large range. */
       const float value_step_float_min = 0.1f;
@@ -3976,7 +3997,31 @@ static void ui_numedit_begin(uiBut *but, uiHandleButtonData *data)
       }
     }
 
-    data->dragfstart = (softrange == 0.0f) ? 0.0f : ((float)data->value - softmin) / softrange;
+    if (softrange == 0.0f) {
+      data->dragfstart = 0.0f;
+    }
+    else {
+      switch (scale_type) {
+        case PROP_SCALE_LINEAR: {
+          data->dragfstart = ((float)data->value - softmin) / softrange;
+          break;
+        }
+        case PROP_SCALE_LOG: {
+          BLI_assert(log_min != 0.0f);
+          const float base = softmax / log_min;
+          data->dragfstart = logf((float)data->value / log_min) / logf(base);
+          break;
+        }
+        case PROP_SCALE_CUBIC: {
+          const float cubic_min = cube_f(softmin);
+          const float cubic_max = cube_f(softmax);
+          const float cubic_range = cubic_max - cubic_min;
+          const float f = ((float)data->value - softmin) * cubic_range / softrange + cubic_min;
+          data->dragfstart = (cbrtf(f) - softmin) / softrange;
+          break;
+        }
+      }
+    }
     data->dragf = data->dragfstart;
 
     data->drag_map_soft_min = softmin;
@@ -4694,6 +4739,7 @@ static float ui_numedit_apply_snapf(
     /* pass */
   }
   else {
+    const PropertyScaleType scale_type = ui_but_scale_type(but);
     float softrange = softmax - softmin;
     float fac = 1.0f;
 
@@ -4731,30 +4777,29 @@ static float ui_numedit_apply_snapf(
       }
     }
 
-    if (snap == SNAP_ON) {
-      if (softrange < 2.10f) {
-        tempf = roundf(tempf * 10.0f) * 0.1f;
+    BLI_assert(ELEM(snap, SNAP_ON, SNAP_ON_SMALL));
+    switch (scale_type) {
+      case PROP_SCALE_LINEAR:
+      case PROP_SCALE_CUBIC: {
+        const float snap_fac = (snap == SNAP_ON_SMALL ? 0.1f : 1.0f);
+        if (softrange < 2.10f) {
+          tempf = roundf(tempf * 10.0f / snap_fac) * 0.1f * snap_fac;
+        }
+        else if (softrange < 21.0f) {
+          tempf = roundf(tempf / snap_fac) * snap_fac;
+        }
+        else {
+          tempf = roundf(tempf * 0.1f / snap_fac) * 10.0f * snap_fac;
+        }
+        break;
       }
-      else if (softrange < 21.0f) {
-        tempf = roundf(tempf);
+      case PROP_SCALE_LOG: {
+        const float snap_fac = powf(10.0f,
+                                    roundf(log10f(tempf) + UI_PROP_SCALE_LOG_SNAP_OFFSET) -
+                                        (snap == SNAP_ON_SMALL ? 2.0f : 1.0f));
+        tempf = roundf(tempf / snap_fac) * snap_fac;
+        break;
       }
-      else {
-        tempf = roundf(tempf * 0.1f) * 10.0f;
-      }
-    }
-    else if (snap == SNAP_ON_SMALL) {
-      if (softrange < 2.10f) {
-        tempf = roundf(tempf * 100.0f) * 0.01f;
-      }
-      else if (softrange < 21.0f) {
-        tempf = roundf(tempf * 10.0f) * 0.1f;
-      }
-      else {
-        tempf = roundf(tempf);
-      }
-    }
-    else {
-      BLI_assert(0);
     }
 
     if (fac != 1.0f) {
@@ -4800,6 +4845,7 @@ static bool ui_numedit_but_NUM(uiButNumber *number_but,
   int lvalue, temp;
   bool changed = false;
   const bool is_float = ui_but_is_float(but);
+  const PropertyScaleType scale_type = ui_but_scale_type(but);
 
   /* prevent unwanted drag adjustments, test motion so modifier keys refresh. */
   if ((is_motion || data->draglock) && (ui_but_dragedit_update_mval(data, mx) == false)) {
@@ -4811,21 +4857,74 @@ static bool ui_numedit_but_NUM(uiButNumber *number_but,
     const float softmax = but->softmax;
     const float softrange = softmax - softmin;
 
+    const float log_min = (scale_type == PROP_SCALE_LOG) ?
+                              max_ff(max_ff(softmin, UI_PROP_SCALE_LOG_MIN),
+                                     powf(10, -number_but->precision) * 0.5f) :
+                              0;
+
     /* Mouse location isn't screen clamped to the screen so use a linear mapping
      * 2px == 1-int, or 1px == 1-ClickStep */
     if (is_float) {
       fac *= 0.01f * number_but->step_size;
-      tempf = (float)data->startvalue + ((float)(mx - data->dragstartx) * fac);
+      switch (scale_type) {
+        case PROP_SCALE_LINEAR: {
+          tempf = (float)data->startvalue + (float)(mx - data->dragstartx) * fac;
+          break;
+        }
+        case PROP_SCALE_LOG: {
+          const float startvalue = max_ff((float)data->startvalue, log_min);
+          tempf = expf((float)(mx - data->dragstartx) * fac) * startvalue;
+          if (tempf <= log_min) {
+            tempf = 0.0f;
+          }
+          break;
+        }
+        case PROP_SCALE_CUBIC: {
+          tempf = cbrtf((float)data->startvalue) + (float)(mx - data->dragstartx) * fac;
+          tempf *= tempf * tempf;
+          break;
+        }
+      }
+
       tempf = ui_numedit_apply_snapf(but, tempf, softmin, softmax, snap);
 
 #if 1 /* fake moving the click start, nicer for dragging back after passing the limit */
-      if (tempf < softmin) {
-        data->dragstartx -= (softmin - tempf) / fac;
-        tempf = softmin;
-      }
-      else if (tempf > softmax) {
-        data->dragstartx += (tempf - softmax) / fac;
-        tempf = softmax;
+      switch (scale_type) {
+        case PROP_SCALE_LINEAR: {
+          if (tempf < softmin) {
+            data->dragstartx -= (softmin - tempf) / fac;
+            tempf = softmin;
+          }
+          else if (tempf > softmax) {
+            data->dragstartx -= (softmax - tempf) / fac;
+            tempf = softmax;
+          }
+          break;
+        }
+        case PROP_SCALE_LOG: {
+          if (tempf < log_min) {
+            data->dragstartx -= logf(log_min / (float)data->startvalue) / fac -
+                                (float)(mx - data->dragstartx);
+            tempf = softmin;
+          }
+          else if (tempf > softmax) {
+            data->dragstartx -= logf(softmax / (float)data->startvalue) / fac -
+                                (float)(mx - data->dragstartx);
+            tempf = softmax;
+          }
+          break;
+        }
+        case PROP_SCALE_CUBIC: {
+          if (tempf < softmin) {
+            data->dragstartx = mx - (int)((cbrtf(softmin) - cbrtf((float)data->startvalue)) / fac);
+            tempf = softmin;
+          }
+          else if (tempf > softmax) {
+            data->dragstartx = mx - (int)((cbrtf(softmax) - cbrtf((float)data->startvalue)) / fac);
+            tempf = softmax;
+          }
+          break;
+        }
       }
 #else
       CLAMP(tempf, softmin, softmax);
@@ -4932,7 +5031,31 @@ static bool ui_numedit_but_NUM(uiButNumber *number_but,
     }
 
     data->draglastx = mx;
-    tempf = (softmin + data->dragf * softrange);
+
+    switch (scale_type) {
+      case PROP_SCALE_LINEAR: {
+        tempf = (softmin + data->dragf * softrange);
+        break;
+      }
+      case PROP_SCALE_LOG: {
+        const float log_min = max_ff(max_ff(softmin, UI_PROP_SCALE_LOG_MIN),
+                                     powf(10.0f, -number_but->precision) * 0.5f);
+        const float base = softmax / log_min;
+        tempf = powf(base, data->dragf) * log_min;
+        if (tempf <= log_min) {
+          tempf = 0.0f;
+        }
+        break;
+      }
+      case PROP_SCALE_CUBIC: {
+        tempf = (softmin + data->dragf * softrange);
+        tempf *= tempf * tempf;
+        float cubic_min = softmin * softmin * softmin;
+        float cubic_max = softmax * softmax * softmax;
+        tempf = (tempf - cubic_min) / (cubic_max - cubic_min) * softrange + softmin;
+        break;
+      }
+    }
 
     if (!is_float) {
       temp = round_fl_to_int(tempf);
@@ -5179,9 +5302,19 @@ static int ui_do_but_NUM(
     else {
       /* Float Value. */
       if (but->drawflag & (UI_BUT_ACTIVE_LEFT | UI_BUT_ACTIVE_RIGHT)) {
+        const PropertyScaleType scale_type = ui_but_scale_type(but);
+
         button_activate_state(C, but, BUTTON_STATE_NUM_EDITING);
 
-        const double value_step = (double)number_but->step_size * UI_PRECISION_FLOAT_SCALE;
+        double value_step;
+        if (scale_type == PROP_SCALE_LOG) {
+          value_step = powf(10.0f,
+                            (roundf(log10f(data->value) + UI_PROP_SCALE_LOG_SNAP_OFFSET) - 1.0f) +
+                                log10f(number_but->step_size));
+        }
+        else {
+          value_step = (double)number_but->step_size * UI_PRECISION_FLOAT_SCALE;
+        }
         BLI_assert(value_step > 0.0f);
         const double value_test = (but->drawflag & UI_BUT_ACTIVE_LEFT) ?
                                       (double)max_ff(but->softmin,
@@ -5229,6 +5362,8 @@ static bool ui_numedit_but_SLI(uiBut *but,
     return changed;
   }
 
+  const PropertyScaleType scale_type = ui_but_scale_type(but);
+
   softmin = but->softmin;
   softmax = but->softmax;
   softrange = softmax - softmin;
@@ -5270,7 +5405,24 @@ static bool ui_numedit_but_SLI(uiBut *but,
 #endif
   /* done correcting mouse */
 
-  tempf = softmin + f * softrange;
+  switch (scale_type) {
+    case PROP_SCALE_LINEAR: {
+      tempf = softmin + f * softrange;
+      break;
+    }
+    case PROP_SCALE_LOG: {
+      tempf = powf(softmax / softmin, f) * softmin;
+      break;
+    }
+    case PROP_SCALE_CUBIC: {
+      const float cubicmin = cube_f(softmin);
+      const float cubicmax = cube_f(softmax);
+      const float cubicrange = cubicmax - cubicmin;
+      tempf = cube_f(softmin + f * softrange);
+      tempf = (tempf - cubicmin) / cubicrange * softrange + softmin;
+      break;
+    }
+  }
   temp = round_fl_to_int(tempf);
 
   if (snap) {
@@ -5464,6 +5616,8 @@ static int ui_do_but_SLI(
 
   if (click) {
     if (click == 2) {
+      const PropertyScaleType scale_type = ui_but_scale_type(but);
+
       /* nudge slider to the left or right */
       float f, tempf, softmin, softmax, softrange;
       int temp;
@@ -5488,14 +5642,20 @@ static int ui_do_but_SLI(
         f = (float)(mx - but->rect.xmin) / (BLI_rctf_size_x(&but->rect));
       }
 
-      f = softmin + f * softrange;
+      if (scale_type == PROP_SCALE_LOG) {
+        f = powf(softmax / softmin, f) * softmin;
+      }
+      else {
+        f = softmin + f * softrange;
+      }
 
       if (!ui_but_is_float(but)) {
+        int value_step = 1;
         if (f < temp) {
-          temp--;
+          temp -= value_step;
         }
         else {
-          temp++;
+          temp += value_step;
         }
 
         if (temp >= softmin && temp <= softmax) {
@@ -5506,14 +5666,23 @@ static int ui_do_but_SLI(
         }
       }
       else {
-        if (f < tempf) {
-          tempf -= 0.01f;
-        }
-        else {
-          tempf += 0.01f;
-        }
-
         if (tempf >= softmin && tempf <= softmax) {
+          float value_step;
+          if (scale_type == PROP_SCALE_LOG) {
+            value_step = powf(10.0f, roundf(log10f(tempf) + UI_PROP_SCALE_LOG_SNAP_OFFSET) - 1.0f);
+          }
+          else {
+            value_step = 0.01f;
+          }
+
+          if (f < tempf) {
+            tempf -= value_step;
+          }
+          else {
+            tempf += value_step;
+          }
+
+          CLAMP(tempf, softmin, softmax);
           data->value = tempf;
         }
         else {

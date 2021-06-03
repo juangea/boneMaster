@@ -121,6 +121,7 @@ static int wm_alembic_export_exec(bContext *C, wmOperator *op)
       .uvs = RNA_boolean_get(op->ptr, "uvs"),
       .normals = RNA_boolean_get(op->ptr, "normals"),
       .vcolors = RNA_boolean_get(op->ptr, "vcolors"),
+      .orcos = RNA_boolean_get(op->ptr, "orcos"),
       .apply_subdiv = RNA_boolean_get(op->ptr, "apply_subdiv"),
       .curves_as_mesh = RNA_boolean_get(op->ptr, "curves_as_mesh"),
       .flatten_hierarchy = RNA_boolean_get(op->ptr, "flatten"),
@@ -210,6 +211,7 @@ static void ui_alembic_export_settings(uiLayout *layout, PointerRNA *imfptr)
 
   uiItemR(col, imfptr, "normals", 0, NULL, ICON_NONE);
   uiItemR(col, imfptr, "vcolors", 0, NULL, ICON_NONE);
+  uiItemR(col, imfptr, "orcos", 0, NULL, ICON_NONE);
   uiItemR(col, imfptr, "face_sets", 0, NULL, ICON_NONE);
   uiItemR(col, imfptr, "curves_as_mesh", 0, NULL, ICON_NONE);
 
@@ -240,21 +242,17 @@ static void ui_alembic_export_settings(uiLayout *layout, PointerRNA *imfptr)
 
 static void wm_alembic_export_draw(bContext *C, wmOperator *op)
 {
-  PointerRNA ptr;
-
-  RNA_pointer_create(NULL, op->type->srna, op->properties, &ptr);
-
   /* Conveniently set start and end frame to match the scene's frame range. */
   Scene *scene = CTX_data_scene(C);
 
-  if (scene != NULL && RNA_boolean_get(&ptr, "init_scene_frame_range")) {
-    RNA_int_set(&ptr, "start", SFRA);
-    RNA_int_set(&ptr, "end", EFRA);
+  if (scene != NULL && RNA_boolean_get(op->ptr, "init_scene_frame_range")) {
+    RNA_int_set(op->ptr, "start", SFRA);
+    RNA_int_set(op->ptr, "end", EFRA);
 
-    RNA_boolean_set(&ptr, "init_scene_frame_range", false);
+    RNA_boolean_set(op->ptr, "init_scene_frame_range", false);
   }
 
-  ui_alembic_export_settings(op->layout, &ptr);
+  ui_alembic_export_settings(op->layout, op->ptr);
 }
 
 static bool wm_alembic_export_check(bContext *UNUSED(C), wmOperator *op)
@@ -381,6 +379,12 @@ void WM_OT_alembic_export(wmOperatorType *ot)
   RNA_def_boolean(ot->srna, "normals", 1, "Normals", "Export normals");
 
   RNA_def_boolean(ot->srna, "vcolors", 0, "Vertex Colors", "Export vertex colors");
+
+  RNA_def_boolean(ot->srna,
+                  "orcos",
+                  true,
+                  "Generated Coordinates",
+                  "Export undeformed mesh vertex coordinates");
 
   RNA_def_boolean(
       ot->srna, "face_sets", 0, "Face Sets", "Export per face shading group assignments");
@@ -595,10 +599,7 @@ static void ui_alembic_import_settings(uiLayout *layout, PointerRNA *imfptr)
 
 static void wm_alembic_import_draw(bContext *UNUSED(C), wmOperator *op)
 {
-  PointerRNA ptr;
-
-  RNA_pointer_create(NULL, op->type->srna, op->properties, &ptr);
-  ui_alembic_import_settings(op->layout, &ptr);
+  ui_alembic_import_settings(op->layout, op->ptr);
 }
 
 /* op->invoke, opens fileselect if path property not set, otherwise executes */

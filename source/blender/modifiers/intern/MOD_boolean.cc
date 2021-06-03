@@ -124,13 +124,7 @@ static void updateDepsgraph(ModifierData *md, const ModifierUpdateDepsgraphConte
   Collection *col = bmd->collection;
 
   if ((bmd->flag & eBooleanModifierFlag_Collection) && col != nullptr) {
-    FOREACH_COLLECTION_OBJECT_RECURSIVE_BEGIN (col, operand_ob) {
-      if (operand_ob->type == OB_MESH && operand_ob != ctx->object) {
-        DEG_add_object_relation(ctx->node, operand_ob, DEG_OB_COMP_TRANSFORM, "Boolean Modifier");
-        DEG_add_object_relation(ctx->node, operand_ob, DEG_OB_COMP_GEOMETRY, "Boolean Modifier");
-      }
-    }
-    FOREACH_COLLECTION_OBJECT_RECURSIVE_END;
+    DEG_add_collection_geometry_relation(ctx->node, col, "Boolean Modifier");
   }
   /* We need own transformation as well. */
   DEG_add_modifier_to_transform_relation(ctx->node, "Boolean Modifier");
@@ -289,11 +283,10 @@ static void BMD_mesh_intersection(BMesh *bm,
   /* main bmesh intersection setup */
   /* create tessface & intersect */
   const int looptris_tot = poly_to_tri_count(bm->totface, bm->totloop);
-  int tottri;
   BMLoop *(*looptris)[3] = (BMLoop * (*)[3])
       MEM_malloc_arrayN(looptris_tot, sizeof(*looptris), __func__);
 
-  BM_mesh_calc_tessellation_beauty(bm, looptris, &tottri);
+  BM_mesh_calc_tessellation_beauty(bm, looptris);
 
   /* postpone this until after tessellating
    * so we can use the original normals before the vertex are moved */
@@ -370,7 +363,7 @@ static void BMD_mesh_intersection(BMesh *bm,
 
   BM_mesh_intersect(bm,
                     looptris,
-                    tottri,
+                    looptris_tot,
                     bm_face_isect_pair,
                     nullptr,
                     false,
@@ -641,7 +634,6 @@ ModifierTypeInfo modifierType_Boolean = {
     /* modifyMesh */ modifyMesh,
     /* modifyHair */ nullptr,
     /* modifyGeometrySet */ nullptr,
-    /* modifyVolume */ nullptr,
 
     /* initData */ initData,
     /* requiredDataMask */ requiredDataMask,

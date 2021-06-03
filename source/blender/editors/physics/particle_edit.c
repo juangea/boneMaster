@@ -609,7 +609,7 @@ static bool key_test_depth(const PEData *data, const float co[3], const int scre
   }
 
   float win[3];
-  ED_view3d_project(data->vc.region, co, win);
+  ED_view3d_project_v3(data->vc.region, co, win);
 
   if (win[2] - 0.00001f > depth) {
     return 0;
@@ -5375,8 +5375,7 @@ static bool particle_edit_toggle_poll(bContext *C)
     return 0;
   }
 
-  return (ob->particlesystem.first || BKE_modifiers_findby_type(ob, eModifierType_Cloth) ||
-          BKE_modifiers_findby_type(ob, eModifierType_Softbody));
+  return ED_object_particle_edit_mode_supported(ob);
 }
 
 static void free_all_psys_edit(Object *object)
@@ -5389,6 +5388,12 @@ static void free_all_psys_edit(Object *object)
       psys->edit = NULL;
     }
   }
+}
+
+bool ED_object_particle_edit_mode_supported(const Object *ob)
+{
+  return (ob->particlesystem.first || BKE_modifiers_findby_type(ob, eModifierType_Cloth) ||
+          BKE_modifiers_findby_type(ob, eModifierType_Softbody));
 }
 
 void ED_object_particle_edit_mode_enter_ex(Depsgraph *depsgraph, Scene *scene, Object *ob)

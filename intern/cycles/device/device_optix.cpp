@@ -193,6 +193,9 @@ class OptiXDevice : public CUDADevice {
   device_only_memory<unsigned char> denoiser_state;
   int denoiser_input_passes = 0;
 
+  vector<device_only_memory<char>> delayed_free_bvh_memory;
+  thread_mutex delayed_free_bvh_mutex;
+
  public:
   OptiXDevice(DeviceInfo &info_, Stats &stats_, Profiler &profiler_, bool background_)
       : CUDADevice(info_, stats_, profiler_, background_),
@@ -257,6 +260,8 @@ class OptiXDevice : public CUDADevice {
 
     // Make CUDA context current
     const CUDAContextScope scope(cuContext);
+
+    free_bvh_memory_delayed();
 
     sbt_data.free();
     texture_info.free();
@@ -721,7 +726,11 @@ class OptiXDevice : public CUDADevice {
       }
     }
     else if (task.type == DeviceTask::SHADER) {
-      launch_shader_eval(task, thread_index);
+      // CUDA kernels are used when doing baking
+      if (optix_module == NULL)
+        CUDADevice::shader(task);
+      else
+        launch_shader_eval(task, thread_index);
     }
     else if (task.type == DeviceTask::DENOISE_BUFFER) {
       // Set up a single tile that covers the whole task and denoise it
@@ -956,14 +965,21 @@ class OptiXDevice : public CUDADevice {
         // Create OptiX denoiser handle on demand when it is first used
         OptixDenoiserOptions denoiser_options = {};
         assert(task.denoising.input_passes >= 1 && task.denoising.input_passes <= 3);
+#  if OPTIX_ABI_VERSION >= 47
+        denoiser_options.guideAlbedo = task.denoising.input_passes >= 2;
+        denoiser_options.guideNormal = task.denoising.input_passes >= 3;
+        check_result_optix_ret(optixDenoiserCreate(
+            context, OPTIX_DENOISER_MODEL_KIND_HDR, &denoiser_options, &denoiser));
+#  else
         denoiser_options.inputKind = static_cast<OptixDenoiserInputKind>(
             OPTIX_DENOISER_INPUT_RGB + (task.denoising.input_passes - 1));
-#  if OPTIX_ABI_VERSION < 28
+#    if OPTIX_ABI_VERSION < 28
         denoiser_options.pixelFormat = OPTIX_PIXEL_FORMAT_FLOAT3;
-#  endif
+#    endif
         check_result_optix_ret(optixDenoiserCreate(context, &denoiser_options, &denoiser));
         check_result_optix_ret(
             optixDenoiserSetModel(denoiser, OPTIX_DENOISER_MODEL_KIND_HDR, NULL, 0));
+#  endif
 
         // OptiX denoiser handle was created with the requested number of input passes
         denoiser_input_passes = task.denoising.input_passes;
@@ -1033,10 +1049,34 @@ class OptiXDevice : public CUDADevice {
 #  endif
       output_layers[0].format = OPTIX_PIXEL_FORMAT_FLOAT3;
 
+#  if OPTIX_ABI_VERSION >= 47
+      OptixDenoiserLayer image_layers = {};
+      image_layers.input = input_layers[0];
+      image_layers.output = output_layers[0];
+
+      OptixDenoiserGuideLayer guide_layers = {};
+      guide_layers.albedo = input_layers[1];
+      guide_layers.normal = input_layers[2];
+#  endif
+
       // Finally run denonising
       OptixDenoiserParams params = {};  // All parameters are disabled/zero
+#  if OPTIX_ABI_VERSION >= 47
       check_result_optix_ret(optixDenoiserInvoke(denoiser,
-                                                 0,
+                                                 NULL,
+                                                 &params,
+                                                 denoiser_state.device_pointer,
+                                                 scratch_offset,
+                                                 &guide_layers,
+                                                 &image_layers,
+                                                 1,
+                                                 overlap_offset.x,
+                                                 overlap_offset.y,
+                                                 denoiser_state.device_pointer + scratch_offset,
+                                                 scratch_size));
+#  else
+      check_result_optix_ret(optixDenoiserInvoke(denoiser,
+                                                 NULL,
                                                  &params,
                                                  denoiser_state.device_pointer,
                                                  scratch_offset,
@@ -1047,6 +1087,7 @@ class OptiXDevice : public CUDADevice {
                                                  output_layers,
                                                  denoiser_state.device_pointer + scratch_offset,
                                                  scratch_size));
+#  endif
 
 #  if OPTIX_DENOISER_NO_PIXEL_STRIDE
       void *output_args[] = {&input_ptr,
@@ -1265,6 +1306,8 @@ class OptiXDevice : public CUDADevice {
       Device::build_bvh(bvh, progress, refit);
       return;
     }
+
+    free_bvh_memory_delayed();
 
     BVHOptiX *const bvh_optix = static_cast<BVHOptiX *>(bvh);
 
@@ -1734,6 +1777,24 @@ class OptiXDevice : public CUDADevice {
       }
       tlas_handle = bvh_optix->traversable_handle;
     }
+  }
+
+  void release_optix_bvh(BVH *bvh) override
+  {
+    thread_scoped_lock lock(delayed_free_bvh_mutex);
+    /* Do delayed free of BVH memory, since geometry holding BVH might be deleted
+     * while GPU is still rendering. */
+    BVHOptiX *const bvh_optix = static_cast<BVHOptiX *>(bvh);
+
+    delayed_free_bvh_memory.emplace_back(std::move(bvh_optix->as_data));
+    delayed_free_bvh_memory.emplace_back(std::move(bvh_optix->motion_transform_data));
+    bvh_optix->traversable_handle = 0;
+  }
+
+  void free_bvh_memory_delayed()
+  {
+    thread_scoped_lock lock(delayed_free_bvh_mutex);
+    delayed_free_bvh_memory.free_memory();
   }
 
   void const_copy_to(const char *name, void *host, size_t size) override

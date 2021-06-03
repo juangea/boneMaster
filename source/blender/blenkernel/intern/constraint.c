@@ -1473,8 +1473,12 @@ static void followpath_get_tarmat(struct Depsgraph *UNUSED(depsgraph),
          * that's animated, but this will only work if it actually is animated...
          *
          * we divide the curvetime calculated in the previous step by the length of the path,
-         * to get a time factor, which then gets clamped to lie within 0.0 - 1.0 range. */
+         * to get a time factor. */
         curvetime /= cu->pathlen;
+
+        if (cu->flag & CU_PATH_CLAMP) {
+          CLAMP(curvetime, 0.0f, 1.0f);
+        }
       }
       else {
         /* fixed position along curve */
@@ -2836,7 +2840,7 @@ static void actcon_get_tarmat(struct Depsgraph *depsgraph,
        * including rotation order, otherwise this fails. */
       pchan = cob->pchan;
 
-      tchan = BKE_pose_channel_verify(&pose, pchan->name);
+      tchan = BKE_pose_channel_ensure(&pose, pchan->name);
       tchan->rotmode = pchan->rotmode;
 
       /* evaluate action using workob (it will only set the PoseChannel in question) */

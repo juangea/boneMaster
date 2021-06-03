@@ -352,15 +352,18 @@ static void seq_disk_cache_update_file(SeqDiskCache *disk_cache, char *path)
 }
 
 /* Path format:
- * <cache dir>/<project name>/<scene name>-<timestamp>/<seq name>/DCACHE_FNAME_FORMAT
+ * <cache dir>/<project name>_seq_cache/<scene name>-<timestamp>/<seq name>/DCACHE_FNAME_FORMAT
  */
 
 static void seq_disk_cache_get_project_dir(SeqDiskCache *disk_cache, char *path, size_t path_len)
 {
-  char main_name[FILE_MAX];
-  BLI_split_file_part(BKE_main_blendfile_path(disk_cache->bmain), main_name, sizeof(main_name));
+  char cache_dir[FILE_MAX];
+  BLI_split_file_part(BKE_main_blendfile_path(disk_cache->bmain), cache_dir, sizeof(cache_dir));
+  /* Use suffix, so that the cache directory name does not conflict with the bmain's blend file. */
+  const char *suffix = "_seq_cache";
+  strncat(cache_dir, suffix, sizeof(cache_dir) - strlen(cache_dir) - 1);
   BLI_strncpy(path, seq_disk_cache_base_dir(), path_len);
-  BLI_path_append(path, path_len, main_name);
+  BLI_path_append(path, path_len, cache_dir);
 }
 
 static void seq_disk_cache_get_dir(
@@ -421,7 +424,7 @@ static void seq_disk_cache_handle_versioning(SeqDiskCache *disk_cache)
   BLI_strncpy(path_version_file, path, sizeof(path_version_file));
   BLI_path_append(path_version_file, sizeof(path_version_file), "cache_version");
 
-  if (BLI_exists(path)) {
+  if (BLI_exists(path) && BLI_is_dir(path)) {
     FILE *file = BLI_fopen(path_version_file, "r");
 
     if (file) {
@@ -515,7 +518,7 @@ static size_t inflate_file_to_imbuf(ImBuf *ibuf, FILE *file, DiskCacheHeaderEntr
 
 static bool seq_disk_cache_read_header(FILE *file, DiskCacheHeader *header)
 {
-  fseek(file, 0, 0);
+  BLI_fseek(file, 0LL, SEEK_SET);
   const size_t num_items_read = fread(header, sizeof(*header), 1, file);
   if (num_items_read < 1) {
     BLI_assert(!"unable to read disk cache header");
@@ -537,7 +540,7 @@ static bool seq_disk_cache_read_header(FILE *file, DiskCacheHeader *header)
 
 static size_t seq_disk_cache_write_header(FILE *file, DiskCacheHeader *header)
 {
-  fseek(file, 0, 0);
+  BLI_fseek(file, 0LL, SEEK_SET);
   return fwrite(header, sizeof(*header), 1, file);
 }
 
@@ -976,14 +979,34 @@ static void seq_cache_recycle_linked(Scene *scene, SeqCacheKey *base)
   SeqCacheKey *next = base->link_next;
 
   while (base) {
+    if (!BLI_ghash_haskey(cache->hash, base)) {
+      break; /* Key has already been removed from cache. */
+    }
+
     SeqCacheKey *prev = base->link_prev;
+    if (prev != NULL && prev->link_next != base) {
+      /* Key has been removed and replaced and doesn't belong to this chain anymore. */
+      base->link_prev = NULL;
+      break;
+    }
+
     BLI_ghash_remove(cache->hash, base, seq_cache_keyfree, seq_cache_valfree);
     base = prev;
   }
 
   base = next;
   while (base) {
+    if (!BLI_ghash_haskey(cache->hash, base)) {
+      break; /* Key has already been removed from cache. */
+    }
+
     next = base->link_next;
+    if (next != NULL && next->link_prev != base) {
+      /* Key has been removed and replaced and doesn't belong to this chain anymore. */
+      base->link_next = NULL;
+      break;
+    }
+
     BLI_ghash_remove(cache->hash, base, seq_cache_keyfree, seq_cache_valfree);
     base = next;
   }

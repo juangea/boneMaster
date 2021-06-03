@@ -86,10 +86,17 @@ float safe_rcp(float a) { return (a != 0.0) ? (1.0 / a) : 0.0; }
 vec2 safe_rcp(vec2 a) { return mix(vec2(0.0), (1.0 / a), notEqual(a, vec2(0.0))); }
 vec4 safe_rcp(vec4 a) { return mix(vec4(0.0), (1.0 / a), notEqual(a, vec4(0.0))); }
 
+float safe_sqrt(float a) { return sqrt(max(a, 0.0)); }
+
 float sqr(float a) { return a * a; }
 vec2 sqr(vec2 a) { return a * a; }
 vec3 sqr(vec3 a) { return a * a; }
 vec4 sqr(vec4 a) { return a * a; }
+
+/* Use manual powers for fixed powers. pow() can have unpredicatble results on some implementations.
+ * (see T87369, T87541) */
+float pow6(float x) { return sqr(sqr(x) * x); }
+float pow8(float x) { return sqr(sqr(sqr(x))); }
 
 float len_squared(vec3 a) { return dot(a, a); }
 float len_squared(vec2 a) { return dot(a, a); }
