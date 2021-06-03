@@ -543,6 +543,38 @@ bool gpencil_stroke_inside_circle(const float mval[2], int rad, int x0, int y0, 
 }
 
 /* ******************************************************** */
+/* Selection Validity Testing */
+
+bool ED_gpencil_frame_has_selected_stroke(const bGPDframe *gpf)
+{
+  LISTBASE_FOREACH (bGPDstroke *, gps, &gpf->strokes) {
+    if (gps->flag & GP_STROKE_SELECT) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool ED_gpencil_layer_has_selected_stroke(const bGPDlayer *gpl, const bool is_multiedit)
+{
+  bGPDframe *init_gpf = (is_multiedit) ? gpl->frames.first : gpl->actframe;
+  for (bGPDframe *gpf = init_gpf; gpf; gpf = gpf->next) {
+    if ((gpf == gpl->actframe) || ((gpf->flag & GP_FRAME_SELECT) && (is_multiedit))) {
+      if (ED_gpencil_frame_has_selected_stroke(gpf)) {
+        return true;
+      }
+    }
+    /* If not multiedit, exit loop. */
+    if (!is_multiedit) {
+      break;
+    }
+  }
+
+  return false;
+}
+
+/* ******************************************************** */
 /* Stroke Validity Testing */
 
 /* Check whether given stroke can be edited given the supplied context */
@@ -1244,7 +1276,6 @@ void ED_gpencil_stroke_reproject(Depsgraph *depsgraph,
     }
     else {
       /* Geometry - Snap to surfaces of visible geometry */
-      float ray_start[3];
       float ray_normal[3];
       /* magic value for initial depth copied from the default
        * value of Python's Scene.ray_cast function
@@ -1253,13 +1284,14 @@ void ED_gpencil_stroke_reproject(Depsgraph *depsgraph,
       float location[3] = {0.0f, 0.0f, 0.0f};
       float normal[3] = {0.0f, 0.0f, 0.0f};
 
-      ED_view3d_win_to_ray(region, xy, &ray_start[0], &ray_normal[0]);
+      ED_view3d_win_to_vector(region, xy, &ray_normal[0]);
+      BLI_assert(gps->flag & GP_STROKE_3DSPACE);
       if (ED_transform_snap_object_project_ray(sctx,
                                                depsgraph,
                                                &(const struct SnapObjectParams){
                                                    .snap_select = SNAP_ALL,
                                                },
-                                               &ray_start[0],
+                                               &pt2.x,
                                                &ray_normal[0],
                                                &depth,
                                                &location[0],
