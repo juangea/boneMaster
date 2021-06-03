@@ -38,7 +38,6 @@
 #  include "BLI_math_mpq.hh"
 #  include "BLI_mesh_intersect.hh"
 #  include "BLI_mpq3.hh"
-#  include "BLI_polyfill_2d.h"
 #  include "BLI_set.hh"
 #  include "BLI_span.hh"
 #  include "BLI_stack.hh"
@@ -2680,113 +2679,10 @@ static IMesh raycast_patches_boolean(const IMesh &tm,
     }
   }
   BLI_bvhtree_free(tree);
+
   ans.set_faces(out_faces);
   return ans;
 }
-
-/**
- * Tessellate face f into triangles and return an array of `const Face *`
- * giving that triangulation. Intended to be used when f has > 4 vertices.
- * Care is taken so that the original edge index associated with
- * each edge in the output triangles either matches the original edge
- * for the (identical) edge of f, or else is -1. So diagonals added
- * for triangulation can later be identified by having #NO_INDEX for original.
- */
-static Array<Face *> triangulate_poly(Face *f, IMeshArena *arena)
-{
-  /* Similar to loop body in BM_mesh_calc_tesselation. */
-  int flen = f->size();
-  BLI_assert(flen > 4);
-  if (!f->plane_populated()) {
-    f->populate_plane(false);
-  }
-  /* Project along negative face normal so (x,y) can be used in 2d. */
-  const double3 &poly_normal = f->plane->norm;
-  float no[3] = {float(poly_normal[0]), float(poly_normal[1]), float(poly_normal[2])};
-  normalize_v3(no);
-  float axis_mat[3][3];
-  float(*projverts)[2];
-  unsigned int(*tris)[3];
-  const int totfilltri = flen - 2;
-  /* Prepare projected vertices and array to receive triangles in tesselation. */
-  tris = static_cast<unsigned int(*)[3]>(MEM_malloc_arrayN(totfilltri, sizeof(*tris), __func__));
-  projverts = static_cast<float(*)[2]>(MEM_malloc_arrayN(flen, sizeof(*projverts), __func__));
-  axis_dominant_v3_to_m3_negate(axis_mat, no);
-  for (int j = 0; j < flen; ++j) {
-    const double3 &dco = (*f)[j]->co;
-    float co[3] = {float(dco[0]), float(dco[1]), float(dco[2])};
-    mul_v2_m3v3(projverts[j], axis_mat, co);
-  }
-  BLI_polyfill_calc(projverts, flen, 1, tris);
-  /* Put tesselation triangles into Face form. Record original edges where they exist. */
-  Array<Face *> ans(totfilltri);
-  for (int t = 0; t < totfilltri; ++t) {
-    unsigned int *tri = tris[t];
-    int eo[3];
-    const Vert *v[3];
-    for (int k = 0; k < 3; k++) {
-      BLI_assert(tri[k] < flen);
-      v[k] = (*f)[tri[k]];
-      /* If tri edge goes between two successive indices in
-       * the original face, then it is an original edge. */
-      if ((tri[k] + 1) % flen == tri[(k + 1) % 3]) {
-        eo[k] = f->edge_orig[tri[k]];
-      }
-      else {
-        eo[k] = NO_INDEX;
-      }
-      ans[t] = arena->add_face(
-          {v[0], v[1], v[2]}, f->orig, {eo[0], eo[1], eo[2]}, {false, false, false});
-    }
-  }
-
-  MEM_freeN(tris);
-  MEM_freeN(projverts);
-
-  return ans;
-}
-
-/**
- * Return an #IMesh that is a triangulation of a mesh with general
- * polygonal faces, #IMesh.
- * Added diagonals will be distinguishable by having edge original
- * indices of #NO_INDEX.
- */
-static IMesh triangulate_polymesh(IMesh &imesh, IMeshArena *arena)
-{
-  Vector<Face *> face_tris;
-  constexpr int estimated_tris_per_face = 3;
-  face_tris.reserve(estimated_tris_per_face * imesh.face_size());
-  for (Face *f : imesh.faces()) {
-    /* Tessellate face f, following plan similar to #BM_face_calc_tesselation. */
-    int flen = f->size();
-    if (flen == 3) {
-      face_tris.append(f);
-    }
-    else if (flen == 4) {
-      const Vert *v0 = (*f)[0];
-      const Vert *v1 = (*f)[1];
-      const Vert *v2 = (*f)[2];
-      const Vert *v3 = (*f)[3];
-      int eo_01 = f->edge_orig[0];
-      int eo_12 = f->edge_orig[1];
-      int eo_23 = f->edge_orig[2];
-      int eo_30 = f->edge_orig[3];
-      Face *f0 = arena->add_face({v0, v1, v2}, f->orig, {eo_01, eo_12, -1}, {false, false, false});
-      Face *f1 = arena->add_face({v0, v2, v3}, f->orig, {-1, eo_23, eo_30}, {false, false, false});
-      face_tris.append(f0);
-      face_tris.append(f1);
-    }
-    else {
-      Array<Face *> tris = triangulate_poly(f, arena);
-      for (Face *tri : tris) {
-        face_tris.append(tri);
-      }
-    }
-  }
-  return IMesh(face_tris);
-}
-
 /**
  * If \a tri1 and \a tri2 have a common edge (in opposite orientation),
  * return the indices into \a tri1 and \a tri2 where that common edge starts. Else return (-1,-1).

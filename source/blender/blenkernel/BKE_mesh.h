@@ -215,7 +215,8 @@ void BKE_mesh_split_faces(struct Mesh *mesh, bool free_loop_normals);
  * ignored otherwise. */
 struct Mesh *BKE_mesh_new_from_object(struct Depsgraph *depsgraph,
                                       struct Object *object,
-                                      bool preserve_all_data_layers);
+                                      const bool preserve_all_data_layers,
+                                      const bool preserve_origindex);
 
 /* This is a version of BKE_mesh_new_from_object() which stores mesh in the given main database.
  * However, that function enforces object type to be a geometry one, and ensures a mesh is always
@@ -577,9 +578,9 @@ void BKE_mesh_polygons_flip(struct MPoly *mpoly,
                             struct CustomData *ldata,
                             int totpoly);
 
-/* merge verts  */
-/* Enum for merge_mode of CDDM_merge_verts.
- * Refer to mesh.c for details. */
+/* Merge verts. */
+/* Enum for merge_mode of #BKE_mesh_merge_verts.
+ * Refer to mesh_merge.c for details. */
 enum {
   MESH_MERGE_VERTS_DUMP_IF_MAPPED,
   MESH_MERGE_VERTS_DUMP_IF_EQUAL,

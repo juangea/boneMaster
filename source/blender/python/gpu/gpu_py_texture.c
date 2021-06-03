@@ -247,7 +247,7 @@ static PyObject *pygpu_texture__tp_new(PyTypeObject *UNUSED(self), PyObject *arg
     return NULL;
   }
 
-  return BPyGPUTexture_CreatePyObject(tex);
+  return BPyGPUTexture_CreatePyObject(tex, false);
 }
 
 PyDoc_STRVAR(pygpu_texture_width_doc, "Width of the texture.\n\n:type: `int`");
@@ -349,11 +349,12 @@ PyDoc_STRVAR(pygpu_texture_read_doc,
 static PyObject *pygpu_texture_read(BPyGPUTexture *self)
 {
   BPYGPU_TEXTURE_CHECK_OBJ(self);
+  eGPUTextureFormat tex_format = GPU_texture_format(self->tex);
 
   /* #GPU_texture_read is restricted in combining 'data_format' with 'tex_format'.
    * So choose data_format here. */
   eGPUDataFormat best_data_format;
-  switch (GPU_texture_format(self->tex)) {
+  switch (tex_format) {
     case GPU_DEPTH_COMPONENT24:
     case GPU_DEPTH_COMPONENT16:
     case GPU_DEPTH_COMPONENT32F:
@@ -389,8 +390,12 @@ static PyObject *pygpu_texture_read(BPyGPUTexture *self)
   }
 
   void *buf = GPU_texture_read(self->tex, best_data_format, 0);
-  const Py_ssize_t shape[2] = {GPU_texture_height(self->tex), GPU_texture_width(self->tex)};
-  return (PyObject *)BPyGPU_Buffer_CreatePyObject(best_data_format, shape, ARRAY_SIZE(shape), buf);
+  const Py_ssize_t shape[3] = {GPU_texture_height(self->tex),
+                               GPU_texture_width(self->tex),
+                               GPU_texture_component_len(tex_format)};
+
+  int shape_len = (shape[2] == 1) ? 2 : 3;
+  return (PyObject *)BPyGPU_Buffer_CreatePyObject(best_data_format, shape, shape_len, buf);
 }
 
 #ifdef BPYGPU_USE_GPUOBJ_FREE_METHOD
@@ -412,6 +417,9 @@ static PyObject *pygpu_texture_free(BPyGPUTexture *self)
 static void BPyGPUTexture__tp_dealloc(BPyGPUTexture *self)
 {
   if (self->tex) {
+#ifndef GPU_NO_USE_PY_REFERENCES
+    GPU_texture_py_reference_set(self->tex, NULL);
+#endif
     GPU_texture_free(self->tex);
   }
   Py_TYPE(self)->tp_free((PyObject *)self);
@@ -535,10 +543,7 @@ static PyObject *pygpu_texture_from_image(PyObject *UNUSED(self), PyObject *arg)
   BKE_imageuser_default(&iuser);
   GPUTexture *tex = BKE_image_get_gpu_texture(ima, &iuser, NULL);
 
-  /* Increase the texture reference count. */
-  GPU_texture_ref(tex);
-
-  return BPyGPUTexture_CreatePyObject(tex);
+  return BPyGPUTexture_CreatePyObject(tex, true);
 }
 
 static struct PyMethodDef pygpu_texture__m_methods[] = {
@@ -595,12 +600,32 @@ PyObject *bpygpu_texture_init(void)
 /** \name Public API
  * \{ */
 
-PyObject *BPyGPUTexture_CreatePyObject(GPUTexture *tex)
+PyObject *BPyGPUTexture_CreatePyObject(GPUTexture *tex, bool shared_reference)
 {
   BPyGPUTexture *self;
 
+  if (shared_reference) {
+#ifndef GPU_NO_USE_PY_REFERENCES
+    void **ref = GPU_texture_py_reference_get(tex);
+    if (ref) {
+      /* Retrieve BPyGPUTexture reference. */
+      self = (BPyGPUTexture *)POINTER_OFFSET(ref, -offsetof(BPyGPUTexture, tex));
+      BLI_assert(self->tex == tex);
+      Py_INCREF(self);
+      return (PyObject *)self;
+    }
+#endif
+
+    GPU_texture_ref(tex);
+  }
+
   self = PyObject_New(BPyGPUTexture, &BPyGPUTexture_Type);
   self->tex = tex;
+
+#ifndef GPU_NO_USE_PY_REFERENCES
+  BLI_assert(GPU_texture_py_reference_get(tex) == NULL);
+  GPU_texture_py_reference_set(tex, (void **)&self->tex);
+#endif
 
   return (PyObject *)self;
 }

@@ -1332,7 +1332,7 @@ static float view3d_point_depth(const RegionView3D *rv3d, const float co[3])
 
 /* only erase stroke points that are visible */
 static bool gpencil_stroke_eraser_is_occluded(
-    tGPsdata *p, bGPDlayer *gpl, const bGPDspoint *pt, const int x, const int y)
+    tGPsdata *p, bGPDlayer *gpl, bGPDspoint *pt, const int x, const int y)
 {
   Object *obact = (Object *)p->ownerPtr.data;
   Brush *brush = p->brush;
@@ -1364,7 +1364,11 @@ static bool gpencil_stroke_eraser_is_occluded(
       mul_v3_m4v3(fpt, diff_mat, &pt->x);
       const float depth_pt = view3d_point_depth(rv3d, fpt);
 
+      /* Checked occlusion flag. */
+      pt->flag |= GP_SPOINT_TEMP_TAG;
       if (depth_pt > depth_mval) {
+        /* Is occluded. */
+        pt->flag |= GP_SPOINT_TEMP_TAG2;
         return true;
       }
     }
@@ -1540,6 +1544,10 @@ static void gpencil_stroke_eraser_dostroke(tGPsdata *p,
     for (i = 0; i < gps->totpoints; i++) {
       bGPDspoint *pt = &gps->points[i];
       pt->flag &= ~GP_SPOINT_TAG;
+      /* Occlusion already checked. */
+      pt->flag &= ~GP_SPOINT_TEMP_TAG;
+      /* Point is occluded. */
+      pt->flag &= ~GP_SPOINT_TEMP_TAG2;
     }
 
     /* First Pass: Loop over the points in the stroke
@@ -1585,9 +1593,23 @@ static void gpencil_stroke_eraser_dostroke(tGPsdata *p,
          * - this assumes that linewidth is irrelevant
          */
         if (gpencil_stroke_inside_circle(mval, radius, pc0[0], pc0[1], pc2[0], pc2[1])) {
-          if ((gpencil_stroke_eraser_is_occluded(p, gpl, pt0, pc0[0], pc0[1]) == false) ||
-              (gpencil_stroke_eraser_is_occluded(p, gpl, pt1, pc1[0], pc1[1]) == false) ||
-              (gpencil_stroke_eraser_is_occluded(p, gpl, pt2, pc2[0], pc2[1]) == false)) {
+
+          bool is_occluded_pt0, is_occluded_pt1, is_occluded_pt2 = true;
+          is_occluded_pt0 = (pt0 && ((pt0->flag & GP_SPOINT_TEMP_TAG) != 0)) ?
+                                ((pt0->flag & GP_SPOINT_TEMP_TAG2) != 0) :
+                                gpencil_stroke_eraser_is_occluded(p, gpl, pt0, pc0[0], pc0[1]);
+          if (is_occluded_pt0) {
+            is_occluded_pt1 = ((pt1->flag & GP_SPOINT_TEMP_TAG) != 0) ?
+                                  ((pt1->flag & GP_SPOINT_TEMP_TAG2) != 0) :
+                                  gpencil_stroke_eraser_is_occluded(p, gpl, pt1, pc1[0], pc1[1]);
+            if (is_occluded_pt1) {
+              is_occluded_pt2 = ((pt2->flag & GP_SPOINT_TEMP_TAG) != 0) ?
+                                    ((pt2->flag & GP_SPOINT_TEMP_TAG2) != 0) :
+                                    gpencil_stroke_eraser_is_occluded(p, gpl, pt2, pc2[0], pc2[1]);
+            }
+          }
+
+          if (!is_occluded_pt0 || !is_occluded_pt1 || !is_occluded_pt2) {
             /* Point is affected: */
             /* Adjust thickness
              *  - Influence of eraser falls off with distance from the middle of the eraser
@@ -2120,7 +2142,7 @@ static void gpencil_paint_initstroke(tGPsdata *p,
   /* get active layer (or add a new one if non-existent) */
   p->gpl = BKE_gpencil_layer_active_get(p->gpd);
   if (p->gpl == NULL) {
-    p->gpl = BKE_gpencil_layer_addnew(p->gpd, DATA_("GP_Layer"), true);
+    p->gpl = BKE_gpencil_layer_addnew(p->gpd, DATA_("GP_Layer"), true, false);
     changed = true;
     if (p->custom_color[3]) {
       copy_v3_v3(p->gpl->color, p->custom_color);
@@ -3676,14 +3698,6 @@ static int gpencil_draw_modal(bContext *C, wmOperator *op, const wmEvent *event)
        *   as animators may be working "to camera", so having this working
        *   is essential for ensuring that they can quickly return to that view
        */
-    }
-    else if ((event->type == EVT_BKEY) && (event->val == KM_RELEASE)) {
-      /* Add Blank Frame
-       * - Since this operator is non-modal, we can just call it here, and keep going...
-       * - This operator is especially useful when animating
-       */
-      WM_operator_name_call(C, "GPENCIL_OT_blank_frame_add", WM_OP_EXEC_DEFAULT, NULL);
-      estate = OPERATOR_RUNNING_MODAL;
     }
     else if ((!ELEM(p->paintmode, GP_PAINTMODE_ERASER, GP_PAINTMODE_SET_CP))) {
       gpencil_guide_event_handling(C, op, event, p);

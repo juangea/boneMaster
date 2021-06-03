@@ -252,7 +252,7 @@ static int dot_v3_array_find_max_index(const float dirs[][3],
 }
 
 /**
- * Re-order \a mat so \a axis_align uses it's own axis which is closest to \a v.
+ * Re-order \a mat so \a axis_align uses its own axis which is closest to \a v.
  */
 static bool mat3_align_axis_to_v3(float mat[3][3], const int axis_align, const float v[3])
 {
@@ -323,7 +323,7 @@ static bool idp_poject_surface_normal(SnapObjectContext *snap_context,
                                                  SCE_SNAP_MODE_FACE,
                                                  &(const struct SnapObjectParams){
                                                      .snap_select = SNAP_ALL,
-                                                     .use_object_edit_cage = true,
+                                                     .edit_mode_type = SNAP_GEOM_EDIT,
                                                  },
                                                  mval_fl,
                                                  NULL,
@@ -941,7 +941,7 @@ static void view3d_interactive_add_calc_plane(bContext *C,
                                                   SCE_SNAP_MODE_FACE,
                                                   &(const struct SnapObjectParams){
                                                       .snap_select = SNAP_ALL,
-                                                      .use_object_edit_cage = true,
+                                                      .edit_mode_type = SNAP_GEOM_EDIT,
                                                   },
                                                   mval_fl,
                                                   NULL,
@@ -1472,10 +1472,27 @@ static int view3d_interactive_add_modal(bContext *C, wmOperator *op, const wmEve
           RNA_float_set_array(&op_props, "rotation", rotation);
           RNA_float_set_array(&op_props, "location", location);
           RNA_float_set_array(&op_props, "scale", scale);
-          /* Always use default size here. */
+
+          /* Always use the defaults here since desired bounds have been set interactively, it does
+           * not make sense to use a different values from a previous command. */
           if (ipd->primitive_type == PLACE_PRIMITIVE_TYPE_CUBE) {
             RNA_float_set(&op_props, "size", 2.0f);
           }
+          if (ELEM(ipd->primitive_type,
+                   PLACE_PRIMITIVE_TYPE_CYLINDER,
+                   PLACE_PRIMITIVE_TYPE_SPHERE_UV,
+                   PLACE_PRIMITIVE_TYPE_SPHERE_ICO)) {
+            RNA_float_set(&op_props, "radius", 1.0f);
+          }
+          if (ELEM(
+                  ipd->primitive_type, PLACE_PRIMITIVE_TYPE_CYLINDER, PLACE_PRIMITIVE_TYPE_CONE)) {
+            RNA_float_set(&op_props, "depth", 2.0f);
+          }
+          if (ipd->primitive_type == PLACE_PRIMITIVE_TYPE_CONE) {
+            RNA_float_set(&op_props, "radius1", 1.0f);
+            RNA_float_set(&op_props, "radius2", 0.0f);
+          }
+
           WM_operator_name_call_ptr(C, ot, WM_OP_EXEC_DEFAULT, &op_props);
           WM_operator_properties_free(&op_props);
         }
@@ -1745,7 +1762,7 @@ static void WIDGETGROUP_placement_setup(const bContext *UNUSED(C), wmGizmoGroup 
     gizmo->flag |= WM_GIZMO_HIDDEN_KEYMAP;
   }
 
-  /* Sets the gizmos custom-data which has it's own free callback. */
+  /* Sets the gizmos custom-data which has its own free callback. */
   preview_plane_cursor_setup(gzgroup);
 }
 
@@ -2044,7 +2061,7 @@ static void cursor_plane_draw(bContext *C, int x, int y, void *customdata)
     GPU_matrix_projection_set(rv3d->winmat);
     GPU_matrix_set(rv3d->viewmat);
 
-    const float scale_mod = U.gizmo_size * 2 * U.dpi_fac;
+    const float scale_mod = U.gizmo_size * 2 * U.dpi_fac / U.pixelsize;
 
     float final_scale = (scale_mod * pixel_size);
 

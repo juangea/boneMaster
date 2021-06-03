@@ -1136,8 +1136,8 @@ static bool cursor_isect_multi_input_socket(const float cursor[2], const bNodeSo
        * But keep it smaller because for multi-input socket you
        * sometimes want to drag the link to the other side, if you may
        * accidentally pick the wrong link otherwise. */
-      .ymin = socket->locy - node_socket_height * 0.5 - NODE_SOCKSIZE,
-      .ymax = socket->locy + node_socket_height * 0.5 + NODE_SOCKSIZE,
+      .ymin = socket->locy - node_socket_height,
+      .ymax = socket->locy + node_socket_height,
   };
   if (BLI_rctf_isect_pt(&multi_socket_rect, cursor[0], cursor[1])) {
     return true;
@@ -1713,8 +1713,6 @@ static int node_mute_exec(bContext *C, wmOperator *UNUSED(op))
     }
   }
 
-  do_tag_update |= ED_node_is_geometry(snode);
-
   snode_notify(C, snode);
   if (do_tag_update) {
     snode_dag_update(C, snode);
@@ -1754,8 +1752,6 @@ static int node_delete_exec(bContext *C, wmOperator *UNUSED(op))
       nodeRemoveNode(bmain, snode->edittree, node, true);
     }
   }
-
-  do_tag_update |= ED_node_is_geometry(snode);
 
   ntreeUpdateTree(CTX_data_main(C), snode->edittree);
 

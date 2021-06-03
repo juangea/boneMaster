@@ -1189,18 +1189,23 @@ static const char arg_handle_playback_mode_doc[] =
     "\t-s <frame>\n"
     "\t\tPlay from <frame>.\n"
     "\t-e <frame>\n"
-    "\t\tPlay until <frame>.";
+    "\t\tPlay until <frame>.\n"
+    "\t-c <cache_memory>\n"
+    "\t\tAmount of memory in megabytes to allow for caching images during playback.\n"
+    "\t\tZero disables (clamping to a fixed number of frames instead).";
 static int arg_handle_playback_mode(int argc, const char **argv, void *UNUSED(data))
 {
-  /* not if -b was given first */
+  /* Ignore the animation player if `-b` was given first. */
   if (G.background == 0) {
 #  ifdef WITH_FFMPEG
     /* Setup FFmpeg with current debug flags. */
     IMB_ffmpeg_init();
 #  endif
 
-    WM_main_playanim(argc, argv); /* not the same argc and argv as before */
-    exit(0);                      /* 2.4x didn't do this */
+    /* This function knows to skip this argument ('-a'). */
+    WM_main_playanim(argc, argv);
+
+    exit(0);
   }
 
   return -2;
@@ -2041,6 +2046,15 @@ void main_args_setup(bContext *C, bArgs *ba)
 
   BLI_args_add(ba, "-t", "--threads", CB(arg_handle_threads_set), NULL);
 
+  /* Include in the environment pass so it's possible display errors initializing subsystems,
+   * especially `bpy.appdir` since it's useful to show errors finding paths on startup. */
+  BLI_args_add(ba, NULL, "--log", CB(arg_handle_log_set), ba);
+  BLI_args_add(ba, NULL, "--log-level", CB(arg_handle_log_level_set), ba);
+  BLI_args_add(ba, NULL, "--log-show-basename", CB(arg_handle_log_show_basename_set), ba);
+  BLI_args_add(ba, NULL, "--log-show-backtrace", CB(arg_handle_log_show_backtrace_set), ba);
+  BLI_args_add(ba, NULL, "--log-show-timestamp", CB(arg_handle_log_show_timestamp_set), ba);
+  BLI_args_add(ba, NULL, "--log-file", CB(arg_handle_log_file_set), ba);
+
   /* Pass: Background Mode & Settings
    *
    * Also and commands that exit after usage. */
@@ -2061,13 +2075,6 @@ void main_args_setup(bContext *C, bArgs *ba)
   BLI_args_add(ba, "-b", "--background", CB(arg_handle_background_mode_set), NULL);
 
   BLI_args_add(ba, "-a", NULL, CB(arg_handle_playback_mode), NULL);
-
-  BLI_args_add(ba, NULL, "--log", CB(arg_handle_log_set), ba);
-  BLI_args_add(ba, NULL, "--log-level", CB(arg_handle_log_level_set), ba);
-  BLI_args_add(ba, NULL, "--log-show-basename", CB(arg_handle_log_show_basename_set), ba);
-  BLI_args_add(ba, NULL, "--log-show-backtrace", CB(arg_handle_log_show_backtrace_set), ba);
-  BLI_args_add(ba, NULL, "--log-show-timestamp", CB(arg_handle_log_show_timestamp_set), ba);
-  BLI_args_add(ba, NULL, "--log-file", CB(arg_handle_log_file_set), ba);
 
   BLI_args_add(ba, "-d", "--debug", CB(arg_handle_debug_mode_set), ba);
 

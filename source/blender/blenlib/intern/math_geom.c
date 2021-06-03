@@ -2353,7 +2353,7 @@ bool isect_planes_v3_fn(
         for (i_test = 0; i_test < planes_len; i_test++) {
           const float *np_test = planes[i_test];
           if (((dot_v3v3(np_test, co_test) + np_test[3]) > eps_isect)) {
-            /* For low epsilon values the point could intersect it's own plane. */
+            /* For low epsilon values the point could intersect its own plane. */
             if (!ELEM(i_test, i, j, k)) {
               break;
             }
@@ -5393,7 +5393,7 @@ void accumulate_vertex_normals_poly_v3(float **vertnos,
 
 void tangent_from_uv_v3(const float uv1[2],
                         const float uv2[2],
-                        const float uv3[3],
+                        const float uv3[2],
                         const float co1[3],
                         const float co2[3],
                         const float co3[3],

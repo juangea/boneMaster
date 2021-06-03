@@ -601,6 +601,7 @@ void ED_operatortypes_gpencil(void)
 
   WM_operatortype_append(GPENCIL_OT_layer_mask_add);
   WM_operatortype_append(GPENCIL_OT_layer_mask_remove);
+  WM_operatortype_append(GPENCIL_OT_layer_mask_move);
 
   WM_operatortype_append(GPENCIL_OT_hide);
   WM_operatortype_append(GPENCIL_OT_reveal);
@@ -650,6 +651,7 @@ void ED_operatortypes_gpencil(void)
 
   WM_operatortype_append(GPENCIL_OT_material_to_vertex_color);
   WM_operatortype_append(GPENCIL_OT_extract_palette_vertex);
+  WM_operatortype_append(GPENCIL_OT_materials_copy_to_object);
 
   WM_operatortype_append(GPENCIL_OT_transform_fill);
   WM_operatortype_append(GPENCIL_OT_reset_transform_fill);

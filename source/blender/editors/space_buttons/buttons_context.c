@@ -975,22 +975,12 @@ int /*eContextResult*/ buttons_context(const bContext *C,
         if (matnr < 0) {
           matnr = 0;
         }
-        CTX_data_pointer_set(result, &ob->id, &RNA_MaterialSlot, &ob->mat[matnr]);
+        /* Keep aligned with rna_Object_material_slots_get. */
+        CTX_data_pointer_set(result, &ob->id, &RNA_MaterialSlot, POINTER_FROM_INT(matnr + 1));
       }
     }
 
     return CTX_RESULT_OK;
-  }
-  if (CTX_data_equals(member, "modifier")) {
-    PointerRNA *ptr = get_pointer_type(path, &RNA_Modifier);
-
-    if (ptr != NULL && !RNA_pointer_is_null(ptr)) {
-      Object *ob = (Object *)ptr->owner_id;
-      ModifierData *md = ptr->data;
-      CTX_data_pointer_set(result, &ob->id, &RNA_Modifier, md);
-      return CTX_RESULT_OK;
-    }
-    return CTX_RESULT_NO_DATA;
   }
   if (CTX_data_equals(member, "texture_user")) {
     ButsContextTexture *ct = sbuts->texuser;

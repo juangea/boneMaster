@@ -37,6 +37,7 @@
 #include "BKE_context.h"
 #include "BKE_fcurve.h"
 #include "BKE_global.h"
+#include "BKE_image.h"
 #include "BKE_layer.h"
 #include "BKE_lib_id.h"
 #include "BKE_main.h"
@@ -505,9 +506,27 @@ bool clipUVTransform(TransInfo *t, float vec[2], const bool resize)
   bool clipx = true, clipy = true;
   float min[2], max[2];
 
-  min[0] = min[1] = 0.0f;
-  max[0] = t->aspect[0];
-  max[1] = t->aspect[1];
+  /* Check if the current image in UV editor is a tiled image or not. */
+  const SpaceImage *sima = t->area->spacedata.first;
+  const Image *image = sima->image;
+  const bool is_tiled_image = image && (image->source == IMA_SRC_TILED);
+  /* Stores the coordinates of the closest UDIM tile.
+   * Also acts as an offset to the tile from the origin of UV space. */
+  float base_offset[2] = {0.0f, 0.0f};
+
+  /* If tiled image then constrain to correct/closest UDIM tile, else 0-1 UV space. */
+  if (is_tiled_image) {
+    int nearest_tile_index = BKE_image_find_nearest_tile(image, t->center_global);
+    if (nearest_tile_index != -1) {
+      nearest_tile_index -= 1001;
+      /* Getting coordinates of nearest tile from the tile index. */
+      base_offset[0] = nearest_tile_index % 10;
+      base_offset[1] = nearest_tile_index / 10;
+    }
+  }
+
+  min[0] = min[1] = FLT_MAX;
+  max[0] = max[1] = FLT_MIN;
 
   FOREACH_TRANS_DATA_CONTAINER (t, tc) {
 
@@ -520,42 +539,48 @@ bool clipUVTransform(TransInfo *t, float vec[2], const bool resize)
   }
 
   if (resize) {
-    if (min[0] < 0.0f && t->center_global[0] > 0.0f && t->center_global[0] < t->aspect[0] * 0.5f) {
-      vec[0] *= t->center_global[0] / (t->center_global[0] - min[0]);
+    if (min[0] < base_offset[0] && t->center_global[0] > base_offset[0] &&
+        t->center_global[0] < base_offset[0] + (t->aspect[0] * 0.5f)) {
+      vec[0] *= (t->center_global[0] - base_offset[0]) / (t->center_global[0] - min[0]);
     }
-    else if (max[0] > t->aspect[0] && t->center_global[0] < t->aspect[0]) {
-      vec[0] *= (t->center_global[0] - t->aspect[0]) / (t->center_global[0] - max[0]);
+    else if (max[0] > (base_offset[0] + t->aspect[0]) &&
+             t->center_global[0] < (base_offset[0] + t->aspect[0])) {
+      vec[0] *= (t->center_global[0] - (base_offset[0] + t->aspect[0])) /
+                (t->center_global[0] - max[0]);
     }
     else {
       clipx = 0;
     }
 
-    if (min[1] < 0.0f && t->center_global[1] > 0.0f && t->center_global[1] < t->aspect[1] * 0.5f) {
-      vec[1] *= t->center_global[1] / (t->center_global[1] - min[1]);
+    if (min[1] < base_offset[1] && t->center_global[1] > base_offset[1] &&
+        t->center_global[1] < base_offset[1] + (t->aspect[1] * 0.5f)) {
+      vec[1] *= (t->center_global[1] - base_offset[1]) / (t->center_global[1] - min[1]);
     }
-    else if (max[1] > t->aspect[1] && t->center_global[1] < t->aspect[1]) {
-      vec[1] *= (t->center_global[1] - t->aspect[1]) / (t->center_global[1] - max[1]);
+    else if (max[1] > (base_offset[1] + t->aspect[1]) &&
+             t->center_global[1] < (base_offset[1] + t->aspect[1])) {
+      vec[1] *= (t->center_global[1] - (base_offset[1] + t->aspect[1])) /
+                (t->center_global[1] - max[1]);
     }
     else {
       clipy = 0;
     }
   }
   else {
-    if (min[0] < 0.0f) {
-      vec[0] -= min[0];
+    if (min[0] < base_offset[0]) {
+      vec[0] += base_offset[0] - min[0];
     }
-    else if (max[0] > t->aspect[0]) {
-      vec[0] -= max[0] - t->aspect[0];
+    else if (max[0] > base_offset[0] + t->aspect[0]) {
+      vec[0] -= max[0] - base_offset[0] - t->aspect[0];
     }
     else {
       clipx = 0;
     }
 
-    if (min[1] < 0.0f) {
-      vec[1] -= min[1];
+    if (min[1] < base_offset[1]) {
+      vec[1] += base_offset[1] - min[1];
     }
-    else if (max[1] > t->aspect[1]) {
-      vec[1] -= max[1] - t->aspect[1];
+    else if (max[1] > base_offset[1] + t->aspect[1]) {
+      vec[1] -= max[1] - base_offset[1] - t->aspect[1];
     }
     else {
       clipy = 0;
@@ -1122,8 +1147,7 @@ static void init_TransDataContainers(TransInfo *t,
 
     for (int i = 0; i < objects_len; i++) {
       TransDataContainer *tc = &t->data_container[i];
-      if (((t->flag & T_NO_MIRROR) == 0) && ((t->options & CTX_NO_MIRROR) == 0) &&
-          (objects[i]->type == OB_MESH)) {
+      if (!(t->flag & T_NO_MIRROR) && (objects[i]->type == OB_MESH)) {
         tc->use_mirror_axis_x = (((Mesh *)objects[i]->data)->symmetry & ME_SYMMETRY_X) != 0;
         tc->use_mirror_axis_y = (((Mesh *)objects[i]->data)->symmetry & ME_SYMMETRY_Y) != 0;
         tc->use_mirror_axis_z = (((Mesh *)objects[i]->data)->symmetry & ME_SYMMETRY_Z) != 0;
@@ -1472,91 +1496,89 @@ void createTransData(bContext *C, TransInfo *t)
 /** \name Transform Data Recalc/Flush
  * \{ */
 
-void clipMirrorModifier(TransInfo *t)
+void transform_convert_clip_mirror_modifier_apply(TransDataContainer *tc)
 {
-  FOREACH_TRANS_DATA_CONTAINER (t, tc) {
-    Object *ob = tc->obedit;
-    ModifierData *md = ob->modifiers.first;
-    float tolerance[3] = {0.0f, 0.0f, 0.0f};
-    int axis = 0;
+  Object *ob = tc->obedit;
+  ModifierData *md = ob->modifiers.first;
+  float tolerance[3] = {0.0f, 0.0f, 0.0f};
+  int axis = 0;
 
-    for (; md; md = md->next) {
-      if ((md->type == eModifierType_Mirror) && (md->mode & eModifierMode_Realtime)) {
-        MirrorModifierData *mmd = (MirrorModifierData *)md;
+  for (; md; md = md->next) {
+    if ((md->type == eModifierType_Mirror) && (md->mode & eModifierMode_Realtime)) {
+      MirrorModifierData *mmd = (MirrorModifierData *)md;
 
-        if (mmd->flag & MOD_MIR_CLIPPING) {
-          axis = 0;
-          if (mmd->flag & MOD_MIR_AXIS_X) {
-            axis |= 1;
-            tolerance[0] = mmd->tolerance;
+      if (mmd->flag & MOD_MIR_CLIPPING) {
+        axis = 0;
+        if (mmd->flag & MOD_MIR_AXIS_X) {
+          axis |= 1;
+          tolerance[0] = mmd->tolerance;
+        }
+        if (mmd->flag & MOD_MIR_AXIS_Y) {
+          axis |= 2;
+          tolerance[1] = mmd->tolerance;
+        }
+        if (mmd->flag & MOD_MIR_AXIS_Z) {
+          axis |= 4;
+          tolerance[2] = mmd->tolerance;
+        }
+        if (axis) {
+          float mtx[4][4], imtx[4][4];
+          int i;
+
+          if (mmd->mirror_ob) {
+            float obinv[4][4];
+
+            invert_m4_m4(obinv, mmd->mirror_ob->obmat);
+            mul_m4_m4m4(mtx, obinv, ob->obmat);
+            invert_m4_m4(imtx, mtx);
           }
-          if (mmd->flag & MOD_MIR_AXIS_Y) {
-            axis |= 2;
-            tolerance[1] = mmd->tolerance;
-          }
-          if (mmd->flag & MOD_MIR_AXIS_Z) {
-            axis |= 4;
-            tolerance[2] = mmd->tolerance;
-          }
-          if (axis) {
-            float mtx[4][4], imtx[4][4];
-            int i;
 
-            if (mmd->mirror_ob) {
-              float obinv[4][4];
+          TransData *td = tc->data;
+          for (i = 0; i < tc->data_len; i++, td++) {
+            int clip;
+            float loc[3], iloc[3];
 
-              invert_m4_m4(obinv, mmd->mirror_ob->obmat);
-              mul_m4_m4m4(mtx, obinv, ob->obmat);
-              invert_m4_m4(imtx, mtx);
+            if (td->loc == NULL) {
+              break;
             }
 
-            TransData *td = tc->data;
-            for (i = 0; i < tc->data_len; i++, td++) {
-              int clip;
-              float loc[3], iloc[3];
+            if (td->flag & TD_SKIP) {
+              continue;
+            }
 
-              if (td->loc == NULL) {
-                break;
+            copy_v3_v3(loc, td->loc);
+            copy_v3_v3(iloc, td->iloc);
+
+            if (mmd->mirror_ob) {
+              mul_m4_v3(mtx, loc);
+              mul_m4_v3(mtx, iloc);
+            }
+
+            clip = 0;
+            if (axis & 1) {
+              if (fabsf(iloc[0]) <= tolerance[0] || loc[0] * iloc[0] < 0.0f) {
+                loc[0] = 0.0f;
+                clip = 1;
               }
+            }
 
-              if (td->flag & TD_SKIP) {
-                continue;
+            if (axis & 2) {
+              if (fabsf(iloc[1]) <= tolerance[1] || loc[1] * iloc[1] < 0.0f) {
+                loc[1] = 0.0f;
+                clip = 1;
               }
-
-              copy_v3_v3(loc, td->loc);
-              copy_v3_v3(iloc, td->iloc);
-
+            }
+            if (axis & 4) {
+              if (fabsf(iloc[2]) <= tolerance[2] || loc[2] * iloc[2] < 0.0f) {
+                loc[2] = 0.0f;
+                clip = 1;
+              }
+            }
+            if (clip) {
               if (mmd->mirror_ob) {
-                mul_m4_v3(mtx, loc);
-                mul_m4_v3(mtx, iloc);
+                mul_m4_v3(imtx, loc);
               }
-
-              clip = 0;
-              if (axis & 1) {
-                if (fabsf(iloc[0]) <= tolerance[0] || loc[0] * iloc[0] < 0.0f) {
-                  loc[0] = 0.0f;
-                  clip = 1;
-                }
-              }
-
-              if (axis & 2) {
-                if (fabsf(iloc[1]) <= tolerance[1] || loc[1] * iloc[1] < 0.0f) {
-                  loc[1] = 0.0f;
-                  clip = 1;
-                }
-              }
-              if (axis & 4) {
-                if (fabsf(iloc[2]) <= tolerance[2] || loc[2] * iloc[2] < 0.0f) {
-                  loc[2] = 0.0f;
-                  clip = 1;
-                }
-              }
-              if (clip) {
-                if (mmd->mirror_ob) {
-                  mul_m4_v3(imtx, loc);
-                }
-                copy_v3_v3(td->loc, loc);
-              }
+              copy_v3_v3(td->loc, loc);
             }
           }
         }
@@ -1644,38 +1666,6 @@ void animrecord_check_state(TransInfo *t, struct Object *ob)
   }
 }
 
-static void recalcData_cursor_image(TransInfo *t)
-{
-  TransDataContainer *tc = t->data_container;
-  TransData *td = tc->data;
-  float aspect_inv[2];
-
-  aspect_inv[0] = 1.0f / t->aspect[0];
-  aspect_inv[1] = 1.0f / t->aspect[1];
-
-  td->loc[0] = td->loc[0] * aspect_inv[0];
-  td->loc[1] = td->loc[1] * aspect_inv[1];
-
-  DEG_id_tag_update(&t->scene->id, ID_RECALC_COPY_ON_WRITE);
-}
-
-static void recalcData_cursor(TransInfo *t)
-{
-  DEG_id_tag_update(&t->scene->id, ID_RECALC_COPY_ON_WRITE);
-}
-
-static void recalcData_obedit(TransInfo *t)
-{
-  if (t->state != TRANS_CANCEL) {
-    applyProject(t);
-  }
-  FOREACH_TRANS_DATA_CONTAINER (t, tc) {
-    if (tc->data_len) {
-      DEG_id_tag_update(tc->obedit->data, 0); /* sets recalc flags */
-    }
-  }
-}
-
 /* called for updating while transform acts, once per redraw */
 void recalcData(TransInfo *t)
 {
@@ -1742,7 +1732,7 @@ void recalcData(TransInfo *t)
       recalcData_tracking(t);
       break;
     case TC_MBALL_VERTS:
-      recalcData_obedit(t);
+      recalcData_mball(t);
       break;
     case TC_LATTICE_VERTS:
       recalcData_lattice(t);

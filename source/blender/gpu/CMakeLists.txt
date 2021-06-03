@@ -275,6 +275,7 @@ data_to_c_simple(shaders/material/gpu_shader_material_anisotropic.glsl SRC)
 data_to_c_simple(shaders/material/gpu_shader_material_attribute.glsl SRC)
 data_to_c_simple(shaders/material/gpu_shader_material_background.glsl SRC)
 data_to_c_simple(shaders/material/gpu_shader_material_bevel.glsl SRC)
+data_to_c_simple(shaders/material/gpu_shader_material_wavelength.glsl SRC)
 data_to_c_simple(shaders/material/gpu_shader_material_blackbody.glsl SRC)
 data_to_c_simple(shaders/material/gpu_shader_material_bright_contrast.glsl SRC)
 data_to_c_simple(shaders/material/gpu_shader_material_bump.glsl SRC)
@@ -381,7 +382,7 @@ endif()
 
 blender_add_lib(bf_gpu "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 
-if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_C_COMPILER_ID MATCHES "Clang")
+if(CXX_WARN_NO_SUGGEST_OVERRIDE)
   target_compile_options(bf_gpu PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wsuggest-override>)
 endif()
 

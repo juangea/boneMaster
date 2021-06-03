@@ -148,6 +148,8 @@ static const EnumPropertyItem rna_enum_override_library_property_operation_items
 #  include "DEG_depsgraph_build.h"
 #  include "DEG_depsgraph_query.h"
 
+#  include "ED_asset.h"
+
 #  include "WM_api.h"
 
 void rna_ID_override_library_property_operation_refname_get(PointerRNA *ptr, char *value)
@@ -344,7 +346,7 @@ short RNA_type_to_ID_code(const StructRNA *type)
   if (base_type == &RNA_Screen) {
     return ID_SCR;
   }
-#  ifdef WITH_GEOMETRY_NODES
+#  ifdef WITH_SIMULATION_DATABLOCK
   if (base_type == &RNA_Simulation) {
     return ID_SIM;
   }
@@ -452,7 +454,7 @@ StructRNA *ID_code_to_RNA_type(short idcode)
     case ID_SCR:
       return &RNA_Screen;
     case ID_SIM:
-#  ifdef WITH_GEOMETRY_NODES
+#  ifdef WITH_SIMULATION_DATABLOCK
       return &RNA_Simulation;
 #  else
       return &RNA_ID;
@@ -573,6 +575,22 @@ static ID *rna_ID_copy(ID *id, Main *bmain)
   WM_main_add_notifier(NC_ID | NA_ADDED, NULL);
 
   return newid;
+}
+
+static void rna_ID_asset_mark(ID *id, bContext *C)
+{
+  if (ED_asset_mark_id(C, id)) {
+    WM_main_add_notifier(NC_ID | NA_EDITED, NULL);
+    WM_main_add_notifier(NC_ASSET | NA_ADDED, NULL);
+  }
+}
+
+static void rna_ID_asset_clear(ID *id)
+{
+  if (ED_asset_clear_id(id)) {
+    WM_main_add_notifier(NC_ID | NA_EDITED, NULL);
+    WM_main_add_notifier(NC_ASSET | NA_REMOVED, NULL);
+  }
 }
 
 static ID *rna_ID_override_create(ID *id, Main *bmain, bool remap_local_usages)
@@ -1715,6 +1733,18 @@ static void rna_def_ID(BlenderRNA *brna)
   RNA_def_function_flag(func, FUNC_USE_MAIN);
   parm = RNA_def_pointer(func, "id", "ID", "", "New copy of the ID");
   RNA_def_function_return(func, parm);
+
+  func = RNA_def_function(srna, "asset_mark", "rna_ID_asset_mark");
+  RNA_def_function_ui_description(
+      func,
+      "Enable easier reuse of the data-block through the Asset Browser, with the help of "
+      "customizable metadata (like previews, descriptions and tags)");
+  RNA_def_function_flag(func, FUNC_USE_CONTEXT);
+
+  func = RNA_def_function(srna, "asset_clear", "rna_ID_asset_clear");
+  RNA_def_function_ui_description(
+      func,
+      "Delete all asset metadata and turn the asset data-block back into a normal data-block");
 
   func = RNA_def_function(srna, "override_create", "rna_ID_override_create");
   RNA_def_function_ui_description(func,

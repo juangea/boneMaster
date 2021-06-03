@@ -51,7 +51,7 @@ set(INC
 set(SRC
   intern/draw_cache.c
   intern/draw_cache_extract_mesh.c
-  intern/draw_cache_impl_curve.c
+  intern/draw_cache_impl_curve.cc
   intern/draw_cache_impl_displist.c
   intern/draw_cache_impl_gpencil.c
   intern/draw_cache_impl_hair.c
@@ -478,6 +478,7 @@ add_dependencies(bf_draw bf_dna)
 if(WITH_GTESTS)
   if(WITH_OPENGL_DRAW_TESTS)
     set(TEST_SRC
+      tests/draw_testing.cc
       tests/shaders_test.cc
     )
     set(TEST_INC

@@ -144,6 +144,8 @@ bool ED_gpencil_data_owner_is_annotation(struct PointerRNA *owner_ptr);
 bool ED_gpencil_has_keyframe_v3d(struct Scene *scene, struct Object *ob, int cfra);
 
 /* ----------- Stroke Editing Utilities ---------------- */
+bool ED_gpencil_frame_has_selected_stroke(const struct bGPDframe *gpf);
+bool ED_gpencil_layer_has_selected_stroke(const struct bGPDlayer *gpl, const bool is_multiedit);
 
 bool ED_gpencil_stroke_can_use_direct(const struct ScrArea *area, const struct bGPDstroke *gps);
 bool ED_gpencil_stroke_can_use(const struct bContext *C, const struct bGPDstroke *gps);
@@ -249,6 +251,7 @@ void ED_gpencil_brush_draw_eraser(struct Brush *brush, int x, int y);
 
 /* ----------- Add Primitive Utilities -------------- */
 
+void ED_gpencil_create_blank(struct bContext *C, struct Object *ob, float mat[4][4]);
 void ED_gpencil_create_monkey(struct bContext *C, struct Object *ob, float mat[4][4]);
 void ED_gpencil_create_stroke(struct bContext *C, struct Object *ob, float mat[4][4]);
 void ED_gpencil_create_lineart(struct bContext *C, struct Object *ob);

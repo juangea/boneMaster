@@ -48,6 +48,7 @@
 #include "DNA_screen_types.h"
 #include "DNA_shader_fx_types.h"
 #include "DNA_space_types.h"
+#include "DNA_text_types.h"
 #include "DNA_tracking_types.h"
 #include "DNA_workspace_types.h"
 
@@ -683,6 +684,15 @@ void do_versions_after_linking_290(Main *bmain, ReportList *UNUSED(reports))
         version_node_socket_duplicate(ntree, GEO_NODE_MESH_PRIMITIVE_GRID, "Size X", "Size Y");
       }
       FOREACH_NODETREE_END;
+    }
+  }
+
+  if (!MAIN_VERSION_ATLEAST(bmain, 293, 20)) {
+    /* Set zero user text objects to have a fake user. */
+    LISTBASE_FOREACH (Text *, text, &bmain->texts) {
+      if (text->id.us == 0) {
+        id_fake_user_set(&text->id);
+      }
     }
   }
 
@@ -2056,6 +2066,24 @@ void blo_do_versions_290(FileData *fd, Library *UNUSED(lib), Main *bmain)
           }
         }
       }
+    }
+  }
+
+  /* Set default value for the new bisect_threshold parameter in the mirror modifier. */
+  if (!MAIN_VERSION_ATLEAST(bmain, 293, 19)) {
+    LISTBASE_FOREACH (Object *, ob, &bmain->objects) {
+      LISTBASE_FOREACH (ModifierData *, md, &ob->modifiers) {
+        if (md->type == eModifierType_Mirror) {
+          MirrorModifierData *mmd = (MirrorModifierData *)md;
+          /* This was the previous hard-coded value. */
+          mmd->bisect_threshold = 0.001f;
+        }
+      }
+    }
+
+    LISTBASE_FOREACH (Curve *, cu, &bmain->curves) {
+      /* Turn on clamping as this was implicit before. */
+      cu->flag |= CU_PATH_CLAMP;
     }
   }
 

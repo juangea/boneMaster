@@ -1332,11 +1332,8 @@ bool BKE_object_support_modifier_type_check(const Object *ob, int modifier_type)
   if (ob->type == OB_HAIR) {
     return (mti->modifyHair != NULL) || (mti->flags & eModifierTypeFlag_AcceptsVertexCosOnly);
   }
-  if (ob->type == OB_POINTCLOUD) {
+  if (ELEM(ob->type, OB_POINTCLOUD, OB_VOLUME)) {
     return (mti->modifyGeometrySet != NULL);
-  }
-  if (ob->type == OB_VOLUME) {
-    return (mti->modifyVolume != NULL);
   }
   if (ELEM(ob->type, OB_MESH, OB_CURVE, OB_SURF, OB_FONT, OB_LATTICE)) {
     if (ob->type == OB_LATTICE && (mti->flags & eModifierTypeFlag_AcceptsVertexCosOnly) == 0) {
@@ -2292,7 +2289,7 @@ Object *BKE_object_add_for_data(
 void BKE_object_copy_softbody(Object *ob_dst, const Object *ob_src, const int flag)
 {
   SoftBody *sb = ob_src->soft;
-  bool tagged_no_main = ob_dst->id.tag & LIB_TAG_NO_MAIN;
+  const bool is_orig = (flag & LIB_ID_COPY_SET_COPIED_ON_WRITE) == 0;
 
   ob_dst->softflag = ob_src->softflag;
   if (sb == NULL) {
@@ -2333,7 +2330,7 @@ void BKE_object_copy_softbody(Object *ob_dst, const Object *ob_src, const int fl
 
   sbn->scratch = NULL;
 
-  if (!tagged_no_main) {
+  if (is_orig) {
     sbn->shared = MEM_dupallocN(sb->shared);
     sbn->shared->pointcache = BKE_ptcache_copy_list(
         &sbn->shared->ptcaches, &sb->shared->ptcaches, flag);
@@ -3286,6 +3283,10 @@ static bool ob_parcurve(Object *ob, Object *par, float r_mat[4][4])
   }
   else {
     ctime = cu->ctime;
+  }
+
+  if (cu->flag & CU_PATH_CLAMP) {
+    CLAMP(ctime, 0.0f, 1.0f);
   }
 
   unit_m4(r_mat);
@@ -4346,7 +4347,7 @@ void BKE_object_handle_update_ex(Depsgraph *depsgraph,
   }
   /* Speed optimization for animation lookups. */
   if (ob->pose != NULL) {
-    BKE_pose_channels_hash_make(ob->pose);
+    BKE_pose_channels_hash_ensure(ob->pose);
     if (ob->pose->flag & POSE_CONSTRAINTS_NEED_UPDATE_FLAGS) {
       BKE_pose_update_constraint_flags(ob->pose);
     }
@@ -5117,6 +5118,20 @@ void BKE_object_runtime_reset_on_copy(Object *object, const int UNUSED(flag))
 }
 
 /**
+ * The function frees memory used by the runtime data, but not the runtime field itself.
+ *
+ * All runtime data is cleared to ensure it's not used again,
+ * in keeping with other `_free_data(..)` functions.
+ */
+void BKE_object_runtime_free_data(Object *object)
+{
+  /* Currently this is all that's needed. */
+  BKE_object_free_derived_caches(object);
+
+  BKE_object_runtime_reset(object);
+}
+
+/**
  * Find an associated armature object.
  */
 static Object *obrel_armature_find(Object *ob)
@@ -5657,7 +5672,7 @@ Mesh *BKE_object_to_mesh(Depsgraph *depsgraph, Object *object, bool preserve_all
 {
   BKE_object_to_mesh_clear(object);
 
-  Mesh *mesh = BKE_mesh_new_from_object(depsgraph, object, preserve_all_data_layers);
+  Mesh *mesh = BKE_mesh_new_from_object(depsgraph, object, preserve_all_data_layers, false);
   object->runtime.object_as_temp_mesh = mesh;
   return mesh;
 }

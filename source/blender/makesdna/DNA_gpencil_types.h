@@ -47,7 +47,7 @@ struct Curve;
 #define GP_DEFAULT_CURVE_EDIT_CORNER_ANGLE M_PI_2
 
 #define GPENCIL_MIN_FILL_FAC 0.05f
-#define GPENCIL_MAX_FILL_FAC 5.0f
+#define GPENCIL_MAX_FILL_FAC 8.0f
 
 /* ***************************************** */
 /* GP Stroke Points */
@@ -112,6 +112,8 @@ typedef enum eGPDspoint_Flag {
   GP_SPOINT_TAG = (1 << 1),
   /* stroke point is temp tagged (for some editing operation) */
   GP_SPOINT_TEMP_TAG = (1 << 2),
+  /* stroke point is temp tagged (for some editing operation) */
+  GP_SPOINT_TEMP_TAG2 = (1 << 3),
 } eGPSPoint_Flag;
 
 /* ***************************************** */

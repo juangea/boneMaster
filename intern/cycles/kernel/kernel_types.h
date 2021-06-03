@@ -64,7 +64,7 @@ CCL_NAMESPACE_BEGIN
 #define ID_NONE (0.0f)
 #define LIGHTGROUPS_NONE 0
 
-#define VOLUME_STACK_SIZE	32
+#define VOLUME_STACK_SIZE 32
 #define RNG_DITHER_MASK 0x80000000
 #define RNG_DITHER_SIZE 128
 
@@ -903,6 +903,8 @@ enum ShaderDataFlag {
   SD_HAS_CONSTANT_EMISSION = (1 << 27),
   /* Needs to access attributes for volume rendering */
   SD_NEED_VOLUME_ATTRIBUTES = (1 << 28),
+  /* Shader has emission */
+  SD_HAS_EMISSION = (1 << 29),
 
   SD_SHADER_FLAGS = (SD_USE_MIS | SD_HAS_TRANSPARENT_SHADOW | SD_HAS_VOLUME | SD_HAS_ONLY_VOLUME |
                      SD_HETEROGENEOUS_VOLUME | SD_HAS_BSSRDF_BUMP | SD_VOLUME_EQUIANGULAR |
