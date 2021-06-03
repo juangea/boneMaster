@@ -31,6 +31,7 @@ set(INC
   ../depsgraph
   ../editors/include
   ../editors/space_view3d
+  ../functions
   ../gpu
   ../imbuf
   ../makesdna
@@ -50,7 +51,9 @@ set(INC
 
 set(SRC
   intern/draw_cache.c
-  intern/draw_cache_extract_mesh.c
+  intern/draw_cache_extract_mesh_extractors.c
+  intern/draw_cache_extract_mesh_render_data.c
+  intern/draw_cache_extract_mesh.cc
   intern/draw_cache_impl_curve.cc
   intern/draw_cache_impl_displist.c
   intern/draw_cache_impl_gpencil.c
@@ -321,6 +324,7 @@ data_to_c_simple(intern/shaders/common_globals_lib.glsl SRC)
 data_to_c_simple(intern/shaders/common_pointcloud_lib.glsl SRC)
 data_to_c_simple(intern/shaders/common_hair_lib.glsl SRC)
 data_to_c_simple(intern/shaders/common_hair_refine_vert.glsl SRC)
+data_to_c_simple(intern/shaders/common_hair_refine_comp.glsl SRC)
 data_to_c_simple(intern/shaders/common_math_lib.glsl SRC)
 data_to_c_simple(intern/shaders/common_math_geom_lib.glsl SRC)
 data_to_c_simple(intern/shaders/common_view_lib.glsl SRC)
