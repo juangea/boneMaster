@@ -54,6 +54,13 @@ set(SRC
   intern/draw_cache_extract_mesh_extractors.c
   intern/draw_cache_extract_mesh_render_data.c
   intern/draw_cache_extract_mesh.cc
+  intern/mesh_extractors/extract_mesh_ibo_edituv.cc
+  intern/mesh_extractors/extract_mesh_ibo_fdots.cc
+  intern/mesh_extractors/extract_mesh_ibo_lines_adjacency.cc
+  intern/mesh_extractors/extract_mesh_ibo_lines_paint_mask.cc
+  intern/mesh_extractors/extract_mesh_ibo_lines.cc
+  intern/mesh_extractors/extract_mesh_ibo_points.cc
+  intern/mesh_extractors/extract_mesh_ibo_tris.cc
   intern/draw_cache_impl_curve.cc
   intern/draw_cache_impl_displist.c
   intern/draw_cache_impl_gpencil.c
@@ -149,6 +156,7 @@ set(SRC
   engines/overlay/overlay_image.c
   engines/overlay/overlay_lattice.c
   engines/overlay/overlay_metaball.c
+  engines/overlay/overlay_mode_transfer.c
   engines/overlay/overlay_motion_path.c
   engines/overlay/overlay_outline.c
   engines/overlay/overlay_paint.c
