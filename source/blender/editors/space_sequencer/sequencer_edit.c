@@ -557,7 +557,7 @@ static bool sequencer_slip_recursively(Scene *scene, SlipData *data, int offset)
         seq->endofs = endframe - seq->enddisp;
         changed = true;
       }
-      else if (endframe <= seq->enddisp) {
+      else {
         seq->endstill = seq->enddisp - endframe;
         seq->endofs = 0;
         changed = true;
@@ -568,7 +568,7 @@ static bool sequencer_slip_recursively(Scene *scene, SlipData *data, int offset)
         seq->startofs = 0;
         changed = true;
       }
-      else if (seq->start <= seq->startdisp) {
+      else {
         seq->startstill = 0;
         seq->startofs = seq->startdisp - seq->start;
         changed = true;
@@ -1776,8 +1776,8 @@ static int sequencer_separate_images_exec(bContext *C, wmOperator *op)
       /* if (seq->ipo) id_us_min(&seq->ipo->id); */
       /* XXX, remove fcurve and assign to split image strips */
 
-      start_ofs = timeline_frame = SEQ_transform_get_left_handle_frame(seq, false);
-      frame_end = SEQ_transform_get_right_handle_frame(seq, false);
+      start_ofs = timeline_frame = SEQ_transform_get_left_handle_frame(seq);
+      frame_end = SEQ_transform_get_right_handle_frame(seq);
 
       while (timeline_frame < frame_end) {
         /* New seq. */
