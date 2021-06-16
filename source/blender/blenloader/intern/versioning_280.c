@@ -1785,7 +1785,7 @@ void do_versions_after_linking_280(Main *bmain, ReportList *UNUSED(reports))
 static void do_versions_seq_unique_name_all_strips(Scene *sce, ListBase *seqbasep)
 {
   for (Sequence *seq = seqbasep->first; seq != NULL; seq = seq->next) {
-    SEQ_sequence_base_unique_name_recursive(&sce->ed->seqbase, seq);
+    SEQ_sequence_base_unique_name_recursive(sce, &sce->ed->seqbase, seq);
     if (seq->seqbase.first != NULL) {
       do_versions_seq_unique_name_all_strips(sce, &seq->seqbase);
     }
@@ -3172,7 +3172,7 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
           bool is_blend = false;
 
           {
-            char tool = tool_init;
+            char tool;
             switch (tool_init) {
               case PAINT_BLEND_MIX:
                 tool = VPAINT_TOOL_DRAW;
