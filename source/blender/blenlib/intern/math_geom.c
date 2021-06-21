@@ -4911,8 +4911,8 @@ void window_translate_m4(float winmat[4][4], float perspmat[4][4], const float x
 void planes_from_projmat(const float mat[4][4],
                          float left[4],
                          float right[4],
-                         float top[4],
                          float bottom[4],
+                         float top[4],
                          float near[4],
                          float far[4])
 {
@@ -6216,6 +6216,19 @@ bool is_quad_flip_v3_first_third_fast(const float v1[3],
   cross_v3_v3v3(cross_a, d_12, d_13);
   cross_v3_v3v3(cross_b, d_14, d_13);
   return dot_v3v3(cross_a, cross_b) > 0.0f;
+}
+
+bool is_quad_flip_v3_first_third_fast_with_normal(const float v1[3],
+                                                  const float v2[3],
+                                                  const float v3[3],
+                                                  const float v4[3],
+                                                  const float normal[3])
+{
+  float dir_v3v1[3], tangent[3];
+  sub_v3_v3v3(dir_v3v1, v3, v1);
+  cross_v3_v3v3(tangent, dir_v3v1, normal);
+  const float dot = dot_v3v3(v1, tangent);
+  return (dot_v3v3(v4, tangent) >= dot) || (dot_v3v3(v2, tangent) <= dot);
 }
 
 /**

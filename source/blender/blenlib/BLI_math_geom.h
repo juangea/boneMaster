@@ -105,6 +105,11 @@ bool is_quad_flip_v3_first_third_fast(const float v1[3],
                                       const float v2[3],
                                       const float v3[3],
                                       const float v4[3]);
+bool is_quad_flip_v3_first_third_fast_with_normal(const float v1[3],
+                                                  const float v2[3],
+                                                  const float v3[3],
+                                                  const float v4[3],
+                                                  const float normal[3]);
 
 /********************************* Distance **********************************/
 
@@ -672,8 +677,8 @@ void window_translate_m4(float winmat[4][4], float perspmat[4][4], const float x
 void planes_from_projmat(const float mat[4][4],
                          float left[4],
                          float right[4],
-                         float top[4],
                          float bottom[4],
+                         float top[4],
                          float near[4],
                          float far[4]);
 
