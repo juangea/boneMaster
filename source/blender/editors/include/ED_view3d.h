@@ -90,8 +90,6 @@ typedef struct ViewDepths {
   short x, y; /* only for temp use for sub-rects, added to region->winx/y */
   float *depths;
   double depth_range[2];
-
-  bool damaged;
 } ViewDepths;
 
 /* Rotate 3D cursor on placement. */
@@ -154,19 +152,20 @@ void ED_view3d_depth_override(struct Depsgraph *depsgraph,
                               struct View3D *v3d,
                               struct Object *obact,
                               eV3DDepthOverrideMode mode,
-                              bool update_cache);
+                              struct ViewDepths **r_depths);
+void ED_view3d_depths_free(ViewDepths *depths);
 bool ED_view3d_depth_read_cached(const ViewDepths *vd,
                                  const int mval[2],
                                  int margin,
                                  float *r_depth);
-bool ED_view3d_depth_read_cached_normal(const ViewContext *vc,
+bool ED_view3d_depth_read_cached_normal(const struct ARegion *region,
+                                        const ViewDepths *depths,
                                         const int mval[2],
                                         float r_normal[3]);
 bool ED_view3d_depth_unproject_v3(const struct ARegion *region,
                                   const int mval[2],
                                   const double depth,
                                   float r_location_world[3]);
-void ED_view3d_depth_tag_update(struct RegionView3D *rv3d);
 
 /* Projection */
 #define IS_CLIPPED 12000
@@ -211,7 +210,7 @@ typedef enum {
    * \note Perspective views should enable #V3D_PROJ_TEST_CLIP_WIN along with
    * #V3D_PROJ_TEST_CLIP_NEAR as the near-plane-clipped location of a point
    * may become very large (even infinite) when projected into screen-space.
-   * Unless the that point happens to coincide with the camera's point of view.
+   * Unless that point happens to coincide with the camera's point of view.
    *
    * Use #V3D_PROJ_TEST_CLIP_CONTENT_DEFAULT instead of #V3D_PROJ_TEST_CLIP_CONTENT,
    * to avoid accidentally enabling near clipping without clipping by window bounds.
@@ -367,6 +366,8 @@ float ED_view3d_pixel_size(const struct RegionView3D *rv3d, const float co[3]);
 float ED_view3d_pixel_size_no_ui_scale(const struct RegionView3D *rv3d, const float co[3]);
 
 float ED_view3d_calc_zfac(const struct RegionView3D *rv3d, const float co[3], bool *r_flip);
+float ED_view3d_calc_depth_for_comparison(const struct RegionView3D *rv3d, const float co[3]);
+
 bool ED_view3d_clip_segment(const struct RegionView3D *rv3d, float ray_start[3], float ray_end[3]);
 bool ED_view3d_win_to_ray_clipped(struct Depsgraph *depsgraph,
                                   const struct ARegion *region,

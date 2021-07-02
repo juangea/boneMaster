@@ -298,7 +298,7 @@ static void copy_spline_domain_attributes(const CurveComponent &curve_component,
       if (size != 0) {
         BUFFER_FOR_CPP_TYPE_VALUE(type, buffer);
         spline_attribute->get(i, buffer);
-        type.fill_initialized(buffer, result[offset], size);
+        type.fill_assign_n(buffer, result[offset], size);
       }
     }
 
@@ -325,8 +325,6 @@ static void geo_node_curve_to_points_exec(GeoNodeExecParams params)
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
 
   geometry_set = bke::geometry_set_realize_instances(geometry_set);
-
-  SCOPED_TIMER(__func__);
 
   if (!geometry_set.has_curve()) {
     params.set_output("Geometry", GeometrySet());

@@ -786,12 +786,6 @@ static void view3d_main_region_free(ARegion *region)
       RE_engine_free(rv3d->render_engine);
     }
 
-    if (rv3d->depths) {
-      if (rv3d->depths->depths) {
-        MEM_freeN(rv3d->depths->depths);
-      }
-      MEM_freeN(rv3d->depths);
-    }
     if (rv3d->sms) {
       MEM_freeN(rv3d->sms);
     }
@@ -815,7 +809,6 @@ static void *view3d_main_region_duplicate(void *poin)
       new->clipbb = MEM_dupallocN(rv3d->clipbb);
     }
 
-    new->depths = NULL;
     new->render_engine = NULL;
     new->sms = NULL;
     new->smooth_timer = NULL;
@@ -1624,7 +1617,7 @@ static int view3d_context(const bContext *C, const char *member, bContextDataRes
      * This is ignored in the case the object is in any mode (besides object-mode),
      * since the object's mode impacts the current tool, cursor, gizmos etc.
      * If we didn't have this exception, changing visibility would need to perform
-     * many of the the same updates as changing the objects mode.
+     * many of the same updates as changing the objects mode.
      *
      * Further, there are multiple ways to hide objects - by collection, by object type, etc.
      * it's simplest if all these methods behave consistently - respecting the object-mode

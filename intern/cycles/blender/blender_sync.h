@@ -249,6 +249,7 @@ class BlenderSync {
           use_surfaces(true),
           use_hair(true),
           use_volumes(true),
+          use_motion_blur(true),
           samples(0),
           bound_samples(false)
     {
@@ -261,6 +262,7 @@ class BlenderSync {
     bool use_surfaces;
     bool use_hair;
     bool use_volumes;
+    bool use_motion_blur;
     int samples;
     bool bound_samples;
   } view_layer;
