@@ -6411,6 +6411,32 @@ void uiTemplateNodeSocket(uiLayout *layout, bContext *UNUSED(C), float color[4])
 /** \name Cache File Template
  * \{ */
 
+static void cache_file_layer_item(uiList *UNUSED(ui_list),
+                                  bContext *UNUSED(C),
+                                  uiLayout *layout,
+                                  PointerRNA *UNUSED(dataptr),
+                                  PointerRNA *itemptr,
+                                  int UNUSED(icon),
+                                  PointerRNA *UNUSED(active_dataptr),
+                                  const char *UNUSED(active_propname),
+                                  int UNUSED(index),
+                                  int UNUSED(flt_flag))
+{
+  uiLayout *row = uiLayoutRow(layout, true);
+  uiItemR(row, itemptr, "hide_layer", UI_ITEM_R_NO_BG, "", ICON_NONE);
+  uiItemR(row, itemptr, "filepath", UI_ITEM_R_NO_BG, "", ICON_NONE);
+}
+
+uiListType *UI_UL_cache_file_layers()
+{
+  uiListType *list_type = (uiListType *)MEM_callocN(sizeof(*list_type), __func__);
+
+  BLI_strncpy(list_type->idname, "UI_UL_cache_file_layers", sizeof(list_type->idname));
+  list_type->draw_item = cache_file_layer_item;
+
+  return list_type;
+}
+
 void uiTemplateCacheFile(uiLayout *layout,
                          const bContext *C,
                          PointerRNA *ptr,
@@ -6458,7 +6484,7 @@ void uiTemplateCacheFile(uiLayout *layout,
 
   SpaceProperties *sbuts = CTX_wm_space_properties(C);
 
-  uiLayout *row, *sub, *subsub;
+  uiLayout *row, *sub, *subsub, *col;
 
   uiLayoutSetPropSep(layout, true);
 
@@ -6466,6 +6492,34 @@ void uiTemplateCacheFile(uiLayout *layout,
   uiItemR(row, &fileptr, "filepath", 0, NULL, ICON_NONE);
   sub = uiLayoutRow(row, true);
   uiItemO(sub, "", ICON_FILE_REFRESH, "cachefile.reload");
+
+  row = uiLayoutRow(layout, false);
+  col = uiLayoutColumn(row, true);
+
+  uiTemplateList(col,
+                 C,
+                 "UI_UL_cache_file_layers",
+                 "cache_file_layers",
+                 &fileptr,
+                 "layers",
+                 &fileptr,
+                 "active_index",
+                 "",
+                 5,
+                 5,
+                 UILST_LAYOUT_DEFAULT,
+                 1,
+                 UI_TEMPLATE_LIST_FLAG_NONE);
+
+  col = uiLayoutColumn(row, true);
+  uiItemO(col, "", ICON_ADD, "cachefile.layer_add");
+  uiItemO(col, "", ICON_REMOVE, "cachefile.layer_remove");
+
+  if (BLI_listbase_count(&file->layers) > 1) {
+    uiItemS_ex(col, 1.0f);
+    uiItemO(col, "", ICON_TRIA_UP, "cachefile.layer_move");
+    uiItemO(col, "", ICON_TRIA_DOWN, "cachefile.layer_move");
+  }
 
   row = uiLayoutRow(layout, false);
   uiItemR(row, &fileptr, "is_sequence", 0, NULL, ICON_NONE);

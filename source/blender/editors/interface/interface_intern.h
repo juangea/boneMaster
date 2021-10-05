@@ -1293,6 +1293,9 @@ void ui_block_free_views(struct uiBlock *block);
 uiTreeViewHandle *ui_block_view_find_matching_in_old_block(const uiBlock *new_block,
                                                            const uiTreeViewHandle *new_view);
 
+/* interface_templates.c */
+struct uiListType *UI_UL_cache_file_layers(void);
+
 #ifdef __cplusplus
 }
 #endif
