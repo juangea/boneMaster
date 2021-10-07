@@ -113,15 +113,25 @@ void ABC_get_transform(struct CacheReader *reader,
                        float time,
                        float scale);
 
+typedef struct ABCReadParams {
+  float time;
+  int read_flags;
+  const char *velocity_name;
+  float velocity_scale;
+
+  const char *point_attributes_regex;
+  const char *loop_attributes_regex;
+  const char *face_attributes_regex;
+
+  ListBase *mappings;
+} ABCReadParams;
+
 /* Either modifies existing_mesh in-place or constructs a new mesh. */
 struct Mesh *ABC_read_mesh(struct CacheReader *reader,
                            struct Object *ob,
                            struct Mesh *existing_mesh,
-                           const float time,
-                           const char **err_str,
-                           const int read_flags,
-                           const char *velocity_name,
-                           const float velocity_scale);
+                           const ABCReadParams *params,
+                           const char **err_str);
 
 bool ABC_mesh_topology_changed(struct CacheReader *reader,
                                struct Object *ob,

@@ -324,3 +324,92 @@ void CACHEFILE_OT_layer_move(wmOperatorType *ot)
                "Direction",
                "Direction to move the active vertex group towards");
 }
+
+/* ***************************** Add Attribute Mapping Operator **************************** */
+
+static bool cachefile_attribute_mapping_poll(bContext *C)
+{
+  return CTX_data_edit_cachefile(C) != NULL;
+}
+
+static int cachefile_attribute_mapping_add_exec(bContext *C, wmOperator *UNUSED(op))
+{
+  CacheFile *cache_file = CTX_data_edit_cachefile(C);
+
+  if (!cache_file) {
+    return OPERATOR_CANCELLED;
+  }
+
+  const int current_mapping_count = BLI_listbase_count(&cache_file->attribute_mappings);
+
+  /* We allow only 254 attributes since we store the active index in a char, and we use a 1 (one)
+   * based index. */
+  if (current_mapping_count >= 254) {
+    WM_report(RPT_ERROR, "Attribute mapping limit reached for the CacheFile");
+    return OPERATOR_CANCELLED;
+  }
+
+  CacheAttributeMapping *mapping = MEM_callocN(sizeof(CacheAttributeMapping),
+                                               "CacheAttributeMapping");
+
+  BLI_addtail(&cache_file->attribute_mappings, mapping);
+
+  cache_file->active_attribute_mapping = (char)(current_mapping_count + 1);
+
+  /* Since the mapping is not initialized, adding a mapping does not trigger a CacheFile update. */
+
+  return OPERATOR_FINISHED;
+}
+
+void CACHEFILE_OT_attribute_mapping_add(wmOperatorType *ot)
+{
+  ot->name = "Add Attribute Mapping";
+  ot->description = "Add an attribute mapping for this CacheFile";
+  ot->idname = __func__;
+
+  /* api callbacks */
+  ot->exec = cachefile_attribute_mapping_add_exec;
+  ot->poll = cachefile_attribute_mapping_poll;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
+static int cachefile_attribute_mapping_remove_exec(bContext *C, wmOperator *UNUSED(op))
+{
+  CacheFile *cache_file = CTX_data_edit_cachefile(C);
+
+  if (!cache_file) {
+    return OPERATOR_CANCELLED;
+  }
+
+  CacheAttributeMapping *mapping = BKE_cachefile_get_active_attribute_mapping(cache_file);
+
+  /* Reset this now as it will have to be done whether we have a mapping or not. */
+  cache_file->active_attribute_mapping = 0;
+
+  if (!mapping) {
+    return OPERATOR_CANCELLED;
+  }
+
+  BLI_remlink(&cache_file->attribute_mappings, mapping);
+
+  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
+  BKE_cachefile_reload(depsgraph, cache_file);
+
+  return OPERATOR_FINISHED;
+}
+
+void CACHEFILE_OT_attribute_mapping_remove(wmOperatorType *ot)
+{
+  ot->name = "Remove Attribute Mapping";
+  ot->description = "Remove an attribute mapping from this CacheFile";
+  ot->idname = __func__;
+
+  /* api callbacks */
+  ot->exec = cachefile_attribute_mapping_remove_exec;
+  ot->poll = cachefile_attribute_mapping_poll;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}

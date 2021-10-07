@@ -282,8 +282,8 @@ void AbcCurveReader::read_curve_sample(Curve *cu,
  */
 Mesh *AbcCurveReader::read_mesh(Mesh *existing_mesh,
                                 const ISampleSelector &sample_sel,
+                                const AttributeSelector * /*attribute_selector*/,
                                 int /*read_flag*/,
-                                const char * /*velocity_name*/,
                                 const float /*velocity_scale*/,
                                 const char **err_str)
 {

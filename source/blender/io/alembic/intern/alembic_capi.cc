@@ -798,20 +798,41 @@ static ISampleSelector sample_selector_for_time(float time)
 Mesh *ABC_read_mesh(CacheReader *reader,
                     Object *ob,
                     Mesh *existing_mesh,
-                    const float time,
-                    const char **err_str,
-                    const int read_flag,
-                    const char *velocity_name,
-                    const float velocity_scale)
+                    const ABCReadParams *params,
+                    const char **err_str)
 {
   AbcObjectReader *abc_reader = get_abc_reader(reader, ob, err_str);
   if (abc_reader == nullptr) {
     return nullptr;
   }
 
-  ISampleSelector sample_sel = sample_selector_for_time(time);
-  return abc_reader->read_mesh(
-      existing_mesh, sample_sel, read_flag, velocity_name, velocity_scale, err_str);
+  AttributeSelector attribute_selector(params->mappings);
+
+  if (!attribute_selector.set_point_attributes_regex(params->point_attributes_regex)) {
+    *err_str = "Invalid regex for point attributes\n";
+    return nullptr;
+  }
+
+  if (!attribute_selector.set_loop_attributes_regex(params->loop_attributes_regex)) {
+    *err_str = "Invalid regex for face corner attributes\n";
+    return nullptr;
+  }
+
+  if (!attribute_selector.set_face_attributes_regex(params->face_attributes_regex)) {
+    *err_str = "Invalid regex for face attributes\n";
+    return nullptr;
+  }
+
+  attribute_selector.set_velocity_attribute(params->velocity_name);
+  attribute_selector.set_read_flags(params->read_flags);
+
+  ISampleSelector sample_sel = sample_selector_for_time(params->time);
+  return abc_reader->read_mesh(existing_mesh,
+                               sample_sel,
+                               &attribute_selector,
+                               params->read_flags,
+                               params->velocity_scale,
+                               err_str);
 }
 
 bool ABC_mesh_topology_changed(

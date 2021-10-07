@@ -45,8 +45,8 @@ class AbcCurveReader final : public AbcObjectReader {
   void readObjectData(Main *bmain, const Alembic::Abc::ISampleSelector &sample_sel) override;
   struct Mesh *read_mesh(struct Mesh *existing_mesh,
                          const Alembic::Abc::ISampleSelector &sample_sel,
+                         const AttributeSelector *attribute_selector,
                          const int read_flag,
-                         const char *velocity_name,
                          const float velocity_scale,
                          const char **err_str) override;
 

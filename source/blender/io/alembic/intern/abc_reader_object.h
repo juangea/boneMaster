@@ -33,6 +33,8 @@ using Alembic::AbcCoreAbstract::chrono_t;
 
 namespace blender::io::alembic {
 
+class AttributeSelector;
+
 struct ImportSettings {
   bool do_convert_mat;
   float conversion_mat[4][4];
@@ -51,7 +53,6 @@ struct ImportSettings {
   int read_flag;
 
   /* From CacheFile and MeshSeqCacheModifierData */
-  std::string velocity_name;
   float velocity_scale;
 
   bool validate_meshes;
@@ -69,7 +70,6 @@ struct ImportSettings {
         sequence_len(1),
         sequence_offset(0),
         read_flag(0),
-        velocity_name(""),
         velocity_scale(1.0f),
         validate_meshes(false),
         always_add_cache_reader(false),
@@ -149,8 +149,8 @@ class AbcObjectReader {
 
   virtual struct Mesh *read_mesh(struct Mesh *mesh,
                                  const Alembic::Abc::ISampleSelector &sample_sel,
+                                 const AttributeSelector *attribute_selector,
                                  const int read_flag,
-                                 const char *velocity_name,
                                  const float velocity_scale,
                                  const char **err_str);
   virtual bool topology_changed(Mesh *existing_mesh,

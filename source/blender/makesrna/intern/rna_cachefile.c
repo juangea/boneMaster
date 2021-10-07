@@ -63,6 +63,16 @@ static void rna_CacheFileLayer_update(Main *UNUSED(bmain), Scene *UNUSED(scene),
   WM_main_add_notifier(NC_OBJECT | ND_DRAW, NULL);
 }
 
+static void rna_CacheFile_attribute_mapping_update(Main *UNUSED(bmain),
+                                                   Scene *UNUSED(scene),
+                                                   PointerRNA *ptr)
+{
+  CacheFile *cache_file = (CacheFile *)ptr->owner_id;
+
+  DEG_id_tag_update(&cache_file->id, ID_RECALC_COPY_ON_WRITE);
+  WM_main_add_notifier(NC_OBJECT | ND_DRAW, NULL);
+}
+
 static void rna_CacheFile_dependency_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
   rna_CacheFile_update(bmain, scene, ptr);
@@ -120,6 +130,7 @@ static void rna_CacheFile_active_layer_index_range(
   *min = 0;
   *max = max_ii(0, BLI_listbase_count(&cache_file->layers) - 1);
 }
+
 static void rna_CacheFileLayer_hidden_flag_set(PointerRNA *ptr, const bool value)
 {
   CacheFileLayer *layer = (CacheFileLayer *)ptr->data;
@@ -130,6 +141,53 @@ static void rna_CacheFileLayer_hidden_flag_set(PointerRNA *ptr, const bool value
   else {
     layer->flag &= ~CACHEFILE_LAYER_HIDDEN;
   }
+}
+
+static PointerRNA rna_CacheFile_active_attribute_mapping_get(PointerRNA *ptr)
+{
+  CacheFile *cache_file = (CacheFile *)ptr->owner_id;
+  return rna_pointer_inherit_refine(
+      ptr, &RNA_CacheAttributeMapping, BKE_cachefile_get_active_attribute_mapping(cache_file));
+}
+
+static void rna_CacheFile_active_attribute_mapping_set(PointerRNA *ptr,
+                                                       PointerRNA value,
+                                                       struct ReportList *reports)
+{
+  CacheFile *cache_file = (CacheFile *)ptr->owner_id;
+  int index = BLI_findindex(&cache_file->attribute_mappings, value.data);
+  if (index == -1) {
+    BKE_reportf(reports,
+                RPT_ERROR,
+                "Attribute mapping '%s' not found in object '%s'",
+                ((CacheAttributeMapping *)value.data)->name,
+                cache_file->id.name + 2);
+    cache_file->active_attribute_mapping = 0;
+    return;
+  }
+
+  cache_file->active_attribute_mapping = index + 1;
+}
+
+static int rna_CacheFile_active_attribute_mapping_index_get(PointerRNA *ptr)
+{
+  CacheFile *cache_file = (CacheFile *)ptr->owner_id;
+  return cache_file->active_attribute_mapping - 1;
+}
+
+static void rna_CacheFile_active_attribute_mapping_index_set(PointerRNA *ptr, int value)
+{
+  CacheFile *cache_file = (CacheFile *)ptr->owner_id;
+  cache_file->active_attribute_mapping = value + 1;
+}
+
+static void rna_CacheFile_active_attribute_mapping_index_range(
+    PointerRNA *ptr, int *min, int *max, int *UNUSED(softmin), int *UNUSED(softmax))
+{
+  CacheFile *cache_file = (CacheFile *)ptr->owner_id;
+
+  *min = 0;
+  *max = max_ii(0, BLI_listbase_count(&cache_file->attribute_mappings) - 1);
 }
 
 #else
@@ -149,6 +207,81 @@ static void rna_def_alembic_object_path(BlenderRNA *brna)
   RNA_def_struct_name_property(srna, prop);
 
   RNA_define_lib_overridable(false);
+}
+
+static void rna_def_cachefile_attribute_mapping(BlenderRNA *brna)
+{
+  StructRNA *srna = RNA_def_struct(brna, "CacheAttributeMapping", NULL);
+  RNA_def_struct_sdna(srna, "CacheAttributeMapping");
+  RNA_def_struct_ui_text(
+      srna,
+      "Cache Attribute Mapping",
+      "Attribute Mappin of the cache, used to define how to interpret certain attributes");
+
+  PropertyRNA *prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
+  RNA_def_property_ui_text(prop, "Name", "Name of the attribute to map");
+  RNA_def_property_update(prop, 0, "rna_CacheFile_attribute_mapping_update");
+
+  static const EnumPropertyItem rna_enum_cache_attribute_mapping_items[] = {
+      {CACHEFILE_ATTRIBUTE_MAP_NONE, "MAP_NONE", 0, "None", ""},
+      {CACHEFILE_ATTRIBUTE_MAP_TO_UVS,
+       "MAP_TO_UVS",
+       0,
+       "UVs",
+       "Read the attribute as a UV map of the same name"},
+      {CACHEFILE_ATTRIBUTE_MAP_TO_VERTEX_COLORS,
+       "MAP_TO_VERTEX_COLORS",
+       0,
+       "Vertex Colors",
+       "Read the attribute as a vertex color layer of the same name"},
+      {CACHEFILE_ATTRIBUTE_MAP_TO_WEIGHT_GROUPS,
+       "MAP_TO_WEIGHT_GROUPS",
+       0,
+       "Weight Group",
+       "Read the attribute as a weight group channel of the same name"},
+      {CACHEFILE_ATTRIBUTE_MAP_TO_FLOAT2,
+       "MAP_TO_FLOAT2",
+       0,
+       "2D Vector",
+       "Interpret the attribute's data as generic 2D vectors"},
+      {CACHEFILE_ATTRIBUTE_MAP_TO_FLOAT3,
+       "MAP_TO_FLOAT3",
+       0,
+       "3D Vector",
+       "Interpret the attribute's data as generic 3D vectors"},
+      {CACHEFILE_ATTRIBUTE_MAP_TO_COLOR,
+       "MAP_TO_COLOR",
+       0,
+       "Color",
+       "Interpret the attribute's data as colors (RGBA)"},
+      {0, NULL, 0, NULL, NULL},
+  };
+
+  prop = RNA_def_property(srna, "mapping", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, rna_enum_cache_attribute_mapping_items);
+  RNA_def_property_update(prop, 0, "rna_CacheFile_attribute_mapping_update");
+}
+
+static void rna_def_cachefile_attribute_mappings(BlenderRNA *brna, PropertyRNA *cprop)
+{
+  RNA_def_property_srna(cprop, "CacheAttributeMappings");
+  StructRNA *srna = RNA_def_struct(brna, "CacheAttributeMappings", NULL);
+  RNA_def_struct_sdna(srna, "CacheFile");
+  RNA_def_struct_ui_text(
+      srna, "Cache Attribute Mappings", "Collection of cache attribute mappings");
+
+  PropertyRNA *prop = RNA_def_property(srna, "active", PROP_POINTER, PROP_NONE);
+  RNA_def_property_struct_type(prop, "CacheAttributeMapping");
+  RNA_def_property_pointer_funcs(prop,
+                                 "rna_CacheFile_active_attribute_mapping_get",
+                                 "rna_CacheFile_active_attribute_mapping_set",
+                                 NULL,
+                                 NULL);
+  RNA_def_property_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(
+      prop, "Active Attribute Mapping", "Active attribute mapping of the CacheFile");
+  RNA_def_property_ui_text(
+      prop, "Active Attribute Mapping Index", "Active index in attribute mappings array");
 }
 
 /* cachefile.object_paths */
@@ -351,6 +484,50 @@ static void rna_def_cachefile(BlenderRNA *brna)
                              "rna_CacheFile_active_layer_index_get",
                              "rna_CacheFile_active_layer_index_set",
                              "rna_CacheFile_active_layer_index_range");
+  /* ----------------- Alembic Attribute Selection ----------------- */
+
+  prop = RNA_def_property(srna, "point_attributes_regex", PROP_STRING, PROP_NONE);
+  RNA_def_property_ui_text(
+      prop,
+      "Point Attributes",
+      "Only read point level attributes in the Alembic Archive if their names "
+      "match the given regular expression");
+  RNA_def_property_update(prop, 0, "rna_CacheFile_update");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+
+  prop = RNA_def_property(srna, "loop_attributes_regex", PROP_STRING, PROP_NONE);
+  RNA_def_property_ui_text(
+      prop,
+      "Face Corner Attributes",
+      "Only read face corner level attributes in the Alembic Archive if their names "
+      "match the given regular expression");
+  RNA_def_property_update(prop, 0, "rna_CacheFile_update");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+
+  prop = RNA_def_property(srna, "face_attributes_regex", PROP_STRING, PROP_NONE);
+  RNA_def_property_ui_text(prop,
+                           "Face Attributes",
+                           "Only read face level attributes in the Alembic Archive if their names "
+                           "match the given regular expression");
+  RNA_def_property_update(prop, 0, "rna_CacheFile_update");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+
+  /* ----------------- Attribute Mappings ----------------- */
+
+  prop = RNA_def_property(srna, "attribute_mappings", PROP_COLLECTION, PROP_NONE);
+  RNA_def_property_collection_sdna(prop, NULL, "attribute_mappings", NULL);
+  RNA_def_property_struct_type(prop, "CacheAttributeMapping");
+  RNA_def_property_override_clear_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_ui_text(prop, "Cache Attribute Mappings", "Attribute mappings of the cache");
+  rna_def_cachefile_attribute_mappings(brna, prop);
+
+  prop = RNA_def_property(srna, "active_attribute_mapping_index", PROP_INT, PROP_UNSIGNED);
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_int_sdna(prop, NULL, "active_attribute_mapping");
+  RNA_def_property_int_funcs(prop,
+                             "rna_CacheFile_active_attribute_mapping_index_get",
+                             "rna_CacheFile_active_attribute_mapping_index_set",
+                             "rna_CacheFile_active_attribute_mapping_index_range");
 
   RNA_define_lib_overridable(false);
 
@@ -364,6 +541,7 @@ void RNA_def_cachefile(BlenderRNA *brna)
   rna_def_cachefile(brna);
   rna_def_alembic_object_path(brna);
   rna_def_cachefile_layer(brna);
+  rna_def_cachefile_attribute_mapping(brna);
 }
 
 #endif

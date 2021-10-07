@@ -6437,6 +6437,32 @@ uiListType *UI_UL_cache_file_layers()
   return list_type;
 }
 
+static void cache_file_attribute_mapping_item(uiList *UNUSED(ui_list),
+                                              bContext *UNUSED(C),
+                                              uiLayout *layout,
+                                              PointerRNA *UNUSED(dataptr),
+                                              PointerRNA *itemptr,
+                                              int UNUSED(icon),
+                                              PointerRNA *UNUSED(active_dataptr),
+                                              const char *UNUSED(active_propname),
+                                              int UNUSED(index),
+                                              int UNUSED(flt_flag))
+{
+  uiLayout *row = uiLayoutRow(layout, true);
+  uiItemR(row, itemptr, "name", UI_ITEM_R_NO_BG, "", ICON_NONE);
+  uiItemR(row, itemptr, "mapping", UI_ITEM_R_NO_BG, "", ICON_NONE);
+}
+
+uiListType *UI_UL_cache_file_attribute_mappings()
+{
+  uiListType *list_type = (uiListType *)MEM_callocN(sizeof(*list_type), __func__);
+
+  BLI_strncpy(list_type->idname, "UI_UL_cache_file_attribute_mappings", sizeof(list_type->idname));
+  list_type->draw_item = cache_file_attribute_mapping_item;
+
+  return list_type;
+}
+
 void uiTemplateCacheFile(uiLayout *layout,
                          const bContext *C,
                          PointerRNA *ptr,
@@ -6579,6 +6605,33 @@ void uiTemplateCacheFile(uiLayout *layout,
 
   uiItemR(layout, &fileptr, "velocity_name", 0, NULL, ICON_NONE);
   uiItemR(layout, &fileptr, "velocity_unit", 0, NULL, ICON_NONE);
+
+  uiItemR(layout, &fileptr, "point_attributes_regex", 0, NULL, ICON_NONE);
+  uiItemR(layout, &fileptr, "loop_attributes_regex", 0, NULL, ICON_NONE);
+  uiItemR(layout, &fileptr, "face_attributes_regex", 0, NULL, ICON_NONE);
+
+  row = uiLayoutRow(layout, false);
+  col = uiLayoutColumn(row, true);
+
+  uiItemL(col, "Attribute Remapping", ICON_NONE);
+  uiTemplateList(col,
+                 (bContext *)C,
+                 "UI_UL_cache_file_attribute_mappings",
+                 "cache_file_attribute_mappings",
+                 &fileptr,
+                 "attribute_mappings",
+                 &fileptr,
+                 "active_attribute_mapping_index",
+                 "",
+                 5,
+                 5,
+                 UILST_LAYOUT_DEFAULT,
+                 1,
+                 UI_TEMPLATE_LIST_FLAG_NONE);
+
+  col = uiLayoutColumn(row, true);
+  uiItemO(col, "", ICON_ADD, "cachefile.attribute_mapping_add");
+  uiItemO(col, "", ICON_REMOVE, "cachefile.attribute_mapping_remove");
 
   /* TODO: unused for now, so no need to expose. */
 #if 0

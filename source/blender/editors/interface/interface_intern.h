@@ -1260,6 +1260,9 @@ void UI_OT_eyedropper_gpencil_color(struct wmOperatorType *ot);
 /* interface_template_asset_view.cc */
 struct uiListType *UI_UL_asset_view(void);
 
+/* interface_templates.c */
+struct uiListType *UI_UL_cache_file_attribute_mappings(void);
+
 /**
  * For use with #ui_rna_collection_search_update_fn.
  */

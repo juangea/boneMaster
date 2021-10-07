@@ -82,7 +82,7 @@ bool AbcPointsReader::accepts_object_type(
 void AbcPointsReader::readObjectData(Main *bmain, const Alembic::Abc::ISampleSelector &sample_sel)
 {
   Mesh *mesh = BKE_mesh_add(bmain, m_data_name.c_str());
-  Mesh *read_mesh = this->read_mesh(mesh, sample_sel, 0, "", 0.0f, nullptr);
+  Mesh *read_mesh = this->read_mesh(mesh, sample_sel, nullptr, 0, 0.0f, nullptr);
 
   if (read_mesh != mesh) {
     BKE_mesh_nomain_to_mesh(read_mesh, mesh, m_object, &CD_MASK_MESH, true);
@@ -126,8 +126,8 @@ void read_points_sample(const IPointsSchema &schema,
 
 struct Mesh *AbcPointsReader::read_mesh(struct Mesh *existing_mesh,
                                         const ISampleSelector &sample_sel,
+                                        const AttributeSelector *attribute_selector,
                                         int read_flag,
-                                        const char * /*velocity_name*/,
                                         const float /*velocity_scale*/,
                                         const char **err_str)
 {
@@ -155,7 +155,8 @@ struct Mesh *AbcPointsReader::read_mesh(struct Mesh *existing_mesh,
 
   Mesh *mesh_to_export = new_mesh ? new_mesh : existing_mesh;
   const bool use_vertex_interpolation = read_flag & MOD_MESHSEQ_INTERPOLATE_VERTICES;
-  CDStreamConfig config = get_config(mesh_to_export, use_vertex_interpolation);
+  CDStreamConfig config = get_config(
+      mesh_to_export, attribute_selector, m_iobject.getFullName(), use_vertex_interpolation);
   read_points_sample(m_schema, sample_sel, config);
 
   return mesh_to_export;

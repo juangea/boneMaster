@@ -31,3 +31,6 @@ void CACHEFILE_OT_reload(struct wmOperatorType *ot);
 void CACHEFILE_OT_layer_add(struct wmOperatorType *ot);
 void CACHEFILE_OT_layer_remove(struct wmOperatorType *ot);
 void CACHEFILE_OT_layer_move(struct wmOperatorType *ot);
+
+void CACHEFILE_OT_attribute_mapping_add(struct wmOperatorType *ot);
+void CACHEFILE_OT_attribute_mapping_remove(struct wmOperatorType *ot);
