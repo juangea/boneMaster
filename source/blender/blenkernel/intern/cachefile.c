@@ -478,6 +478,7 @@ CacheFileLayer *BKE_cachefile_add_layer(CacheFile *cache_file, const char filena
   }
 
   CacheFileLayer *layer = MEM_mallocN(sizeof(CacheFileLayer), "CacheFileLayer");
+  layer->flag = 0;
   BLI_strncpy(layer->filepath, filename, sizeof(layer->filepath));
 
   BLI_addtail(&cache_file->layers, layer);
