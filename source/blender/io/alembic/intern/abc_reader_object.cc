@@ -164,22 +164,22 @@ Imath::M44d get_matrix(const IXformSchema &schema, const float time)
   return s0.getMatrix();
 }
 
-struct Mesh *AbcObjectReader::read_mesh(struct Mesh *existing_mesh,
-                                        const Alembic::Abc::ISampleSelector &UNUSED(sample_sel),
-                                        const AttributeSelector *UNUSED(attribute_selector),
-                                        int UNUSED(read_flag),
-                                        const float UNUSED(velocity_scale),
-                                        const char **UNUSED(err_str))
-{
-  return existing_mesh;
-}
-
 bool AbcObjectReader::topology_changed(Mesh * /*existing_mesh*/,
                                        const Alembic::Abc::ISampleSelector & /*sample_sel*/)
 {
   /* The default implementation of read_mesh() just returns the original mesh, so never changes the
    * topology. */
   return false;
+}
+
+void AbcObjectReader::read_geometry(GeometrySet &UNUSED(geometry_set),
+                                    const Alembic::Abc::ISampleSelector &UNUSED(sample_sel),
+                                    const AttributeSelector *UNUSED(attribute_selector),
+                                    int UNUSED(read_flag),
+                                    const float UNUSED(velocity_scale),
+                                    const char **UNUSED(err_str))
+{
+  return;
 }
 
 void AbcObjectReader::setupObjectTransform(const float time)

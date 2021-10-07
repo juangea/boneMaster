@@ -484,6 +484,7 @@ static void rna_def_cachefile(BlenderRNA *brna)
                              "rna_CacheFile_active_layer_index_get",
                              "rna_CacheFile_active_layer_index_set",
                              "rna_CacheFile_active_layer_index_range");
+
   /* ----------------- Alembic Attribute Selection ----------------- */
 
   prop = RNA_def_property(srna, "point_attributes_regex", PROP_STRING, PROP_NONE);

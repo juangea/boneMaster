@@ -795,44 +795,44 @@ static ISampleSelector sample_selector_for_time(float time)
   return ISampleSelector(time, ISampleSelector::kFloorIndex);
 }
 
-Mesh *ABC_read_mesh(CacheReader *reader,
-                    Object *ob,
-                    Mesh *existing_mesh,
-                    const ABCReadParams *params,
-                    const char **err_str)
+void ABC_read_geometry(CacheReader *reader,
+                       Object *ob,
+                       GeometrySet *geometry_set,
+                       const ABCReadParams *params,
+                       const char **err_str)
 {
   AbcObjectReader *abc_reader = get_abc_reader(reader, ob, err_str);
   if (abc_reader == nullptr) {
-    return nullptr;
+    return;
   }
 
   AttributeSelector attribute_selector(params->mappings);
 
   if (!attribute_selector.set_point_attributes_regex(params->point_attributes_regex)) {
     *err_str = "Invalid regex for point attributes\n";
-    return nullptr;
+    return;
   }
 
   if (!attribute_selector.set_loop_attributes_regex(params->loop_attributes_regex)) {
     *err_str = "Invalid regex for face corner attributes\n";
-    return nullptr;
+    return;
   }
 
   if (!attribute_selector.set_face_attributes_regex(params->face_attributes_regex)) {
     *err_str = "Invalid regex for face attributes\n";
-    return nullptr;
+    return;
   }
 
   attribute_selector.set_velocity_attribute(params->velocity_name);
   attribute_selector.set_read_flags(params->read_flags);
 
   ISampleSelector sample_sel = sample_selector_for_time(params->time);
-  return abc_reader->read_mesh(existing_mesh,
-                               sample_sel,
-                               &attribute_selector,
-                               params->read_flags,
-                               params->velocity_scale,
-                               err_str);
+  abc_reader->read_geometry(*geometry_set,
+                            sample_sel,
+                            &attribute_selector,
+                            params->read_flags,
+                            params->velocity_scale,
+                            err_str);
 }
 
 bool ABC_mesh_topology_changed(

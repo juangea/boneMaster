@@ -552,6 +552,10 @@ void BKE_modifier_blend_read_data(struct BlendDataReader *reader,
                                   struct Object *ob);
 void BKE_modifier_blend_read_lib(struct BlendLibReader *reader, struct Object *ob);
 
+/* Return whether the modifier can operate directly on a Curve, i.e. without needing a conversion
+ * to a temporary Mesh. */
+bool BKE_modifier_supports_curve_data(const ModifierData *md);
+
 #ifdef __cplusplus
 }
 #endif

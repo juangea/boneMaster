@@ -37,6 +37,7 @@
 #include "BLI_listbase.h"
 #include "BLI_math_geom.h"
 
+#include "BKE_geometry_set.hh"
 #include "BKE_main.h"
 #include "BKE_material.h"
 #include "BKE_mesh.h"
@@ -517,6 +518,27 @@ bool AbcMeshReader::topology_changed(Mesh *existing_mesh, const ISampleSelector 
          face_indices->size() != existing_mesh->totloop;
 }
 
+void AbcMeshReader::read_geometry(GeometrySet &geometry_set,
+                                  const Alembic::Abc::ISampleSelector &sample_sel,
+                                  const AttributeSelector *attribute_selector,
+                                  int read_flag,
+                                  const float velocity_scale,
+                                  const char **err_str)
+{
+  Mesh *mesh = geometry_set.get_mesh_for_write();
+
+  if (mesh == nullptr) {
+    return;
+  }
+
+  Mesh *new_mesh = read_mesh(
+      mesh, sample_sel, attribute_selector, read_flag, velocity_scale, err_str);
+
+  if (new_mesh != mesh) {
+    geometry_set.replace_mesh(new_mesh);
+  }
+}
+
 Mesh *AbcMeshReader::read_mesh(Mesh *existing_mesh,
                                const ISampleSelector &sample_sel,
                                const AttributeSelector *attribute_selector,
@@ -891,6 +913,27 @@ Mesh *AbcSubDReader::read_mesh(Mesh *existing_mesh,
   read_subd_sample(&settings, m_schema, sample_sel, config);
 
   return mesh_to_export;
+}
+
+void AbcSubDReader::read_geometry(GeometrySet &geometry_set,
+                                  const Alembic::Abc::ISampleSelector &sample_sel,
+                                  const AttributeSelector *attribute_selector,
+                                  int read_flag,
+                                  const float velocity_scale,
+                                  const char **err_str)
+{
+  Mesh *mesh = geometry_set.get_mesh_for_write();
+
+  if (mesh == nullptr) {
+    return;
+  }
+
+  Mesh *new_mesh = read_mesh(
+      mesh, sample_sel, attribute_selector, read_flag, velocity_scale, err_str);
+
+  if (new_mesh != mesh) {
+    geometry_set.replace_mesh(new_mesh);
+  }
 }
 
 }  // namespace blender::io::alembic

@@ -375,6 +375,8 @@ void CACHEFILE_OT_attribute_mapping_add(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
+/* ***************************** Remove Attribute Mapping Operator **************************** */
+
 static int cachefile_attribute_mapping_remove_exec(bContext *C, wmOperator *UNUSED(op))
 {
   CacheFile *cache_file = CTX_data_edit_cachefile(C);

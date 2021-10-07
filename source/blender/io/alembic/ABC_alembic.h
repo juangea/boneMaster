@@ -35,6 +35,10 @@ struct Object;
 struct Scene;
 struct bContext;
 
+#ifdef __cplusplus
+class GeometrySet;
+#endif
+
 int ABC_get_version(void);
 
 struct AlembicExportParams {
@@ -126,12 +130,14 @@ typedef struct ABCReadParams {
   ListBase *mappings;
 } ABCReadParams;
 
-/* Either modifies existing_mesh in-place or constructs a new mesh. */
-struct Mesh *ABC_read_mesh(struct CacheReader *reader,
-                           struct Object *ob,
-                           struct Mesh *existing_mesh,
-                           const ABCReadParams *params,
-                           const char **err_str);
+#ifdef __cplusplus
+/* Either modifies the existing geometry component, or create a new one. */
+void ABC_read_geometry(CacheReader *reader,
+                       Object *ob,
+                       GeometrySet *geometry_set,
+                       const ABCReadParams *params,
+                       const char **err_str);
+#endif
 
 bool ABC_mesh_topology_changed(struct CacheReader *reader,
                                struct Object *ob,

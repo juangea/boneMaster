@@ -259,6 +259,44 @@ PointCloud *BKE_pointcloud_new_nomain(const int totpoint)
   return pointcloud;
 }
 
+void BKE_pointcloud_nomain_to_pointcloud(PointCloud *pointcloud_src, PointCloud *pointcloud_dst, bool take_ownership)
+{
+  BLI_assert(pointcloud_src->id.tag & LIB_TAG_NO_MAIN);
+
+  /* pointcloud_src might depend on pointcloud_dst, so we need to do everything with a local copy */
+  PointCloud tmp = *pointcloud_dst;
+  eCDAllocType alloctype = CD_DUPLICATE;
+
+  if (take_ownership) {
+    bool has_any_referenced_layers = CustomData_has_referenced(&pointcloud_src->pdata);
+
+    if (!has_any_referenced_layers) {
+      alloctype = CD_ASSIGN;
+    }
+  }
+
+  CustomData_reset(&tmp.pdata);
+
+  const CustomDataMask pmask = CD_MASK_ALL;
+
+  const int totpoint = tmp.totpoint = pointcloud_src->totpoint;
+  CustomData_copy(&pointcloud_src->pdata, &tmp.pdata, pmask, alloctype, totpoint);
+
+  BKE_pointcloud_update_customdata_pointers(&tmp);
+
+  CustomData_free(&pointcloud_dst->pdata, pointcloud_dst->totpoint);
+
+  /* skip the listbase */
+  MEMCPY_STRUCT_AFTER(pointcloud_dst, &tmp, id.prev);
+
+  if (take_ownership) {
+    if (alloctype == CD_ASSIGN) {
+      CustomData_free_typemask(&pointcloud_src->pdata, pointcloud_src->totpoint, ~pmask);
+    }
+    BKE_id_free(nullptr, pointcloud_src);
+  }
+}
+
 void BKE_pointcloud_minmax(const struct PointCloud *pointcloud, float r_min[3], float r_max[3])
 {
   float(*pointcloud_co)[3] = pointcloud->co;

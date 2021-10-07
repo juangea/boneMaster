@@ -36,8 +36,10 @@
 #include "BLI_listbase.h"
 
 #include "BKE_curve.h"
+#include "BKE_geometry_set.hh"
 #include "BKE_mesh.h"
 #include "BKE_object.h"
+#include "BKE_spline.hh"
 
 using Alembic::Abc::FloatArraySamplePtr;
 using Alembic::Abc::Int32ArraySamplePtr;
@@ -90,22 +92,87 @@ bool AbcCurveReader::accepts_object_type(
   return true;
 }
 
+static short get_curve_resolution(const ICurvesSchema &schema,
+                                  const Alembic::Abc::ISampleSelector &sample_sel)
+{
+  ICompoundProperty user_props = schema.getUserProperties();
+  if (user_props) {
+    const PropertyHeader *header = user_props.getPropertyHeader(ABC_CURVE_RESOLUTION_U_PROPNAME);
+    if (header != nullptr && header->isScalar() && IInt16Property::matches(*header)) {
+      IInt16Property resolu(user_props, header->getName());
+      return resolu.getValue(sample_sel);
+    }
+  }
+
+  return 1;
+}
+
+static short get_curve_order(Alembic::AbcGeom::CurveType abc_curve_type,
+                             const UcharArraySamplePtr orders,
+                             size_t curve_index)
+{
+  switch (abc_curve_type) {
+    case Alembic::AbcGeom::kCubic:
+      return 4;
+    case Alembic::AbcGeom::kVariableOrder:
+      if (orders && orders->size() > curve_index) {
+        return static_cast<short>((*orders)[curve_index]);
+      }
+      ATTR_FALLTHROUGH;
+    case Alembic::AbcGeom::kLinear:
+    default:
+      return 2;
+  }
+}
+
+static int get_curve_overlap(Alembic::AbcGeom::CurvePeriodicity periodicity,
+                             const P3fArraySamplePtr positions,
+                             int idx,
+                             int num_verts,
+                             short order)
+{
+  if (periodicity == Alembic::AbcGeom::kPeriodic) {
+    /* Check the number of points which overlap, we don't have
+     * overlapping points in Blender, but other software do use them to
+     * indicate that a curve is actually cyclic. Usually the number of
+     * overlapping points is equal to the order/degree of the curve.
+     */
+
+    const int start = idx;
+    const int end = idx + num_verts;
+    int overlap = 0;
+
+    for (int j = start, k = end - order; j < order; j++, k++) {
+      const Imath::V3f &p1 = (*positions)[j];
+      const Imath::V3f &p2 = (*positions)[k];
+
+      if (p1 != p2) {
+        break;
+      }
+
+      overlap++;
+    }
+
+    /* TODO: Special case, need to figure out how it coincides with knots. */
+    if (overlap == 0 && num_verts > 2 && (*positions)[start] == (*positions)[end - 1]) {
+      overlap = 1;
+    }
+
+    /* There is no real cycles. */
+    return overlap;
+  }
+
+  /* kNonPeriodic is always assumed to have no overlap. */
+  return 0;
+}
+
 void AbcCurveReader::readObjectData(Main *bmain, const Alembic::Abc::ISampleSelector &sample_sel)
 {
   Curve *cu = BKE_curve_add(bmain, m_data_name.c_str(), OB_CURVE);
 
   cu->flag |= CU_3D;
   cu->actvert = CU_ACT_NONE;
-  cu->resolu = 1;
-
-  ICompoundProperty user_props = m_curves_schema.getUserProperties();
-  if (user_props) {
-    const PropertyHeader *header = user_props.getPropertyHeader(ABC_CURVE_RESOLUTION_U_PROPNAME);
-    if (header != nullptr && header->isScalar() && IInt16Property::matches(*header)) {
-      IInt16Property resolu(user_props, header->getName());
-      cu->resolu = resolu.getValue(sample_sel);
-    }
-  }
+  cu->resolu = get_curve_resolution(m_curves_schema, sample_sel);
 
   m_object = BKE_object_add_only_object(bmain, OB_CURVE, m_object_name.c_str());
   m_object->data = cu;
@@ -161,60 +228,15 @@ void AbcCurveReader::read_curve_sample(Curve *cu,
     nu->pntsu = num_verts;
     nu->pntsv = 1;
     nu->flag |= CU_SMOOTH;
+    nu->orderu = get_curve_order(smp.getType(), orders, i);
 
-    switch (smp.getType()) {
-      case Alembic::AbcGeom::kCubic:
-        nu->orderu = 4;
-        break;
-      case Alembic::AbcGeom::kVariableOrder:
-        if (orders && orders->size() > i) {
-          nu->orderu = static_cast<short>((*orders)[i]);
-          break;
-        }
-        ATTR_FALLTHROUGH;
-      case Alembic::AbcGeom::kLinear:
-      default:
-        nu->orderu = 2;
-    }
+    const int overlap = get_curve_overlap(periodicity, positions, idx, num_verts, nu->orderu);
 
-    if (periodicity == Alembic::AbcGeom::kNonPeriodic) {
+    if (overlap == 0) {
       nu->flagu |= CU_NURB_ENDPOINT;
     }
-    else if (periodicity == Alembic::AbcGeom::kPeriodic) {
+    else {
       nu->flagu |= CU_NURB_CYCLIC;
-
-      /* Check the number of points which overlap, we don't have
-       * overlapping points in Blender, but other software do use them to
-       * indicate that a curve is actually cyclic. Usually the number of
-       * overlapping points is equal to the order/degree of the curve.
-       */
-
-      const int start = idx;
-      const int end = idx + num_verts;
-      int overlap = 0;
-
-      for (int j = start, k = end - nu->orderu; j < nu->orderu; j++, k++) {
-        const Imath::V3f &p1 = (*positions)[j];
-        const Imath::V3f &p2 = (*positions)[k];
-
-        if (p1 != p2) {
-          break;
-        }
-
-        overlap++;
-      }
-
-      /* TODO: Special case, need to figure out how it coincides with knots. */
-      if (overlap == 0 && num_verts > 2 && (*positions)[start] == (*positions)[end - 1]) {
-        overlap = 1;
-      }
-
-      /* There is no real cycles. */
-      if (overlap == 0) {
-        nu->flagu &= ~CU_NURB_CYCLIC;
-        nu->flagu |= CU_NURB_ENDPOINT;
-      }
-
       nu->pntsu -= overlap;
     }
 
@@ -274,19 +296,44 @@ void AbcCurveReader::read_curve_sample(Curve *cu,
   }
 }
 
-/* NOTE: Alembic only stores data about control points, but the Mesh
+static bool topology_changed(CurveEval *curve_eval, const Int32ArraySamplePtr &num_vertices)
+{
+  const size_t num_curves = num_vertices->size();
+  if (num_curves != curve_eval->splines().size()) {
+    return true;
+  }
+
+  for (size_t i = 0; i < num_vertices->size(); i++) {
+    const Spline *spline = curve_eval->splines()[i].get();
+
+    if (!spline) {
+      return true;
+    }
+
+    // TODO(kevindietrich) : this should check for the overlap.
+    if (spline->positions().size() != (*num_vertices)[i]) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/* NOTE: Alembic only stores data about control points, but the CurveEval
  * passed from the cache modifier contains the displist, which has more data
  * than the control points, so to avoid corrupting the displist we modify the
- * object directly and create a new Mesh from that. Also we might need to
+ * object directly and create a new CurveEval from that. Also we might need to
  * create new or delete existing NURBS in the curve.
  */
-Mesh *AbcCurveReader::read_mesh(Mesh *existing_mesh,
-                                const ISampleSelector &sample_sel,
-                                const AttributeSelector * /*attribute_selector*/,
-                                int /*read_flag*/,
-                                const float /*velocity_scale*/,
-                                const char **err_str)
+void AbcCurveReader::read_geometry(GeometrySet &geometry_set,
+                                   const Alembic::Abc::ISampleSelector &sample_sel,
+                                   const AttributeSelector *attribute_selector,
+                                   int read_flag,
+                                   const float velocity_scale,
+                                   const char **err_str)
 {
+  assert(geometry_set.has_curve());
+
   ICurvesSchema::Sample sample;
 
   try {
@@ -299,61 +346,49 @@ Mesh *AbcCurveReader::read_mesh(Mesh *existing_mesh,
            m_curves_schema.getName().c_str(),
            sample_sel.getRequestedTime(),
            ex.what());
-    return existing_mesh;
+    return;
   }
 
-  const P3fArraySamplePtr &positions = sample.getPositions();
+  CurveEval *curve_eval = geometry_set.get_curve_for_write();
+
   const Int32ArraySamplePtr num_vertices = sample.getCurvesNumVertices();
+  const P3fArraySamplePtr &positions = sample.getPositions();
 
-  int vertex_idx = 0;
-  int curve_idx;
-  Curve *curve = static_cast<Curve *>(m_object->data);
-
-  const int curve_count = BLI_listbase_count(&curve->nurb);
-  bool same_topology = curve_count == num_vertices->size();
-
-  if (same_topology) {
-    Nurb *nurbs = static_cast<Nurb *>(curve->nurb.first);
-    for (curve_idx = 0; nurbs; nurbs = nurbs->next, curve_idx++) {
-      const int num_in_alembic = (*num_vertices)[curve_idx];
-      const int num_in_blender = nurbs->pntsu;
-
-      if (num_in_alembic != num_in_blender) {
-        same_topology = false;
-        break;
-      }
-    }
-  }
-
-  if (!same_topology) {
+  if (blender::io::alembic::topology_changed(curve_eval, num_vertices)) {
+    Curve *curve = static_cast<Curve *>(m_object->data);
     BKE_nurbList_free(&curve->nurb);
     read_curve_sample(curve, m_curves_schema, sample_sel);
+
+    std::unique_ptr<CurveEval> new_curve_eval = curve_eval_from_dna_curve(*curve);
+    geometry_set.replace_curve(new_curve_eval.release(), GeometryOwnershipType::Editable);
   }
   else {
-    Nurb *nurbs = static_cast<Nurb *>(curve->nurb.first);
-    for (curve_idx = 0; nurbs; nurbs = nurbs->next, curve_idx++) {
-      const int totpoint = (*num_vertices)[curve_idx];
+    const IFloatGeomParam widths_param = m_curves_schema.getWidthsParam();
+    FloatArraySamplePtr radiuses;
 
-      if (nurbs->bp) {
-        BPoint *point = nurbs->bp;
+    if (widths_param.valid()) {
+      IFloatGeomParam::Sample wsample = widths_param.getExpandedValue(sample_sel);
+      radiuses = wsample.getVals();
+    }
 
-        for (int i = 0; i < totpoint; i++, point++, vertex_idx++) {
-          const Imath::V3f &pos = (*positions)[vertex_idx];
-          copy_zup_from_yup(point->vec, pos.getValue());
-        }
+    const bool do_radius = (radiuses != nullptr) && (radiuses->size() > 1);
+    float radius = (radiuses && radiuses->size() == 1) ? (*radiuses)[0] : 1.0f;
+
+    size_t position_index = 0;
+    size_t radius_index = 0;
+
+    for (size_t i = 0; i < num_vertices->size(); i++) {
+      Spline *spline = curve_eval->splines()[i].get();
+
+      for (float3 &position : spline->positions()) {
+        copy_zup_from_yup(position, (*positions)[position_index++].getValue());
       }
-      else if (nurbs->bezt) {
-        BezTriple *bezier = nurbs->bezt;
 
-        for (int i = 0; i < totpoint; i++, bezier++, vertex_idx++) {
-          const Imath::V3f &pos = (*positions)[vertex_idx];
-          copy_zup_from_yup(bezier->vec[1], pos.getValue());
-        }
+      for (float &r : spline->radii()) {
+        r = (do_radius) ? (*radiuses)[radius_index++] : radius;
       }
     }
   }
-
-  return BKE_mesh_new_nomain_from_curve(m_object);
 }
 
 }  // namespace blender::io::alembic

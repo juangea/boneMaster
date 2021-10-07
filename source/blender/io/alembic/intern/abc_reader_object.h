@@ -24,6 +24,8 @@
 
 #include "DNA_ID.h"
 
+class GeometrySet;
+
 struct CacheFile;
 struct Main;
 struct Mesh;
@@ -147,14 +149,15 @@ class AbcObjectReader {
 
   virtual void readObjectData(Main *bmain, const Alembic::Abc::ISampleSelector &sample_sel) = 0;
 
-  virtual struct Mesh *read_mesh(struct Mesh *mesh,
-                                 const Alembic::Abc::ISampleSelector &sample_sel,
-                                 const AttributeSelector *attribute_selector,
-                                 const int read_flag,
-                                 const float velocity_scale,
-                                 const char **err_str);
   virtual bool topology_changed(Mesh *existing_mesh,
                                 const Alembic::Abc::ISampleSelector &sample_sel);
+
+  virtual void read_geometry(GeometrySet &geometry_set,
+                             const Alembic::Abc::ISampleSelector &sample_sel,
+                             const AttributeSelector *attribute_selector,
+                             int read_flag,
+                             const float velocity_scale,
+                             const char **err_str);
 
   /** Reads the object matrix and sets up an object transform if animated. */
   void setupObjectTransform(const float time);
