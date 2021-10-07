@@ -218,6 +218,7 @@ static int cachefile_layer_add_exec(bContext *C, wmOperator *op)
   }
 
   reload_cachefile(C, cache_file);
+  WM_main_add_notifier(NC_OBJECT | ND_DRAW, NULL);
   return OPERATOR_FINISHED;
 }
 
@@ -254,6 +255,7 @@ static int cachefile_layer_remove_exec(bContext *C, wmOperator *UNUSED(op))
   BKE_cachefile_remove_layer(cache_file, layer);
 
   reload_cachefile(C, cache_file);
+  WM_main_add_notifier(NC_OBJECT | ND_DRAW, NULL);
   return OPERATOR_FINISHED;
 }
 
@@ -292,6 +294,7 @@ static int cachefile_layer_move_exec(bContext *C, wmOperator *op)
     cache_file->active_layer = BLI_findindex(&cache_file->layers, layer) + 1;
     /* Only reload if something moved, might be expensive. */
     reload_cachefile(C, cache_file);
+    WM_main_add_notifier(NC_OBJECT | ND_DRAW, NULL);
   }
 
   return OPERATOR_FINISHED;
