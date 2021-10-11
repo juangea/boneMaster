@@ -63,13 +63,6 @@ struct ScopeCustomDataPointers {
   CustomData *loop_custom_data;
 };
 
-struct CDStreamConfig;
-
-using SpecialAttributeCallbackType = std::function<void(const CDStreamConfig &,
-                                                        const ICompoundProperty &,
-                                                        const Alembic::Abc::PropertyHeader &,
-                                                        Alembic::Abc::ISampleSelector)>;
-
 struct CDStreamConfig {
   MLoop *mloop;
   int totloop;
