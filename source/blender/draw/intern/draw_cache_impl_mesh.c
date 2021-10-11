@@ -392,6 +392,21 @@ static DRW_MeshCDMask mesh_cd_calc_used_gpu_layers(const Mesh *me,
             }
 #endif
             if (layer == -1) {
+              layer = CustomData_get_named_layer(cd_vdata, CD_PROP_FLOAT, name);
+              type = CD_PROP_FLOAT;
+            }
+
+            if (layer == -1) {
+              layer = CustomData_get_named_layer(cd_vdata, CD_PROP_FLOAT2, name);
+              type = CD_PROP_FLOAT2;
+            }
+
+            if (layer == -1) {
+              layer = CustomData_get_named_layer(cd_vdata, CD_PROP_FLOAT3, name);
+              type = CD_PROP_FLOAT3;
+            }
+
+            if (layer == -1) {
               continue;
             }
           }
@@ -471,6 +486,24 @@ static DRW_MeshCDMask mesh_cd_calc_used_gpu_layers(const Mesh *me,
           }
           case CD_ORCO: {
             cd_used.orco = 1;
+            break;
+          }
+          case CD_PROP_FLOAT: {
+            if (layer != -1 && layer < 8) {
+              cd_used.attr_float = (1 << layer);
+            }
+            break;
+          }
+          case CD_PROP_FLOAT2: {
+            if (layer != -1 && layer < 8) {
+              cd_used.attr_float2 = (1 << layer);
+            }
+            break;
+          }
+          case CD_PROP_FLOAT3: {
+            if (layer != -1 && layer < 8) {
+              cd_used.attr_float3 = (1 << layer);
+            }
             break;
           }
         }
@@ -1427,6 +1460,18 @@ void DRW_mesh_batch_cache_create_requested(struct TaskGraph *task_graph,
         if (cache->cd_used.orco != cache->cd_needed.orco) {
           GPU_VERTBUF_DISCARD_SAFE(mbc->buff.vbo.orco);
         }
+        if ((cache->cd_used.attr_float & cache->cd_needed.attr_float) !=
+            cache->cd_needed.attr_float) {
+          GPU_VERTBUF_DISCARD_SAFE(mbc->buff.vbo.attr_float);
+        }
+        if ((cache->cd_used.attr_float2 & cache->cd_needed.attr_float2) !=
+            cache->cd_needed.attr_float2) {
+          GPU_VERTBUF_DISCARD_SAFE(mbc->buff.vbo.attr_float2);
+        }
+        if ((cache->cd_used.attr_float3 & cache->cd_needed.attr_float3) !=
+            cache->cd_needed.attr_float3) {
+          GPU_VERTBUF_DISCARD_SAFE(mbc->buff.vbo.attr_float3);
+        }
         if (cache->cd_used.sculpt_overlays != cache->cd_needed.sculpt_overlays) {
           GPU_VERTBUF_DISCARD_SAFE(mbc->buff.vbo.sculpt_data);
         }
@@ -1518,6 +1563,15 @@ void DRW_mesh_batch_cache_create_requested(struct TaskGraph *task_graph,
     if (cache->cd_used.vcol != 0 || cache->cd_used.sculpt_vcol != 0) {
       DRW_vbo_request(cache->batch.surface, &mbuflist->vbo.vcol);
     }
+    if (cache->cd_used.attr_float != 0) {
+      DRW_vbo_request(cache->batch.surface, &mbuflist->vbo.attr_float);
+    }
+    if (cache->cd_used.attr_float2 != 0) {
+      DRW_vbo_request(cache->batch.surface, &mbuflist->vbo.attr_float2);
+    }
+    if (cache->cd_used.attr_float3 != 0) {
+      DRW_vbo_request(cache->batch.surface, &mbuflist->vbo.attr_float3);
+    }
   }
   MDEPS_ASSERT(all_verts, vbo.pos_nor);
   if (DRW_batch_requested(cache->batch.all_verts, GPU_PRIM_POINTS)) {
@@ -1600,6 +1654,15 @@ void DRW_mesh_batch_cache_create_requested(struct TaskGraph *task_graph,
       }
       if (cache->cd_used.orco != 0) {
         DRW_vbo_request(cache->surface_per_mat[i], &mbuflist->vbo.orco);
+      }
+      if (cache->cd_used.attr_float != 0) {
+        DRW_vbo_request(cache->surface_per_mat[i], &mbuflist->vbo.attr_float);
+      }
+      if (cache->cd_used.attr_float2 != 0) {
+        DRW_vbo_request(cache->surface_per_mat[i], &mbuflist->vbo.attr_float2);
+      }
+      if (cache->cd_used.attr_float3 != 0) {
+        DRW_vbo_request(cache->surface_per_mat[i], &mbuflist->vbo.attr_float3);
       }
     }
   }

@@ -328,6 +328,9 @@ extern const MeshExtract extract_poly_idx;
 extern const MeshExtract extract_edge_idx;
 extern const MeshExtract extract_vert_idx;
 extern const MeshExtract extract_fdot_idx;
+extern const MeshExtract extract_attr_float;
+extern const MeshExtract extract_attr_float2;
+extern const MeshExtract extract_attr_float3;
 
 #ifdef __cplusplus
 }

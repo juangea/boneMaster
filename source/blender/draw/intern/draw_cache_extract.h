@@ -57,6 +57,11 @@ typedef struct DRW_MeshCDMask {
   uint32_t tan : 8;
   uint32_t vcol : 8;
   uint32_t sculpt_vcol : 8;
+  //  uint32_t attr_bool: 8;
+  //  uint32_t attr_int : 8;
+  uint32_t attr_float : 8;
+  uint32_t attr_float2 : 8;
+  uint32_t attr_float3 : 8;
   uint32_t orco : 1;
   uint32_t tan_orco : 1;
   uint32_t sculpt_overlays : 1;
@@ -114,6 +119,9 @@ typedef struct MeshBufferList {
     GPUVertBuf *uv;
     GPUVertBuf *tan;
     GPUVertBuf *vcol;
+    GPUVertBuf *attr_float;
+    GPUVertBuf *attr_float2;
+    GPUVertBuf *attr_float3;
     GPUVertBuf *sculpt_data;
     GPUVertBuf *orco;
     /* Only for edit mode. */
