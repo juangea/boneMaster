@@ -592,7 +592,7 @@ void WM_operator_py_idname(char *to, const char *from);
 bool WM_operator_py_idname_ok_or_report(struct ReportList *reports,
                                         const char *classname,
                                         const char *idname);
-char *WM_context_path_resolve_property_full(struct bContext *C,
+char *WM_context_path_resolve_property_full(const struct bContext *C,
                                             const PointerRNA *ptr,
                                             PropertyRNA *prop,
                                             int index);
@@ -937,6 +937,10 @@ float WM_event_ndof_to_axis_angle(const struct wmNDOFMotionData *ndof, float axi
 void WM_event_ndof_to_quat(const struct wmNDOFMotionData *ndof, float q[4]);
 #endif /* WITH_INPUT_NDOF */
 
+#ifdef WITH_XR_OPENXR
+bool WM_event_is_xr(const struct wmEvent *event);
+#endif
+
 float WM_event_tablet_data(const struct wmEvent *event, int *pen_flip, float tilt[2]);
 bool WM_event_is_tablet(const struct wmEvent *event);
 
@@ -1008,6 +1012,8 @@ bool WM_xr_session_state_controller_aim_location_get(const wmXrData *xr,
 bool WM_xr_session_state_controller_aim_rotation_get(const wmXrData *xr,
                                                      unsigned int subaction_idx,
                                                      float r_rotation[4]);
+
+struct ARegionType *WM_xr_surface_controller_region_type_get(void);
 
 /* wm_xr_actions.c */
 /* XR action functions to be called pre-XR session start.
