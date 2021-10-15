@@ -163,7 +163,7 @@ static void fill_vertbuf_with_attribute_bm(const MeshRenderData *mr,
   }
 }
 
-template<typename T>
+template<typename AttributeType, typename VBOType = AttributeType>
 static void extract_attr_generic(const MeshRenderData *mr,
                                  GPUVertBuf *vbo,
                                  CustomData *custom_data,
@@ -176,14 +176,37 @@ static void extract_attr_generic(const MeshRenderData *mr,
   for (int i = 0; i < MAX_MCOL; i++) {
     if (layers_used & (1 << i)) {
       if (mr->extract_type == MR_EXTRACT_BMESH) {
-        fill_vertbuf_with_attribute_bm<T, T>(mr, vbo, custom_data, cd_type, i);
+        fill_vertbuf_with_attribute_bm<AttributeType, VBOType>(mr, vbo, custom_data, cd_type, i);
       }
       else {
         MLoop *loops = static_cast<MLoop *>(CustomData_get_layer(cd_ldata, CD_MLOOP));
-        fill_vertbuf_with_attribute<T, T>(mr, vbo, custom_data, cd_type, loops, i);
+        fill_vertbuf_with_attribute<AttributeType, VBOType>(
+            mr, vbo, custom_data, cd_type, loops, i);
       }
     }
   }
+}
+
+static void extract_attr_bool_init(const MeshRenderData *mr,
+                                   struct MeshBatchCache *cache,
+                                   void *buf,
+                                   void *UNUSED(tls_data))
+{
+  CustomData *cd_vdata = (mr->extract_type == MR_EXTRACT_BMESH) ? &mr->bm->vdata : &mr->me->vdata;
+  uint32_t layers_used = cache->cd_used.attr_float;
+  GPUVertBuf *vbo = static_cast<GPUVertBuf *>(buf);
+  extract_attr_generic<bool, float>(mr, vbo, cd_vdata, CD_PROP_FLOAT, layers_used);
+}
+
+static void extract_attr_int32_init(const MeshRenderData *mr,
+                                    struct MeshBatchCache *cache,
+                                    void *buf,
+                                    void *UNUSED(tls_data))
+{
+  CustomData *cd_vdata = (mr->extract_type == MR_EXTRACT_BMESH) ? &mr->bm->vdata : &mr->me->vdata;
+  uint32_t layers_used = cache->cd_used.attr_float;
+  GPUVertBuf *vbo = static_cast<GPUVertBuf *>(buf);
+  extract_attr_generic<int32_t, float>(mr, vbo, cd_vdata, CD_PROP_FLOAT, layers_used);
 }
 
 static void extract_attr_float_init(const MeshRenderData *mr,
@@ -217,6 +240,28 @@ static void extract_attr_float3_init(const MeshRenderData *mr,
   uint32_t layers_used = cache->cd_used.attr_float3;
   GPUVertBuf *vbo = static_cast<GPUVertBuf *>(buf);
   extract_attr_generic<float3>(mr, vbo, cd_vdata, CD_PROP_FLOAT3, layers_used);
+}
+
+constexpr MeshExtract create_extractor_attr_bool()
+{
+  MeshExtract extractor = {nullptr};
+  extractor.init = extract_attr_bool_init;
+  extractor.data_type = MR_DATA_NONE;
+  extractor.data_size = 0;
+  extractor.use_threading = false;
+  extractor.mesh_buffer_offset = offsetof(MeshBufferList, vbo.attr_float);
+  return extractor;
+}
+
+constexpr MeshExtract create_extractor_attr_int32()
+{
+  MeshExtract extractor = {nullptr};
+  extractor.init = extract_attr_int32_init;
+  extractor.data_type = MR_DATA_NONE;
+  extractor.data_size = 0;
+  extractor.use_threading = false;
+  extractor.mesh_buffer_offset = offsetof(MeshBufferList, vbo.attr_float);
+  return extractor;
 }
 
 constexpr MeshExtract create_extractor_attr_float()
@@ -257,6 +302,8 @@ constexpr MeshExtract create_extractor_attr_float3()
 }  // namespace blender::draw
 
 extern "C" {
+const MeshExtract extract_attr_bool = blender::draw::create_extractor_attr_bool();
+const MeshExtract extract_attr_int32 = blender::draw::create_extractor_attr_int32();
 const MeshExtract extract_attr_float = blender::draw::create_extractor_attr_float();
 const MeshExtract extract_attr_float2 = blender::draw::create_extractor_attr_float2();
 const MeshExtract extract_attr_float3 = blender::draw::create_extractor_attr_float3();
