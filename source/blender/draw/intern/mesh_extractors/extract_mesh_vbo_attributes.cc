@@ -36,14 +36,45 @@ namespace blender::draw {
 /** \name Extract Attributes
  * \{ */
 
-template<typename T> float4 get_float4_from_value(T value)
-{
-  return float4(value);
-}
+/* Utility to convert from the type used in the attributes to the types for the VBO.
+ * This is mostly used to promote integers and booleans to floats, as other types (float, float2,
+ * etc.) directly map to avalaible GPU type. Integers are still converted as attributes are vec4 in
+ * the shader.
+ */
+template<typename AttributeType, typename VBOType> struct attribute_type_converter {
+  static VBOType convert_value(AttributeType value)
+  {
+    if constexpr (std::is_same_v<AttributeType, VBOType>) {
+      return value;
+    }
 
-static float4 get_float4_from_value(float3 value)
+    /* This should only concern int and bool which are converted to floats. */
+    return static_cast<VBOType>(value);
+  }
+};
+
+/* Return the number of component for the attribute's value type, or 0 if is it unsupported. */
+static uint gpu_component_size_for_attribute_type(CustomDataType type)
 {
-  return float4(value.x, value.y, value.z, 1.0f);
+  switch (type) {
+    case CD_PROP_BOOL:
+    case CD_PROP_INT32:
+    case CD_PROP_FLOAT: {
+      return 1;
+    }
+    case CD_PROP_FLOAT2: {
+      return 2;
+    }
+    case CD_PROP_FLOAT3: {
+      return 3;
+    }
+    case CD_PROP_COLOR: {
+      return 4;
+    }
+    default: {
+      return 0;
+    }
+  }
 }
 
 static void init_format_for_attr(GPUVertFormat &format,
@@ -51,6 +82,11 @@ static void init_format_for_attr(GPUVertFormat &format,
                                  CustomDataType type,
                                  uint32_t layers_used)
 {
+  GPUVertCompType comp_type = GPU_COMP_F32;
+  const uint comp_size = gpu_component_size_for_attribute_type(type);
+  /* We should not be here if the attribute type is not supported. */
+  BLI_assert(comp_size != 0);
+
   for (int i = 0; i < 8; i++) {
     if (layers_used & (1 << i)) {
       char attr_name[32], attr_safe_name[GPU_MAX_SAFE_ATTR_NAME];
@@ -59,7 +95,7 @@ static void init_format_for_attr(GPUVertFormat &format,
       /* Attributes use auto-name. */
       BLI_snprintf(attr_name, sizeof(attr_name), "a%s", attr_safe_name);
 
-      GPU_vertformat_attr_add(&format, attr_name, GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
+      GPU_vertformat_attr_add(&format, attr_name, comp_type, comp_size, GPU_FETCH_FLOAT);
       GPU_vertformat_alias_add(&format, attr_name);
     }
   }
@@ -80,7 +116,7 @@ static void init_vbo_for_attribute(GPUVertBuf *vbo,
   GPU_vertbuf_data_alloc(vbo, static_cast<uint32_t>(vert_len));
 }
 
-template<typename T>
+template<typename AttributeType, typename VBOType>
 static void fill_vertbuf_with_attribute(const MeshRenderData *mr,
                                         GPUVertBuf *vbo,
                                         CustomData *custom_data,
@@ -88,24 +124,29 @@ static void fill_vertbuf_with_attribute(const MeshRenderData *mr,
                                         MLoop *loops,
                                         int layer_index)
 {
-  float4 *vbo_data = static_cast<float4 *>(GPU_vertbuf_get_data(vbo));
-  const T *attr_data = static_cast<T *>(CustomData_get_layer_n(custom_data, cd_type, layer_index));
+  VBOType *vbo_data = static_cast<VBOType *>(GPU_vertbuf_get_data(vbo));
+  const AttributeType *attr_data = static_cast<AttributeType *>(
+      CustomData_get_layer_n(custom_data, cd_type, layer_index));
+
+  using converter = attribute_type_converter<AttributeType, VBOType>;
 
   // TODO(kevindietrich) : domains
   for (int ml_index = 0; ml_index < mr->loop_len; ml_index++, vbo_data++, loops++) {
-    *vbo_data = get_float4_from_value(attr_data[loops->v]);
+    *vbo_data = converter::convert_value(attr_data[loops->v]);
   }
 }
 
-template<typename T>
+template<typename AttributeType, typename VBOType>
 static void fill_vertbuf_with_attribute_bm(const MeshRenderData *mr,
                                            GPUVertBuf *vbo,
                                            CustomData *custom_data,
                                            CustomDataType cd_type,
                                            int layer_index)
 {
-  float4 *vbo_data = static_cast<float4 *>(GPU_vertbuf_get_data(vbo));
+  VBOType *vbo_data = static_cast<VBOType *>(GPU_vertbuf_get_data(vbo));
   int cd_ofs = CustomData_get_n_offset(custom_data, cd_type, layer_index);
+
+  using converter = attribute_type_converter<AttributeType, VBOType>;
 
   // TODO(kevindietrich) : domains
   BMIter f_iter;
@@ -114,8 +155,9 @@ static void fill_vertbuf_with_attribute_bm(const MeshRenderData *mr,
     BMLoop *l_iter, *l_first;
     l_iter = l_first = BM_FACE_FIRST_LOOP(efa);
     do {
-      const T *attr_data = (const T *)BM_ELEM_CD_GET_VOID_P(l_iter->v, cd_ofs);
-      *vbo_data = get_float4_from_value(*attr_data);
+      const AttributeType *attr_data = (const AttributeType *)BM_ELEM_CD_GET_VOID_P(l_iter->v,
+                                                                                    cd_ofs);
+      *vbo_data = converter::convert_value(*attr_data);
       vbo_data++;
     } while ((l_iter = l_iter->next) != l_first);
   }
@@ -134,11 +176,11 @@ static void extract_attr_generic(const MeshRenderData *mr,
   for (int i = 0; i < MAX_MCOL; i++) {
     if (layers_used & (1 << i)) {
       if (mr->extract_type == MR_EXTRACT_BMESH) {
-        fill_vertbuf_with_attribute_bm<T>(mr, vbo, custom_data, cd_type, i);
+        fill_vertbuf_with_attribute_bm<T, T>(mr, vbo, custom_data, cd_type, i);
       }
       else {
         MLoop *loops = static_cast<MLoop *>(CustomData_get_layer(cd_ldata, CD_MLOOP));
-        fill_vertbuf_with_attribute<T>(mr, vbo, custom_data, cd_type, loops, i);
+        fill_vertbuf_with_attribute<T, T>(mr, vbo, custom_data, cd_type, loops, i);
       }
     }
   }
