@@ -127,6 +127,10 @@ typedef struct Mesh_Runtime {
   /** Needed in case we need to lazily initialize the mesh. */
   CustomData_MeshMasks cd_mask_extra;
 
+  /** Needed to ensure some thread-safety during render data pre-processing. */
+  void *render_mutex;
+  void *_pad3;
+
 } Mesh_Runtime;
 
 typedef struct Mesh {
@@ -282,9 +286,9 @@ enum {
 /* We can't have both flags enabled at once,
  * flags defined in DNA_scene_types.h */
 #define ME_EDIT_PAINT_SEL_MODE(_me) \
-  (((_me)->editflag & ME_EDIT_PAINT_FACE_SEL) ? SCE_SELECT_FACE : \
-   ((_me)->editflag & ME_EDIT_PAINT_VERT_SEL) ? SCE_SELECT_VERTEX : \
-                                                0)
+  (((_me)->editflag & ME_EDIT_PAINT_FACE_SEL) ? \
+       SCE_SELECT_FACE : \
+       ((_me)->editflag & ME_EDIT_PAINT_VERT_SEL) ? SCE_SELECT_VERTEX : 0)
 
 /* me->flag */
 enum {

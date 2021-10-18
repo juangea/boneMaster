@@ -56,12 +56,6 @@ typedef struct DRW_MeshCDMask {
   uint32_t uv : 8;
   uint32_t tan : 8;
   uint32_t vcol : 8;
-  uint32_t sculpt_vcol : 8;
-  //  uint32_t attr_bool: 8;
-  //  uint32_t attr_int : 8;
-  uint32_t attr_float : 8;
-  uint32_t attr_float2 : 8;
-  uint32_t attr_float3 : 8;
   uint32_t orco : 1;
   uint32_t tan_orco : 1;
   uint32_t sculpt_overlays : 1;
@@ -69,10 +63,10 @@ typedef struct DRW_MeshCDMask {
    *  modifiers could remove it. (see T68857) */
   uint32_t edit_uv : 1;
 } DRW_MeshCDMask;
-/* Keep `DRW_MeshCDMask` struct within an `uint64_t`.
+/* Keep `DRW_MeshCDMask` struct within an `uint32_t`.
  * bit-wise and atomic operations are used to compare and update the struct.
  * See `mesh_cd_layers_type_*` functions. */
-BLI_STATIC_ASSERT(sizeof(DRW_MeshCDMask) <= sizeof(uint64_t), "DRW_MeshCDMask exceeds 64 bits")
+BLI_STATIC_ASSERT(sizeof(DRW_MeshCDMask) <= sizeof(uint32_t), "DRW_MeshCDMask exceeds 64 bits")
 typedef enum eMRIterType {
   MR_ITER_LOOPTRI = 1 << 0,
   MR_ITER_POLY = 1 << 1,
@@ -80,6 +74,25 @@ typedef enum eMRIterType {
   MR_ITER_LVERT = 1 << 3,
 } eMRIterType;
 ENUM_OPERATORS(eMRIterType, MR_ITER_LVERT)
+
+typedef struct DRW_AttributeRequest {
+  int layer_index;
+  int domain;  // This is an AttributeDomain.
+} DRW_AttributeRequest;
+
+typedef struct DRW_AttributeRequestsList {
+  DRW_AttributeRequest requests[GPU_MAX_ATTR];
+  int num_requests;
+} DRW_AttributeRequestsList;
+
+typedef struct DRW_MeshAttributes {
+  DRW_AttributeRequestsList bool_attributes;
+  DRW_AttributeRequestsList int32_attributes;
+  DRW_AttributeRequestsList float_attributes;
+  DRW_AttributeRequestsList float2_attributes;
+  DRW_AttributeRequestsList float3_attributes;
+  DRW_AttributeRequestsList color_attributes;
+} DRW_MeshAttributes;
 
 typedef enum eMRDataType {
   MR_DATA_NONE = 0,
@@ -119,9 +132,12 @@ typedef struct MeshBufferList {
     GPUVertBuf *uv;
     GPUVertBuf *tan;
     GPUVertBuf *vcol;
+    GPUVertBuf *attr_bool;
+    GPUVertBuf *attr_int32;
     GPUVertBuf *attr_float;
     GPUVertBuf *attr_float2;
     GPUVertBuf *attr_float3;
+    GPUVertBuf *attr_color;
     GPUVertBuf *sculpt_data;
     GPUVertBuf *orco;
     /* Only for edit mode. */
@@ -292,6 +308,9 @@ typedef struct MeshBatchCache {
   struct DRW_MeshWeightState weight_state;
 
   DRW_MeshCDMask cd_used, cd_needed, cd_used_over_time;
+
+  // TODO(kevindietrich) : attr_used_over_time
+  DRW_MeshAttributes attr_used, attr_needed, attr_used_over_time;
 
   int lastmatch;
 

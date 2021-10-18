@@ -333,6 +333,7 @@ extern const MeshExtract extract_attr_int32;
 extern const MeshExtract extract_attr_float;
 extern const MeshExtract extract_attr_float2;
 extern const MeshExtract extract_attr_float3;
+extern const MeshExtract extract_attr_color;
 
 #ifdef __cplusplus
 }

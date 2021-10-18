@@ -28,6 +28,8 @@
 #include "BLI_float4.hh"
 #include "BLI_string.h"
 
+#include "BKE_attribute.h"
+
 #include "extract_mesh.h"
 
 namespace blender::draw {
@@ -35,6 +37,27 @@ namespace blender::draw {
 /* ---------------------------------------------------------------------- */
 /** \name Extract Attributes
  * \{ */
+
+static CustomData *get_custom_data_for_domain(const MeshRenderData *mr, AttributeDomain domain)
+{
+  switch (domain) {
+    default: {
+      return nullptr;
+    }
+    case ATTR_DOMAIN_POINT: {
+      return (mr->extract_type == MR_EXTRACT_BMESH) ? &mr->bm->vdata : &mr->me->vdata;
+    }
+    case ATTR_DOMAIN_CORNER: {
+      return (mr->extract_type == MR_EXTRACT_BMESH) ? &mr->bm->ldata : &mr->me->ldata;
+    }
+    case ATTR_DOMAIN_FACE: {
+      return (mr->extract_type == MR_EXTRACT_BMESH) ? &mr->bm->pdata : &mr->me->pdata;
+    }
+    case ATTR_DOMAIN_EDGE: {
+      return (mr->extract_type == MR_EXTRACT_BMESH) ? &mr->bm->edata : &mr->me->edata;
+    }
+  }
+}
 
 /* Utility to convert from the type used in the attributes to the types for the VBO.
  * This is mostly used to promote integers and booleans to floats, as other types (float, float2,
@@ -50,6 +73,22 @@ template<typename AttributeType, typename VBOType> struct attribute_type_convert
 
     /* This should only concern int and bool which are converted to floats. */
     return static_cast<VBOType>(value);
+  }
+};
+
+struct gpuMeshCol {
+  ushort r, g, b, a;
+};
+
+template<> struct attribute_type_converter<MPropCol, gpuMeshCol> {
+  static gpuMeshCol convert_value(MPropCol value)
+  {
+    gpuMeshCol result;
+    result.r = unit_float_to_ushort_clamp(value.color[0]);
+    result.g = unit_float_to_ushort_clamp(value.color[1]);
+    result.b = unit_float_to_ushort_clamp(value.color[2]);
+    result.a = unit_float_to_ushort_clamp(value.color[3]);
+    return result;
   }
 };
 
@@ -77,86 +116,138 @@ static uint gpu_component_size_for_attribute_type(CustomDataType type)
   }
 }
 
-static void init_format_for_attr(GPUVertFormat &format,
-                                 CustomData *custom_data,
+static void init_format_for_attr(const MeshRenderData *mr,
+                                 GPUVertFormat &format,
                                  CustomDataType type,
-                                 uint32_t layers_used)
+                                 const DRW_AttributeRequestsList *requests)
 {
-  GPUVertCompType comp_type = GPU_COMP_F32;
+  GPUVertCompType comp_type =
+      GPU_COMP_F32;  // type == CD_PROP_COLOR ? GPU_COMP_U16 : GPU_COMP_F32;
   const uint comp_size = gpu_component_size_for_attribute_type(type);
   /* We should not be here if the attribute type is not supported. */
   BLI_assert(comp_size != 0);
 
-  for (int i = 0; i < 8; i++) {
-    if (layers_used & (1 << i)) {
-      char attr_name[32], attr_safe_name[GPU_MAX_SAFE_ATTR_NAME];
-      const char *layer_name = CustomData_get_layer_name(custom_data, type, i);
-      GPU_vertformat_safe_attr_name(layer_name, attr_safe_name, GPU_MAX_SAFE_ATTR_NAME);
-      /* Attributes use auto-name. */
-      BLI_snprintf(attr_name, sizeof(attr_name), "a%s", attr_safe_name);
+  for (int i = 0; i < requests->num_requests; i++) {
+    const DRW_AttributeRequest req = requests->requests[i];
+    const AttributeDomain domain = static_cast<AttributeDomain>(req.domain);
+    const CustomData *custom_data = get_custom_data_for_domain(mr, domain);
+    char attr_name[32], attr_safe_name[GPU_MAX_SAFE_ATTR_NAME];
+    const char *layer_name = CustomData_get_layer_name(custom_data, type, req.layer_index);
+    GPU_vertformat_safe_attr_name(layer_name, attr_safe_name, GPU_MAX_SAFE_ATTR_NAME);
+    /* Attributes use auto-name. */
+    BLI_snprintf(attr_name, sizeof(attr_name), "a%s", attr_safe_name);
 
-      GPU_vertformat_attr_add(&format, attr_name, comp_type, comp_size, GPU_FETCH_FLOAT);
-      GPU_vertformat_alias_add(&format, attr_name);
-    }
+    GPU_vertformat_attr_add(&format, attr_name, comp_type, comp_size, GPU_FETCH_FLOAT);
+    GPU_vertformat_alias_add(&format, attr_name);
   }
 }
 
-static void init_vbo_for_attribute(GPUVertBuf *vbo,
-                                   CustomData *custom_data,
+static void init_vbo_for_attribute(const MeshRenderData *mr,
+                                   GPUVertBuf *vbo,
                                    CustomDataType type,
-                                   uint32_t layers_used,
+                                   const DRW_AttributeRequestsList *requests,
                                    int vert_len)
 {
   GPUVertFormat format = {0};
   GPU_vertformat_deinterleave(&format);
-
-  init_format_for_attr(format, custom_data, type, layers_used);
-
+  init_format_for_attr(mr, format, type, requests);
   GPU_vertbuf_init_with_format(vbo, &format);
   GPU_vertbuf_data_alloc(vbo, static_cast<uint32_t>(vert_len));
 }
 
 template<typename AttributeType, typename VBOType>
 static void fill_vertbuf_with_attribute(const MeshRenderData *mr,
-                                        GPUVertBuf *vbo,
-                                        CustomData *custom_data,
+                                        VBOType *&vbo_data,
                                         CustomDataType cd_type,
-                                        MLoop *loops,
-                                        int layer_index)
+                                        const DRW_AttributeRequest req)
 {
-  VBOType *vbo_data = static_cast<VBOType *>(GPU_vertbuf_get_data(vbo));
+  const AttributeDomain domain = static_cast<AttributeDomain>(req.domain);
+  const CustomData *custom_data = get_custom_data_for_domain(mr, domain);
+  BLI_assert(custom_data);
+  const int layer_index = req.layer_index;
+
+  const MPoly *mpoly = mr->mpoly;
+  const MLoop *mloop = mr->mloop;
+
   const AttributeType *attr_data = static_cast<AttributeType *>(
       CustomData_get_layer_n(custom_data, cd_type, layer_index));
 
   using converter = attribute_type_converter<AttributeType, VBOType>;
 
-  // TODO(kevindietrich) : domains
-  for (int ml_index = 0; ml_index < mr->loop_len; ml_index++, vbo_data++, loops++) {
-    *vbo_data = converter::convert_value(attr_data[loops->v]);
+  switch (domain) {
+    default: {
+      BLI_assert(false);
+      break;
+    }
+    case ATTR_DOMAIN_POINT: {
+      for (int ml_index = 0; ml_index < mr->loop_len; ml_index++, vbo_data++, mloop++) {
+        *vbo_data = converter::convert_value(attr_data[mloop->v]);
+      }
+      break;
+    }
+    case ATTR_DOMAIN_CORNER: {
+      for (int ml_index = 0; ml_index < mr->loop_len; ml_index++, vbo_data++) {
+        *vbo_data = converter::convert_value(attr_data[ml_index]);
+      }
+      break;
+    }
+    case ATTR_DOMAIN_EDGE: {
+      for (int ml_index = 0; ml_index < mr->loop_len; ml_index++, vbo_data++, mloop++) {
+        *vbo_data = converter::convert_value(attr_data[mloop->e]);
+      }
+      break;
+    }
+    case ATTR_DOMAIN_FACE: {
+      for (int mp_index = 0; mp_index < mr->poly_len; mp_index++) {
+        const MPoly &poly = mpoly[mp_index];
+        const VBOType value = converter::convert_value(attr_data[mp_index]);
+        for (int l = 0; l < poly.totloop; l++) {
+          *vbo_data++ = value;
+        }
+      }
+      break;
+    }
   }
 }
 
 template<typename AttributeType, typename VBOType>
 static void fill_vertbuf_with_attribute_bm(const MeshRenderData *mr,
-                                           GPUVertBuf *vbo,
-                                           CustomData *custom_data,
+                                           VBOType *&vbo_data,
                                            CustomDataType cd_type,
-                                           int layer_index)
+                                           const DRW_AttributeRequest req)
 {
-  VBOType *vbo_data = static_cast<VBOType *>(GPU_vertbuf_get_data(vbo));
+  const AttributeDomain domain = static_cast<AttributeDomain>(req.domain);
+  const CustomData *custom_data = get_custom_data_for_domain(mr, domain);
+  BLI_assert(custom_data);
+  const int layer_index = req.layer_index;
+
   int cd_ofs = CustomData_get_n_offset(custom_data, cd_type, layer_index);
 
   using converter = attribute_type_converter<AttributeType, VBOType>;
 
-  // TODO(kevindietrich) : domains
   BMIter f_iter;
   BMFace *efa;
   BM_ITER_MESH (efa, &f_iter, mr->bm, BM_FACES_OF_MESH) {
     BMLoop *l_iter, *l_first;
     l_iter = l_first = BM_FACE_FIRST_LOOP(efa);
     do {
-      const AttributeType *attr_data = (const AttributeType *)BM_ELEM_CD_GET_VOID_P(l_iter->v,
-                                                                                    cd_ofs);
+      const AttributeType *attr_data = nullptr;
+      if (domain == ATTR_DOMAIN_POINT) {
+        attr_data = static_cast<const AttributeType *>(BM_ELEM_CD_GET_VOID_P(l_iter->v, cd_ofs));
+      }
+      else if (domain == ATTR_DOMAIN_CORNER) {
+        attr_data = static_cast<const AttributeType *>(BM_ELEM_CD_GET_VOID_P(l_iter, cd_ofs));
+      }
+      else if (domain == ATTR_DOMAIN_FACE) {
+        attr_data = static_cast<const AttributeType *>(BM_ELEM_CD_GET_VOID_P(efa, cd_ofs));
+      }
+      else if (domain == ATTR_DOMAIN_EDGE) {
+        attr_data = static_cast<const AttributeType *>(BM_ELEM_CD_GET_VOID_P(l_iter->e, cd_ofs));
+      }
+      else {
+        BLI_assert(false);
+        continue;
+      }
       *vbo_data = converter::convert_value(*attr_data);
       vbo_data++;
     } while ((l_iter = l_iter->next) != l_first);
@@ -166,23 +257,20 @@ static void fill_vertbuf_with_attribute_bm(const MeshRenderData *mr,
 template<typename AttributeType, typename VBOType = AttributeType>
 static void extract_attr_generic(const MeshRenderData *mr,
                                  GPUVertBuf *vbo,
-                                 CustomData *custom_data,
                                  CustomDataType cd_type,
-                                 uint32_t layers_used)
+                                 const DRW_AttributeRequestsList *requests)
 {
-  CustomData *cd_ldata = (mr->extract_type == MR_EXTRACT_BMESH) ? &mr->bm->ldata : &mr->me->ldata;
-  init_vbo_for_attribute(vbo, custom_data, cd_type, layers_used, mr->loop_len);
+  init_vbo_for_attribute(mr, vbo, cd_type, requests, mr->loop_len);
 
-  for (int i = 0; i < MAX_MCOL; i++) {
-    if (layers_used & (1 << i)) {
-      if (mr->extract_type == MR_EXTRACT_BMESH) {
-        fill_vertbuf_with_attribute_bm<AttributeType, VBOType>(mr, vbo, custom_data, cd_type, i);
-      }
-      else {
-        MLoop *loops = static_cast<MLoop *>(CustomData_get_layer(cd_ldata, CD_MLOOP));
-        fill_vertbuf_with_attribute<AttributeType, VBOType>(
-            mr, vbo, custom_data, cd_type, loops, i);
-      }
+  VBOType *vbo_data = static_cast<VBOType *>(GPU_vertbuf_get_data(vbo));
+
+  for (int i = 0; i < requests->num_requests; i++) {
+    const DRW_AttributeRequest req = requests->requests[i];
+    if (mr->extract_type == MR_EXTRACT_BMESH) {
+      fill_vertbuf_with_attribute_bm<AttributeType>(mr, vbo_data, cd_type, req);
+    }
+    else {
+      fill_vertbuf_with_attribute<AttributeType>(mr, vbo_data, cd_type, req);
     }
   }
 }
@@ -192,10 +280,9 @@ static void extract_attr_bool_init(const MeshRenderData *mr,
                                    void *buf,
                                    void *UNUSED(tls_data))
 {
-  CustomData *cd_vdata = (mr->extract_type == MR_EXTRACT_BMESH) ? &mr->bm->vdata : &mr->me->vdata;
-  uint32_t layers_used = cache->cd_used.attr_float;
+  const DRW_AttributeRequestsList *attrs_used = &cache->attr_used.bool_attributes;
   GPUVertBuf *vbo = static_cast<GPUVertBuf *>(buf);
-  extract_attr_generic<bool, float>(mr, vbo, cd_vdata, CD_PROP_FLOAT, layers_used);
+  extract_attr_generic<bool, float>(mr, vbo, CD_PROP_BOOL, attrs_used);
 }
 
 static void extract_attr_int32_init(const MeshRenderData *mr,
@@ -203,10 +290,9 @@ static void extract_attr_int32_init(const MeshRenderData *mr,
                                     void *buf,
                                     void *UNUSED(tls_data))
 {
-  CustomData *cd_vdata = (mr->extract_type == MR_EXTRACT_BMESH) ? &mr->bm->vdata : &mr->me->vdata;
-  uint32_t layers_used = cache->cd_used.attr_float;
+  const DRW_AttributeRequestsList *attrs_used = &cache->attr_used.int32_attributes;
   GPUVertBuf *vbo = static_cast<GPUVertBuf *>(buf);
-  extract_attr_generic<int32_t, float>(mr, vbo, cd_vdata, CD_PROP_FLOAT, layers_used);
+  extract_attr_generic<int32_t, float>(mr, vbo, CD_PROP_INT32, attrs_used);
 }
 
 static void extract_attr_float_init(const MeshRenderData *mr,
@@ -214,10 +300,9 @@ static void extract_attr_float_init(const MeshRenderData *mr,
                                     void *buf,
                                     void *UNUSED(tls_data))
 {
-  CustomData *cd_vdata = (mr->extract_type == MR_EXTRACT_BMESH) ? &mr->bm->vdata : &mr->me->vdata;
-  uint32_t layers_used = cache->cd_used.attr_float;
+  const DRW_AttributeRequestsList *attrs_used = &cache->attr_used.float_attributes;
   GPUVertBuf *vbo = static_cast<GPUVertBuf *>(buf);
-  extract_attr_generic<float>(mr, vbo, cd_vdata, CD_PROP_FLOAT, layers_used);
+  extract_attr_generic<float>(mr, vbo, CD_PROP_FLOAT, attrs_used);
 }
 
 static void extract_attr_float2_init(const MeshRenderData *mr,
@@ -225,10 +310,9 @@ static void extract_attr_float2_init(const MeshRenderData *mr,
                                      void *buf,
                                      void *UNUSED(tls_data))
 {
-  CustomData *cd_vdata = (mr->extract_type == MR_EXTRACT_BMESH) ? &mr->bm->vdata : &mr->me->vdata;
-  uint32_t layers_used = cache->cd_used.attr_float2;
+  const DRW_AttributeRequestsList *attrs_used = &cache->attr_used.float2_attributes;
   GPUVertBuf *vbo = static_cast<GPUVertBuf *>(buf);
-  extract_attr_generic<float2>(mr, vbo, cd_vdata, CD_PROP_FLOAT2, layers_used);
+  extract_attr_generic<float2>(mr, vbo, CD_PROP_FLOAT2, attrs_used);
 }
 
 static void extract_attr_float3_init(const MeshRenderData *mr,
@@ -236,10 +320,19 @@ static void extract_attr_float3_init(const MeshRenderData *mr,
                                      void *buf,
                                      void *UNUSED(tls_data))
 {
-  CustomData *cd_vdata = (mr->extract_type == MR_EXTRACT_BMESH) ? &mr->bm->vdata : &mr->me->vdata;
-  uint32_t layers_used = cache->cd_used.attr_float3;
+  const DRW_AttributeRequestsList *attrs_used = &cache->attr_used.float3_attributes;
   GPUVertBuf *vbo = static_cast<GPUVertBuf *>(buf);
-  extract_attr_generic<float3>(mr, vbo, cd_vdata, CD_PROP_FLOAT3, layers_used);
+  extract_attr_generic<float3>(mr, vbo, CD_PROP_FLOAT3, attrs_used);
+}
+
+static void extract_attr_color_init(const MeshRenderData *mr,
+                                    struct MeshBatchCache *cache,
+                                    void *buf,
+                                    void *UNUSED(tls_data))
+{
+  const DRW_AttributeRequestsList *attrs_used = &cache->attr_used.color_attributes;
+  GPUVertBuf *vbo = static_cast<GPUVertBuf *>(buf);
+  extract_attr_generic<MPropCol>(mr, vbo, CD_PROP_COLOR, attrs_used);
 }
 
 constexpr MeshExtract create_extractor_attr_bool()
@@ -249,7 +342,7 @@ constexpr MeshExtract create_extractor_attr_bool()
   extractor.data_type = MR_DATA_NONE;
   extractor.data_size = 0;
   extractor.use_threading = false;
-  extractor.mesh_buffer_offset = offsetof(MeshBufferList, vbo.attr_float);
+  extractor.mesh_buffer_offset = offsetof(MeshBufferList, vbo.attr_bool);
   return extractor;
 }
 
@@ -260,7 +353,7 @@ constexpr MeshExtract create_extractor_attr_int32()
   extractor.data_type = MR_DATA_NONE;
   extractor.data_size = 0;
   extractor.use_threading = false;
-  extractor.mesh_buffer_offset = offsetof(MeshBufferList, vbo.attr_float);
+  extractor.mesh_buffer_offset = offsetof(MeshBufferList, vbo.attr_int32);
   return extractor;
 }
 
@@ -297,6 +390,17 @@ constexpr MeshExtract create_extractor_attr_float3()
   return extractor;
 }
 
+constexpr MeshExtract create_extractor_attr_color()
+{
+  MeshExtract extractor = {nullptr};
+  extractor.init = extract_attr_color_init;
+  extractor.data_type = MR_DATA_NONE;
+  extractor.data_size = 0;
+  extractor.use_threading = false;
+  extractor.mesh_buffer_offset = offsetof(MeshBufferList, vbo.attr_color);
+  return extractor;
+}
+
 /** \} */
 
 }  // namespace blender::draw
@@ -307,4 +411,5 @@ const MeshExtract extract_attr_int32 = blender::draw::create_extractor_attr_int3
 const MeshExtract extract_attr_float = blender::draw::create_extractor_attr_float();
 const MeshExtract extract_attr_float2 = blender::draw::create_extractor_attr_float2();
 const MeshExtract extract_attr_float3 = blender::draw::create_extractor_attr_float3();
+const MeshExtract extract_attr_color = blender::draw::create_extractor_attr_color();
 }
