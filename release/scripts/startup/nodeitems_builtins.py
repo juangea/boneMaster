@@ -115,6 +115,7 @@ def curve_node_items(context):
     yield NodeItem("GeometryNodeCurveParameter")
     yield NodeItem("GeometryNodeInputTangent")
     yield NodeItem("GeometryNodeInputCurveTilt")
+    yield NodeItem("GeometryNodeCurveEndpointSelection")
     yield NodeItem("GeometryNodeCurveHandleTypeSelection")
     yield NodeItem("GeometryNodeInputSplineCyclic")
     yield NodeItem("GeometryNodeSplineLength")
@@ -148,6 +149,7 @@ def mesh_node_items(context):
     yield NodeItem("GeometryNodeMeshToPoints")
     yield NodeItem("GeometryNodeSplitEdges")
     yield NodeItem("GeometryNodeSubdivideMesh")
+    yield NodeItem("GeometryNodeSubdivisionSurface")
     yield NodeItem("GeometryNodeTriangulate")
     yield NodeItemCustom(draw=lambda self, layout, context: layout.separator())
     yield NodeItem("GeometryNodeInputShadeSmooth")
@@ -653,6 +655,7 @@ geometry_node_categories = [
 
         NodeItem("GeometryNodeCaptureAttribute"),
         NodeItem("GeometryNodeAttributeStatistic"),
+        NodeItem("GeometryNodeAttributeTransfer"),
     ]),
     GeometryNodeCategory("GEO_COLOR", "Color", items=[
         NodeItem("ShaderNodeMixRGB"),
@@ -718,7 +721,10 @@ geometry_node_categories = [
         NodeItem("GeometryNodeStringToCurves"),
     ]),
     GeometryNodeCategory("GEO_TEXTURE", "Texture", items=[
+        NodeItem("ShaderNodeTexGradient"),
+        NodeItem("ShaderNodeTexMusgrave"),
         NodeItem("ShaderNodeTexNoise"),
+        NodeItem("ShaderNodeTexVoronoi"),
         NodeItem("ShaderNodeTexWhiteNoise"),
     ]),
     GeometryNodeCategory("GEO_UTILITIES", "Utilities", items=[

@@ -154,7 +154,7 @@ ccl_device_inline bool scene_intersect_valid(ccl_private const Ray *ray)
   return isfinite_safe(ray->P.x) && isfinite_safe(ray->D.x) && len_squared(ray->D) != 0.0f;
 }
 
-ccl_device_intersect bool scene_intersect(ccl_global const KernelGlobals *kg,
+ccl_device_intersect bool scene_intersect(KernelGlobals kg,
                                           ccl_private const Ray *ray,
                                           const uint visibility,
                                           ccl_private Intersection *isect)
@@ -248,7 +248,7 @@ ccl_device_intersect bool scene_intersect(ccl_global const KernelGlobals *kg,
 }
 
 #ifdef __BVH_LOCAL__
-ccl_device_intersect bool scene_intersect_local(ccl_global const KernelGlobals *kg,
+ccl_device_intersect bool scene_intersect_local(KernelGlobals kg,
                                                 ccl_private const Ray *ray,
                                                 ccl_private LocalIntersection *local_isect,
                                                 int local_object,
@@ -256,10 +256,10 @@ ccl_device_intersect bool scene_intersect_local(ccl_global const KernelGlobals *
                                                 int max_hits)
 {
 #  ifdef __KERNEL_OPTIX__
-  uint p0 = ((uint64_t)lcg_state) & 0xFFFFFFFF;
-  uint p1 = (((uint64_t)lcg_state) >> 32) & 0xFFFFFFFF;
-  uint p2 = ((uint64_t)local_isect) & 0xFFFFFFFF;
-  uint p3 = (((uint64_t)local_isect) >> 32) & 0xFFFFFFFF;
+  uint p0 = pointer_pack_to_uint_0(lcg_state);
+  uint p1 = pointer_pack_to_uint_1(lcg_state);
+  uint p2 = pointer_pack_to_uint_0(local_isect);
+  uint p3 = pointer_pack_to_uint_1(local_isect);
   uint p4 = local_object;
   /* Is set to zero on miss or if ray is aborted, so can be used as return value. */
   uint p5 = max_hits;
@@ -360,7 +360,7 @@ ccl_device_intersect bool scene_intersect_local(ccl_global const KernelGlobals *
 #endif
 
 #ifdef __SHADOW_RECORD_ALL__
-ccl_device_intersect bool scene_intersect_shadow_all(ccl_global const KernelGlobals *kg,
+ccl_device_intersect bool scene_intersect_shadow_all(KernelGlobals kg,
                                                      ccl_private const Ray *ray,
                                                      ccl_private Intersection *isect,
                                                      uint visibility,
@@ -368,8 +368,9 @@ ccl_device_intersect bool scene_intersect_shadow_all(ccl_global const KernelGlob
                                                      ccl_private uint *num_hits)
 {
 #  ifdef __KERNEL_OPTIX__
-  uint p0 = ((uint64_t)isect) & 0xFFFFFFFF;
-  uint p1 = (((uint64_t)isect) >> 32) & 0xFFFFFFFF;
+  uint p0 = pointer_pack_to_uint_0(isect);
+  uint p1 = pointer_pack_to_uint_1(isect);
+  uint p2 = 0; /* Number of hits. */
   uint p3 = max_hits;
   uint p4 = visibility;
   uint p5 = false;
@@ -394,10 +395,12 @@ ccl_device_intersect bool scene_intersect_shadow_all(ccl_global const KernelGlob
              0,
              p0,
              p1,
-             *num_hits,
+             p2,
              p3,
              p4,
              p5);
+
+  *num_hits = p2;
 
   return p5;
 #  else /* __KERNEL_OPTIX__ */
@@ -445,7 +448,7 @@ ccl_device_intersect bool scene_intersect_shadow_all(ccl_global const KernelGlob
 #endif /* __SHADOW_RECORD_ALL__ */
 
 #ifdef __VOLUME__
-ccl_device_intersect bool scene_intersect_volume(ccl_global const KernelGlobals *kg,
+ccl_device_intersect bool scene_intersect_volume(KernelGlobals kg,
                                                  ccl_private const Ray *ray,
                                                  ccl_private Intersection *isect,
                                                  const uint visibility)
@@ -507,7 +510,7 @@ ccl_device_intersect bool scene_intersect_volume(ccl_global const KernelGlobals 
 #endif /* __VOLUME__ */
 
 #ifdef __VOLUME_RECORD_ALL__
-ccl_device_intersect uint scene_intersect_volume_all(ccl_global const KernelGlobals *kg,
+ccl_device_intersect uint scene_intersect_volume_all(KernelGlobals kg,
                                                      ccl_private const Ray *ray,
                                                      ccl_private Intersection *isect,
                                                      const uint max_hits,

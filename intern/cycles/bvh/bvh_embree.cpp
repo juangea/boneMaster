@@ -73,7 +73,7 @@ static void rtc_filter_occluded_func(const RTCFilterFunctionNArguments *args)
   const RTCRay *ray = (RTCRay *)args->ray;
   RTCHit *hit = (RTCHit *)args->hit;
   CCLIntersectContext *ctx = ((IntersectContext *)args->context)->userRayExt;
-  const KernelGlobals *kg = ctx->kg;
+  const KernelGlobalsCPU *kg = ctx->kg;
 
   switch (ctx->type) {
     case CCLIntersectContext::RAY_SHADOW_ALL: {
@@ -81,7 +81,7 @@ static void rtc_filter_occluded_func(const RTCFilterFunctionNArguments *args)
       kernel_embree_convert_hit(kg, ray, hit, &current_isect);
 
       /* If no transparent shadows, all light is blocked. */
-      const int flags = intersection_get_shader_flags(kg, &current_isect);
+      const int flags = intersection_get_shader_flags(kg, current_isect.prim, current_isect.type);
       if (!(flags & (SD_HAS_TRANSPARENT_SHADOW)) || ctx->max_hits == 0) {
         ctx->opaque_hit = true;
         return;
