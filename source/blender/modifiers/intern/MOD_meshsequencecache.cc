@@ -444,6 +444,7 @@ static void velocity_panel_draw(const bContext *UNUSED(C), Panel *panel)
     return;
   }
 
+  uiLayoutSetPropSep(layout, true);
   uiTemplateCacheFileVelocity(layout, &fileptr);
   uiItemR(layout, ptr, "velocity_scale", 0, nullptr, ICON_NONE);
 }
@@ -460,6 +461,7 @@ static void attribute_remapping_panel_draw(const bContext *C, Panel *panel)
     return;
   }
 
+  uiLayoutSetPropSep(layout, true);
   uiTemplateCacheFileAttributeRemapping(layout, C, &fileptr);
 }
 
@@ -475,6 +477,7 @@ static void override_layers_panel_draw(const bContext *C, Panel *panel)
     return;
   }
 
+  uiLayoutSetPropSep(layout, true);
   uiTemplateCacheFileLayers(layout, C, &fileptr);
 }
 
@@ -490,6 +493,7 @@ static void time_settings_panel_draw(const bContext *UNUSED(C), Panel *panel)
     return;
   }
 
+  uiLayoutSetPropSep(layout, true);
   uiTemplateCacheFileTimeSettings(layout, &fileptr);
 }
 
@@ -505,6 +509,7 @@ static void render_procedural_panel_draw(const bContext *C, Panel *panel)
     return;
   }
 
+  uiLayoutSetPropSep(layout, true);
   uiTemplateCacheFileProcedural(layout, C, &fileptr);
 }
 

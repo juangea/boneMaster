@@ -6490,6 +6490,9 @@ void uiTemplateCacheFileAttributeRemapping(uiLayout *layout,
                                            const bContext *C,
                                            PointerRNA *fileptr)
 {
+  /* Ensure that the context has a CacheFile as this may not be set inside of modifiers panels. */
+  uiLayoutSetContextPointer(layout, "edit_cachefile", fileptr);
+
   uiLayout *row = uiLayoutRow(layout, false);
   uiLayout *col = uiLayoutColumn(row, true);
 
@@ -6683,9 +6686,6 @@ void uiTemplateCacheFile(uiLayout *layout,
     uiItemR(row, &fileptr, "scale", 0, IFACE_("Manual Scale"), ICON_NONE);
 
     uiTemplateCacheFileVelocity(layout, &fileptr);
-
-    row = uiLayoutRow(layout, false);
-    uiTemplateCacheFileAttributeRemapping(row, C, &fileptr);
   }
 
   /* TODO: unused for now, so no need to expose. */
