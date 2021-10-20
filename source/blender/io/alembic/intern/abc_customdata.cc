@@ -1617,60 +1617,6 @@ bool has_animated_attributes(const ICompoundProperty &arb_geom_params)
   return false;
 }
 
-/* In the UI we allow ',' to separate arguments, which should be converted to '|' as this is used
- * to select different substrings in regexes. */
-static std::string regex_string_from_blender_regex(const char *regex)
-{
-  std::string result = regex;
-
-  if (result == "*") {
-    return ".*";
-  }
-
-  std::replace(result.begin(), result.end(), ',', '|');
-  return result;
-}
-
-bool AttributeSelector::set_point_attributes_regex(const char *regex)
-{
-  try {
-    point_attributes = regex_string_from_blender_regex(regex);
-  }
-  catch (std::regex_error &) {
-    /* Ignore the regex_error string, we have our own message. */
-    return false;
-  }
-
-  return true;
-}
-
-bool AttributeSelector::set_loop_attributes_regex(const char *regex)
-{
-  try {
-    loop_attributes = regex_string_from_blender_regex(regex);
-  }
-  catch (std::regex_error &) {
-    /* Ignore the regex_error string, we have our own message. */
-    return false;
-  }
-
-  return true;
-}
-
-bool AttributeSelector::set_face_attributes_regex(const char *regex)
-{
-  face_attributes = regex_string_from_blender_regex(regex);
-  try {
-    face_attributes = regex_string_from_blender_regex(regex);
-  }
-  catch (std::regex_error &) {
-    /* Ignore the regex_error string, we have our own message. */
-    return false;
-  }
-
-  return true;
-}
-
 void AttributeSelector::set_read_flags(int flags)
 {
   read_flags = flags;
@@ -1729,18 +1675,6 @@ bool AttributeSelector::select_attribute(const BlenderScope bl_scope,
   /* This is loaded separately. */
   if (attr_name == velocity_attribute) {
     return false;
-  }
-
-  if (bl_scope == BlenderScope::POINT) {
-    return std::regex_match(attr_name, point_attributes);
-  }
-
-  if (bl_scope == BlenderScope::LOOPS) {
-    return std::regex_match(attr_name, loop_attributes);
-  }
-
-  if (bl_scope == BlenderScope::POLYGON) {
-    return std::regex_match(attr_name, face_attributes);
   }
 
   return true;

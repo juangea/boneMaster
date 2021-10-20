@@ -247,9 +247,6 @@ static void modifyGeometry(ModifierData *md,
   params.read_flags = mcmd->read_flag;
   params.velocity_name = mcmd->cache_file->velocity_name;
   params.velocity_scale = velocity_scale;
-  params.point_attributes_regex = mcmd->cache_file->point_attributes_regex;
-  params.loop_attributes_regex = mcmd->cache_file->loop_attributes_regex;
-  params.face_attributes_regex = mcmd->cache_file->face_attributes_regex;
   params.mappings = &mcmd->cache_file->attribute_mappings;
 
   ABC_read_geometry(mcmd->reader, ctx->object, &geometry_set, &params, &err_str);

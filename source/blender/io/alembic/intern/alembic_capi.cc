@@ -807,22 +807,6 @@ void ABC_read_geometry(CacheReader *reader,
   }
 
   AttributeSelector attribute_selector(params->mappings);
-
-  if (!attribute_selector.set_point_attributes_regex(params->point_attributes_regex)) {
-    *err_str = "Invalid regex for point attributes\n";
-    return;
-  }
-
-  if (!attribute_selector.set_loop_attributes_regex(params->loop_attributes_regex)) {
-    *err_str = "Invalid regex for face corner attributes\n";
-    return;
-  }
-
-  if (!attribute_selector.set_face_attributes_regex(params->face_attributes_regex)) {
-    *err_str = "Invalid regex for face attributes\n";
-    return;
-  }
-
   attribute_selector.set_velocity_attribute(params->velocity_name);
   attribute_selector.set_read_flags(params->read_flags);
 

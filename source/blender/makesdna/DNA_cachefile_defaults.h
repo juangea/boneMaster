@@ -42,10 +42,6 @@
     .handle_readers = NULL, \
     .use_prefetch = 1, \
     .prefetch_cache_size = 4096, \
-  \
-    .point_attributes_regex[0] = '\0', \
-    .loop_attributes_regex[0] = '\0', \
-    .face_attributes_regex[0] = '\0', \
   }
 
 /** \} */

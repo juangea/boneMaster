@@ -485,34 +485,6 @@ static void rna_def_cachefile(BlenderRNA *brna)
                              "rna_CacheFile_active_layer_index_set",
                              "rna_CacheFile_active_layer_index_range");
 
-  /* ----------------- Alembic Attribute Selection ----------------- */
-
-  prop = RNA_def_property(srna, "point_attributes_regex", PROP_STRING, PROP_NONE);
-  RNA_def_property_ui_text(
-      prop,
-      "Point Attributes",
-      "Only read point level attributes in the Alembic Archive if their names "
-      "match the given regular expression");
-  RNA_def_property_update(prop, 0, "rna_CacheFile_update");
-  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
-
-  prop = RNA_def_property(srna, "loop_attributes_regex", PROP_STRING, PROP_NONE);
-  RNA_def_property_ui_text(
-      prop,
-      "Face Corner Attributes",
-      "Only read face corner level attributes in the Alembic Archive if their names "
-      "match the given regular expression");
-  RNA_def_property_update(prop, 0, "rna_CacheFile_update");
-  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
-
-  prop = RNA_def_property(srna, "face_attributes_regex", PROP_STRING, PROP_NONE);
-  RNA_def_property_ui_text(prop,
-                           "Face Attributes",
-                           "Only read face level attributes in the Alembic Archive if their names "
-                           "match the given regular expression");
-  RNA_def_property_update(prop, 0, "rna_CacheFile_update");
-  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
-
   /* ----------------- Attribute Mappings ----------------- */
 
   prop = RNA_def_property(srna, "attribute_mappings", PROP_COLLECTION, PROP_NONE);

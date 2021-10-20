@@ -26,7 +26,6 @@
 #include <Alembic/AbcGeom/All.h>
 
 #include <map>
-#include <regex>
 
 #include "BLI_listbase_wrapper.hh"
 
@@ -144,11 +143,6 @@ void write_custom_data(const OCompoundProperty &prop,
                        int data_type);
 
 class AttributeSelector {
-  /* Regexes for filtering attributes for each possible domain. */
-  std::regex point_attributes;
-  std::regex loop_attributes;
-  std::regex face_attributes;
-
   /* Name of the velocity attribute, it is ignored since we deal with separately. */
   std::string velocity_attribute = "";
 
@@ -160,12 +154,6 @@ class AttributeSelector {
   AttributeSelector(ListBase *mappings_) : mappings(mappings_)
   {
   }
-
-  bool set_point_attributes_regex(const char *regex);
-
-  bool set_loop_attributes_regex(const char *regex);
-
-  bool set_face_attributes_regex(const char *regex);
 
   void set_velocity_attribute(const char *name);
 

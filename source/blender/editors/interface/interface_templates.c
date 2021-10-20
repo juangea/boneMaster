@@ -6672,10 +6672,6 @@ void uiTemplateCacheFile(uiLayout *layout,
   sub = uiLayoutRow(row, true);
   uiItemO(sub, "", ICON_FILE_REFRESH, "cachefile.reload");
 
-  uiItemR(layout, &fileptr, "point_attributes_regex", 0, NULL, ICON_NONE);
-  uiItemR(layout, &fileptr, "loop_attributes_regex", 0, NULL, ICON_NONE);
-  uiItemR(layout, &fileptr, "face_attributes_regex", 0, NULL, ICON_NONE);
-
   if (sbuts->mainb == BCONTEXT_CONSTRAINT) {
     row = uiLayoutRow(layout, false);
     uiTemplateCacheFileLayers(row, C, &fileptr);

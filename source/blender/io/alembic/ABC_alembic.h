@@ -123,10 +123,6 @@ typedef struct ABCReadParams {
   const char *velocity_name;
   float velocity_scale;
 
-  const char *point_attributes_regex;
-  const char *loop_attributes_regex;
-  const char *face_attributes_regex;
-
   ListBase *mappings;
 } ABCReadParams;
 

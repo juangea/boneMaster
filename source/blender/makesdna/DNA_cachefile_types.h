@@ -161,15 +161,6 @@ typedef struct CacheFile {
   /* Name of the velocity property in the archive. */
   char velocity_name[64];
 
-  /** Regular expression for selecting point or vertex attributes in the CacheFile. */
-  char point_attributes_regex[64];
-
-  /** Regular expression for selecting loop attributes in the CacheFile. */
-  char loop_attributes_regex[64];
-
-  /** Regular expression for selecting face attributes in the CacheFile. */
-  char face_attributes_regex[64];
-
   ListBase attribute_mappings;
 
   /* Runtime */
