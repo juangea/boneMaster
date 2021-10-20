@@ -2209,10 +2209,25 @@ void uiTemplateComponentMenu(uiLayout *layout,
                              const char *propname,
                              const char *name);
 void uiTemplateNodeSocket(uiLayout *layout, struct bContext *C, float color[4]);
+
 void uiTemplateCacheFile(uiLayout *layout,
                          const struct bContext *C,
                          struct PointerRNA *ptr,
                          const char *propname);
+void uiTemplateCacheFileVelocity(uiLayout *layout, struct PointerRNA *fileptr);
+bool uiTemplateCacheFilePointer(struct PointerRNA *ptr,
+                                const char *propname,
+                                struct PointerRNA *r_file_ptr);
+void uiTemplateCacheFileAttributeRemapping(uiLayout *layout,
+                                           const struct bContext *C,
+                                           struct PointerRNA *fileptr);
+void uiTemplateCacheFileLayers(uiLayout *layout,
+                               const struct bContext *C,
+                               struct PointerRNA *fileptr);
+void uiTemplateCacheFileProcedural(uiLayout *layout,
+                                   const struct bContext *C,
+                                   struct PointerRNA *fileptr);
+void uiTemplateCacheFileTimeSettings(uiLayout *layout, struct PointerRNA *fileptr);
 
 /* Default UIList class name, keep in sync with its declaration in bl_ui/__init__.py */
 #define UI_UL_DEFAULT_CLASS_NAME "UI_UL_list"

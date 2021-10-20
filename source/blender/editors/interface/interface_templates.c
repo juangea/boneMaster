@@ -6480,75 +6480,55 @@ uiListType *UI_UL_cache_file_attribute_mappings()
   return list_type;
 }
 
-void uiTemplateCacheFile(uiLayout *layout,
-                         const bContext *C,
-                         PointerRNA *ptr,
-                         const char *propname)
+void uiTemplateCacheFileVelocity(uiLayout *layout, PointerRNA *fileptr)
 {
-  if (!ptr->data) {
-    return;
-  }
+  uiItemR(layout, fileptr, "velocity_name", 0, NULL, ICON_NONE);
+  uiItemR(layout, fileptr, "velocity_unit", 0, NULL, ICON_NONE);
+}
 
-  PropertyRNA *prop = RNA_struct_find_property(ptr, propname);
-
-  if (!prop) {
-    printf(
-        "%s: property not found: %s.%s\n", __func__, RNA_struct_identifier(ptr->type), propname);
-    return;
-  }
-
-  if (RNA_property_type(prop) != PROP_POINTER) {
-    printf("%s: expected pointer property for %s.%s\n",
-           __func__,
-           RNA_struct_identifier(ptr->type),
-           propname);
-    return;
-  }
-
-  PointerRNA fileptr = RNA_property_pointer_get(ptr, prop);
-  CacheFile *file = fileptr.data;
-
-  uiLayoutSetContextPointer(layout, "edit_cachefile", &fileptr);
-
-  uiTemplateID(layout,
-               C,
-               ptr,
-               propname,
-               NULL,
-               "CACHEFILE_OT_open",
-               NULL,
-               UI_TEMPLATE_ID_FILTER_ALL,
-               false,
-               NULL);
-
-  if (!file) {
-    return;
-  }
-
-  SpaceProperties *sbuts = CTX_wm_space_properties(C);
-
-  uiLayout *row, *sub, *subsub, *col;
-
-  uiLayoutSetPropSep(layout, true);
-
-  row = uiLayoutRow(layout, true);
-  uiItemR(row, &fileptr, "filepath", 0, NULL, ICON_NONE);
-  sub = uiLayoutRow(row, true);
-  uiItemO(sub, "", ICON_FILE_REFRESH, "cachefile.reload");
-
-  row = uiLayoutRow(layout, false);
-  col = uiLayoutColumn(row, true);
+void uiTemplateCacheFileAttributeRemapping(uiLayout *layout,
+                                           const bContext *C,
+                                           PointerRNA *fileptr)
+{
+  uiLayout *row = uiLayoutRow(layout, false);
+  uiLayout *col = uiLayoutColumn(row, true);
 
   uiTemplateList(col,
-                 C,
+                 (bContext *)C,
+                 "UI_UL_cache_file_attribute_mappings",
+                 "cache_file_attribute_mappings",
+                 fileptr,
+                 "attribute_mappings",
+                 fileptr,
+                 "active_attribute_mapping_index",
+                 "",
+                 1,
+                 5,
+                 UILST_LAYOUT_DEFAULT,
+                 1,
+                 UI_TEMPLATE_LIST_FLAG_NONE);
+
+  col = uiLayoutColumn(row, true);
+  uiItemO(col, "", ICON_ADD, "cachefile.attribute_mapping_add");
+  uiItemO(col, "", ICON_REMOVE, "cachefile.attribute_mapping_remove");
+}
+
+void uiTemplateCacheFileLayers(uiLayout *layout, const bContext *C, PointerRNA *fileptr)
+{
+  CacheFile *file = fileptr->data;
+  uiLayout *row = uiLayoutRow(layout, false);
+  uiLayout *col = uiLayoutColumn(row, true);
+
+  uiTemplateList(col,
+                 (bContext *)C,
                  "UI_UL_cache_file_layers",
                  "cache_file_layers",
-                 &fileptr,
+                 fileptr,
                  "layers",
-                 &fileptr,
+                 fileptr,
                  "active_index",
                  "",
-                 5,
+                 1,
                  5,
                  UILST_LAYOUT_DEFAULT,
                  1,
@@ -6563,9 +6543,11 @@ void uiTemplateCacheFile(uiLayout *layout,
     uiItemO(col, "", ICON_TRIA_UP, "cachefile.layer_move");
     uiItemO(col, "", ICON_TRIA_DOWN, "cachefile.layer_move");
   }
+}
 
-  row = uiLayoutRow(layout, false);
-  uiItemR(row, &fileptr, "is_sequence", 0, NULL, ICON_NONE);
+void uiTemplateCacheFileProcedural(uiLayout *layout, const bContext *C, PointerRNA *fileptr)
+{
+  uiLayout *row, *sub;
 
   /* Only enable render procedural option if the active engine supports it. */
   const struct RenderEngineType *engine_type = CTX_data_engine_type(C);
@@ -6589,66 +6571,126 @@ void uiTemplateCacheFile(uiLayout *layout,
 
   row = uiLayoutRow(layout, false);
   uiLayoutSetActive(row, engine_supports_procedural);
-  uiItemR(row, &fileptr, "use_render_procedural", 0, NULL, ICON_NONE);
+  uiItemR(row, fileptr, "use_render_procedural", 0, NULL, ICON_NONE);
 
-  const bool use_render_procedural = RNA_boolean_get(&fileptr, "use_render_procedural");
-  const bool use_prefetch = RNA_boolean_get(&fileptr, "use_prefetch");
+  const bool use_render_procedural = RNA_boolean_get(fileptr, "use_render_procedural");
+  const bool use_prefetch = RNA_boolean_get(fileptr, "use_prefetch");
 
   row = uiLayoutRow(layout, false);
   uiLayoutSetEnabled(row, use_render_procedural);
-  uiItemR(row, &fileptr, "use_prefetch", 0, NULL, ICON_NONE);
+  uiItemR(row, fileptr, "use_prefetch", 0, NULL, ICON_NONE);
 
   sub = uiLayoutRow(layout, false);
   uiLayoutSetEnabled(sub, use_prefetch && use_render_procedural);
-  uiItemR(sub, &fileptr, "prefetch_cache_size", 0, NULL, ICON_NONE);
+  uiItemR(sub, fileptr, "prefetch_cache_size", 0, NULL, ICON_NONE);
+}
+
+void uiTemplateCacheFileTimeSettings(uiLayout *layout, PointerRNA *fileptr)
+{
+  uiLayout *row, *sub, *subsub;
+
+  row = uiLayoutRow(layout, false);
+  uiItemR(row, fileptr, "is_sequence", 0, NULL, ICON_NONE);
 
   row = uiLayoutRowWithHeading(layout, true, IFACE_("Override Frame"));
   sub = uiLayoutRow(row, true);
   uiLayoutSetPropDecorate(sub, false);
-  uiItemR(sub, &fileptr, "override_frame", 0, "", ICON_NONE);
+  uiItemR(sub, fileptr, "override_frame", 0, "", ICON_NONE);
   subsub = uiLayoutRow(sub, true);
-  uiLayoutSetActive(subsub, RNA_boolean_get(&fileptr, "override_frame"));
-  uiItemR(subsub, &fileptr, "frame", 0, "", ICON_NONE);
-  uiItemDecoratorR(row, &fileptr, "frame", 0);
+  uiLayoutSetActive(subsub, RNA_boolean_get(fileptr, "override_frame"));
+  uiItemR(subsub, fileptr, "frame", 0, "", ICON_NONE);
+  uiItemDecoratorR(row, fileptr, "frame", 0);
 
   row = uiLayoutRow(layout, false);
-  uiItemR(row, &fileptr, "frame_offset", 0, NULL, ICON_NONE);
-  uiLayoutSetActive(row, !RNA_boolean_get(&fileptr, "is_sequence"));
+  uiItemR(row, fileptr, "frame_offset", 0, NULL, ICON_NONE);
+  uiLayoutSetActive(row, !RNA_boolean_get(fileptr, "is_sequence"));
+}
 
-  if (sbuts->mainb == BCONTEXT_CONSTRAINT) {
-    row = uiLayoutRow(layout, false);
-    uiItemR(row, &fileptr, "scale", 0, IFACE_("Manual Scale"), ICON_NONE);
+bool uiTemplateCacheFilePointer(PointerRNA *ptr, const char *propname, PointerRNA *r_file_ptr)
+{
+  PropertyRNA *prop = RNA_struct_find_property(ptr, propname);
+
+  if (!prop) {
+    printf(
+        "%s: property not found: %s.%s\n", __func__, RNA_struct_identifier(ptr->type), propname);
+    return false;
   }
 
-  uiItemR(layout, &fileptr, "velocity_name", 0, NULL, ICON_NONE);
-  uiItemR(layout, &fileptr, "velocity_unit", 0, NULL, ICON_NONE);
+  if (RNA_property_type(prop) != PROP_POINTER) {
+    printf("%s: expected pointer property for %s.%s\n",
+           __func__,
+           RNA_struct_identifier(ptr->type),
+           propname);
+    return false;
+  }
+
+  *r_file_ptr = RNA_property_pointer_get(ptr, prop);
+  return true;
+}
+
+void uiTemplateCacheFile(uiLayout *layout,
+                         const bContext *C,
+                         PointerRNA *ptr,
+                         const char *propname)
+{
+  if (!ptr->data) {
+    return;
+  }
+
+  PointerRNA fileptr;
+  if (!uiTemplateCacheFilePointer(ptr, propname, &fileptr)) {
+    return;
+  }
+
+  CacheFile *file = fileptr.data;
+
+  uiLayoutSetContextPointer(layout, "edit_cachefile", &fileptr);
+
+  uiTemplateID(layout,
+               C,
+               ptr,
+               propname,
+               NULL,
+               "CACHEFILE_OT_open",
+               NULL,
+               UI_TEMPLATE_ID_FILTER_ALL,
+               false,
+               NULL);
+
+  if (!file) {
+    return;
+  }
+
+  SpaceProperties *sbuts = CTX_wm_space_properties(C);
+
+  uiLayout *row, *sub;
+
+  uiLayoutSetPropSep(layout, true);
+
+  row = uiLayoutRow(layout, true);
+  uiItemR(row, &fileptr, "filepath", 0, NULL, ICON_NONE);
+  sub = uiLayoutRow(row, true);
+  uiItemO(sub, "", ICON_FILE_REFRESH, "cachefile.reload");
 
   uiItemR(layout, &fileptr, "point_attributes_regex", 0, NULL, ICON_NONE);
   uiItemR(layout, &fileptr, "loop_attributes_regex", 0, NULL, ICON_NONE);
   uiItemR(layout, &fileptr, "face_attributes_regex", 0, NULL, ICON_NONE);
 
-  row = uiLayoutRow(layout, false);
-  col = uiLayoutColumn(row, true);
+  if (sbuts->mainb == BCONTEXT_CONSTRAINT) {
+    row = uiLayoutRow(layout, false);
+    uiTemplateCacheFileLayers(row, C, &fileptr);
 
-  uiItemL(col, "Attribute Remapping", ICON_NONE);
-  uiTemplateList(col,
-                 (bContext *)C,
-                 "UI_UL_cache_file_attribute_mappings",
-                 "cache_file_attribute_mappings",
-                 &fileptr,
-                 "attribute_mappings",
-                 &fileptr,
-                 "active_attribute_mapping_index",
-                 "",
-                 5,
-                 5,
-                 UILST_LAYOUT_DEFAULT,
-                 1,
-                 UI_TEMPLATE_LIST_FLAG_NONE);
+    uiTemplateCacheFileProcedural(layout, C, &fileptr);
+    uiTemplateCacheFileTimeSettings(layout, &fileptr);
 
-  col = uiLayoutColumn(row, true);
-  uiItemO(col, "", ICON_ADD, "cachefile.attribute_mapping_add");
-  uiItemO(col, "", ICON_REMOVE, "cachefile.attribute_mapping_remove");
+    row = uiLayoutRow(layout, false);
+    uiItemR(row, &fileptr, "scale", 0, IFACE_("Manual Scale"), ICON_NONE);
+
+    uiTemplateCacheFileVelocity(layout, &fileptr);
+
+    row = uiLayoutRow(layout, false);
+    uiTemplateCacheFileAttributeRemapping(row, C, &fileptr);
+  }
 
   /* TODO: unused for now, so no need to expose. */
 #if 0
