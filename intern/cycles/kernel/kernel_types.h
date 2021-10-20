@@ -1174,9 +1174,10 @@ typedef struct KernelIntegrator {
   float volume_step_rate;
 
   int has_shadow_catcher;
+  float scrambling_distance;
 
   /* padding */
-  int pad1, pad2;
+  int pad1;
 } KernelIntegrator;
 static_assert_align(KernelIntegrator, 16);
 

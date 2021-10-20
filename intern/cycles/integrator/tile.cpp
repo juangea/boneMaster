@@ -48,8 +48,12 @@ ccl_device_inline uint round_up_to_power_of_two(uint x)
 
 TileSize tile_calculate_best_size(const int2 &image_size,
                                   const int num_samples,
-                                  const int max_num_path_states)
+                                  const int max_num_path_states,
+                                  const float scrambling_distance)
 {
+  if (scrambling_distance < 0.9f) {
+    return ((max_num_path_states > 4000000) ? TileSize(1024, 1024, 1) : TileSize(512, 512, 1));
+  }
   if (max_num_path_states == 1) {
     /* Simple case: avoid any calculation, which could cause rounding issues. */
     return TileSize(1, 1, 1);
