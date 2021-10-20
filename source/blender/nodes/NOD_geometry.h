@@ -33,6 +33,7 @@ void register_node_type_geo_legacy_attribute_transfer(void);
 void register_node_type_geo_legacy_curve_set_handles(void);
 void register_node_type_geo_legacy_attribute_proximity(void);
 void register_node_type_geo_legacy_attribute_randomize(void);
+void register_node_type_geo_legacy_curve_to_points(void);
 void register_node_type_geo_legacy_delete_geometry(void);
 void register_node_type_geo_legacy_material_assign(void);
 void register_node_type_geo_legacy_mesh_to_curve(void);
@@ -45,6 +46,7 @@ void register_node_type_geo_legacy_select_by_handle_type(void);
 void register_node_type_geo_legacy_curve_subdivide(void);
 void register_node_type_geo_legacy_edge_split(void);
 void register_node_type_geo_legacy_subdivision_surface(void);
+void register_node_type_geo_legacy_raycast(void);
 
 void register_node_type_geo_align_rotation_to_vector(void);
 void register_node_type_geo_attribute_capture(void);

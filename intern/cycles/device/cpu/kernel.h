@@ -58,6 +58,7 @@ class CPUKernels {
 
   ShaderEvalFunction shader_eval_displace;
   ShaderEvalFunction shader_eval_background;
+  ShaderEvalFunction shader_eval_curve_shadow_transparency;
 
   /* Adaptive stopping. */
 
@@ -100,10 +101,6 @@ class CPUKernels {
       const KernelGlobalsCPU *kg, ccl_global float *render_buffer, int pixel_index)>;
 
   CryptomattePostprocessFunction cryptomatte_postprocess;
-
-  /* Bake. */
-
-  CPUKernelFunction<void (*)(const KernelGlobalsCPU *, float *, int, int, int, int, int)> bake;
 
   CPUKernels();
 };

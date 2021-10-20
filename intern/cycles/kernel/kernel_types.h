@@ -61,6 +61,15 @@ CCL_NAMESPACE_BEGIN
 #define ID_NONE (0.0f)
 #define PASS_UNUSED (~0)
 
+#define INTEGRATOR_SHADOW_ISECT_SIZE_CPU 1024U
+#define INTEGRATOR_SHADOW_ISECT_SIZE_GPU 4U
+
+#ifdef __KERNEL_CPU__
+#  define INTEGRATOR_SHADOW_ISECT_SIZE INTEGRATOR_SHADOW_ISECT_SIZE_CPU
+#else
+#  define INTEGRATOR_SHADOW_ISECT_SIZE INTEGRATOR_SHADOW_ISECT_SIZE_GPU
+#endif
+
 /* Kernel features */
 #define __SOBOL__
 #define __DPDU__
@@ -276,21 +285,22 @@ enum PathRayFlag {
   PATH_RAY_VOLUME_PASS = (1U << 26U),
   PATH_RAY_ANY_PASS = (PATH_RAY_REFLECT_PASS | PATH_RAY_TRANSMISSION_PASS | PATH_RAY_VOLUME_PASS),
 
-  /* Shadow ray is for a light or surface. */
+  /* Shadow ray is for a light or surface, or AO. */
   PATH_RAY_SHADOW_FOR_LIGHT = (1U << 27U),
+  PATH_RAY_SHADOW_FOR_AO = (1U << 28U),
 
   /* A shadow catcher object was hit and the path was split into two. */
-  PATH_RAY_SHADOW_CATCHER_HIT = (1U << 28U),
+  PATH_RAY_SHADOW_CATCHER_HIT = (1U << 29U),
 
   /* A shadow catcher object was hit and this path traces only shadow catchers, writing them into
    * their dedicated pass for later division.
    *
    * NOTE: Is not covered with `PATH_RAY_ANY_PASS` because shadow catcher does special handling
    * which is separate from the light passes. */
-  PATH_RAY_SHADOW_CATCHER_PASS = (1U << 29U),
+  PATH_RAY_SHADOW_CATCHER_PASS = (1U << 30U),
 
   /* Path is evaluating background for an approximate shadow catcher with non-transparent film. */
-  PATH_RAY_SHADOW_CATCHER_BACKGROUND = (1U << 30U),
+  PATH_RAY_SHADOW_CATCHER_BACKGROUND = (1U << 31U),
 };
 
 /* Configure ray visibility bits for rays and objects respectively,
@@ -582,6 +592,7 @@ typedef enum AttributeStandard {
   ATTR_STD_VOLUME_VELOCITY,
   ATTR_STD_POINTINESS,
   ATTR_STD_RANDOM_PER_ISLAND,
+  ATTR_STD_SHADOW_TRANSPARENCY,
   ATTR_STD_NUM,
 
   ATTR_STD_NOT_FOUND = ~0
@@ -812,6 +823,7 @@ typedef struct ccl_align(16) ShaderData
 #ifdef __OSL__
   const struct KernelGlobalsCPU *osl_globals;
   const struct IntegratorStateCPU *osl_path_state;
+  const struct IntegratorShadowStateCPU *osl_shadow_path_state;
 #endif
 
   /* LCG state for closures that require additional random numbers. */
@@ -1451,6 +1463,7 @@ typedef enum DeviceKernel {
 
   DEVICE_KERNEL_SHADER_EVAL_DISPLACE,
   DEVICE_KERNEL_SHADER_EVAL_BACKGROUND,
+  DEVICE_KERNEL_SHADER_EVAL_CURVE_SHADOW_TRANSPARENCY,
 
 #define DECLARE_FILM_CONVERT_KERNEL(variant) \
   DEVICE_KERNEL_FILM_CONVERT_##variant, DEVICE_KERNEL_FILM_CONVERT_##variant##_HALF_RGBA

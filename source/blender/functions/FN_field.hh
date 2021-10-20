@@ -418,9 +418,14 @@ class IndexFieldInput final : public FieldInput {
  public:
   IndexFieldInput();
 
+  static GVArray *get_index_varray(IndexMask mask, ResourceScope &scope);
+
   const GVArray *get_varray_for_context(const FieldContext &context,
                                         IndexMask mask,
                                         ResourceScope &scope) const final;
+
+  uint64_t hash() const override;
+  bool is_equal_to(const fn::FieldNode &other) const override;
 };
 
 /** \} */

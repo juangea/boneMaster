@@ -64,6 +64,11 @@ void KERNEL_FUNCTION_FULL_NAME(shader_eval_displace)(const KernelGlobalsCPU *kg,
                                                      const KernelShaderEvalInput *input,
                                                      float *output,
                                                      const int offset);
+void KERNEL_FUNCTION_FULL_NAME(shader_eval_curve_shadow_transparency)(
+    const KernelGlobalsCPU *kg,
+    const KernelShaderEvalInput *input,
+    float *output,
+    const int offset);
 
 /* --------------------------------------------------------------------
  * Adaptive sampling.
@@ -101,13 +106,5 @@ void KERNEL_FUNCTION_FULL_NAME(adaptive_sampling_filter_y)(const KernelGlobalsCP
 void KERNEL_FUNCTION_FULL_NAME(cryptomatte_postprocess)(const KernelGlobalsCPU *kg,
                                                         ccl_global float *render_buffer,
                                                         int pixel_index);
-
-/* --------------------------------------------------------------------
- * Bake.
- */
-/* TODO(sergey): Needs to be re-implemented. Or not? Brecht did it already :) */
-
-void KERNEL_FUNCTION_FULL_NAME(bake)(
-    const KernelGlobalsCPU *kg, float *buffer, int sample, int x, int y, int offset, int stride);
 
 #undef KERNEL_ARCH

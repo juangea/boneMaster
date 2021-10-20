@@ -1544,6 +1544,8 @@ int ntreeTexExecTree(struct bNodeTree *ntree,
 #define GEO_NODE_TRANSFER_ATTRIBUTE 1125
 #define GEO_NODE_SUBDIVISION_SURFACE 1126
 #define GEO_NODE_CURVE_ENDPOINT_SELECTION 1127
+#define GEO_NODE_RAYCAST 1128
+#define GEO_NODE_CURVE_TO_POINTS 1130
 
 /** \} */
 
@@ -1565,6 +1567,7 @@ int ntreeTexExecTree(struct bNodeTree *ntree,
 #define FN_NODE_ROTATE_EULER 1215
 #define FN_NODE_ALIGN_EULER_TO_VECTOR 1216
 #define FN_NODE_INPUT_COLOR 1217
+#define FN_NODE_REPLACE_STRING 1218
 
 /** \} */
 

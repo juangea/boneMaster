@@ -111,8 +111,7 @@ ccl_device_forceinline void integrator_intersect_shader_next_kernel(
    * Note that the splitting leaves kernel and sorting counters as-is, so use INIT semantic for
    * the matte path. */
 
-  const bool use_raytrace_kernel = ((shader_flags & SD_HAS_RAYTRACE) ||
-                                    (kernel_data.film.pass_ao != PASS_UNUSED));
+  const bool use_raytrace_kernel = (shader_flags & SD_HAS_RAYTRACE);
 
   if (use_raytrace_kernel) {
     INTEGRATOR_PATH_NEXT_SORTED(
@@ -135,13 +134,6 @@ ccl_device_forceinline void integrator_intersect_shader_next_kernel(
     }
     else {
       INTEGRATOR_PATH_INIT_SORTED(DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE, shader);
-    }
-
-    /* If the split happened after bounce through a transparent object it's possible to have shadow
-     * patch. Make sure it is properly re-scheduled on the split path. */
-    const int shadow_kernel = INTEGRATOR_STATE(state, shadow_path, queued_kernel);
-    if (shadow_kernel != 0) {
-      INTEGRATOR_SHADOW_PATH_INIT(shadow_kernel);
     }
   }
 #endif
