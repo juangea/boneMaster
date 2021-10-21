@@ -23,6 +23,8 @@
 
 #include "MEM_guardedalloc.h"
 
+#include <functional>
+
 #include "BLI_float2.hh"
 #include "BLI_float3.hh"
 #include "BLI_float4.hh"
@@ -155,6 +157,36 @@ static void init_vbo_for_attribute(const MeshRenderData *mr,
   GPU_vertbuf_data_alloc(vbo, static_cast<uint32_t>(vert_len));
 }
 
+static void init_vbo_for_attribute(const MeshRenderData *mr,
+                                   GPUVertBuf *vbo,
+                                   const DRW_AttributeRequest *request)
+{
+  const DRW_AttributeRequest req = *request;
+  GPUVertCompType comp_type =
+      GPU_COMP_F32;  // type == CD_PROP_COLOR ? GPU_COMP_U16 : GPU_COMP_F32;
+  const uint comp_size = gpu_component_size_for_attribute_type(
+      static_cast<CustomDataType>(req.cd_type));
+  /* We should not be here if the attribute type is not supported. */
+  BLI_assert(comp_size != 0);
+
+  GPUVertFormat format = {0};
+  GPU_vertformat_deinterleave(&format);
+
+  const AttributeDomain domain = static_cast<AttributeDomain>(req.domain);
+  const CustomData *custom_data = get_custom_data_for_domain(mr, domain);
+  char attr_name[32], attr_safe_name[GPU_MAX_SAFE_ATTR_NAME];
+  const char *layer_name = CustomData_get_layer_name(custom_data, req.cd_type, req.layer_index);
+  GPU_vertformat_safe_attr_name(layer_name, attr_safe_name, GPU_MAX_SAFE_ATTR_NAME);
+  /* Attributes use auto-name. */
+  BLI_snprintf(attr_name, sizeof(attr_name), "a%s", attr_safe_name);
+
+  GPU_vertformat_attr_add(&format, attr_name, comp_type, comp_size, GPU_FETCH_FLOAT);
+  GPU_vertformat_alias_add(&format, attr_name);
+
+  GPU_vertbuf_init_with_format(vbo, &format);
+  GPU_vertbuf_data_alloc(vbo, static_cast<uint32_t>(mr->loop_len));
+}
+
 template<typename AttributeType, typename VBOType>
 static void fill_vertbuf_with_attribute(const MeshRenderData *mr,
                                         VBOType *&vbo_data,
@@ -254,6 +286,7 @@ static void fill_vertbuf_with_attribute_bm(const MeshRenderData *mr,
   }
 }
 
+#ifdef SPLIT_ATTRIBUTE_VBO_BY_TYPE
 template<typename AttributeType, typename VBOType = AttributeType>
 static void extract_attr_generic(const MeshRenderData *mr,
                                  GPUVertBuf *vbo,
@@ -274,7 +307,27 @@ static void extract_attr_generic(const MeshRenderData *mr,
     }
   }
 }
+#else
+template<typename AttributeType, typename VBOType = AttributeType>
+static void extract_attr_generic(const MeshRenderData *mr,
+                                 GPUVertBuf *vbo,
+                                 const DRW_AttributeRequest *request)
+{
+  VBOType *vbo_data = static_cast<VBOType *>(GPU_vertbuf_get_data(vbo));
 
+  const DRW_AttributeRequest req = *request;
+  if (mr->extract_type == MR_EXTRACT_BMESH) {
+    fill_vertbuf_with_attribute_bm<AttributeType>(
+        mr, vbo_data, static_cast<CustomDataType>(req.cd_type), req);
+  }
+  else {
+    fill_vertbuf_with_attribute<AttributeType>(
+        mr, vbo_data, static_cast<CustomDataType>(req.cd_type), req);
+  }
+}
+#endif
+
+#ifdef SPLIT_ATTRIBUTE_VBO_BY_TYPE
 static void extract_attr_bool_init(const MeshRenderData *mr,
                                    struct MeshBatchCache *cache,
                                    void *buf,
@@ -400,16 +453,121 @@ constexpr MeshExtract create_extractor_attr_color()
   extractor.mesh_buffer_offset = offsetof(MeshBufferList, vbo.attr_color);
   return extractor;
 }
+#else
+
+static void extract_attr_init(const MeshRenderData *mr,
+                              struct MeshBatchCache *cache,
+                              void *buf,
+                              void *UNUSED(tls_data),
+                              int index)
+{
+  const DRW_AttributeRequestsList *attrs_used = &cache->attr_used.list;
+  const DRW_AttributeRequest *request = &attrs_used->requests[index];
+
+  GPUVertBuf *vbo = static_cast<GPUVertBuf *>(buf);
+
+  init_vbo_for_attribute(mr, vbo, request);
+
+  switch (request->cd_type) {
+    case CD_PROP_BOOL: {
+      extract_attr_generic<bool, float>(mr, vbo, request);
+      break;
+    }
+    case CD_PROP_INT32: {
+      extract_attr_generic<int32_t, float>(mr, vbo, request);
+      break;
+    }
+    case CD_PROP_FLOAT: {
+      extract_attr_generic<float>(mr, vbo, request);
+      break;
+    }
+    case CD_PROP_FLOAT2: {
+      extract_attr_generic<float2>(mr, vbo, request);
+      break;
+    }
+    case CD_PROP_FLOAT3: {
+      extract_attr_generic<float3>(mr, vbo, request);
+      break;
+    }
+    case CD_PROP_COLOR: {
+      extract_attr_generic<MPropCol>(mr, vbo, request);
+      break;
+    }
+    default: {
+      BLI_assert(false);
+    }
+  }
+}
+
+/* Wrappers around extract_attr_init so we can pass the index of the attribute that we want to
+ * extract. The overall API does not allow us to pass this in a convenient way. */
+#  define EXTRACT_INIT_WRAPPER(index) \
+    static void extract_attr_init##index( \
+        const MeshRenderData *mr, struct MeshBatchCache *cache, void *buf, void *tls_data) \
+    { \
+      extract_attr_init(mr, cache, buf, tls_data, index); \
+    }
+
+EXTRACT_INIT_WRAPPER(0)
+EXTRACT_INIT_WRAPPER(1)
+EXTRACT_INIT_WRAPPER(2)
+EXTRACT_INIT_WRAPPER(3)
+EXTRACT_INIT_WRAPPER(4)
+EXTRACT_INIT_WRAPPER(5)
+EXTRACT_INIT_WRAPPER(6)
+EXTRACT_INIT_WRAPPER(7)
+EXTRACT_INIT_WRAPPER(8)
+EXTRACT_INIT_WRAPPER(9)
+EXTRACT_INIT_WRAPPER(10)
+EXTRACT_INIT_WRAPPER(11)
+EXTRACT_INIT_WRAPPER(12)
+EXTRACT_INIT_WRAPPER(13)
+EXTRACT_INIT_WRAPPER(14)
+
+constexpr MeshExtract create_extractor_attr(int index, ExtractInitFn fn)
+{
+  MeshExtract extractor = {nullptr};
+  extractor.init = fn;
+  extractor.data_type = MR_DATA_NONE;
+  extractor.data_size = 0;
+  extractor.use_threading = false;
+  extractor.mesh_buffer_offset = offsetof(MeshBufferList, vbo.attr[index]);
+  return extractor;
+}
+#endif
 
 /** \} */
 
 }  // namespace blender::draw
 
 extern "C" {
+#ifdef SPLIT_ATTRIBUTE_VBO_BY_TYPE
 const MeshExtract extract_attr_bool = blender::draw::create_extractor_attr_bool();
 const MeshExtract extract_attr_int32 = blender::draw::create_extractor_attr_int32();
 const MeshExtract extract_attr_float = blender::draw::create_extractor_attr_float();
 const MeshExtract extract_attr_float2 = blender::draw::create_extractor_attr_float2();
 const MeshExtract extract_attr_float3 = blender::draw::create_extractor_attr_float3();
 const MeshExtract extract_attr_color = blender::draw::create_extractor_attr_color();
+#else
+
+#  define EXTRACT_ATTR_PARAMETERS(index) index, blender::draw::extract_attr_init##index
+
+const MeshExtract extract_attr[GPU_MAX_ATTR] = {
+    blender::draw::create_extractor_attr(EXTRACT_ATTR_PARAMETERS(0)),
+    blender::draw::create_extractor_attr(EXTRACT_ATTR_PARAMETERS(1)),
+    blender::draw::create_extractor_attr(EXTRACT_ATTR_PARAMETERS(2)),
+    blender::draw::create_extractor_attr(EXTRACT_ATTR_PARAMETERS(3)),
+    blender::draw::create_extractor_attr(EXTRACT_ATTR_PARAMETERS(4)),
+    blender::draw::create_extractor_attr(EXTRACT_ATTR_PARAMETERS(5)),
+    blender::draw::create_extractor_attr(EXTRACT_ATTR_PARAMETERS(6)),
+    blender::draw::create_extractor_attr(EXTRACT_ATTR_PARAMETERS(7)),
+    blender::draw::create_extractor_attr(EXTRACT_ATTR_PARAMETERS(8)),
+    blender::draw::create_extractor_attr(EXTRACT_ATTR_PARAMETERS(9)),
+    blender::draw::create_extractor_attr(EXTRACT_ATTR_PARAMETERS(10)),
+    blender::draw::create_extractor_attr(EXTRACT_ATTR_PARAMETERS(11)),
+    blender::draw::create_extractor_attr(EXTRACT_ATTR_PARAMETERS(12)),
+    blender::draw::create_extractor_attr(EXTRACT_ATTR_PARAMETERS(13)),
+    blender::draw::create_extractor_attr(EXTRACT_ATTR_PARAMETERS(14)),
+};
+#endif
 }

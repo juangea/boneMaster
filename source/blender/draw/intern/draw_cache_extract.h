@@ -76,8 +76,9 @@ typedef enum eMRIterType {
 ENUM_OPERATORS(eMRIterType, MR_ITER_LVERT)
 
 typedef struct DRW_AttributeRequest {
+  int cd_type;  // This is a #CustomDataType.
   int layer_index;
-  int domain;  // This is an AttributeDomain.
+  int domain;  // This is an #AttributeDomain.
 } DRW_AttributeRequest;
 
 typedef struct DRW_AttributeRequestsList {
@@ -85,13 +86,19 @@ typedef struct DRW_AttributeRequestsList {
   int num_requests;
 } DRW_AttributeRequestsList;
 
+#undef SPLIT_ATTRIBUTE_VBO_BY_TYPE
+
 typedef struct DRW_MeshAttributes {
+#ifdef SPLIT_ATTRIBUTE_VBO_BY_TYPE
   DRW_AttributeRequestsList bool_attributes;
   DRW_AttributeRequestsList int32_attributes;
   DRW_AttributeRequestsList float_attributes;
   DRW_AttributeRequestsList float2_attributes;
   DRW_AttributeRequestsList float3_attributes;
   DRW_AttributeRequestsList color_attributes;
+#else
+  DRW_AttributeRequestsList list;
+#endif
 } DRW_MeshAttributes;
 
 typedef enum eMRDataType {
@@ -132,12 +139,6 @@ typedef struct MeshBufferList {
     GPUVertBuf *uv;
     GPUVertBuf *tan;
     GPUVertBuf *vcol;
-    GPUVertBuf *attr_bool;
-    GPUVertBuf *attr_int32;
-    GPUVertBuf *attr_float;
-    GPUVertBuf *attr_float2;
-    GPUVertBuf *attr_float3;
-    GPUVertBuf *attr_color;
     GPUVertBuf *sculpt_data;
     GPUVertBuf *orco;
     /* Only for edit mode. */
@@ -157,6 +158,16 @@ typedef struct MeshBufferList {
     GPUVertBuf *edge_idx; /* extend */
     GPUVertBuf *poly_idx;
     GPUVertBuf *fdot_idx;
+#ifdef SPLIT_ATTRIBUTE_VBO_BY_TYPE
+    GPUVertBuf *attr_bool;
+    GPUVertBuf *attr_int32;
+    GPUVertBuf *attr_float;
+    GPUVertBuf *attr_float2;
+    GPUVertBuf *attr_float3;
+    GPUVertBuf *attr_color;
+#else
+    GPUVertBuf *attr[GPU_MAX_ATTR];
+#endif
   } vbo;
   /* Index Buffers:
    * Only need to be updated when topology changes. */

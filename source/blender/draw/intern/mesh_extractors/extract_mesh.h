@@ -334,6 +334,7 @@ extern const MeshExtract extract_attr_float;
 extern const MeshExtract extract_attr_float2;
 extern const MeshExtract extract_attr_float3;
 extern const MeshExtract extract_attr_color;
+extern const MeshExtract extract_attr[GPU_MAX_ATTR];
 
 #ifdef __cplusplus
 }
