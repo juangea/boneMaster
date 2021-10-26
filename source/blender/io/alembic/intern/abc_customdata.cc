@@ -709,7 +709,7 @@ template<> struct value_type_converter<Imath::C4f> {
 static size_t mcols_out_of_bounds_check(const size_t color_index,
                                         const size_t array_size,
                                         const std::string &iobject_full_name,
-                                        const PropertyHeader &prop_header,
+                                        const std::string &prop_name,
                                         bool &r_is_out_of_bounds,
                                         bool &r_bounds_warning_given)
 {
@@ -720,7 +720,7 @@ static size_t mcols_out_of_bounds_check(const size_t color_index,
   if (!r_bounds_warning_given) {
     std::cerr << "Alembic: color index out of bounds "
                  "reading face colors for object "
-              << iobject_full_name << ", property " << prop_header.getName() << std::endl;
+              << iobject_full_name << ", property " << prop_name << std::endl;
     r_bounds_warning_given = true;
   }
   r_is_out_of_bounds = true;
@@ -1258,7 +1258,7 @@ static void read_mesh_uvs(const CDStreamConfig &config,
 
 template<typename TRAIT>
 static void read_mesh_colors_generic(const CDStreamConfig &config,
-                                     const PropertyHeader &prop_header,
+                                     const std::string &prop_name,
                                      const ITypedGeomParam<TRAIT> &color_param,
                                      ISampleSelector iss)
 {
@@ -1296,7 +1296,7 @@ static void read_mesh_colors_generic(const CDStreamConfig &config,
   bool use_dual_indexing = is_facevarying && indices->size() > 0;
 
   create_loop_layer_for_scope<MCol>(
-      config, bl_scope, CD_MLOOPCOL, prop_header.getName(), [&](size_t loop_index) {
+      config, bl_scope, CD_MLOOPCOL, prop_name, [&](size_t loop_index) {
         size_t color_index = loop_index;
         if (use_dual_indexing) {
           color_index = (*indices)[color_index];
@@ -1306,7 +1306,7 @@ static void read_mesh_colors_generic(const CDStreamConfig &config,
         color_index = mcols_out_of_bounds_check(color_index,
                                                 values.size(),
                                                 config.iobject_full_name,
-                                                prop_header,
+                                                prop_name,
                                                 is_mcols_out_of_bounds,
                                                 bounds_warning_given);
 
@@ -1320,33 +1320,29 @@ static void read_mesh_colors_generic(const CDStreamConfig &config,
 }
 
 static void read_mesh_vertex_colors_c3f(const CDStreamConfig &config,
-                                        const ICompoundProperty &prop,
-                                        const PropertyHeader &prop_header,
+                                        const IC3fGeomParam &color_param,
+                                        const std::string &prop_name,
                                         ISampleSelector sample_sel)
 {
-  IC3fGeomParam color_param(prop, prop_header.getName());
-
   if (!color_param.valid()) {
     return;
   }
 
   BLI_assert(STREQ("rgb", color_param.getInterpretation()));
-  read_mesh_colors_generic(config, prop_header, color_param, sample_sel);
+  read_mesh_colors_generic(config, prop_name, color_param, sample_sel);
 }
 
 static void read_mesh_vertex_colors_c4f(const CDStreamConfig &config,
-                                        const ICompoundProperty &prop,
-                                        const PropertyHeader &prop_header,
+                                        const IC4fGeomParam &color_param,
+                                        const std::string &prop_name,
                                         ISampleSelector sample_sel)
 {
-  IC4fGeomParam color_param(prop, prop_header.getName());
-
   if (!color_param.valid()) {
     return;
   }
 
   BLI_assert(STREQ("rgba", color_param.getInterpretation()));
-  read_mesh_colors_generic(config, prop_header, color_param, sample_sel);
+  read_mesh_colors_generic(config, prop_name, color_param, sample_sel);
 }
 
 /* This structure holds data for an attribute found on the Alembic object. */
@@ -1497,7 +1493,8 @@ void read_arbitrary_attributes(const CDStreamConfig &config,
           continue;
         }
 
-        read_mesh_vertex_colors_c3f(config, desc.parent, prop, sample_sel);
+        IC3fGeomParam param = IC3fGeomParam(desc.parent, prop.getName());
+        read_mesh_vertex_colors_c3f(config, param, prop.getName(), sample_sel);
       }
       else {
         IC3fGeomParam param = IC3fGeomParam(desc.parent, prop.getName());
@@ -1514,7 +1511,8 @@ void read_arbitrary_attributes(const CDStreamConfig &config,
           continue;
         }
 
-        read_mesh_vertex_colors_c4f(config, desc.parent, prop, sample_sel);
+        IC4fGeomParam param = IC4fGeomParam(desc.parent, prop.getName());
+        read_mesh_vertex_colors_c4f(config, param, prop.getName(), sample_sel);
       }
       else {
         IC4fGeomParam param = IC4fGeomParam(desc.parent, prop.getName());
