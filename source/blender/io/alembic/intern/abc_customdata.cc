@@ -970,7 +970,8 @@ static void create_layer_for_scope(const CDStreamConfig &config,
   const int layer_size = size_for_scope(config.scope_sizes, target_scope);
 
   const AttributeDomain domain = attribute_domain_from_blender_scope(target_scope);
-  CustomDataLayer *layer = BKE_id_attribute_new(config.id, name.c_str(), cd_type, domain, nullptr);
+  CustomDataLayer *layer = BKE_id_attribute_ensure(
+      config.id, name.c_str(), cd_type, domain, nullptr);
 
   BlenderType *layer_data = static_cast<BlenderType *>(layer->data);
 
