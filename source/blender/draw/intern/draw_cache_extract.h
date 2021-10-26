@@ -24,6 +24,10 @@
 
 struct TaskGraph;
 
+#include "DNA_customdata_types.h"
+
+#include "BKE_attribute.h"
+
 #include "GPU_batch.h"
 #include "GPU_index_buffer.h"
 #include "GPU_vertex_buffer.h"
@@ -66,7 +70,7 @@ typedef struct DRW_MeshCDMask {
 /* Keep `DRW_MeshCDMask` struct within an `uint32_t`.
  * bit-wise and atomic operations are used to compare and update the struct.
  * See `mesh_cd_layers_type_*` functions. */
-BLI_STATIC_ASSERT(sizeof(DRW_MeshCDMask) <= sizeof(uint32_t), "DRW_MeshCDMask exceeds 64 bits")
+BLI_STATIC_ASSERT(sizeof(DRW_MeshCDMask) <= sizeof(uint32_t), "DRW_MeshCDMask exceeds 32 bits")
 typedef enum eMRIterType {
   MR_ITER_LOOPTRI = 1 << 0,
   MR_ITER_POLY = 1 << 1,
@@ -76,29 +80,14 @@ typedef enum eMRIterType {
 ENUM_OPERATORS(eMRIterType, MR_ITER_LVERT)
 
 typedef struct DRW_AttributeRequest {
-  int cd_type;  // This is a #CustomDataType.
+  CustomDataType cd_type;
   int layer_index;
-  int domain;  // This is an #AttributeDomain.
+  AttributeDomain domain;
 } DRW_AttributeRequest;
 
-typedef struct DRW_AttributeRequestsList {
+typedef struct DRW_MeshAttributes {
   DRW_AttributeRequest requests[GPU_MAX_ATTR];
   int num_requests;
-} DRW_AttributeRequestsList;
-
-#undef SPLIT_ATTRIBUTE_VBO_BY_TYPE
-
-typedef struct DRW_MeshAttributes {
-#ifdef SPLIT_ATTRIBUTE_VBO_BY_TYPE
-  DRW_AttributeRequestsList bool_attributes;
-  DRW_AttributeRequestsList int32_attributes;
-  DRW_AttributeRequestsList float_attributes;
-  DRW_AttributeRequestsList float2_attributes;
-  DRW_AttributeRequestsList float3_attributes;
-  DRW_AttributeRequestsList color_attributes;
-#else
-  DRW_AttributeRequestsList list;
-#endif
 } DRW_MeshAttributes;
 
 typedef enum eMRDataType {
@@ -158,16 +147,7 @@ typedef struct MeshBufferList {
     GPUVertBuf *edge_idx; /* extend */
     GPUVertBuf *poly_idx;
     GPUVertBuf *fdot_idx;
-#ifdef SPLIT_ATTRIBUTE_VBO_BY_TYPE
-    GPUVertBuf *attr_bool;
-    GPUVertBuf *attr_int32;
-    GPUVertBuf *attr_float;
-    GPUVertBuf *attr_float2;
-    GPUVertBuf *attr_float3;
-    GPUVertBuf *attr_color;
-#else
     GPUVertBuf *attr[GPU_MAX_ATTR];
-#endif
   } vbo;
   /* Index Buffers:
    * Only need to be updated when topology changes. */
@@ -320,7 +300,6 @@ typedef struct MeshBatchCache {
 
   DRW_MeshCDMask cd_used, cd_needed, cd_used_over_time;
 
-  // TODO(kevindietrich) : attr_used_over_time
   DRW_MeshAttributes attr_used, attr_needed, attr_used_over_time;
 
   int lastmatch;

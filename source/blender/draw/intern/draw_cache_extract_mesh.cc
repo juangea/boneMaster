@@ -650,18 +650,9 @@ static void mesh_buffer_cache_create_requested(struct TaskGraph *task_graph,
   EXTRACT_ADD_REQUESTED(vbo, vert_idx);
   EXTRACT_ADD_REQUESTED(vbo, fdot_idx);
   EXTRACT_ADD_REQUESTED(vbo, skin_roots);
-#ifdef SPLIT_ATTRIBUTE_VBO_BY_TYPE
-  EXTRACT_ADD_REQUESTED(vbo, attr_bool);
-  EXTRACT_ADD_REQUESTED(vbo, attr_int32);
-  EXTRACT_ADD_REQUESTED(vbo, attr_float);
-  EXTRACT_ADD_REQUESTED(vbo, attr_float2);
-  EXTRACT_ADD_REQUESTED(vbo, attr_float3);
-  EXTRACT_ADD_REQUESTED(vbo, attr_color);
-#else
   for (int i = 0; i < GPU_MAX_ATTR; i++) {
     EXTRACT_ADD_REQUESTED(vbo, attr[i]);
   }
-#endif
 
   EXTRACT_ADD_REQUESTED(ibo, tris);
   if (DRW_ibo_requested(mbuflist->ibo.lines_loose)) {

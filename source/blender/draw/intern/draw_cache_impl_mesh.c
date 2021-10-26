@@ -276,7 +276,8 @@ static void mesh_cd_calc_edit_uv_layer(const Mesh *UNUSED(me), DRW_MeshCDMask *c
  * Utilities for handling requested attributes.
  * \{ */
 
-static bool has_request(const DRW_AttributeRequestsList *requests, DRW_AttributeRequest req)
+/* Return true if the given DRW_AttributeRequest is already in the requests. */
+static bool has_request(const DRW_MeshAttributes *requests, DRW_AttributeRequest req)
 {
   for (int i = 0; i < requests->num_requests; i++) {
     const DRW_AttributeRequest src_req = requests->requests[i];
@@ -294,8 +295,8 @@ static bool has_request(const DRW_AttributeRequestsList *requests, DRW_Attribute
   return false;
 }
 
-static void mesh_attrs_merge_requests(const DRW_AttributeRequestsList *src_requests,
-                                      DRW_AttributeRequestsList *dst_requests)
+static void mesh_attrs_merge_requests(const DRW_MeshAttributes *src_requests,
+                                      DRW_MeshAttributes *dst_requests)
 {
   for (int i = 0; i < src_requests->num_requests; i++) {
     if (dst_requests->num_requests == GPU_MAX_ATTR) {
@@ -311,8 +312,22 @@ static void mesh_attrs_merge_requests(const DRW_AttributeRequestsList *src_reque
   }
 }
 
-static bool drw_attribute_requests_match(const DRW_AttributeRequestsList *a,
-                                         const DRW_AttributeRequestsList *b)
+static void drw_mesh_attributes_clear(DRW_MeshAttributes *attributes)
+{
+  memset(attributes, 0, sizeof(DRW_MeshAttributes));
+}
+
+static void drw_mesh_attributes_merge(DRW_MeshAttributes *dst,
+                                      const DRW_MeshAttributes *src,
+                                      ThreadMutex *mesh_render_mutex)
+{
+  BLI_mutex_lock(mesh_render_mutex);
+  mesh_attrs_merge_requests(src, dst);
+  BLI_mutex_unlock(mesh_render_mutex);
+}
+
+/* Return true if all requests in b are in a. */
+static bool drw_mesh_attributes_overlap(DRW_MeshAttributes *a, DRW_MeshAttributes *b)
 {
   if (a->num_requests != b->num_requests) {
     return false;
@@ -327,171 +342,20 @@ static bool drw_attribute_requests_match(const DRW_AttributeRequestsList *a,
   return true;
 }
 
-#if 0
-static void attr_request_list_print(const DRW_AttributeRequestsList *requests)
+static void drw_mesh_attributes_add_request(DRW_MeshAttributes *attrs,
+                                            CustomDataType type,
+                                            int layer,
+                                            AttributeDomain domain)
 {
-  fprintf(stderr, "-- %d attributes requested\n", requests->num_requests);
-  for (int i = 0; i < requests->num_requests; ++i) {
-    DRW_AttributeRequest req = requests->requests[i];
-    fprintf(stderr, "-- domain: %d, layer: %d\n", req.domain, req.layer_index);
-  }
-}
-
-static void drw_mesh_attributes_print(const DRW_MeshAttributes *src, const char *message)
-{
-  fprintf(stderr, "------------------------------------\n%s\n", message);
-  fprintf(stderr, "Bool attributes:\n");
-  attr_request_list_print(&src->bool_attributes);
-  fprintf(stderr, "Int32 attributes:\n");
-  attr_request_list_print(&src->int32_attributes);
-  fprintf(stderr, "Float attributes:\n");
-  attr_request_list_print(&src->float_attributes);
-  fprintf(stderr, "Float2 attributes:\n");
-  attr_request_list_print(&src->float2_attributes);
-  fprintf(stderr, "Float3 attributes:\n");
-  attr_request_list_print(&src->float3_attributes);
-  fprintf(stderr, "Color attributes:\n");
-  attr_request_list_print(&src->color_attributes);
-}
-#endif
-
-static void drw_mesh_attributes_clear(DRW_MeshAttributes *attributes)
-{
-  memset(attributes, 0, sizeof(DRW_MeshAttributes));
-}
-
-static void drw_mesh_attributes_merge(DRW_MeshAttributes *dst,
-                                      const DRW_MeshAttributes *src,
-                                      ThreadMutex *mesh_render_mutex)
-{
-  BLI_mutex_lock(mesh_render_mutex);
-#ifdef SPLIT_ATTRIBUTE_VBO_BY_TYPE
-#  define MERGE_ATTRIBUTES(name) \
-    mesh_attrs_merge_requests(&src->name##_attributes, &dst->name##_attributes)
-
-  MERGE_ATTRIBUTES(bool);
-  MERGE_ATTRIBUTES(int32);
-  MERGE_ATTRIBUTES(float);
-  MERGE_ATTRIBUTES(float2);
-  MERGE_ATTRIBUTES(float3);
-  MERGE_ATTRIBUTES(color);
-
-#  undef MERGE_ATTRIBUTES
-#else
-  mesh_attrs_merge_requests(&src->list, &dst->list);
-#endif
-  BLI_mutex_unlock(mesh_render_mutex);
-}
-
-#ifdef SPLIT_ATTRIBUTE_VBO_BY_TYPE
-static DRW_AttributeRequestsList *drw_mesh_attribute_requests_list_for_type(
-    DRW_MeshAttributes *attrs, CustomDataType type)
-{
-  switch (type) {
-    default: {
-      return NULL;
-    }
-    case CD_PROP_BOOL: {
-      return &attrs->bool_attributes;
-    }
-    case CD_PROP_INT32: {
-      return &attrs->int32_attributes;
-    }
-    case CD_PROP_FLOAT: {
-      return &attrs->float_attributes;
-    }
-    case CD_PROP_FLOAT2: {
-      return &attrs->float2_attributes;
-    }
-    case CD_PROP_FLOAT3: {
-      return &attrs->float3_attributes;
-    }
-    case CD_PROP_COLOR: {
-      return &attrs->color_attributes;
-    }
-  }
-}
-
-static bool drw_mesh_attributes_match_type(DRW_MeshAttributes *a,
-                                           DRW_MeshAttributes *b,
-                                           CustomDataType type)
-{
-  const DRW_AttributeRequestsList *list_a = drw_mesh_attribute_requests_list_for_type(a, type);
-  const DRW_AttributeRequestsList *list_b = drw_mesh_attribute_requests_list_for_type(b, type);
-  return drw_attribute_requests_match(list_a, list_b);
-}
-#endif
-
-static bool drw_mesh_attributes_overlap(DRW_MeshAttributes *a, DRW_MeshAttributes *b)
-{
-#ifdef SPLIT_ATTRIBUTE_VBO_BY_TYPE
-  if (!drw_mesh_attributes_match_type(a, b, CD_PROP_BOOL)) {
-    return false;
-  }
-  if (!drw_mesh_attributes_match_type(a, b, CD_PROP_INT32)) {
-    return false;
-  }
-  if (!drw_mesh_attributes_match_type(a, b, CD_PROP_FLOAT)) {
-    return false;
-  }
-  if (!drw_mesh_attributes_match_type(a, b, CD_PROP_FLOAT2)) {
-    return false;
-  }
-  if (!drw_mesh_attributes_match_type(a, b, CD_PROP_FLOAT3)) {
-    return false;
-  }
-  if (!drw_mesh_attributes_match_type(a, b, CD_PROP_COLOR)) {
-    return false;
-  }
-  return true;
-#else
-  return drw_attribute_requests_match(&a->list, &b->list);
-#endif
-}
-
-static int drw_mesh_attributes_size(DRW_MeshAttributes *attributes)
-{
-#ifdef SPLIT_ATTRIBUTE_VBO_BY_TYPE
-  return attributes->bool_attributes.num_requests + attributes->float_attributes.num_requests +
-         attributes->int32_attributes.num_requests + attributes->float2_attributes.num_requests +
-         attributes->float3_attributes.num_requests + attributes->color_attributes.num_requests;
-#else
-  return attributes->list.num_requests;
-#endif
-}
-
-#ifdef SPLIT_ATTRIBUTE_VBO_BY_TYPE
-static bool drw_mesh_attributes_has_request_type(DRW_MeshAttributes *attrs, CustomDataType type)
-{
-  const DRW_AttributeRequestsList *list = drw_mesh_attribute_requests_list_for_type(attrs, type);
-  return list && list->num_requests != 0;
-}
-#endif
-
-static DRW_AttributeRequest *drw_mesh_attributes_add_request(DRW_MeshAttributes *attrs,
-                                                             CustomDataType type)
-{
-  if (drw_mesh_attributes_size(attrs) >= GPU_MAX_ATTR) {
-    return NULL;
+  if (attrs->num_requests >= GPU_MAX_ATTR) {
+    return;
   }
 
-#ifdef SPLIT_ATTRIBUTE_VBO_BY_TYPE
-  DRW_AttributeRequestsList *list = drw_mesh_attribute_requests_list_for_type(attrs, type);
-  if (!list) {
-    return NULL;
-  }
-
-  if (list->num_requests >= GPU_MAX_ATTR) {
-    return NULL;
-  }
-#else
-  DRW_AttributeRequestsList *list = &attrs->list;
-#endif
-
-  DRW_AttributeRequest *req = &list->requests[list->num_requests];
+  DRW_AttributeRequest *req = &attrs->requests[attrs->num_requests];
   req->cd_type = type;
-  list->num_requests += 1;
-  return req;
+  req->layer_index = layer;
+  req->domain = domain;
+  attrs->num_requests += 1;
 }
 
 /** \} */
@@ -583,9 +447,7 @@ static void mesh_cd_calc_active_vcol_layer(const Mesh *me, DRW_MeshAttributes *a
 
   int layer = CustomData_get_active_layer(cd_vdata, CD_PROP_COLOR);
   if (layer != -1) {
-    DRW_AttributeRequest *req = drw_mesh_attributes_add_request(attrs_used, CD_PROP_COLOR);
-    req->domain = ATTR_DOMAIN_POINT;
-    req->layer_index = layer;
+    drw_mesh_attributes_add_request(attrs_used, CD_PROP_COLOR, layer, ATTR_DOMAIN_POINT);
   }
 }
 
@@ -692,6 +554,7 @@ static DRW_MeshCDMask mesh_cd_calc_used_gpu_layers(const Mesh *me,
               }
               else {
                 layer = -1;
+                domain = ATTR_DOMAIN_NUM;
               }
             }
 
@@ -758,12 +621,8 @@ static DRW_MeshCDMask mesh_cd_calc_used_gpu_layers(const Mesh *me,
           case CD_PROP_FLOAT2:
           case CD_PROP_FLOAT3:
           case CD_PROP_COLOR: {
-            if (layer != -1) {
-              DRW_AttributeRequest *req = drw_mesh_attributes_add_request(attributes, type);
-              if (req) {
-                req->layer_index = layer;
-                req->domain = domain;
-              }
+            if (layer != -1 && domain != ATTR_DOMAIN_NUM) {
+              drw_mesh_attributes_add_request(attributes, type, layer, domain);
             }
             break;
           }
@@ -1233,7 +1092,7 @@ static void sculpt_request_active_vcol(MeshBatchCache *cache, Mesh *me)
   drw_mesh_attributes_clear(&attrs_needed);
   mesh_cd_calc_active_vcol_layer(me, &attrs_needed);
 
-  BLI_assert(attrs_needed.color_attributes.num_requests != 0 &&
+  BLI_assert(attrs_needed.num_requests != 0 &&
              "No MPropCol layer available in Sculpt, but batches requested anyway!");
 
   drw_mesh_attributes_merge(&cache->attr_needed, &attrs_needed, me->runtime.render_mutex);
@@ -1595,11 +1454,25 @@ void DRW_mesh_batch_cache_free_old(Mesh *me, int ctime)
     cache->lastmatch = ctime;
   }
 
+  if (drw_mesh_attributes_overlap(&cache->attr_used_over_time, &cache->attr_used)) {
+    cache->lastmatch = ctime;
+  }
+
   if (ctime - cache->lastmatch > U.vbotimeout) {
     mesh_batch_cache_discard_shaded_tri(cache);
   }
 
   mesh_cd_layers_type_clear(&cache->cd_used_over_time);
+  drw_mesh_attributes_clear(&cache->attr_used_over_time);
+}
+
+static void drw_add_attributes_vbo(GPUBatch *batch,
+                                   MeshBufferList *mbuflist,
+                                   DRW_MeshAttributes *attr_used)
+{
+  for (int i = 0; i < attr_used->num_requests; i++) {
+    DRW_vbo_request(batch, &mbuflist->vbo.attr[i]);
+  }
 }
 
 #ifdef DEBUG
@@ -1635,36 +1508,6 @@ static void drw_mesh_batch_cache_check_available(struct TaskGraph *task_graph, M
   }
 }
 #endif
-
-static void drw_add_attributes_vbo(GPUBatch *batch,
-                                   MeshBufferList *mbuflist,
-                                   DRW_MeshAttributes *attr_used)
-{
-#ifdef SPLIT_ATTRIBUTE_VBO_BY_TYPE
-  if (drw_mesh_attributes_has_request_type(attr_used, CD_PROP_BOOL)) {
-    DRW_vbo_request(batch, &mbuflist->vbo.attr_bool);
-  }
-  if (drw_mesh_attributes_has_request_type(attr_used, CD_PROP_INT32)) {
-    DRW_vbo_request(batch, &mbuflist->vbo.attr_int32);
-  }
-  if (drw_mesh_attributes_has_request_type(attr_used, CD_PROP_FLOAT)) {
-    DRW_vbo_request(batch, &mbuflist->vbo.attr_float);
-  }
-  if (drw_mesh_attributes_has_request_type(attr_used, CD_PROP_FLOAT2)) {
-    DRW_vbo_request(batch, &mbuflist->vbo.attr_float2);
-  }
-  if (drw_mesh_attributes_has_request_type(attr_used, CD_PROP_FLOAT3)) {
-    DRW_vbo_request(batch, &mbuflist->vbo.attr_float3);
-  }
-  if (drw_mesh_attributes_has_request_type(attr_used, CD_PROP_COLOR)) {
-    DRW_vbo_request(batch, &mbuflist->vbo.attr_color);
-  }
-#else
-  for (int i = 0; i < attr_used->list.num_requests; i++) {
-    DRW_vbo_request(batch, &mbuflist->vbo.attr[i]);
-  }
-#endif
-}
 
 /* Can be called for any surface type. Mesh *me is the final mesh. */
 void DRW_mesh_batch_cache_create_requested(struct TaskGraph *task_graph,
@@ -1765,38 +1608,11 @@ void DRW_mesh_batch_cache_create_requested(struct TaskGraph *task_graph,
         if ((cache->cd_used.vcol & cache->cd_needed.vcol) != cache->cd_needed.vcol) {
           GPU_VERTBUF_DISCARD_SAFE(mbc->buff.vbo.vcol);
         }
-#ifdef SPLIT_ATTRIBUTE_VBO_BY_TYPE
-        if (!drw_mesh_attributes_match_type(
-                &cache->attr_used, &cache->attr_needed, CD_PROP_BOOL)) {
-          GPU_VERTBUF_DISCARD_SAFE(mbc->buff.vbo.attr_bool);
-        }
-        if (!drw_mesh_attributes_match_type(
-                &cache->attr_used, &cache->attr_needed, CD_PROP_INT32)) {
-          GPU_VERTBUF_DISCARD_SAFE(mbc->buff.vbo.attr_int32);
-        }
-        if (!drw_mesh_attributes_match_type(
-                &cache->attr_used, &cache->attr_needed, CD_PROP_FLOAT)) {
-          GPU_VERTBUF_DISCARD_SAFE(mbc->buff.vbo.attr_float);
-        }
-        if (!drw_mesh_attributes_match_type(
-                &cache->attr_used, &cache->attr_needed, CD_PROP_FLOAT2)) {
-          GPU_VERTBUF_DISCARD_SAFE(mbc->buff.vbo.attr_float2);
-        }
-        if (!drw_mesh_attributes_match_type(
-                &cache->attr_used, &cache->attr_needed, CD_PROP_FLOAT3)) {
-          GPU_VERTBUF_DISCARD_SAFE(mbc->buff.vbo.attr_float3);
-        }
-        if (!drw_mesh_attributes_match_type(
-                &cache->attr_used, &cache->attr_needed, CD_PROP_COLOR)) {
-          GPU_VERTBUF_DISCARD_SAFE(mbc->buff.vbo.attr_color);
-        }
-#else
         if (!drw_mesh_attributes_overlap(&cache->attr_used, &cache->attr_needed)) {
           for (int i = 0; i < GPU_MAX_ATTR; i++) {
             GPU_VERTBUF_DISCARD_SAFE(mbc->buff.vbo.attr[i]);
           }
         }
-#endif
       }
       /* We can't discard batches at this point as they have been
        * referenced for drawing. Just clear them in place. */
