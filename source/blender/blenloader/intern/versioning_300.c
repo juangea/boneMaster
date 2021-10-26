@@ -1197,7 +1197,7 @@ static void correct_bone_roll_value(const float head[3],
       /* Recompute roll using legacy code to interpret the old value. */
       legacy_vec_roll_to_mat3_normalized(vec, *r_roll, bone_mat);
       mat3_to_vec_roll(bone_mat, vec2, r_roll);
-      BLI_assert(compare_v3v3(vec, vec2, FLT_EPSILON));
+      BLI_assert(compare_v3v3(vec, vec2, 0.001f));
     }
   }
 }
@@ -1215,6 +1215,56 @@ static void do_version_bones_roll(ListBase *lb)
         bone->arm_head, bone->arm_tail, bone->arm_mat[0], bone->arm_mat[1], &bone->arm_roll);
 
     do_version_bones_roll(&bone->childbase);
+  }
+}
+
+static void version_geometry_nodes_set_position_node_offset(bNodeTree *ntree)
+{
+  /* Add the new Offset socket. */
+  LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+    if (node->type != GEO_NODE_SET_POSITION) {
+      continue;
+    }
+    if (BLI_listbase_count(&node->inputs) < 4) {
+      /* The offset socket didn't exist in the file yet. */
+      return;
+    }
+    bNodeSocket *old_offset_socket = BLI_findlink(&node->inputs, 3);
+    if (old_offset_socket->type == SOCK_VECTOR) {
+      /* Versioning happened already. */
+      return;
+    }
+    /* Change identifier of old socket, so that the there is no name collision. */
+    STRNCPY(old_offset_socket->identifier, "Offset_old");
+    nodeAddStaticSocket(ntree, node, SOCK_IN, SOCK_VECTOR, PROP_TRANSLATION, "Offset", "Offset");
+  }
+
+  /* Relink links that were connected to Position while Offset was enabled. */
+  LISTBASE_FOREACH (bNodeLink *, link, &ntree->links) {
+    if (link->tonode->type != GEO_NODE_SET_POSITION) {
+      continue;
+    }
+    if (!STREQ(link->tosock->identifier, "Position")) {
+      continue;
+    }
+    bNodeSocket *old_offset_socket = BLI_findlink(&link->tonode->inputs, 3);
+    /* This assumes that the offset is not linked to something else. That seems to be a reasonable
+     * assumption, because the node is probably only ever used in one or the other mode. */
+    const bool offset_enabled =
+        ((bNodeSocketValueBoolean *)old_offset_socket->default_value)->value;
+    if (offset_enabled) {
+      /* Relink to new offset socket. */
+      link->tosock = old_offset_socket->next;
+    }
+  }
+
+  /* Remove old Offset socket. */
+  LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+    if (node->type != GEO_NODE_SET_POSITION) {
+      continue;
+    }
+    bNodeSocket *old_offset_socket = BLI_findlink(&node->inputs, 3);
+    nodeRemoveSocket(ntree, node, old_offset_socket);
   }
 }
 
@@ -2005,6 +2055,22 @@ void blo_do_versions_300(FileData *fd, Library *UNUSED(lib), Main *bmain)
     }
   }
 
+  if (!MAIN_VERSION_ATLEAST(bmain, 300, 38)) {
+    LISTBASE_FOREACH (bScreen *, screen, &bmain->screens) {
+      LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+        LISTBASE_FOREACH (SpaceLink *, space, &area->spacedata) {
+          if (space->spacetype == SPACE_FILE) {
+            SpaceFile *sfile = (SpaceFile *)space;
+            FileAssetSelectParams *asset_params = sfile->asset_params;
+            if (asset_params) {
+              asset_params->base_params.filter_id = FILTER_ID_ALL;
+            }
+          }
+        }
+      }
+    }
+  }
+
   /**
    * Versioning code until next subversion bump goes here.
    *
@@ -2014,7 +2080,16 @@ void blo_do_versions_300(FileData *fd, Library *UNUSED(lib), Main *bmain)
    *
    * \note Keep this message at the bottom of the function.
    */
+
   {
+    /* Update the `idnames` for renamed geometry and function nodes. */
+    LISTBASE_FOREACH (bNodeTree *, ntree, &bmain->nodetrees) {
+      if (ntree->type != NTREE_GEOMETRY) {
+        continue;
+      }
+      version_node_id(ntree, FN_NODE_SLICE_STRING, "FunctionNodeSliceString");
+      version_geometry_nodes_set_position_node_offset(ntree);
+    }
     /* Keep this block, even when empty. */
   }
 }

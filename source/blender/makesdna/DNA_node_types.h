@@ -1291,6 +1291,14 @@ typedef struct NodeAttributeCurveMap {
   CurveMapping *curve_rgb;
 } NodeAttributeCurveMap;
 
+typedef struct NodeInputBool {
+  uint8_t boolean;
+} NodeInputBool;
+
+typedef struct NodeInputInt {
+  int integer;
+} NodeInputInt;
+
 typedef struct NodeInputVector {
   float vector[3];
 } NodeInputVector;
@@ -1572,6 +1580,11 @@ typedef struct NodeGeometrySeparateGeometry {
   /* AttributeDomain. */
   int8_t domain;
 } NodeGeometrySeparateGeometry;
+
+typedef struct NodeGeometryImageTexture {
+  int interpolation;
+  int extension;
+} NodeGeometryImageTexture;
 
 /* script node mode */
 #define NODE_SCRIPT_INTERNAL 0
