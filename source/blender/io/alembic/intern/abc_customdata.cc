@@ -1378,6 +1378,269 @@ static Vector<ParsedAttributeDesc> parse_attributes(const AttributeSelector *att
   return result;
 }
 
+/* This function should be used for any attribute processing to ensure that all supported attribute
+ * types are handled.
+ *
+ * Unsupported attribute types are:
+ * - int64 and uint64, since we may have data loss as Blender only supports int32
+ * - half floating points (scalar, vec2, vec3, color)
+ * - matrices (3x3, 4x4)
+ * - string
+ * - quaternions
+ * - 2d normals
+ * - 2d & 3d bounding boxes
+ */
+template<typename OpType>
+static auto abc_attribute_type_operation(const ICompoundProperty &parent_prop,
+                                         const PropertyHeader &prop,
+                                         OpType &&op)
+{
+  if (IFloatGeomParam::matches(prop)) {
+    IFloatGeomParam param = IFloatGeomParam(parent_prop, prop.getName());
+    return op(param);
+  }
+  if (IDoubleGeomParam::matches(prop)) {
+    IDoubleGeomParam param = IDoubleGeomParam(parent_prop, prop.getName());
+    return op(param);
+  }
+  if (IBoolGeomParam::matches(prop)) {
+    IBoolGeomParam param = IBoolGeomParam(parent_prop, prop.getName());
+    return op(param);
+  }
+  if (ICharGeomParam::matches(prop)) {
+    ICharGeomParam param = ICharGeomParam(parent_prop, prop.getName());
+    return op(param);
+  }
+  if (IInt16GeomParam::matches(prop)) {
+    IInt16GeomParam param = IInt16GeomParam(parent_prop, prop.getName());
+    return op(param);
+  }
+  if (IInt32GeomParam::matches(prop)) {
+    IInt32GeomParam param = IInt32GeomParam(parent_prop, prop.getName());
+    return op(param);
+  }
+  if (IUcharGeomParam::matches(prop)) {
+    IUcharGeomParam param = IUcharGeomParam(parent_prop, prop.getName());
+    return op(param);
+  }
+  if (IUInt16GeomParam::matches(prop)) {
+    IUInt16GeomParam param = IUInt16GeomParam(parent_prop, prop.getName());
+    return op(param);
+  }
+  if (IUInt32GeomParam::matches(prop)) {
+    IUInt32GeomParam param = IUInt32GeomParam(parent_prop, prop.getName());
+    return op(param);
+  }
+  if (IV2fGeomParam::matches(prop)) {
+    IV2fGeomParam param = IV2fGeomParam(parent_prop, prop.getName());
+    return op(param);
+  }
+  if (IN3fGeomParam::matches(prop)) {
+    IN3fGeomParam param = IN3fGeomParam(parent_prop, prop.getName());
+    return op(param);
+  }
+  if (IN3dGeomParam::matches(prop)) {
+    IN3dGeomParam param = IN3dGeomParam(parent_prop, prop.getName());
+    return op(param);
+  }
+  if (IP3fGeomParam::matches(prop)) {
+    IP3fGeomParam param = IP3fGeomParam(parent_prop, prop.getName());
+    return op(param);
+  }
+  if (IP3dGeomParam::matches(prop)) {
+    IP3dGeomParam param = IP3dGeomParam(parent_prop, prop.getName());
+    return op(param);
+  }
+  if (IV3fGeomParam::matches(prop)) {
+    IV3fGeomParam param = IV3fGeomParam(parent_prop, prop.getName());
+    return op(param);
+  }
+  if (IV3dGeomParam::matches(prop)) {
+    IV3dGeomParam param = IV3dGeomParam(parent_prop, prop.getName());
+    return op(param);
+  }
+  if (IC3fGeomParam::matches(prop)) {
+    IC3fGeomParam param = IC3fGeomParam(parent_prop, prop.getName());
+    return op(param);
+  }
+  if (IC4fGeomParam::matches(prop)) {
+    IC4fGeomParam param = IC4fGeomParam(parent_prop, prop.getName());
+    return op(param);
+  }
+
+  return op.default_handler_for_unsupported_attribute_type();
+}
+
+struct AttributeReadOperator {
+  const CDStreamConfig &config;
+  const ISampleSelector &sample_sel;
+  const AttributeSelector &attr_sel;
+  float velocity_scale;
+
+  ParsedAttributeDesc *desc;
+
+  void default_handler_for_unsupported_attribute_type()
+  {
+  }
+
+  void operator()(const IFloatGeomParam &param)
+  {
+    process_typed_attribute_with_mapping(config, desc->mapping, CD_PROP_FLOAT, param, sample_sel);
+  }
+
+  void operator()(const IDoubleGeomParam &param)
+  {
+    process_typed_attribute_with_mapping(config, desc->mapping, CD_PROP_FLOAT, param, sample_sel);
+  }
+
+  void operator()(const IBoolGeomParam &param)
+  {
+    process_typed_attribute(config, CD_PROP_BOOL, param, sample_sel);
+  }
+
+  void operator()(const ICharGeomParam &param)
+  {
+    process_typed_attribute(config, CD_PROP_INT32, param, sample_sel);
+  }
+
+  void operator()(const IInt16GeomParam &param)
+  {
+    process_typed_attribute(config, CD_PROP_INT32, param, sample_sel);
+  }
+
+  void operator()(const IInt32GeomParam &param)
+  {
+    process_typed_attribute(config, CD_PROP_INT32, param, sample_sel);
+  }
+
+  void operator()(const IUcharGeomParam &param)
+  {
+    process_typed_attribute(config, CD_PROP_INT32, param, sample_sel);
+  }
+
+  void operator()(const IUInt16GeomParam &param)
+  {
+    process_typed_attribute(config, CD_PROP_INT32, param, sample_sel);
+  }
+
+  void operator()(const IUInt32GeomParam &param)
+  {
+    process_typed_attribute(config, CD_PROP_INT32, param, sample_sel);
+  }
+
+  void operator()(const IV2fGeomParam &param)
+  {
+    if (Alembic::AbcGeom::isUV(desc->prop_header)) {
+      if (!attr_sel.uvs_requested()) {
+        return;
+      }
+
+      if (config.mesh) {
+        if (!can_add_uv_layer(config)) {
+          return;
+        }
+
+        read_mesh_uvs(config, param, sample_sel);
+      }
+    }
+    else {
+      process_typed_attribute(config, CD_PROP_FLOAT2, param, sample_sel);
+    }
+  }
+
+  void operator()(const IN3fGeomParam &param)
+  {
+    process_typed_attribute(config, CD_PROP_FLOAT3, param, sample_sel);
+  }
+
+  void operator()(const IN3dGeomParam &param)
+  {
+    process_typed_attribute(config, CD_PROP_FLOAT3, param, sample_sel);
+  }
+
+  void operator()(const IP3fGeomParam &param)
+  {
+    process_typed_attribute(config, CD_PROP_FLOAT3, param, sample_sel);
+  }
+
+  void operator()(const IP3dGeomParam &param)
+  {
+    process_typed_attribute(config, CD_PROP_FLOAT3, param, sample_sel);
+  }
+
+  void operator()(const IV3fGeomParam &param)
+  {
+    const std::string &prop_name = desc->prop_header.getName();
+    if (prop_name == propNameOriginalCoordinates) {
+      if (attr_sel.original_coordinates_requested()) {
+        process_typed_attribute(config, CD_ORCO, param, sample_sel);
+      }
+    }
+    else if (prop_name == attr_sel.velocity_name()) {
+      process_velocity_attribute(config, param, sample_sel, velocity_scale);
+    }
+    else {
+      process_typed_attribute(config, CD_PROP_FLOAT3, param, sample_sel);
+    }
+  }
+
+  void operator()(const IV3dGeomParam &param)
+  {
+    const std::string &prop_name = desc->prop_header.getName();
+    /* Some softaware may write ORCOs as doubles. */
+    if (prop_name == propNameOriginalCoordinates) {
+      if (attr_sel.original_coordinates_requested()) {
+        process_typed_attribute(config, CD_ORCO, param, sample_sel);
+      }
+    }
+    /* Some softaware may write velocity as doubles. */
+    else if (prop_name == attr_sel.velocity_name()) {
+      process_velocity_attribute(config, param, sample_sel, velocity_scale);
+    }
+    else {
+      process_typed_attribute(config, CD_PROP_FLOAT3, param, sample_sel);
+    }
+  }
+
+  void operator()(const IC3fGeomParam &param)
+  {
+    if (config.mesh) {
+      if (!attr_sel.vertex_colors_requested()) {
+        return;
+      }
+
+      if (!can_add_vertex_color_layer(config)) {
+        return;
+      }
+
+      const std::string &prop_name = desc->prop_header.getName();
+      read_mesh_vertex_colors_c3f(config, param, prop_name, sample_sel);
+    }
+    else {
+      process_typed_attribute(config, CD_PROP_COLOR, param, sample_sel);
+    }
+  }
+
+  void operator()(const IC4fGeomParam &param)
+  {
+    if (config.mesh) {
+      if (!attr_sel.vertex_colors_requested()) {
+        return;
+      }
+
+      if (!can_add_vertex_color_layer(config)) {
+        return;
+      }
+
+      const std::string &prop_name = desc->prop_header.getName();
+      read_mesh_vertex_colors_c4f(config, param, prop_name, sample_sel);
+    }
+    else {
+      process_typed_attribute(config, CD_PROP_COLOR, param, sample_sel);
+    }
+  }
+};
+
 void read_arbitrary_attributes(const CDStreamConfig &config,
                                const ICompoundProperty &arb_geom_params,
                                const IV2fGeomParam &primary_uvs,
@@ -1398,129 +1661,25 @@ void read_arbitrary_attributes(const CDStreamConfig &config,
     read_mesh_uvs(config, primary_uvs, sample_sel);
   }
 
+  AttributeReadOperator op{config, sample_sel, attr_sel, velocity_scale, nullptr};
+
   for (ParsedAttributeDesc desc : attributes) {
-    const PropertyHeader &prop = desc.prop_header;
-
-    if (IFloatGeomParam::matches(prop)) {
-      IFloatGeomParam param = IFloatGeomParam(desc.parent, prop.getName());
-      process_typed_attribute_with_mapping(config, desc.mapping, CD_PROP_FLOAT, param, sample_sel);
-    }
-    else if (IDoubleGeomParam::matches(prop)) {
-      IDoubleGeomParam param = IDoubleGeomParam(desc.parent, prop.getName());
-      process_typed_attribute_with_mapping(config, desc.mapping, CD_PROP_FLOAT, param, sample_sel);
-    }
-    else if (IBoolGeomParam::matches(prop)) {
-      IBoolGeomParam param = IBoolGeomParam(desc.parent, prop.getName());
-      process_typed_attribute(config, CD_PROP_BOOL, param, sample_sel);
-    }
-    else if (IInt32GeomParam::matches(prop)) {
-      IInt32GeomParam param = IInt32GeomParam(desc.parent, prop.getName());
-      process_typed_attribute(config, CD_PROP_INT32, param, sample_sel);
-    }
-    else if (IV2fGeomParam::matches(prop)) {
-      if (Alembic::AbcGeom::isUV(prop)) {
-        if (!attr_sel.uvs_requested()) {
-          continue;
-        }
-
-        if (config.mesh) {
-          if (!can_add_uv_layer(config)) {
-            continue;
-          }
-
-          IV2fGeomParam param = IV2fGeomParam(desc.parent, prop.getName());
-          read_mesh_uvs(config, param, sample_sel);
-        }
-      }
-      else {
-        IV2fGeomParam param = IV2fGeomParam(desc.parent, prop.getName());
-        process_typed_attribute(config, CD_PROP_FLOAT2, param, sample_sel);
-      }
-    }
-    else if (IN3fGeomParam::matches(prop)) {
-      IP3fGeomParam param = IP3fGeomParam(desc.parent, prop.getName());
-      process_typed_attribute(config, CD_PROP_FLOAT3, param, sample_sel);
-    }
-    else if (IN3dGeomParam::matches(prop)) {
-      IP3dGeomParam param = IP3dGeomParam(desc.parent, prop.getName());
-      process_typed_attribute(config, CD_PROP_FLOAT3, param, sample_sel);
-    }
-    else if (IP3fGeomParam::matches(prop)) {
-      IP3fGeomParam param = IP3fGeomParam(desc.parent, prop.getName());
-      process_typed_attribute(config, CD_PROP_FLOAT3, param, sample_sel);
-    }
-    else if (IP3dGeomParam::matches(prop)) {
-      IP3dGeomParam param = IP3dGeomParam(desc.parent, prop.getName());
-      process_typed_attribute(config, CD_PROP_FLOAT3, param, sample_sel);
-    }
-    else if (IV3fGeomParam::matches(prop)) {
-      IV3fGeomParam param = IV3fGeomParam(desc.parent, prop.getName());
-      if (prop.getName() == propNameOriginalCoordinates) {
-        if (attr_sel.original_coordinates_requested()) {
-          process_typed_attribute(config, CD_ORCO, param, sample_sel);
-        }
-      }
-      else if (prop.getName() == attr_sel.velocity_name()) {
-        process_velocity_attribute(config, param, sample_sel, velocity_scale);
-      }
-      else {
-        process_typed_attribute(config, CD_PROP_FLOAT3, param, sample_sel);
-      }
-    }
-    else if (IV3dGeomParam::matches(prop)) {
-      IV3dGeomParam param = IV3dGeomParam(desc.parent, prop.getName());
-      /* Some softaware may write ORCOs as doubles. */
-      if (prop.getName() == propNameOriginalCoordinates) {
-        if (attr_sel.original_coordinates_requested()) {
-          process_typed_attribute(config, CD_ORCO, param, sample_sel);
-        }
-      }
-      /* Some softaware may write velocity as doubles. */
-      else if (prop.getName() == attr_sel.velocity_name()) {
-        process_velocity_attribute(config, param, sample_sel, velocity_scale);
-      }
-      else {
-        process_typed_attribute(config, CD_PROP_FLOAT3, param, sample_sel);
-      }
-    }
-    else if (IC3fGeomParam::matches(prop)) {
-      if (config.mesh) {
-        if (!attr_sel.vertex_colors_requested()) {
-          continue;
-        }
-
-        if (!can_add_vertex_color_layer(config)) {
-          continue;
-        }
-
-        IC3fGeomParam param = IC3fGeomParam(desc.parent, prop.getName());
-        read_mesh_vertex_colors_c3f(config, param, prop.getName(), sample_sel);
-      }
-      else {
-        IC3fGeomParam param = IC3fGeomParam(desc.parent, prop.getName());
-        process_typed_attribute(config, CD_PROP_COLOR, param, sample_sel);
-      }
-    }
-    else if (IC4fGeomParam::matches(prop)) {
-      if (config.mesh) {
-        if (!attr_sel.vertex_colors_requested()) {
-          continue;
-        }
-
-        if (!can_add_vertex_color_layer(config)) {
-          continue;
-        }
-
-        IC4fGeomParam param = IC4fGeomParam(desc.parent, prop.getName());
-        read_mesh_vertex_colors_c4f(config, param, prop.getName(), sample_sel);
-      }
-      else {
-        IC4fGeomParam param = IC4fGeomParam(desc.parent, prop.getName());
-        process_typed_attribute(config, CD_PROP_COLOR, param, sample_sel);
-      }
-    }
+    op.desc = &desc;
+    abc_attribute_type_operation(desc.parent, desc.prop_header, op);
   }
 }
+
+struct AnimatedAttributeOperator {
+  bool default_handler_for_unsupported_attribute_type()
+  {
+    return false;
+  }
+
+  template<typename ParamType> bool operator()(const ParamType &param)
+  {
+    return param.valid() && !param.isConstant();
+  }
+};
 
 bool has_animated_attributes(const ICompoundProperty &arb_geom_params)
 {
@@ -1529,86 +1688,11 @@ bool has_animated_attributes(const ICompoundProperty &arb_geom_params)
    * name, etc.) would not be initialized anyway. */
   Vector<ParsedAttributeDesc> attributes = parse_attributes(nullptr, arb_geom_params);
 
+  AnimatedAttributeOperator animated_param_op;
   for (ParsedAttributeDesc desc : attributes) {
     const PropertyHeader &prop = desc.prop_header;
-
-    if (IFloatGeomParam::matches(prop)) {
-      IFloatGeomParam param = IFloatGeomParam(desc.parent, prop.getName());
-      if (param.valid() && !param.isConstant()) {
-        return true;
-      }
-    }
-    else if (IDoubleGeomParam::matches(prop)) {
-      IDoubleGeomParam param = IDoubleGeomParam(desc.parent, prop.getName());
-      if (param.valid() && !param.isConstant()) {
-        return true;
-      }
-    }
-    else if (IBoolGeomParam::matches(prop)) {
-      IBoolGeomParam param = IBoolGeomParam(desc.parent, prop.getName());
-      if (param.valid() && !param.isConstant()) {
-        return true;
-      }
-    }
-    else if (IInt32GeomParam::matches(prop)) {
-      IInt32GeomParam param = IInt32GeomParam(desc.parent, prop.getName());
-      if (param.valid() && !param.isConstant()) {
-        return true;
-      }
-    }
-    else if (IV2fGeomParam::matches(prop)) {
-      IV2fGeomParam param = IV2fGeomParam(desc.parent, prop.getName());
-      if (param.valid() && !param.isConstant()) {
-        return true;
-      }
-    }
-    else if (IN3fGeomParam::matches(prop)) {
-      IP3fGeomParam param = IP3fGeomParam(desc.parent, prop.getName());
-      if (param.valid() && !param.isConstant()) {
-        return true;
-      }
-    }
-    else if (IN3dGeomParam::matches(prop)) {
-      IP3dGeomParam param = IP3dGeomParam(desc.parent, prop.getName());
-      if (param.valid() && !param.isConstant()) {
-        return true;
-      }
-    }
-    else if (IP3fGeomParam::matches(prop)) {
-      IP3fGeomParam param = IP3fGeomParam(desc.parent, prop.getName());
-      if (param.valid() && !param.isConstant()) {
-        return true;
-      }
-    }
-    else if (IP3dGeomParam::matches(prop)) {
-      IP3dGeomParam param = IP3dGeomParam(desc.parent, prop.getName());
-      if (param.valid() && !param.isConstant()) {
-        return true;
-      }
-    }
-    else if (IV3fGeomParam::matches(prop)) {
-      IV3fGeomParam param = IV3fGeomParam(desc.parent, prop.getName());
-      if (param.valid() && !param.isConstant()) {
-        return true;
-      }
-    }
-    else if (IV3dGeomParam::matches(prop)) {
-      IV3dGeomParam param = IV3dGeomParam(desc.parent, prop.getName());
-      if (param.valid() && !param.isConstant()) {
-        return true;
-      }
-    }
-    else if (IC3fGeomParam::matches(prop)) {
-      IC3fGeomParam param = IC3fGeomParam(desc.parent, prop.getName());
-      if (param.valid() && !param.isConstant()) {
-        return true;
-      }
-    }
-    else if (IC4fGeomParam::matches(prop)) {
-      IC4fGeomParam param = IC4fGeomParam(desc.parent, prop.getName());
-      if (param.valid() && !param.isConstant()) {
-        return true;
-      }
+    if (abc_attribute_type_operation(desc.parent, prop, animated_param_op)) {
+      return true;
     }
   }
 
