@@ -176,14 +176,16 @@ std::unique_ptr<ColumnValues> GeometryDataSource::get_column_values(
                                            r_cell_value.value_float = value;
                                          });
     case CD_PROP_INT32:
-      return column_values_from_function(SPREADSHEET_VALUE_TYPE_INT32,
-                                         column_id.name,
-                                         domain_size,
-                                         [varray](int index, CellValue &r_cell_value) {
-                                           int value;
-                                           varray->get(index, &value);
-                                           r_cell_value.value_int = value;
-                                         });
+      return column_values_from_function(
+          SPREADSHEET_VALUE_TYPE_INT32,
+          column_id.name,
+          domain_size,
+          [varray](int index, CellValue &r_cell_value) {
+            int value;
+            varray->get(index, &value);
+            r_cell_value.value_int = value;
+          },
+          STREQ(column_id.name, "id") ? 5.5f : 0.0f);
     case CD_PROP_BOOL:
       return column_values_from_function(SPREADSHEET_VALUE_TYPE_BOOL,
                                          column_id.name,
@@ -388,7 +390,7 @@ void InstancesDataSource::foreach_default_column_ids(
   SpreadsheetColumnID column_id;
   column_id.name = (char *)"Name";
   fn(column_id, false);
-  for (const char *name : {"Position", "Rotation", "Scale", "ID"}) {
+  for (const char *name : {"Position", "Rotation", "Scale", "id"}) {
     column_id.name = (char *)name;
     fn(column_id, false);
   }
@@ -466,14 +468,16 @@ std::unique_ptr<ColumnValues> InstancesDataSource::get_column_values(
                                        });
   }
   Span<int> ids = component_->instance_ids();
-  if (STREQ(column_id.name, "ID")) {
-    /* Make the column a bit wider by default, since the IDs tend to be large numbers. */
-    return column_values_from_function(
-        SPREADSHEET_VALUE_TYPE_INT32,
-        column_id.name,
-        size,
-        [ids](int index, CellValue &r_cell_value) { r_cell_value.value_int = ids[index]; },
-        5.5f);
+  if (!ids.is_empty()) {
+    if (STREQ(column_id.name, "id")) {
+      /* Make the column a bit wider by default, since the IDs tend to be large numbers. */
+      return column_values_from_function(
+          SPREADSHEET_VALUE_TYPE_INT32,
+          column_id.name,
+          size,
+          [ids](int index, CellValue &r_cell_value) { r_cell_value.value_int = ids[index]; },
+          5.5f);
+    }
   }
   return {};
 }

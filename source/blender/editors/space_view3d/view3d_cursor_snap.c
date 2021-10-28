@@ -372,7 +372,7 @@ static void cursor_box_draw(const float dimensions[3], uchar color[4])
 
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
   immUniformColor4ubv(color);
-  imm_draw_cube_corners_3d(pos_id, (float[3]){0.0f, 0.0f, dimensions[2]}, dimensions, 0.15f);
+  imm_draw_cube_corners_3d(pos_id, (const float[3]){0.0f, 0.0f, dimensions[2]}, dimensions, 0.15f);
   immUnbindProgram();
 
   GPU_line_smooth(false);
@@ -883,16 +883,16 @@ static void v3d_cursor_snap_activate(void)
 static void v3d_cursor_snap_free(void)
 {
   SnapCursorDataIntern *data_intern = &g_data_intern;
-  if (data_intern->handle && G_MAIN->wm.first) {
-    WM_paint_cursor_end(data_intern->handle);
+  if (data_intern->handle) {
+    if (G_MAIN->wm.first) {
+      WM_paint_cursor_end(data_intern->handle);
+    }
     data_intern->handle = NULL;
   }
   if (data_intern->snap_context_v3d) {
     ED_transform_snap_object_context_destroy(data_intern->snap_context_v3d);
     data_intern->snap_context_v3d = NULL;
   }
-
-  BLI_freelistN(&data_intern->state_intern);
 }
 
 void ED_view3d_cursor_snap_state_default_set(V3DSnapCursorState *state)
@@ -923,6 +923,7 @@ void ED_view3d_cursor_snap_deactive(V3DSnapCursorState *state)
 
   SnapStateIntern *state_intern = STATE_INTERN_GET(state);
   BLI_remlink(&data_intern->state_intern, state_intern);
+  MEM_freeN(state_intern);
   if (BLI_listbase_is_empty(&data_intern->state_intern)) {
     v3d_cursor_snap_free();
   }
@@ -972,9 +973,4 @@ struct SnapObjectContext *ED_view3d_cursor_snap_context_ensure(Scene *scene)
   SnapCursorDataIntern *data_intern = &g_data_intern;
   v3d_cursor_snap_context_ensure(scene);
   return data_intern->snap_context_v3d;
-}
-
-void ED_view3d_cursor_snap_exit(void)
-{
-  v3d_cursor_snap_free();
 }

@@ -119,6 +119,7 @@ struct wmWindowManager;
 
 #include "BLI_compiler_attrs.h"
 #include "DNA_listBase.h"
+#include "DNA_uuid_types.h"
 #include "DNA_vec_types.h"
 #include "DNA_xr_types.h"
 #include "RNA_types.h"
@@ -967,6 +968,7 @@ typedef void (*wmPaintCursorDraw)(struct bContext *C, int, int, void *customdata
 #define WM_DRAG_VALUE 6
 #define WM_DRAG_COLOR 7
 #define WM_DRAG_DATASTACK 8
+#define WM_DRAG_ASSET_CATALOG 9
 
 typedef enum wmDragFlags {
   WM_DRAG_NOP = 0,
@@ -999,6 +1001,10 @@ typedef struct wmDragAsset {
    * */
   struct bContext *evil_C;
 } wmDragAsset;
+
+typedef struct wmDragAssetCatalog {
+  bUUID drag_catalog_id;
+} wmDragAssetCatalog;
 
 /**
  * For some specific cases we support dragging multiple assets (#WM_DRAG_ASSET_LIST). There is no
@@ -1044,6 +1050,11 @@ typedef struct wmDrag {
    * triggered.
    */
   struct wmDropBox *active_dropbox;
+  /* Text to show when the operator poll fails. Typically the message the
+   * operator set with CTX_wm_operator_poll_msg_set(). */
+  const char *disabled_info;
+  bool free_disabled_info;
+
   unsigned int flags;
 
   /** List of wmDragIDs, all are guaranteed to have the same ID type. */

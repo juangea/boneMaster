@@ -122,6 +122,8 @@
 #  define _MDEPS_ASSERT6(b, n1, n2, n3, n4, n5) _MDEPS_ASSERT5(b, n1, n2, n3, n4); _MDEPS_ASSERT2(b, n5)
 #  define _MDEPS_ASSERT7(b, n1, n2, n3, n4, n5, n6) _MDEPS_ASSERT6(b, n1, n2, n3, n4, n5); _MDEPS_ASSERT2(b, n6)
 #  define _MDEPS_ASSERT8(b, n1, n2, n3, n4, n5, n6, n7) _MDEPS_ASSERT7(b, n1, n2, n3, n4, n5, n6); _MDEPS_ASSERT2(b, n7)
+#  define _MDEPS_ASSERT21(b, n1, n2, n3, n4, n5, n6, n7, n8, n9, n10, n11, n12, n13, n14, n15, n16, n17, n18, n19, n20) _MDEPS_ASSERT8(b, n1, n2, n3, n4, n5, n6, n7); _MDEPS_ASSERT8(b, n8, n9, n10, n11, n12, n13, n14); _MDEPS_ASSERT7(b, n15, n16, n17, n18, n19, n20)
+#  define _MDEPS_ASSERT22(b, n1, n2, n3, n4, n5, n6, n7, n8, n9, n10, n11, n12, n13, n14, n15, n16, n17, n18, n19, n20, n21) _MDEPS_ASSERT21(b, n1, n2, n3, n4, n5, n6, n7, n8, n9, n10, n11, n12, n13, n14, n15, n16, n17, n18, n19, n20); _MDEPS_ASSERT2(b, n21);
 
 #  define MDEPS_ASSERT_FLAG(...) VA_NARGS_CALL_OVERLOAD(_MDEPS_ASSERT, __VA_ARGS__)
 #  define MDEPS_ASSERT(batch_name, ...) MDEPS_ASSERT_FLAG(BATCH_FLAG(batch_name), __VA_ARGS__)
@@ -193,6 +195,21 @@ static const DRWBatchFlag g_buffer_deps[] = {
     [BUFFER_INDEX(vbo.edge_idx)] = BATCH_FLAG(edit_selection_edges),
     [BUFFER_INDEX(vbo.poly_idx)] = BATCH_FLAG(edit_selection_faces),
     [BUFFER_INDEX(vbo.fdot_idx)] = BATCH_FLAG(edit_selection_fdots),
+    [BUFFER_INDEX(vbo.attr) + 0] = BATCH_FLAG(surface) | SURFACE_PER_MAT_FLAG,
+    [BUFFER_INDEX(vbo.attr) + 1] = BATCH_FLAG(surface) | SURFACE_PER_MAT_FLAG,
+    [BUFFER_INDEX(vbo.attr) + 2] = BATCH_FLAG(surface) | SURFACE_PER_MAT_FLAG,
+    [BUFFER_INDEX(vbo.attr) + 3] = BATCH_FLAG(surface) | SURFACE_PER_MAT_FLAG,
+    [BUFFER_INDEX(vbo.attr) + 4] = BATCH_FLAG(surface) | SURFACE_PER_MAT_FLAG,
+    [BUFFER_INDEX(vbo.attr) + 5] = BATCH_FLAG(surface) | SURFACE_PER_MAT_FLAG,
+    [BUFFER_INDEX(vbo.attr) + 6] = BATCH_FLAG(surface) | SURFACE_PER_MAT_FLAG,
+    [BUFFER_INDEX(vbo.attr) + 7] = BATCH_FLAG(surface) | SURFACE_PER_MAT_FLAG,
+    [BUFFER_INDEX(vbo.attr) + 8] = BATCH_FLAG(surface) | SURFACE_PER_MAT_FLAG,
+    [BUFFER_INDEX(vbo.attr) + 9] = BATCH_FLAG(surface) | SURFACE_PER_MAT_FLAG,
+    [BUFFER_INDEX(vbo.attr) + 10] = BATCH_FLAG(surface) | SURFACE_PER_MAT_FLAG,
+    [BUFFER_INDEX(vbo.attr) + 11] = BATCH_FLAG(surface) | SURFACE_PER_MAT_FLAG,
+    [BUFFER_INDEX(vbo.attr) + 12] = BATCH_FLAG(surface) | SURFACE_PER_MAT_FLAG,
+    [BUFFER_INDEX(vbo.attr) + 13] = BATCH_FLAG(surface) | SURFACE_PER_MAT_FLAG,
+    [BUFFER_INDEX(vbo.attr) + 14] = BATCH_FLAG(surface) | SURFACE_PER_MAT_FLAG,
 
     [BUFFER_INDEX(ibo.tris)] = BATCH_FLAG(surface,
                                           surface_weights,
@@ -1688,7 +1705,27 @@ void DRW_mesh_batch_cache_create_requested(struct TaskGraph *task_graph,
   MeshBufferList *mbuflist = &cache->final.buff;
 
   /* Initialize batches and request VBO's & IBO's. */
-  MDEPS_ASSERT(surface, ibo.tris, vbo.lnor, vbo.pos_nor, vbo.uv, vbo.vcol);
+  MDEPS_ASSERT(surface,
+               ibo.tris,
+               vbo.lnor,
+               vbo.pos_nor,
+               vbo.uv,
+               vbo.vcol,
+               vbo.attr[0],
+               vbo.attr[1],
+               vbo.attr[2],
+               vbo.attr[3],
+               vbo.attr[4],
+               vbo.attr[5],
+               vbo.attr[6],
+               vbo.attr[7],
+               vbo.attr[8],
+               vbo.attr[9],
+               vbo.attr[10],
+               vbo.attr[11],
+               vbo.attr[12],
+               vbo.attr[13],
+               vbo.attr[14]);
   if (DRW_batch_requested(cache->batch.surface, GPU_PRIM_TRIS)) {
     DRW_ibo_request(cache->batch.surface, &mbuflist->ibo.tris);
     /* Order matters. First ones override latest VBO's attributes. */
@@ -1763,8 +1800,28 @@ void DRW_mesh_batch_cache_create_requested(struct TaskGraph *task_graph,
   }
 
   /* Per Material */
-  MDEPS_ASSERT_FLAG(
-      SURFACE_PER_MAT_FLAG, vbo.lnor, vbo.pos_nor, vbo.uv, vbo.tan, vbo.vcol, vbo.orco);
+  MDEPS_ASSERT_FLAG(SURFACE_PER_MAT_FLAG,
+                    vbo.lnor,
+                    vbo.pos_nor,
+                    vbo.uv,
+                    vbo.tan,
+                    vbo.vcol,
+                    vbo.orco,
+                    vbo.attr[0],
+                    vbo.attr[1],
+                    vbo.attr[2],
+                    vbo.attr[3],
+                    vbo.attr[4],
+                    vbo.attr[5],
+                    vbo.attr[6],
+                    vbo.attr[7],
+                    vbo.attr[8],
+                    vbo.attr[9],
+                    vbo.attr[10],
+                    vbo.attr[11],
+                    vbo.attr[12],
+                    vbo.attr[13],
+                    vbo.attr[14]);
   MDEPS_ASSERT_INDEX(TRIS_PER_MAT_INDEX, SURFACE_PER_MAT_FLAG);
   for (int i = 0; i < cache->mat_len; i++) {
     if (DRW_batch_requested(cache->surface_per_mat[i], GPU_PRIM_TRIS)) {
@@ -1935,6 +1992,9 @@ void DRW_mesh_batch_cache_create_requested(struct TaskGraph *task_graph,
   MDEPS_ASSERT_MAP(vbo.edituv_stretch_angle);
   MDEPS_ASSERT_MAP(vbo.fdots_uv);
   MDEPS_ASSERT_MAP(vbo.fdots_edituv_data);
+  for (int i = 0; i < GPU_MAX_ATTR; i++) {
+    MDEPS_ASSERT_MAP(vbo.attr[i]);
+  }
 
   MDEPS_ASSERT_MAP(ibo.tris);
   MDEPS_ASSERT_MAP(ibo.lines);

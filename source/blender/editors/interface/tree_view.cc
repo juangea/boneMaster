@@ -29,6 +29,7 @@
 
 #include "UI_interface.h"
 
+#include "WM_api.h"
 #include "WM_types.h"
 
 #include "UI_tree_view.hh"
@@ -354,6 +355,13 @@ void AbstractTreeViewItem::is_active(IsActiveFn is_active_fn)
   is_active_fn_ = is_active_fn;
 }
 
+std::unique_ptr<AbstractTreeViewItemDragController> AbstractTreeViewItem::create_drag_controller()
+    const
+{
+  /* There's no drag controller (and hence no drag support) by default. */
+  return nullptr;
+}
+
 std::unique_ptr<AbstractTreeViewItemDropController> AbstractTreeViewItem::create_drop_controller()
     const
 {
@@ -641,7 +649,18 @@ BasicTreeViewItem::BasicTreeViewItem(StringRef label, BIFIconID icon_) : icon(ic
 
 void BasicTreeViewItem::build_row(uiLayout &row)
 {
-  uiItemL(&row, label_.c_str(), icon);
+  add_label(row);
+}
+
+void BasicTreeViewItem::add_label(uiLayout &layout, StringRefNull label_override)
+{
+  const StringRefNull label = label_override.is_empty() ? StringRefNull(label_) : label_override;
+
+  /* Some padding for labels without collapse chevron and no icon. Looks weird without. */
+  if (icon == ICON_NONE && !is_collapsible()) {
+    uiItemS_ex(&layout, 0.8f);
+  }
+  uiItemL(&layout, label.c_str(), icon);
 }
 
 void BasicTreeViewItem::on_activate()
@@ -675,7 +694,32 @@ bool UI_tree_view_item_matches(const uiTreeViewItemHandle *a_handle,
   return a.matches_including_parents(b);
 }
 
-bool UI_tree_view_item_can_drop(const uiTreeViewItemHandle *item_, const wmDrag *drag)
+/**
+ * Attempt to start dragging the tree-item \a item_. This will not work if the tree item doesn't
+ * support dragging, i.e. it won't create a drag-controller upon request.
+ * \return True if dragging started successfully, otherwise false.
+ */
+bool UI_tree_view_item_drag_start(bContext *C, uiTreeViewItemHandle *item_)
+{
+  const AbstractTreeViewItem &item = reinterpret_cast<const AbstractTreeViewItem &>(*item_);
+  const std::unique_ptr<AbstractTreeViewItemDragController> drag_controller =
+      item.create_drag_controller();
+  if (!drag_controller) {
+    return false;
+  }
+
+  WM_event_start_drag(C,
+                      ICON_NONE,
+                      drag_controller->get_drag_type(),
+                      drag_controller->create_drag_data(),
+                      0,
+                      WM_DRAG_FREE_DATA);
+  return true;
+}
+
+bool UI_tree_view_item_can_drop(const uiTreeViewItemHandle *item_,
+                                const wmDrag *drag,
+                                const char **r_disabled_hint)
 {
   const AbstractTreeViewItem &item = reinterpret_cast<const AbstractTreeViewItem &>(*item_);
   const std::unique_ptr<AbstractTreeViewItemDropController> drop_controller =
@@ -684,7 +728,7 @@ bool UI_tree_view_item_can_drop(const uiTreeViewItemHandle *item_, const wmDrag 
     return false;
   }
 
-  return drop_controller->can_drop(*drag);
+  return drop_controller->can_drop(*drag, r_disabled_hint);
 }
 
 char *UI_tree_view_item_drop_tooltip(const uiTreeViewItemHandle *item_, const wmDrag *drag)
@@ -709,8 +753,9 @@ bool UI_tree_view_item_drop_handle(uiTreeViewItemHandle *item_, const ListBase *
   std::unique_ptr<AbstractTreeViewItemDropController> drop_controller =
       item.create_drop_controller();
 
+  const char *disabled_hint_dummy = nullptr;
   LISTBASE_FOREACH (const wmDrag *, drag, drags) {
-    if (drop_controller->can_drop(*drag)) {
+    if (drop_controller->can_drop(*drag, &disabled_hint_dummy)) {
       return drop_controller->on_drop(*drag);
     }
   }

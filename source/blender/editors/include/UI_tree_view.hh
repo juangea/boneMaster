@@ -49,6 +49,7 @@ namespace blender::ui {
 class AbstractTreeView;
 class AbstractTreeViewItem;
 class AbstractTreeViewItemDropController;
+class AbstractTreeViewItemDragController;
 
 /* ---------------------------------------------------------------------- */
 /** \name Tree-View Item Container
@@ -274,6 +275,11 @@ class AbstractTreeViewItem : public TreeViewItemContainer {
   virtual bool matches(const AbstractTreeViewItem &other) const;
 
   /**
+   * If an item wants to support being dragged, it has to return a drag controller here.
+   * That is an object implementing #AbstractTreeViewItemDragController.
+   */
+  virtual std::unique_ptr<AbstractTreeViewItemDragController> create_drag_controller() const;
+  /**
    * If an item wants to support dropping data into it, it has to return a drop controller here.
    * That is an object implementing #AbstractTreeViewItemDropController.
    *
@@ -348,6 +354,18 @@ class AbstractTreeViewItem : public TreeViewItemContainer {
  * \{ */
 
 /**
+ * Class to enable dragging a tree-item. An item can return a drop controller for itself via a
+ * custom implementation of #AbstractTreeViewItem::create_drag_controller().
+ */
+class AbstractTreeViewItemDragController {
+ public:
+  virtual ~AbstractTreeViewItemDragController() = default;
+
+  virtual int get_drag_type() const = 0;
+  virtual void *create_drag_data() const = 0;
+};
+
+/**
  * Class to customize the drop behavior of a tree-item, plus the behavior when dragging over this
  * item. An item can return a drop controller for itself via a custom implementation of
  * #AbstractTreeViewItem::create_drop_controller().
@@ -362,8 +380,13 @@ class AbstractTreeViewItemDropController {
 
   /**
    * Check if the data dragged with \a drag can be dropped on the item this controller is for.
+   * \param r_disabled_hint: Return a static string to display to the user, explaining why dropping
+   *                         isn't possible on this item. Shouldn't be done too aggressively, e.g.
+   *                         don't set this if the drag-type can't be dropped here; only if it can
+   *                         but there's another reason it can't be dropped.
+   *                         Can assume this is a non-null pointer.
    */
-  virtual bool can_drop(const wmDrag &drag) const = 0;
+  virtual bool can_drop(const wmDrag &drag, const char **r_disabled_hint) const = 0;
   /**
    * Custom text to display when dragging over a tree item. Should explain what happens when
    * dropping the data onto this item. Will only be used if #AbstractTreeViewItem::can_drop()
@@ -396,9 +419,10 @@ class BasicTreeViewItem : public AbstractTreeViewItem {
   using ActivateFn = std::function<void(BasicTreeViewItem &new_active)>;
   BIFIconID icon;
 
-  BasicTreeViewItem(StringRef label, BIFIconID icon = ICON_NONE);
+  explicit BasicTreeViewItem(StringRef label, BIFIconID icon = ICON_NONE);
 
   void build_row(uiLayout &row) override;
+  void add_label(uiLayout &layout, StringRefNull label_override = "");
   void on_activate(ActivateFn fn);
 
  protected:
@@ -431,6 +455,8 @@ inline ItemT &TreeViewItemContainer::add_tree_item(Args &&...args)
 
 template<class TreeViewType> TreeViewType &AbstractTreeViewItemDropController::tree_view() const
 {
+  static_assert(std::is_base_of<AbstractTreeView, TreeViewType>::value,
+                "Type must derive from and implement the AbstractTreeView interface");
   return static_cast<TreeViewType &>(tree_view_);
 }
 

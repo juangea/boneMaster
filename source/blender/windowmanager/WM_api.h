@@ -276,10 +276,10 @@ typedef void(wmEventHandler_KeymapDynamicFn)(wmWindowManager *wm,
                                              struct wmEventHandler_Keymap *handler,
                                              struct wmEventHandler_KeymapResult *km_result);
 
-void WM_event_get_keymap_from_toolsystem_fallback(struct wmWindowManager *wm,
-                                                  struct wmWindow *win,
-                                                  struct wmEventHandler_Keymap *handler,
-                                                  wmEventHandler_KeymapResult *km_result);
+void WM_event_get_keymap_from_toolsystem_with_gizmos(struct wmWindowManager *wm,
+                                                     struct wmWindow *win,
+                                                     struct wmEventHandler_Keymap *handler,
+                                                     wmEventHandler_KeymapResult *km_result);
 void WM_event_get_keymap_from_toolsystem(struct wmWindowManager *wm,
                                          struct wmWindow *win,
                                          struct wmEventHandler_Keymap *handler,
@@ -751,6 +751,8 @@ void WM_drag_draw_default_fn(struct bContext *C,
 ListBase *WM_dropboxmap_find(const char *idname, int spaceid, int regionid);
 
 /* ID drag and drop */
+ID *WM_drag_asset_id_import(wmDragAsset *asset_drag, int flag_extra);
+bool WM_drag_asset_will_import_linked(const wmDrag *drag);
 void WM_drag_add_local_ID(struct wmDrag *drag, struct ID *id, struct ID *from_parent);
 struct ID *WM_drag_get_local_ID(const struct wmDrag *drag, short idcode);
 struct ID *WM_drag_get_local_ID_from_event(const struct wmEvent *event, short idcode);
@@ -767,6 +769,8 @@ struct ID *WM_drag_get_local_ID_or_import_from_asset(const struct wmDrag *drag, 
 void WM_drag_free_imported_drag_ID(struct Main *bmain,
                                    struct wmDrag *drag,
                                    struct wmDropBox *drop);
+
+struct wmDragAssetCatalog *WM_drag_get_asset_catalog_data(const struct wmDrag *drag);
 
 void WM_drag_add_asset_list_item(wmDrag *drag,
                                  const struct bContext *C,
@@ -933,6 +937,7 @@ bool WM_event_is_modal_tweak_exit(const struct wmEvent *event, int tweak_event);
 bool WM_event_is_last_mousemove(const struct wmEvent *event);
 bool WM_event_is_mouse_drag(const struct wmEvent *event);
 bool WM_event_is_mouse_drag_or_press(const wmEvent *event);
+bool WM_cursor_test_motion_and_update(const int mval[2]) ATTR_NONNULL(1) ATTR_WARN_UNUSED_RESULT;
 
 int WM_event_drag_threshold(const struct wmEvent *event);
 bool WM_event_drag_test(const struct wmEvent *event, const int prev_xy[2]);
