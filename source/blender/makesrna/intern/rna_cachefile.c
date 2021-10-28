@@ -357,6 +357,18 @@ static void rna_def_cachefile(BlenderRNA *brna)
       "Alembic data themselves if possible");
   RNA_def_property_update(prop, 0, "rna_CacheFile_dependency_update");
 
+  static const EnumPropertyItem cache_file_type_items[] = {
+      {CACHE_FILE_TYPE_INVALID, "INVALID", 0, "Invalid", ""},
+      {CACHEFILE_TYPE_ALEMBIC, "ALEMBIC", 0, "Alembic", ""},
+      {CACHEFILE_TYPE_USD, "USD", 0, "USD", ""},
+      {0, NULL, 0, NULL, NULL},
+  };
+
+  prop = RNA_def_property(srna, "type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, cache_file_type_items);
+  RNA_def_property_ui_text(prop, "Type", "Type of the file used for storing data");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
   /* ----------------- For Scene time ------------------- */
 
   prop = RNA_def_property(srna, "override_frame", PROP_BOOLEAN, PROP_NONE);
