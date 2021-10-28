@@ -246,11 +246,8 @@ CustomDataLayer *BKE_id_attribute_find(const ID *id,
   return NULL;
 }
 
-CustomDataLayer *BKE_id_attribute_ensure(const ID *id,
-                                         const char *name,
-                                         const int type,
-                                         const AttributeDomain domain,
-                                         ReportList *reports)
+CustomDataLayer *BKE_id_attribute_ensure(
+    ID *id, const char *name, const int type, const AttributeDomain domain, ReportList *reports)
 {
   CustomDataLayer *layer = BKE_id_attribute_find(id, name, type, domain);
 

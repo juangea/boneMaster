@@ -327,9 +327,9 @@ static bool topology_changed(CurveEval *curve_eval, const Int32ArraySamplePtr &n
  */
 void AbcCurveReader::read_geometry(GeometrySet &geometry_set,
                                    const Alembic::Abc::ISampleSelector &sample_sel,
-                                   const AttributeSelector *attribute_selector,
-                                   int read_flag,
-                                   const float velocity_scale,
+                                   const AttributeSelector * /*attribute_selector*/,
+                                   int /*read_flag*/,
+                                   const float /*velocity_scale*/,
                                    const char **err_str)
 {
   assert(geometry_set.has_curve());

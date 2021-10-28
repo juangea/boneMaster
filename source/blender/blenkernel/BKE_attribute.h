@@ -73,7 +73,7 @@ struct CustomDataLayer *BKE_id_attribute_find(const struct ID *id,
 
 /* Return an existing CustomDataLayer, or create a new one if none is found for the given
  * parameters and return it. */
-struct CustomDataLayer *BKE_id_attribute_ensure(const struct ID *id,
+struct CustomDataLayer *BKE_id_attribute_ensure(struct ID *id,
                                                 const char *name,
                                                 const int type,
                                                 const AttributeDomain domain,
