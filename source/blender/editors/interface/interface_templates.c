@@ -6482,6 +6482,9 @@ uiListType *UI_UL_cache_file_attribute_mappings()
 
 void uiTemplateCacheFileVelocity(uiLayout *layout, PointerRNA *fileptr)
 {
+  /* Ensure that the context has a CacheFile as this may not be set inside of modifiers panels. */
+  uiLayoutSetContextPointer(layout, "edit_cachefile", fileptr);
+
   uiItemR(layout, fileptr, "velocity_name", 0, NULL, ICON_NONE);
   uiItemR(layout, fileptr, "velocity_unit", 0, NULL, ICON_NONE);
 }
@@ -6518,6 +6521,9 @@ void uiTemplateCacheFileAttributeRemapping(uiLayout *layout,
 
 void uiTemplateCacheFileLayers(uiLayout *layout, const bContext *C, PointerRNA *fileptr)
 {
+  /* Ensure that the context has a CacheFile as this may not be set inside of modifiers panels. */
+  uiLayoutSetContextPointer(layout, "edit_cachefile", fileptr);
+
   CacheFile *file = fileptr->data;
   uiLayout *row = uiLayoutRow(layout, false);
   uiLayout *col = uiLayoutColumn(row, true);
@@ -6550,6 +6556,9 @@ void uiTemplateCacheFileLayers(uiLayout *layout, const bContext *C, PointerRNA *
 
 void uiTemplateCacheFileProcedural(uiLayout *layout, const bContext *C, PointerRNA *fileptr)
 {
+  /* Ensure that the context has a CacheFile as this may not be set inside of modifiers panels. */
+  uiLayoutSetContextPointer(layout, "edit_cachefile", fileptr);
+
   uiLayout *row, *sub;
 
   /* Only enable render procedural option if the active engine supports it. */
@@ -6590,6 +6599,9 @@ void uiTemplateCacheFileProcedural(uiLayout *layout, const bContext *C, PointerR
 
 void uiTemplateCacheFileTimeSettings(uiLayout *layout, PointerRNA *fileptr)
 {
+  /* Ensure that the context has a CacheFile as this may not be set inside of modifiers panels. */
+  uiLayoutSetContextPointer(layout, "edit_cachefile", fileptr);
+
   uiLayout *row, *sub, *subsub;
 
   row = uiLayoutRow(layout, false);
