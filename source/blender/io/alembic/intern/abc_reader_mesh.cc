@@ -439,7 +439,9 @@ template<> bool has_animations(Alembic::AbcGeom::IPolyMeshSchema &schema, Import
   return false;
 }
 
-void AbcMeshReader::readObjectData(Main *bmain, const Alembic::Abc::ISampleSelector &sample_sel)
+void AbcMeshReader::readObjectData(Main *bmain,
+                                   const AbcReaderManager & /*manager*/,
+                                   const Alembic::Abc::ISampleSelector &sample_sel)
 {
   Mesh *mesh = BKE_mesh_add(bmain, m_data_name.c_str());
 
@@ -778,7 +780,9 @@ bool AbcSubDReader::accepts_object_type(
   return true;
 }
 
-void AbcSubDReader::readObjectData(Main *bmain, const Alembic::Abc::ISampleSelector &sample_sel)
+void AbcSubDReader::readObjectData(Main *bmain,
+                                   const AbcReaderManager & /*manager*/,
+                                   const Alembic::Abc::ISampleSelector &sample_sel)
 {
   Mesh *mesh = BKE_mesh_add(bmain, m_data_name.c_str());
 

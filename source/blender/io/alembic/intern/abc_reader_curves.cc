@@ -166,7 +166,9 @@ static int get_curve_overlap(Alembic::AbcGeom::CurvePeriodicity periodicity,
   return 0;
 }
 
-void AbcCurveReader::readObjectData(Main *bmain, const Alembic::Abc::ISampleSelector &sample_sel)
+void AbcCurveReader::readObjectData(Main *bmain,
+                                    const AbcReaderManager & /*manager*/,
+                                    const Alembic::Abc::ISampleSelector &sample_sel)
 {
   Curve *cu = BKE_curve_add(bmain, m_data_name.c_str(), OB_CURVE);
 

@@ -38,7 +38,9 @@ class AbcMeshReader final : public AbcObjectReader {
   bool accepts_object_type(const Alembic::AbcCoreAbstract::ObjectHeader &alembic_header,
                            const Object *const ob,
                            const char **err_str) const override;
-  void readObjectData(Main *bmain, const Alembic::Abc::ISampleSelector &sample_sel) override;
+  void readObjectData(Main *bmain,
+                      const AbcReaderManager &manager,
+                      const Alembic::Abc::ISampleSelector &sample_sel) override;
 
   bool topology_changed(Mesh *existing_mesh,
                         const Alembic::Abc::ISampleSelector &sample_sel) override;
@@ -80,7 +82,9 @@ class AbcSubDReader final : public AbcObjectReader {
   bool accepts_object_type(const Alembic::AbcCoreAbstract::ObjectHeader &alembic_header,
                            const Object *const ob,
                            const char **err_str) const override;
-  void readObjectData(Main *bmain, const Alembic::Abc::ISampleSelector &sample_sel) override;
+  void readObjectData(Main *bmain,
+                      const AbcReaderManager &manager,
+                      const Alembic::Abc::ISampleSelector &sample_sel) override;
 
   void read_geometry(GeometrySet &geometry_set,
                      const Alembic::Abc::ISampleSelector &sample_sel,

@@ -86,7 +86,9 @@ bool AbcPointsReader::accepts_object_type(
   return true;
 }
 
-void AbcPointsReader::readObjectData(Main *bmain, const Alembic::Abc::ISampleSelector &sample_sel)
+void AbcPointsReader::readObjectData(Main *bmain,
+                                     const AbcReaderManager & /*manager*/,
+                                     const Alembic::Abc::ISampleSelector &sample_sel)
 {
   PointCloud *point_cloud = static_cast<PointCloud *>(
       BKE_pointcloud_add_default(bmain, m_data_name.c_str()));

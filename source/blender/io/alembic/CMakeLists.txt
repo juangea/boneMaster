@@ -48,6 +48,8 @@ set(SRC
   intern/abc_reader_archive.cc
   intern/abc_reader_camera.cc
   intern/abc_reader_curves.cc
+  intern/abc_reader_instance.cc
+  intern/abc_reader_manager.cc
   intern/abc_reader_mesh.cc
   intern/abc_reader_nurbs.cc
   intern/abc_reader_object.cc
@@ -78,6 +80,8 @@ set(SRC
   intern/abc_reader_archive.h
   intern/abc_reader_camera.h
   intern/abc_reader_curves.h
+  intern/abc_reader_instance.h
+  intern/abc_reader_manager.h
   intern/abc_reader_mesh.h
   intern/abc_reader_nurbs.h
   intern/abc_reader_object.h

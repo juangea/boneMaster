@@ -35,6 +35,7 @@ using Alembic::AbcCoreAbstract::chrono_t;
 
 namespace blender::io::alembic {
 
+class AbcReaderManager;
 class AttributeSelector;
 
 struct ImportSettings {
@@ -147,7 +148,9 @@ class AbcObjectReader {
                                    const Object *const ob,
                                    const char **err_str) const = 0;
 
-  virtual void readObjectData(Main *bmain, const Alembic::Abc::ISampleSelector &sample_sel) = 0;
+  virtual void readObjectData(Main *bmain,
+                              const AbcReaderManager &manager,
+                              const Alembic::Abc::ISampleSelector &sample_sel) = 0;
 
   virtual bool topology_changed(Mesh *existing_mesh,
                                 const Alembic::Abc::ISampleSelector &sample_sel);

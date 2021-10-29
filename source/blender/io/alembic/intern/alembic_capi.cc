@@ -27,6 +27,7 @@
 #include "abc_reader_archive.h"
 #include "abc_reader_camera.h"
 #include "abc_reader_curves.h"
+#include "abc_reader_manager.h"
 #include "abc_reader_mesh.h"
 #include "abc_reader_nurbs.h"
 #include "abc_reader_points.h"
@@ -225,7 +226,7 @@ static void find_iobject(const IObject &object, IObject &ret, const std::string 
  * Generates an AbcObjectReader for this Alembic object and its children.
  *
  * \param object: The Alembic IObject to visit.
- * \param readers: The created AbcObjectReader * will be appended to this vector.
+ * \param manager: The manager responsible for creating the readers.
  * \param settings: Import settings, not used directly but passed to the
  *                 AbcObjectReader subclass constructors.
  * \param r_assign_as_parent: Return parameter, contains a list of reader
@@ -243,7 +244,7 @@ static void find_iobject(const IObject &object, IObject &ret, const std::string 
  * them in sync. */
 static std::pair<bool, AbcObjectReader *> visit_object(
     const IObject &object,
-    AbcObjectReader::ptr_vector &readers,
+    AbcReaderManager &manager,
     ImportSettings &settings,
     AbcObjectReader::ptr_vector &r_assign_as_parent)
 {
@@ -268,7 +269,7 @@ static std::pair<bool, AbcObjectReader *> visit_object(
 
     /* TODO: When we only support C++11, use std::tie() instead. */
     std::pair<bool, AbcObjectReader *> child_result;
-    child_result = visit_object(ichild, readers, settings, assign_as_parent);
+    child_result = visit_object(ichild, manager, settings, assign_as_parent);
 
     bool child_claims_this_object = child_result.first;
     AbcObjectReader *child_reader = child_result.second;
@@ -313,15 +314,15 @@ static std::pair<bool, AbcObjectReader *> visit_object(
     }
 
     if (create_empty) {
-      reader = new AbcEmptyReader(object, settings);
+      reader = manager.create<AbcEmptyReader>(object, settings);
     }
   }
   else if (IPolyMesh::matches(md)) {
-    reader = new AbcMeshReader(object, settings);
+    reader = manager.create<AbcMeshReader>(object, settings);
     parent_is_part_of_this_object = true;
   }
   else if (ISubD::matches(md)) {
-    reader = new AbcSubDReader(object, settings);
+    reader = manager.create<AbcSubDReader>(object, settings);
     parent_is_part_of_this_object = true;
   }
   else if (INuPatch::matches(md)) {
@@ -332,16 +333,16 @@ static std::pair<bool, AbcObjectReader *> visit_object(
      * Blender. Need to figure out exactly how these points are
      * duplicated, in all cases (cyclic U, cyclic V, and cyclic UV).
      * Until this is fixed, disabling NURBS reading. */
-    reader = new AbcNurbsReader(object, settings);
+    reader = manager.create<AbcNurbsReader>(object, settings);
     parent_is_part_of_this_object = true;
 #endif
   }
   else if (ICamera::matches(md)) {
-    reader = new AbcCameraReader(object, settings);
+    reader = manager.create<AbcCameraReader>(object, settings);
     parent_is_part_of_this_object = true;
   }
   else if (IPoints::matches(md)) {
-    reader = new AbcPointsReader(object, settings);
+    reader = manager.create<AbcPointsReader>(object, settings);
     parent_is_part_of_this_object = true;
   }
   else if (IMaterial::matches(md)) {
@@ -354,7 +355,7 @@ static std::pair<bool, AbcObjectReader *> visit_object(
     /* Pass, those are handled in the mesh reader. */
   }
   else if (ICurves::matches(md)) {
-    reader = new AbcCurveReader(object, settings);
+    reader = manager.create<AbcCurveReader>(object, settings);
     parent_is_part_of_this_object = true;
   }
   else {
@@ -367,7 +368,6 @@ static std::pair<bool, AbcObjectReader *> visit_object(
      * not claimed as part of any child Alembic object. */
     BLI_assert(claiming_child_readers.empty());
 
-    readers.push_back(reader);
     reader->incref();
 
     CacheObjectPath *abc_path = static_cast<CacheObjectPath *>(
@@ -437,7 +437,7 @@ struct ImportJobData {
   ImportSettings settings;
 
   ArchiveReader *archive;
-  std::vector<AbcObjectReader *> readers;
+  AbcReaderManager reader_manager;
 
   short *stop;
   short *do_update;
@@ -489,7 +489,8 @@ static void import_startjob(void *user_data, short *stop, short *do_update, floa
 
   /* Parse Alembic Archive. */
   AbcObjectReader::ptr_vector assign_as_parent;
-  visit_object(archive->getTop(), data->readers, data->settings, assign_as_parent);
+  IObject root = archive->getTop();
+  visit_object(archive->getTop(), data->reader_manager, data->settings, assign_as_parent);
 
   /* There shouldn't be any orphans. */
   BLI_assert(assign_as_parent.empty());
@@ -504,19 +505,16 @@ static void import_startjob(void *user_data, short *stop, short *do_update, floa
 
   /* Create objects and set scene frame range. */
 
-  const float size = static_cast<float>(data->readers.size());
+  const float size = static_cast<float>(data->reader_manager.all_readers().size());
   size_t i = 0;
 
   chrono_t min_time = std::numeric_limits<chrono_t>::max();
   chrono_t max_time = std::numeric_limits<chrono_t>::min();
 
   ISampleSelector sample_sel(0.0f);
-  std::vector<AbcObjectReader *>::iterator iter;
-  for (iter = data->readers.begin(); iter != data->readers.end(); ++iter) {
-    AbcObjectReader *reader = *iter;
-
+  for (AbcObjectReader *reader : data->reader_manager.data_readers()) {
     if (reader->valid()) {
-      reader->readObjectData(data->bmain, sample_sel);
+      reader->readObjectData(data->bmain, data->reader_manager, sample_sel);
 
       min_time = std::min(min_time, reader->minTime());
       max_time = std::max(max_time, reader->maxTime());
@@ -551,8 +549,7 @@ static void import_startjob(void *user_data, short *stop, short *do_update, floa
   }
 
   /* Setup parenthood. */
-  for (iter = data->readers.begin(); iter != data->readers.end(); ++iter) {
-    const AbcObjectReader *reader = *iter;
+  for (AbcObjectReader *reader : data->reader_manager.data_readers()) {
     const AbcObjectReader *parent_reader = reader->parent_reader;
     Object *ob = reader->object();
 
@@ -566,8 +563,7 @@ static void import_startjob(void *user_data, short *stop, short *do_update, floa
 
   /* Setup transformations and constraints. */
   i = 0;
-  for (iter = data->readers.begin(); iter != data->readers.end(); ++iter) {
-    AbcObjectReader *reader = *iter;
+  for (AbcObjectReader *reader : data->reader_manager.data_readers()) {
     reader->setupObjectTransform(0.0f);
 
     *data->progress = 0.7f + 0.3f * (++i / size);
@@ -586,12 +582,10 @@ static void import_endjob(void *user_data)
 
   ImportJobData *data = static_cast<ImportJobData *>(user_data);
 
-  std::vector<AbcObjectReader *>::iterator iter;
-
   /* Delete objects on cancellation. */
   if (data->was_cancelled) {
-    for (iter = data->readers.begin(); iter != data->readers.end(); ++iter) {
-      Object *ob = (*iter)->object();
+    for (AbcObjectReader *reader : data->reader_manager.all_readers()) {
+      Object *ob = reader->object();
 
       /* It's possible that cancellation occurred between the creation of
        * the reader and the creation of the Blender object. */
@@ -612,8 +606,8 @@ static void import_endjob(void *user_data)
 
     lc = BKE_layer_collection_get_active(view_layer);
 
-    for (iter = data->readers.begin(); iter != data->readers.end(); ++iter) {
-      Object *ob = (*iter)->object();
+    for (AbcObjectReader *reader : data->reader_manager.data_readers()) {
+      Object *ob = reader->object();
 
       BKE_collection_object_add(data->bmain, lc->collection, ob);
 
@@ -628,6 +622,24 @@ static void import_endjob(void *user_data)
                                ID_RECALC_BASE_FLAGS);
     }
 
+    /* Finally, create instances. */
+    for (AbcObjectReader *reader : data->reader_manager.instance_readers()) {
+      if (!reader->valid()) {
+        continue;
+      }
+
+      reader->readObjectData(data->bmain, data->reader_manager, {});
+      /* We assume that the instance's parent is the same as that of the source object, so we do
+       * not setup parenthood. */
+      reader->setupObjectTransform(0.0f);
+
+      Object *ob = reader->object();
+      BKE_collection_object_add(data->bmain, lc->collection, ob);
+      DEG_id_tag_update(&ob->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
+
+      BKE_main_id_newptr_and_tag_clear(data->bmain);
+    }
+
     DEG_id_tag_update(&data->scene->id, ID_RECALC_BASE_FLAGS);
     DEG_relations_tag_update(data->bmain);
 
@@ -638,8 +650,7 @@ static void import_endjob(void *user_data)
     }
   }
 
-  for (iter = data->readers.begin(); iter != data->readers.end(); ++iter) {
-    AbcObjectReader *reader = *iter;
+  for (AbcObjectReader *reader : data->reader_manager.all_readers()) {
     reader->decref();
 
     if (reader->refcount() == 0) {

@@ -12,32 +12,24 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2016 Kévin Dietrich.
- * All rights reserved.
  */
+
 #pragma once
 
 /** \file
  * \ingroup balembic
  */
 
-#include "abc_reader_mesh.h"
 #include "abc_reader_object.h"
-
-struct Curve;
-
-#define ABC_CURVE_RESOLUTION_U_PROPNAME "blender:resolution"
 
 namespace blender::io::alembic {
 
-class AbcCurveReader final : public AbcObjectReader {
-  Alembic::AbcGeom::ICurvesSchema m_curves_schema;
-
+class AbcInstanceReader final : public AbcObjectReader {
  public:
-  AbcCurveReader(const Alembic::Abc::IObject &object, ImportSettings &settings);
+  AbcInstanceReader(const Alembic::Abc::IObject &object, ImportSettings &settings);
 
   bool valid() const override;
+
   bool accepts_object_type(const Alembic::AbcCoreAbstract::ObjectHeader &alembic_header,
                            const Object *const ob,
                            const char **err_str) const override;
@@ -45,17 +37,6 @@ class AbcCurveReader final : public AbcObjectReader {
   void readObjectData(Main *bmain,
                       const AbcReaderManager &manager,
                       const Alembic::Abc::ISampleSelector &sample_sel) override;
-
-  void read_geometry(GeometrySet &geometry_set,
-                     const Alembic::Abc::ISampleSelector &sample_sel,
-                     const AttributeSelector *attribute_selector,
-                     int read_flag,
-                     const float velocity_scale,
-                     const char **err_str) override;
-
-  void read_curve_sample(Curve *cu,
-                         const Alembic::AbcGeom::ICurvesSchema &schema,
-                         const Alembic::Abc::ISampleSelector &sample_selector);
 };
 
 }  // namespace blender::io::alembic
