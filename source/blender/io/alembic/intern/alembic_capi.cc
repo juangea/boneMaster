@@ -797,7 +797,7 @@ static ISampleSelector sample_selector_for_time(float time)
 
 void ABC_read_geometry(CacheReader *reader,
                        Object *ob,
-                       GeometrySet *geometry_set,
+                       GeometrySet &geometry_set,
                        const ABCReadParams *params,
                        const char **err_str)
 {
@@ -811,7 +811,7 @@ void ABC_read_geometry(CacheReader *reader,
   attribute_selector.set_read_flags(params->read_flags);
 
   ISampleSelector sample_sel = sample_selector_for_time(params->time);
-  abc_reader->read_geometry(*geometry_set,
+  abc_reader->read_geometry(geometry_set,
                             sample_sel,
                             &attribute_selector,
                             params->read_flags,

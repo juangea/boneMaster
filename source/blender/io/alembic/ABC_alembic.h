@@ -130,7 +130,7 @@ typedef struct ABCReadParams {
 /* Either modifies the existing geometry component, or create a new one. */
 void ABC_read_geometry(CacheReader *reader,
                        Object *ob,
-                       GeometrySet *geometry_set,
+                       GeometrySet &geometry_set,
                        const ABCReadParams *params,
                        const char **err_str);
 #endif

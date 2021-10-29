@@ -242,14 +242,28 @@ static void modifyGeometry(ModifierData *md,
     velocity_scale *= FPS;
   }
 
-  ABCReadParams params;
-  params.time = time;
-  params.read_flags = mcmd->read_flag;
-  params.velocity_name = mcmd->cache_file->velocity_name;
-  params.velocity_scale = velocity_scale;
-  params.mappings = &mcmd->cache_file->attribute_mappings;
-
-  ABC_read_geometry(mcmd->reader, ctx->object, &geometry_set, &params, &err_str);
+  switch (cache_file->type) {
+    default: {
+      break;
+    }
+#  ifdef WITH_ALEMBIC
+    case CACHEFILE_TYPE_ALEMBIC: {
+      ABCReadParams params;
+      params.time = time;
+      params.read_flags = mcmd->read_flag;
+      params.velocity_name = mcmd->cache_file->velocity_name;
+      params.velocity_scale = velocity_scale;
+      params.mappings = &mcmd->cache_file->attribute_mappings;
+      ABC_read_geometry(mcmd->reader, ctx->object, geometry_set, &params, &err_str);
+      break;
+    }
+#  endif
+#  ifdef WITH_USD
+    case CACHEFILE_TYPE_USD: {
+      USD_read_geometry(mcmd->reader, ctx->object, geometry_set, time, &err_str, mcmd->read_flag);
+    }
+#  endif
+  }
 
   if (err_str) {
     BKE_modifier_set_error(ctx->object, md, "%s", err_str);
@@ -313,47 +327,32 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *
     }
   }
 
-  Mesh *result = NULL;
+  Mesh *result = nullptr;
 
-  switch (cache_file->type) {
-    case CACHEFILE_TYPE_ALEMBIC: {
-#  ifdef WITH_ALEMBIC
-      GeometrySet geometry_set;
+  GeometrySet geometry_set;
 
-      if (ctx->object->type == OB_CURVE) {
-        std::unique_ptr<CurveEval> curve_eval = curve_eval_from_dna_curve(
-            *static_cast<Curve *>(ctx->object->data));
-        geometry_set = GeometrySet::create_with_curve(curve_eval.release(),
-                                                      GeometryOwnershipType::Editable);
-      }
-      else {
-        geometry_set = GeometrySet::create_with_mesh(mesh, GeometryOwnershipType::Editable);
-      }
+  if (ctx->object->type == OB_CURVE) {
+    std::unique_ptr<CurveEval> curve_eval = curve_eval_from_dna_curve(
+        *static_cast<Curve *>(ctx->object->data));
+    geometry_set = GeometrySet::create_with_curve(curve_eval.release(),
+                                                  GeometryOwnershipType::Editable);
+  }
+  else {
+    geometry_set = GeometrySet::create_with_mesh(mesh, GeometryOwnershipType::Editable);
+  }
 
-      modifyGeometry(md, ctx, geometry_set);
+  modifyGeometry(md, ctx, geometry_set);
 
-      if (ctx->object->type == OB_CURVE) {
-        CurveEval *curve_eval = geometry_set.get_component_for_write<CurveComponent>().release();
+  if (ctx->object->type == OB_CURVE) {
+    CurveEval *curve_eval = geometry_set.get_component_for_write<CurveComponent>().release();
 
-        if (curve_eval) {
-          result = blender::bke::curve_to_wire_mesh(*curve_eval);
-          delete curve_eval;
-        }
-      }
-      else {
-        result = geometry_set.get_component_for_write<MeshComponent>().release();
-      }
-#  endif
-      break;
+    if (curve_eval) {
+      result = blender::bke::curve_to_wire_mesh(*curve_eval);
+      delete curve_eval;
     }
-    case CACHEFILE_TYPE_USD:
-#  ifdef WITH_USD
-      result = USD_read_mesh(
-          mcmd->reader, ctx->object, mesh, time * FPS, &err_str, mcmd->read_flag);
-#  endif
-      break;
-    case CACHE_FILE_TYPE_INVALID:
-      break;
+  }
+  else {
+    result = geometry_set.get_component_for_write<MeshComponent>().release();
   }
 
   if (!ELEM(result, nullptr, mesh) && (mesh != org_mesh)) {
