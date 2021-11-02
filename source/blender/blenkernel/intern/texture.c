@@ -142,7 +142,8 @@ static void texture_foreach_id(ID *id, LibraryForeachIDData *data)
   Tex *texture = (Tex *)id;
   if (texture->nodetree) {
     /* nodetree **are owned by IDs**, treat them as mere sub-data and not real ID! */
-    BKE_library_foreach_ID_embedded(data, (ID **)&texture->nodetree);
+    BKE_LIB_FOREACHID_PROCESS_FUNCTION_CALL(
+        data, BKE_library_foreach_ID_embedded(data, (ID **)&texture->nodetree));
   }
   BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, texture->ima, IDWALK_CB_USER);
 }
@@ -184,7 +185,6 @@ static void texture_blend_read_data(BlendDataReader *reader, ID *id)
   BLO_read_data_address(reader, &tex->preview);
   BKE_previewimg_blend_read(reader, tex->preview);
 
-  tex->iuser.ok = 1;
   tex->iuser.scene = NULL;
 }
 
