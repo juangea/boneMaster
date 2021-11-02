@@ -26,6 +26,7 @@
 
 class GeometrySet;
 
+struct bTransformCacheConstraint;
 struct CacheFile;
 struct Main;
 struct Mesh;
@@ -178,6 +179,9 @@ class AbcObjectReader {
 
  protected:
   void determine_inherits_xform();
+
+ private:
+  bTransformCacheConstraint *getOrCreateConstraint();
 };
 
 Imath::M44d get_matrix(const Alembic::AbcGeom::IXformSchema &schema, const float time);
