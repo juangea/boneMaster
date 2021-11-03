@@ -24,6 +24,7 @@ set(INC
   ../../blenkernel
   ../../blenlib
   ../../blenloader
+  ../../blentranslation
   ../../bmesh
   ../../depsgraph
   ../../editors/include
