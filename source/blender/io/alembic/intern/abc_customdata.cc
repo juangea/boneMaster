@@ -350,22 +350,48 @@ static BlenderScope valid_scope_or_unknown(BlenderScope scope)
  * for a possible remapping to some n-dimensionnal data type. */
 static BlenderScope matching_scope(const ScopeSizeInfo scope_sizes,
                                    int dimensions,
-                                   size_t num_values)
+                                   size_t num_values,
+                                   char requested_domain)
 {
+  if (requested_domain != CACHEFILE_ATTR_MAP_DOMAIN_AUTO) {
+    if (requested_domain == CACHEFILE_ATTR_MAP_DOMAIN_POINT) {
+      if (static_cast<size_t>(scope_sizes.point_scope_size * dimensions) == num_values) {
+        return BlenderScope::POINT;
+      }
+
+      return BlenderScope::UNKNOWN;
+    }
+
+    if (requested_domain == CACHEFILE_ATTR_MAP_DOMAIN_FACE_CORNER) {
+      if (static_cast<size_t>(scope_sizes.loop_scope_size * dimensions) == num_values) {
+        return BlenderScope::LOOPS;
+      }
+
+      return BlenderScope::UNKNOWN;
+    }
+
+    if (requested_domain == CACHEFILE_ATTR_MAP_DOMAIN_FACE) {
+      if (static_cast<size_t>(scope_sizes.polygon_scope_size * dimensions) == num_values) {
+        return BlenderScope::POLYGON;
+      }
+
+      return BlenderScope::UNKNOWN;
+    }
+
+    return BlenderScope::UNKNOWN;
+  }
+
   BlenderScope scope = BlenderScope::UNKNOWN;
 
-  if (scope_sizes.loop_scope_size != 0 &&
-      static_cast<size_t>(scope_sizes.loop_scope_size * dimensions) == num_values) {
+  if (static_cast<size_t>(scope_sizes.loop_scope_size * dimensions) == num_values) {
     scope |= BlenderScope::LOOPS;
   }
 
-  if (scope_sizes.polygon_scope_size != 0 &&
-      static_cast<size_t>(scope_sizes.polygon_scope_size * dimensions) == num_values) {
+  if (static_cast<size_t>(scope_sizes.polygon_scope_size * dimensions) == num_values) {
     scope |= BlenderScope::POLYGON;
   }
 
-  if (scope_sizes.point_scope_size != 0 &&
-      static_cast<size_t>(scope_sizes.point_scope_size * dimensions) == num_values) {
+  if (static_cast<size_t>(scope_sizes.point_scope_size * dimensions) == num_values) {
     scope |= BlenderScope::POINT;
   }
 
@@ -487,7 +513,7 @@ static BlenderScope to_blender_scope(Alembic::AbcGeom::GeometryScope abc_scope,
 {
   switch (abc_scope) {
     case kConstantScope: {
-      return matching_scope(scope_sizes, 1, element_size);
+      return matching_scope(scope_sizes, 1, element_size, CACHEFILE_ATTR_MAP_DOMAIN_AUTO);
     }
     case kUniformScope: {
       /* This would mean one value for the whole object, but we don't support that yet. */
@@ -514,7 +540,7 @@ static BlenderScope to_blender_scope(Alembic::AbcGeom::GeometryScope abc_scope,
     }
     case kVaryingScope: {
       /* We have a varying field over some domain, which we need to determine. */
-      return matching_scope(scope_sizes, 1, element_size);
+      return matching_scope(scope_sizes, 1, element_size, CACHEFILE_ATTR_MAP_DOMAIN_AUTO);
     }
     case kUnknownScope: {
       return BlenderScope::UNKNOWN;
@@ -723,7 +749,7 @@ struct AbcAttributeMapping {
 static std::optional<AbcAttributeMapping> final_mapping_from_cache_mapping(
     const CacheAttributeMapping &mapping,
     const ScopeSizeInfo scope_sizes,
-    const AbcAttributeMapping original_mapping,
+    AbcAttributeMapping original_mapping,
     const uint num_elements)
 {
   BLI_assert_msg(num_elements != 0,
@@ -732,11 +758,17 @@ static std::optional<AbcAttributeMapping> final_mapping_from_cache_mapping(
 
   switch (mapping.mapping) {
     case CACHEFILE_ATTRIBUTE_MAP_NONE: {
+      if (mapping.domain == CACHEFILE_ATTR_MAP_DOMAIN_POINT) {
+        original_mapping.scope = BlenderScope::POINT;
+      }
+      if (mapping.domain == CACHEFILE_ATTR_MAP_DOMAIN_FACE_CORNER) {
+        original_mapping.scope = BlenderScope::LOOPS;
+      }
       return original_mapping;
     }
     case CACHEFILE_ATTRIBUTE_MAP_TO_UVS: {
       /* UVs have 2 values per element. */
-      const BlenderScope scope_hint = matching_scope(scope_sizes, 2, num_elements);
+      const BlenderScope scope_hint = matching_scope(scope_sizes, 2, num_elements, mapping.domain);
       if (!is_valid_uv_scope(scope_hint)) {
         return {};
       }
@@ -744,8 +776,8 @@ static std::optional<AbcAttributeMapping> final_mapping_from_cache_mapping(
     }
     case CACHEFILE_ATTRIBUTE_MAP_TO_VERTEX_COLORS: {
       /* 3 values for RGB, 4 for RGBA */
-      BlenderScope rgb_scope_hint = matching_scope(scope_sizes, 3, num_elements);
-      BlenderScope rgba_scope_hint = matching_scope(scope_sizes, 4, num_elements);
+      BlenderScope rgb_scope_hint = matching_scope(scope_sizes, 3, num_elements, mapping.domain);
+      BlenderScope rgba_scope_hint = matching_scope(scope_sizes, 4, num_elements, mapping.domain);
 
       if (is_valid_vertex_color_scope(rgb_scope_hint) &&
           rgba_scope_hint == BlenderScope::UNKNOWN) {
@@ -762,21 +794,21 @@ static std::optional<AbcAttributeMapping> final_mapping_from_cache_mapping(
       return {};
     }
     case CACHEFILE_ATTRIBUTE_MAP_TO_WEIGHT_GROUPS: {
-      BlenderScope r_scope_hint = matching_scope(scope_sizes, 1, num_elements);
+      BlenderScope r_scope_hint = matching_scope(scope_sizes, 1, num_elements, mapping.domain);
       if (!is_valid_vertex_group_scope(r_scope_hint)) {
         return {};
       }
       return AbcAttributeMapping{CD_BWEIGHT, r_scope_hint};
     }
     case CACHEFILE_ATTRIBUTE_MAP_TO_FLOAT2: {
-      BlenderScope r_scope_hint = matching_scope(scope_sizes, 2, num_elements);
+      BlenderScope r_scope_hint = matching_scope(scope_sizes, 2, num_elements, mapping.domain);
       if (r_scope_hint == BlenderScope::UNKNOWN) {
         return {};
       }
       return AbcAttributeMapping{CD_PROP_FLOAT2, r_scope_hint};
     }
     case CACHEFILE_ATTRIBUTE_MAP_TO_FLOAT3: {
-      BlenderScope r_scope_hint = matching_scope(scope_sizes, 3, num_elements);
+      BlenderScope r_scope_hint = matching_scope(scope_sizes, 3, num_elements, mapping.domain);
       if (r_scope_hint == BlenderScope::UNKNOWN) {
         return {};
       }
@@ -784,8 +816,8 @@ static std::optional<AbcAttributeMapping> final_mapping_from_cache_mapping(
     }
     case CACHEFILE_ATTRIBUTE_MAP_TO_COLOR: {
       /* 3 values for RGB, 4 for RGBA */
-      BlenderScope rgb_scope_hint = matching_scope(scope_sizes, 3, num_elements);
-      BlenderScope rgba_scope_hint = matching_scope(scope_sizes, 4, num_elements);
+      BlenderScope rgb_scope_hint = matching_scope(scope_sizes, 3, num_elements, mapping.domain);
+      BlenderScope rgba_scope_hint = matching_scope(scope_sizes, 4, num_elements, mapping.domain);
 
       if (rgb_scope_hint != BlenderScope::UNKNOWN && rgba_scope_hint == BlenderScope::UNKNOWN) {
         return AbcAttributeMapping{CD_PROP_COLOR, rgb_scope_hint, false};
@@ -1101,8 +1133,11 @@ static std::optional<AbcAttributeMapping> determine_attribute_mapping(
   default_mapping.type = get_default_custom_data_type(config, param, default_mapping.is_rgba);
 
   if (desired_mapping) {
-    auto opt_final_mapping = final_mapping_from_cache_mapping(
-        *desired_mapping, config.scope_sizes, default_mapping, num_values);
+    auto opt_final_mapping = final_mapping_from_cache_mapping(*desired_mapping,
+                                                              config.scope_sizes,
+                                                              default_mapping,
+                                                              num_values *
+                                                                  param.getDataType().getExtent());
 
     if (opt_final_mapping.has_value()) {
       /* Verify that the scope is valid, it may be that we cannot apply the desired mapping, or

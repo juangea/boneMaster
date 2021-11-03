@@ -84,6 +84,16 @@ enum {
   CACHEFILE_ATTRIBUTE_MAP_TO_COLOR,
 };
 
+/* CacheAttributeMapping::domain */
+enum {
+  /* Try to automatically map the attribute to the right domain (default behavior without mapping.)
+   */
+  CACHEFILE_ATTR_MAP_DOMAIN_AUTO,
+  CACHEFILE_ATTR_MAP_DOMAIN_POINT,
+  CACHEFILE_ATTR_MAP_DOMAIN_FACE_CORNER,
+  CACHEFILE_ATTR_MAP_DOMAIN_FACE,
+};
+
 /* Custom data mapping for the attributes in the CacheFile. Since there might not be a standard way
  * of expressing what an attribute should be (e.g. is this float2 attribute a UV map?), and since
  * some software might write multi-dimensionnal data as arrays of 1D element (although the size of
@@ -94,7 +104,8 @@ typedef struct CacheAttributeMapping {
 
   char name[64];
   char mapping;
-  char _pad[7];
+  char domain;
+  char _pad[6];
 } CacheAttributeMapping;
 
 /* CacheFile::velocity_unit

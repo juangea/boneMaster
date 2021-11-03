@@ -6468,6 +6468,7 @@ static void cache_file_attribute_mapping_item(uiList *UNUSED(ui_list),
   uiLayout *row = uiLayoutRow(layout, true);
   uiItemR(row, itemptr, "name", UI_ITEM_R_NO_BG, "", ICON_NONE);
   uiItemR(row, itemptr, "mapping", UI_ITEM_R_NO_BG, "", ICON_NONE);
+  uiItemR(row, itemptr, "domain", UI_ITEM_R_NO_BG, "", ICON_NONE);
 }
 
 uiListType *UI_UL_cache_file_attribute_mappings()

@@ -260,6 +260,32 @@ static void rna_def_cachefile_attribute_mapping(BlenderRNA *brna)
   prop = RNA_def_property(srna, "mapping", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_items(prop, rna_enum_cache_attribute_mapping_items);
   RNA_def_property_update(prop, 0, "rna_CacheFile_attribute_mapping_update");
+  RNA_def_property_ui_text(prop, "Data Type", "Define the data type of the attribute");
+
+  static const EnumPropertyItem rna_enum_cache_attribute_domain_items[] = {
+      {CACHEFILE_ATTR_MAP_DOMAIN_AUTO,
+       "AUTO",
+       0,
+       "Automatic",
+       "Try to automatically determine the domain of the attribute"},
+      {CACHEFILE_ATTR_MAP_DOMAIN_POINT,
+       "POINT",
+       0,
+       "Point",
+       "The attribute is defined on the points"},
+      {CACHEFILE_ATTR_MAP_DOMAIN_FACE_CORNER,
+       "FACE_CORNER",
+       0,
+       "Face Corner",
+       "The attribute is defined on the face corners"},
+      {CACHEFILE_ATTR_MAP_DOMAIN_FACE, "FACE", 0, "Face", "The attribute is defined on the faces"},
+      {0, NULL, 0, NULL, NULL},
+  };
+
+  prop = RNA_def_property(srna, "domain", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, rna_enum_cache_attribute_domain_items);
+  RNA_def_property_update(prop, 0, "rna_CacheFile_attribute_mapping_update");
+  RNA_def_property_ui_text(prop, "Domain", "Define the domain on which the attribute is written");
 }
 
 static void rna_def_cachefile_attribute_mappings(BlenderRNA *brna, PropertyRNA *cprop)
