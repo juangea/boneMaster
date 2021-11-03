@@ -43,6 +43,8 @@
 #include "BLI_utildefines.h"
 #include "BLI_vector.hh"
 
+#include "BLT_translation.h"
+
 #include "BKE_attribute.h"
 #include "BKE_customdata.h"
 
@@ -1467,8 +1469,12 @@ struct AttributeReadOperator {
 
   ParsedAttributeDesc *desc;
 
+  bool has_error = false;
+
   void handle_error(AbcAttributeReadError error, const std::string &attribute_name)
   {
+    has_error |= error != AbcAttributeReadError::NO_ERROR;
+
     switch (error) {
       case AbcAttributeReadError::NO_ERROR: {
         return;
@@ -1537,6 +1543,11 @@ void read_arbitrary_attributes(const CDStreamConfig &config,
   for (ParsedAttributeDesc desc : attributes) {
     op.desc = &desc;
     abc_attribute_type_operation(desc.parent, desc.prop_header, op);
+  }
+
+  if (op.has_error && config.modifier_error_message) {
+    *config.modifier_error_message = N_(
+        "Errors while trying to read attributes, see console for details...");
   }
 }
 
