@@ -169,7 +169,7 @@ class AttributeSelector {
 
   bool original_coordinates_requested() const;
 
-  bool select_attribute(const BlenderScope bl_scope, const std::string &attr_name) const;
+  bool select_attribute(const std::string &attr_name) const;
 };
 
 void read_arbitrary_attributes(const CDStreamConfig &config,

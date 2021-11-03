@@ -553,14 +553,20 @@ static AttributeDomain attribute_domain_from_blender_scope(BlenderScope scope)
  * \{ */
 
 template<typename T> struct value_type_converter {
-  using blender_type = float;
-
-  static blender_type convert_value(T value)
+  static float map_to_bool(const T *value)
   {
-    return static_cast<float>(value);
+    return static_cast<bool>(value[0]);
   }
 
-  /* The following are used for attribute remapping. */
+  static float map_to_int32(const T *value)
+  {
+    return static_cast<int32_t>(value[0]);
+  }
+
+  static float map_to_float(const T *value)
+  {
+    return static_cast<float>(value[0]);
+  }
 
   static float2 map_to_float2(const T *value)
   {
@@ -608,98 +614,68 @@ template<typename T> struct value_type_converter {
   }
 };
 
-template<> struct value_type_converter<bool> {
-  using blender_type = bool;
-
-  static blender_type convert_value(bool value)
-  {
-    return value;
-  }
-};
-
-template<> struct value_type_converter<int> {
-  using blender_type = int;
-
-  static blender_type convert_value(int value)
-  {
-    return value;
-  }
-};
-
-template<> struct value_type_converter<Imath::V2f> {
-  using blender_type = float2;
-
-  static blender_type convert_value(Imath::V2f value)
-  {
-    return float2(value.x, value.y);
-  }
-};
-
 template<> struct value_type_converter<Imath::V3f> {
-  using blender_type = float3;
-
-  static blender_type convert_value(Imath::V3f value)
+  static float3 convert_value(const Imath::V3f &v)
   {
-    float3 tmp;
-    copy_yup_from_zup(tmp, value.getValue());
-    return tmp;
+    return v.getValue();
   }
 };
 
 template<> struct value_type_converter<Imath::V3d> {
-  using blender_type = float3;
-
-  static blender_type convert_value(Imath::V3d value)
+  static float3 convert_value(const Imath::V3d &v)
   {
-    Imath::V3f to_v3f = value;
-    float3 tmp;
-    copy_yup_from_zup(tmp, to_v3f.getValue());
-    return tmp;
+    const double *ptr = v.getValue();
+    return float3(
+        static_cast<float>(ptr[0]), static_cast<float>(ptr[1]), static_cast<float>(ptr[2]));
   }
 };
 
 template<> struct value_type_converter<Imath::C3f> {
-  using blender_type = ColorGeometry4f;
-
-  static blender_type convert_value(Imath::C3f value)
-  {
-    return ColorGeometry4f(value.x, value.y, value.z, 1.0f);
-  }
-
-  /* Vertex colors are a special case since the code is meant to be generic, the color attributes
-   * should also work for point clouds or curves, so by default we do not consider them as vertex
-   * colors. */
-  static MCol convert_mcol(Imath::C3f color)
+  static MCol convert_value(const Imath::C3f &v)
   {
     MCol mcol;
-    mcol.a = unit_float_to_uchar_clamp(color[0]);
-    mcol.r = unit_float_to_uchar_clamp(color[1]);
-    mcol.g = unit_float_to_uchar_clamp(color[2]);
+    mcol.a = unit_float_to_uchar_clamp(static_cast<float>(v[0]));
+    mcol.r = unit_float_to_uchar_clamp(static_cast<float>(v[1]));
+    mcol.g = unit_float_to_uchar_clamp(static_cast<float>(v[2]));
     mcol.b = 255;
     return mcol;
   }
 };
 
 template<> struct value_type_converter<Imath::C4f> {
-  using blender_type = ColorGeometry4f;
-
-  static blender_type convert_value(Imath::C4f value)
-  {
-    return ColorGeometry4f(value.r, value.g, value.b, value.a);
-  }
-
-  /* Vertex colors are a special case since the code is meant to be generic, the color attributes
-   * should also work for point clouds or curves, so by default we do not consider them as vertex
-   * colors. */
-  static MCol convert_mcol(Imath::C4f color)
+  static MCol convert_value(const Imath::C4f &v)
   {
     MCol mcol;
-    mcol.a = unit_float_to_uchar_clamp(color[0]);
-    mcol.r = unit_float_to_uchar_clamp(color[1]);
-    mcol.g = unit_float_to_uchar_clamp(color[2]);
-    mcol.b = unit_float_to_uchar_clamp(color[3]);
+    mcol.a = unit_float_to_uchar_clamp(static_cast<float>(v[0]));
+    mcol.r = unit_float_to_uchar_clamp(static_cast<float>(v[1]));
+    mcol.g = unit_float_to_uchar_clamp(static_cast<float>(v[2]));
+    mcol.b = unit_float_to_uchar_clamp(static_cast<float>(v[3]));
     return mcol;
   }
+};
+
+template<typename T> struct to_scalar_type {
+  using type = T;
+};
+
+template<> struct to_scalar_type<Imath::V2f> {
+  using type = float;
+};
+
+template<> struct to_scalar_type<Imath::V3f> {
+  using type = float;
+};
+
+template<> struct to_scalar_type<Imath::V3d> {
+  using type = double;
+};
+
+template<> struct to_scalar_type<Imath::C3f> {
+  using type = float;
+};
+
+template<> struct to_scalar_type<Imath::C4f> {
+  using type = float;
 };
 
 /** \} */
@@ -727,30 +703,6 @@ static size_t mcols_out_of_bounds_check(const size_t color_index,
   return 0;
 }
 
-template<typename TRAIT>
-static bool should_read_attribute(const AttributeSelector &attr_sel,
-                                  const ITypedGeomParam<TRAIT> &param,
-                                  CustomDataType custom_data_type,
-                                  ScopeSizeInfo scope_sizes,
-                                  ISampleSelector sample_selector)
-{
-  typename ITypedGeomParam<TRAIT>::Sample sample;
-  param.getIndexed(sample, sample_selector);
-
-  if (!sample.valid()) {
-    return false;
-  }
-
-  const TypedArraySample<TRAIT> &values = *sample.getVals();
-  const BlenderScope bl_scope = to_blender_scope(param.getScope(), values.size(), scope_sizes);
-
-  if (!is_valid_scope_for_layer(bl_scope, custom_data_type)) {
-    return false;
-  }
-
-  return attr_sel.select_attribute(bl_scope, param.getName());
-}
-
 /* -------------------------------------------------------------------- */
 
 /** \name AbcAttributeMapping
@@ -759,58 +711,36 @@ static bool should_read_attribute(const AttributeSelector &attr_sel,
  * some sort of token to indicate that the mapping is valid for the attribute.
  * \{ */
 
-enum class AbcAttributeMapping {
-  /* The mapping for the attribute is impossible. Either the number of values do not match, or the
-   * resolved scope is not supported. */
-  IMPOSSIBLE,
-  /* It may be possible that no mapping is needed, so this will just load the attribute directly if
-   * possible. */
-  IDENTITY,
-  /* The rest are the possible mappings. The color mapping are split between RGB and RGBA
-   * (depending on the number of elements in the original array). */
-  TO_UVS,
-  TO_VERTEX_COLORS_FROM_RGB,
-  TO_VERTEX_COLORS_FROM_RGBA,
-  TO_VERTEX_GROUP,
-  TO_FLOAT2,
-  TO_FLOAT3,
-  TO_COLOR_FROM_RGB,
-  TO_COLOR_FROM_RGBA,
+struct AbcAttributeMapping {
+  CustomDataType type;
+  BlenderScope scope;
+  /* This is to differentiate between RGB and RGBA colors. */
+  bool is_rgba = false;
 };
 
 /* Try to resolve the mapping for an attribute from the number of individual elements in the array
- * sample and the mapping as desired by the user. Returns the AbcAttributeMapping, and the Blender
- * scope for the attribute. */
-template<typename TRAIT>
-static AbcAttributeMapping determine_abc_mapping_and_scope(
+ * sample and the mapping as desired by the user. */
+static std::optional<AbcAttributeMapping> final_mapping_from_cache_mapping(
     const CacheAttributeMapping &mapping,
-    const TypedArraySample<TRAIT> &array_sample,
     const ScopeSizeInfo scope_sizes,
-    BlenderScope &r_scope_hint)
+    const AbcAttributeMapping original_mapping,
+    const uint num_elements)
 {
-  static_assert(std::is_floating_point_v<typename TRAIT::value_type>,
-                "Only floating point attributes can be remapped");
-
-  const size_t num_elements = array_sample.size();
   BLI_assert_msg(num_elements != 0,
                  "The number of elements in the array is null, although this should have been "
                  "checked before.");
 
-  r_scope_hint = BlenderScope::UNKNOWN;
-
   switch (mapping.mapping) {
     case CACHEFILE_ATTRIBUTE_MAP_NONE: {
-      return AbcAttributeMapping::IDENTITY;
+      return original_mapping;
     }
     case CACHEFILE_ATTRIBUTE_MAP_TO_UVS: {
       /* UVs have 2 values per element. */
-      r_scope_hint = matching_scope(scope_sizes, 2, num_elements);
-
-      if (!is_valid_uv_scope(r_scope_hint)) {
-        return AbcAttributeMapping::IMPOSSIBLE;
+      const BlenderScope scope_hint = matching_scope(scope_sizes, 2, num_elements);
+      if (!is_valid_uv_scope(scope_hint)) {
+        return {};
       }
-
-      return AbcAttributeMapping::TO_UVS;
+      return AbcAttributeMapping{CD_MLOOPUV, scope_hint};
     }
     case CACHEFILE_ATTRIBUTE_MAP_TO_VERTEX_COLORS: {
       /* 3 values for RGB, 4 for RGBA */
@@ -819,35 +749,38 @@ static AbcAttributeMapping determine_abc_mapping_and_scope(
 
       if (is_valid_vertex_color_scope(rgb_scope_hint) &&
           rgba_scope_hint == BlenderScope::UNKNOWN) {
-        r_scope_hint = rgb_scope_hint;
-        return AbcAttributeMapping::TO_VERTEX_COLORS_FROM_RGB;
+        return AbcAttributeMapping{CD_MCOL, rgb_scope_hint, false};
       }
 
       if (rgb_scope_hint == BlenderScope::UNKNOWN &&
           is_valid_vertex_color_scope(rgba_scope_hint)) {
-        r_scope_hint = rgba_scope_hint;
-        return AbcAttributeMapping::TO_VERTEX_COLORS_FROM_RGBA;
+        return AbcAttributeMapping{CD_MCOL, rgba_scope_hint, true};
       }
 
       /* Either both are unknown, or we matched two different scopes in which case we cannot
        * resolve the ambiguity. */
-      r_scope_hint = BlenderScope::UNKNOWN;
-      return AbcAttributeMapping::IMPOSSIBLE;
+      return {};
     }
     case CACHEFILE_ATTRIBUTE_MAP_TO_WEIGHT_GROUPS: {
-      r_scope_hint = matching_scope(scope_sizes, 1, num_elements);
+      BlenderScope r_scope_hint = matching_scope(scope_sizes, 1, num_elements);
       if (!is_valid_vertex_group_scope(r_scope_hint)) {
-        return AbcAttributeMapping::IMPOSSIBLE;
+        return {};
       }
-      return AbcAttributeMapping::TO_VERTEX_GROUP;
+      return AbcAttributeMapping{CD_BWEIGHT, r_scope_hint};
     }
     case CACHEFILE_ATTRIBUTE_MAP_TO_FLOAT2: {
-      r_scope_hint = matching_scope(scope_sizes, 2, num_elements);
-      return AbcAttributeMapping::TO_FLOAT2;
+      BlenderScope r_scope_hint = matching_scope(scope_sizes, 2, num_elements);
+      if (r_scope_hint == BlenderScope::UNKNOWN) {
+        return {};
+      }
+      return AbcAttributeMapping{CD_PROP_FLOAT2, r_scope_hint};
     }
     case CACHEFILE_ATTRIBUTE_MAP_TO_FLOAT3: {
-      r_scope_hint = matching_scope(scope_sizes, 3, num_elements);
-      return AbcAttributeMapping::TO_FLOAT3;
+      BlenderScope r_scope_hint = matching_scope(scope_sizes, 3, num_elements);
+      if (r_scope_hint == BlenderScope::UNKNOWN) {
+        return {};
+      }
+      return AbcAttributeMapping{CD_PROP_FLOAT3, r_scope_hint};
     }
     case CACHEFILE_ATTRIBUTE_MAP_TO_COLOR: {
       /* 3 values for RGB, 4 for RGBA */
@@ -855,23 +788,20 @@ static AbcAttributeMapping determine_abc_mapping_and_scope(
       BlenderScope rgba_scope_hint = matching_scope(scope_sizes, 4, num_elements);
 
       if (rgb_scope_hint != BlenderScope::UNKNOWN && rgba_scope_hint == BlenderScope::UNKNOWN) {
-        r_scope_hint = rgb_scope_hint;
-        return AbcAttributeMapping::TO_COLOR_FROM_RGB;
+        return AbcAttributeMapping{CD_PROP_COLOR, rgb_scope_hint, false};
       }
 
       if (rgb_scope_hint == BlenderScope::UNKNOWN && rgba_scope_hint != BlenderScope::UNKNOWN) {
-        r_scope_hint = rgba_scope_hint;
-        return AbcAttributeMapping::TO_COLOR_FROM_RGB;
+        return AbcAttributeMapping{CD_PROP_COLOR, rgb_scope_hint, true};
       }
 
       /* Either both are unknown, or we matched two different scopes in which case we cannot
        * resolve the ambiguity. */
-      r_scope_hint = BlenderScope::UNKNOWN;
-      return AbcAttributeMapping::IMPOSSIBLE;
+      return {};
     }
   }
 
-  return AbcAttributeMapping::IMPOSSIBLE;
+  return {};
 }
 
 /** \} */
@@ -1009,21 +939,6 @@ static void create_loop_layer_for_scope(const CDStreamConfig &config,
       config, source_scope, BlenderScope::LOOPS, cd_type, name, callback);
 }
 
-/* Wrapper around create_layer_for_scope with a default (generic) callback. */
-template<typename TRAIT>
-static void create_layer_for_scope_generic(const CDStreamConfig &config,
-                                           CustomDataType cd_type,
-                                           const std::string &name,
-                                           const TypedArraySample<TRAIT> &values,
-                                           BlenderScope bl_scope)
-{
-  using abc_type = typename TRAIT::value_type;
-  using blender_type = typename value_type_converter<abc_type>::blender_type;
-  create_layer_for_scope<blender_type>(config, bl_scope, cd_type, name, [&](size_t i) {
-    return value_type_converter<abc_type>::convert_value(values[i]);
-  });
-}
-
 enum class AbcAttributeReadError {
   /* Default value for success. */
   NO_ERROR,
@@ -1079,8 +994,42 @@ static AbcAttributeReadError process_velocity_attribute(const CDStreamConfig &co
   return AbcAttributeReadError::NO_ERROR;
 }
 
+static std::optional<AbcAttributeMapping> determine_attribute_mapping(
+    Alembic::AbcGeom::GeometryScope abc_scope,
+    size_t num_values,
+    ScopeSizeInfo scope_sizes,
+    CustomDataType cd_type,
+    const CacheAttributeMapping *desired_mapping)
+{
+  const BlenderScope bl_scope = to_blender_scope(abc_scope, num_values, scope_sizes);
+  AbcAttributeMapping default_mapping;
+  default_mapping.scope = bl_scope;
+  default_mapping.type = cd_type;
+
+  if (desired_mapping) {
+    auto opt_final_mapping = final_mapping_from_cache_mapping(
+        *desired_mapping, scope_sizes, default_mapping, num_values);
+
+    if (opt_final_mapping.has_value()) {
+      /* Verify that the scope is valid, it may be that we cannot apply the desired mapping, or
+       * that the data matches the default mapping, but that is also invalid. */
+      AbcAttributeMapping final_mapping = opt_final_mapping.value();
+      if (final_mapping.scope != BlenderScope::UNKNOWN) {
+        return opt_final_mapping;
+      }
+    }
+  }
+
+  if (bl_scope != BlenderScope::UNKNOWN) {
+    return default_mapping;
+  }
+
+  return {};
+}
+
 template<typename TRAIT>
 static AbcAttributeReadError process_typed_attribute(const CDStreamConfig &config,
+                                                     const CacheAttributeMapping *mapping,
                                                      CustomDataType cd_type,
                                                      const ITypedGeomParam<TRAIT> &param,
                                                      ISampleSelector iss)
@@ -1095,146 +1044,130 @@ static AbcAttributeReadError process_typed_attribute(const CDStreamConfig &confi
   const ScopeSizeInfo &scope_sizes = config.scope_sizes;
   const AttributeSelector &attr_sel = *config.attr_selector;
 
-  if (!should_read_attribute(attr_sel, param, cd_type, scope_sizes, iss)) {
+  const TypedArraySample<TRAIT> &values = *sample.getVals();
+  const size_t num_values = values.size();
+
+  std::optional<AbcAttributeMapping> opt_abc_mapping = determine_attribute_mapping(
+      param.getScope(), num_values, scope_sizes, cd_type, mapping);
+
+  if (!opt_abc_mapping.has_value()) {
+    return AbcAttributeReadError::MAPPING_IMPOSSIBLE;
+  }
+
+  AbcAttributeMapping abc_mapping = opt_abc_mapping.value();
+  BlenderScope bl_scope = abc_mapping.scope;
+
+  if (!attr_sel.select_attribute(param.getName())) {
     /* Attribute is not meant to be read from here (e.g. velocity or generated coordinates),
      * not an error. */
     return AbcAttributeReadError::NO_ERROR;
   }
 
-  const TypedArraySample<TRAIT> &values = *sample.getVals();
-  BlenderScope bl_scope = to_blender_scope(param.getScope(), values.size(), scope_sizes);
-  create_layer_for_scope_generic(config, cd_type, param.getName(), values, bl_scope);
-  return AbcAttributeReadError::NO_ERROR;
-}
-
-template<typename TRAIT>
-static AbcAttributeReadError process_typed_attribute_with_mapping(
-    const CDStreamConfig &config,
-    const CacheAttributeMapping *mapping,
-    CustomDataType cd_type,
-    const ITypedGeomParam<TRAIT> &param,
-    ISampleSelector iss)
-{
-  typename ITypedGeomParam<TRAIT>::Sample sample;
-  param.getIndexed(sample, iss);
-
-  if (!sample.valid()) {
-    return AbcAttributeReadError::INVALID_ATTRIBUTE;
-  }
-
-  const ScopeSizeInfo &scope_sizes = config.scope_sizes;
-  const AttributeSelector &attr_sel = *config.attr_selector;
-
-  const TypedArraySample<TRAIT> &values = *sample.getVals();
-
-  if (!mapping) {
-    if (!should_read_attribute(attr_sel, param, cd_type, scope_sizes, iss)) {
-      /* Attribute is not meant to be read from here (e.g. velocity or generated coordinates),
-       * not an error. */
-      return AbcAttributeReadError::NO_ERROR;
-    }
-
-    BlenderScope bl_scope = to_blender_scope(param.getScope(), values.size(), scope_sizes);
-    create_layer_for_scope_generic(config, cd_type, param.getName(), values, bl_scope);
-    return AbcAttributeReadError::NO_ERROR;
-  }
-
-  BlenderScope bl_scope;
-  AbcAttributeMapping abc_mapping = determine_abc_mapping_and_scope(
-      *mapping, values, scope_sizes, bl_scope);
-
-  if (bl_scope == BlenderScope::UNKNOWN) {
-    return AbcAttributeReadError::SCOPE_RESOLUTION_FAILED;
-  }
-
-  /* TODO(kevindietrich): check if selected */
-
-  /* TODO(kevindietrich): how to verify that the scope from the mapping matches the one from the
-   * archive? */
-
   using abc_type = typename TRAIT::value_type;
-  const abc_type *input_data = static_cast<const abc_type *>(values.get());
+  using abc_scalar_type = typename to_scalar_type<abc_type>::type;
 
-  switch (abc_mapping) {
-    case AbcAttributeMapping::IMPOSSIBLE: {
+  const abc_scalar_type *input_data = reinterpret_cast<const abc_scalar_type *>(values.get());
+
+  switch (abc_mapping.type) {
+    default: {
       return AbcAttributeReadError::MAPPING_IMPOSSIBLE;
     }
-    case AbcAttributeMapping::IDENTITY: {
-      bl_scope = to_blender_scope(param.getScope(), values.size(), scope_sizes);
-      create_layer_for_scope_generic(config, cd_type, param.getName(), values, bl_scope);
+    case CD_PROP_BOOL: {
+      create_loop_layer_for_scope<bool>(
+          config, bl_scope, CD_PROP_BOOL, param.getName(), [&](size_t i) {
+            return value_type_converter<abc_scalar_type>::map_to_bool(&input_data[i]);
+          });
       return AbcAttributeReadError::NO_ERROR;
     }
-    case AbcAttributeMapping::TO_UVS: {
+    case CD_PROP_INT32: {
+      create_loop_layer_for_scope<int32_t>(
+          config, bl_scope, CD_PROP_INT32, param.getName(), [&](size_t i) {
+            return value_type_converter<abc_scalar_type>::map_to_int32(&input_data[i]);
+          });
+      return AbcAttributeReadError::NO_ERROR;
+    }
+    case CD_PROP_FLOAT: {
+      create_loop_layer_for_scope<float>(
+          config, bl_scope, CD_PROP_FLOAT, param.getName(), [&](size_t i) {
+            return value_type_converter<abc_scalar_type>::map_to_float(&input_data[i]);
+          });
+      return AbcAttributeReadError::NO_ERROR;
+    }
+    case CD_PROP_FLOAT2: {
+      create_layer_for_scope<float2>(
+          config, bl_scope, CD_PROP_FLOAT2, param.getName(), [&](size_t i) {
+            return value_type_converter<abc_scalar_type>::map_to_float2(&input_data[i * 2]);
+          });
+      return AbcAttributeReadError::NO_ERROR;
+    }
+    case CD_ORCO:
+    case CD_PROP_FLOAT3: {
+      create_layer_for_scope<float3>(
+          config, bl_scope, abc_mapping.type, param.getName(), [&](size_t i) {
+            return value_type_converter<abc_scalar_type>::map_to_float3(&input_data[i * 3]);
+          });
+      return AbcAttributeReadError::NO_ERROR;
+    }
+    case CD_PROP_COLOR: {
+      if (abc_mapping.is_rgba) {
+        create_layer_for_scope<ColorGeometry4f>(
+            config, bl_scope, CD_PROP_COLOR, param.getName(), [&](size_t i) {
+              return value_type_converter<abc_scalar_type>::map_to_color_from_rgba(
+                  &input_data[i * 4]);
+            });
+      }
+      else {
+        create_layer_for_scope<ColorGeometry4f>(
+            config, bl_scope, CD_PROP_COLOR, param.getName(), [&](size_t i) {
+              return value_type_converter<abc_scalar_type>::map_to_color_from_rgb(
+                  &input_data[i * 3]);
+            });
+      }
+      return AbcAttributeReadError::NO_ERROR;
+    }
+    case CD_MLOOPUV: {
       if (!can_add_uv_layer(config)) {
         return AbcAttributeReadError::TOO_MANY_ATTRIBUTES;
       }
 
       create_loop_layer_for_scope<float2>(
           config, bl_scope, CD_MLOOPUV, param.getName(), [&](size_t i) {
-            return value_type_converter<abc_type>::map_to_float2(&input_data[i * 2]);
+            return value_type_converter<abc_scalar_type>::map_to_float2(&input_data[i * 2]);
           });
 
       return AbcAttributeReadError::NO_ERROR;
     }
-    case AbcAttributeMapping::TO_VERTEX_COLORS_FROM_RGB: {
+    case CD_MCOL: {
       if (!can_add_vertex_color_layer(config)) {
         return AbcAttributeReadError::TOO_MANY_ATTRIBUTES;
       }
 
-      create_loop_layer_for_scope<MCol>(
-          config, bl_scope, CD_MLOOPCOL, param.getName(), [&](size_t i) {
-            return value_type_converter<abc_type>::map_to_mcol_from_rgb(&input_data[i * 3]);
-          });
-      return AbcAttributeReadError::NO_ERROR;
-    }
-    case AbcAttributeMapping::TO_VERTEX_COLORS_FROM_RGBA: {
-      if (!can_add_vertex_color_layer(config)) {
-        return AbcAttributeReadError::TOO_MANY_ATTRIBUTES;
+      if (abc_mapping.is_rgba) {
+        create_loop_layer_for_scope<MCol>(
+            config, bl_scope, CD_MLOOPCOL, param.getName(), [&](size_t i) {
+              return value_type_converter<abc_scalar_type>::map_to_mcol_from_rgb(
+                  &input_data[i * 3]);
+            });
+      }
+      else {
+        create_loop_layer_for_scope<MCol>(
+            config, bl_scope, CD_MLOOPCOL, param.getName(), [&](size_t i) {
+              return value_type_converter<abc_scalar_type>::map_to_mcol_from_rgba(
+                  &input_data[i * 4]);
+            });
       }
 
-      create_loop_layer_for_scope<MCol>(
-          config, bl_scope, CD_MLOOPCOL, param.getName(), [&](size_t i) {
-            return value_type_converter<abc_type>::map_to_mcol_from_rgba(&input_data[i * 4]);
-          });
       return AbcAttributeReadError::NO_ERROR;
     }
-    case AbcAttributeMapping::TO_VERTEX_GROUP: {
+    case CD_BWEIGHT: {
       if (config.mesh) {
         Mesh *mesh = config.mesh;
         MVert *mvert = config.mvert;
         for (int i = 0; i < mesh->totvert; i++) {
           mvert[i].bweight = unit_float_to_uchar_clamp(
-              value_type_converter<abc_type>::convert_value(input_data[i]));
+              value_type_converter<abc_scalar_type>::map_to_float(&input_data[i]));
         }
       }
-      return AbcAttributeReadError::NO_ERROR;
-    }
-    case AbcAttributeMapping::TO_FLOAT2: {
-      create_layer_for_scope<float2>(
-          config, bl_scope, CD_PROP_FLOAT2, param.getName(), [&](size_t i) {
-            return value_type_converter<abc_type>::map_to_float2(&input_data[i * 2]);
-          });
-      return AbcAttributeReadError::NO_ERROR;
-    }
-    case AbcAttributeMapping::TO_FLOAT3: {
-      create_layer_for_scope<float3>(
-          config, bl_scope, CD_PROP_FLOAT3, param.getName(), [&](size_t i) {
-            return value_type_converter<abc_type>::map_to_float3(&input_data[i * 3]);
-          });
-      return AbcAttributeReadError::NO_ERROR;
-    }
-    case AbcAttributeMapping::TO_COLOR_FROM_RGB: {
-      create_layer_for_scope<ColorGeometry4f>(
-          config, bl_scope, CD_PROP_COLOR, param.getName(), [&](size_t i) {
-            return value_type_converter<abc_type>::map_to_color_from_rgb(&input_data[i * 3]);
-          });
-      return AbcAttributeReadError::NO_ERROR;
-    }
-    case AbcAttributeMapping::TO_COLOR_FROM_RGBA: {
-      create_layer_for_scope<ColorGeometry4f>(
-          config, bl_scope, CD_PROP_COLOR, param.getName(), [&](size_t i) {
-            return value_type_converter<abc_type>::map_to_color_from_rgba(&input_data[i * 4]);
-          });
       return AbcAttributeReadError::NO_ERROR;
     }
   }
@@ -1344,7 +1277,7 @@ static AbcAttributeReadError read_mesh_colors_generic(const CDStreamConfig &conf
         }
 
         using abc_type = typename TRAIT::value_type;
-        return value_type_converter<abc_type>::convert_mcol(values[color_index]);
+        return value_type_converter<abc_type>::convert_value(values[color_index]);
       });
 
   return AbcAttributeReadError::NO_ERROR;
@@ -1549,63 +1482,64 @@ struct AttributeReadOperator {
 
   void operator()(const IFloatGeomParam &param)
   {
-    AbcAttributeReadError error = process_typed_attribute_with_mapping(
+    AbcAttributeReadError error = process_typed_attribute(
         config, desc->mapping, CD_PROP_FLOAT, param, sample_sel);
     handle_error(error, desc->prop_header.getName());
   }
 
   void operator()(const IDoubleGeomParam &param)
   {
-    AbcAttributeReadError error = process_typed_attribute_with_mapping(
+    AbcAttributeReadError error = process_typed_attribute(
         config, desc->mapping, CD_PROP_FLOAT, param, sample_sel);
     handle_error(error, desc->prop_header.getName());
   }
 
   void operator()(const IBoolGeomParam &param)
   {
-    AbcAttributeReadError error = process_typed_attribute(config, CD_PROP_BOOL, param, sample_sel);
+    AbcAttributeReadError error = process_typed_attribute(
+        config, desc->mapping, CD_PROP_BOOL, param, sample_sel);
     handle_error(error, desc->prop_header.getName());
   }
 
   void operator()(const ICharGeomParam &param)
   {
     AbcAttributeReadError error = process_typed_attribute(
-        config, CD_PROP_INT32, param, sample_sel);
+        config, desc->mapping, CD_PROP_INT32, param, sample_sel);
     handle_error(error, desc->prop_header.getName());
   }
 
   void operator()(const IInt16GeomParam &param)
   {
     AbcAttributeReadError error = process_typed_attribute(
-        config, CD_PROP_INT32, param, sample_sel);
+        config, desc->mapping, CD_PROP_INT32, param, sample_sel);
     handle_error(error, desc->prop_header.getName());
   }
 
   void operator()(const IInt32GeomParam &param)
   {
     AbcAttributeReadError error = process_typed_attribute(
-        config, CD_PROP_INT32, param, sample_sel);
+        config, desc->mapping, CD_PROP_INT32, param, sample_sel);
     handle_error(error, desc->prop_header.getName());
   }
 
   void operator()(const IUcharGeomParam &param)
   {
     AbcAttributeReadError error = process_typed_attribute(
-        config, CD_PROP_INT32, param, sample_sel);
+        config, desc->mapping, CD_PROP_INT32, param, sample_sel);
     handle_error(error, desc->prop_header.getName());
   }
 
   void operator()(const IUInt16GeomParam &param)
   {
     AbcAttributeReadError error = process_typed_attribute(
-        config, CD_PROP_INT32, param, sample_sel);
+        config, desc->mapping, CD_PROP_INT32, param, sample_sel);
     handle_error(error, desc->prop_header.getName());
   }
 
   void operator()(const IUInt32GeomParam &param)
   {
     AbcAttributeReadError error = process_typed_attribute(
-        config, CD_PROP_INT32, param, sample_sel);
+        config, desc->mapping, CD_PROP_INT32, param, sample_sel);
     handle_error(error, desc->prop_header.getName());
   }
 
@@ -1628,7 +1562,7 @@ struct AttributeReadOperator {
     }
     else {
       AbcAttributeReadError error = process_typed_attribute(
-          config, CD_PROP_FLOAT2, param, sample_sel);
+          config, desc->mapping, CD_PROP_FLOAT2, param, sample_sel);
       handle_error(error, desc->prop_header.getName());
     }
   }
@@ -1636,28 +1570,28 @@ struct AttributeReadOperator {
   void operator()(const IN3fGeomParam &param)
   {
     AbcAttributeReadError error = process_typed_attribute(
-        config, CD_PROP_FLOAT3, param, sample_sel);
+        config, desc->mapping, CD_PROP_FLOAT3, param, sample_sel);
     handle_error(error, desc->prop_header.getName());
   }
 
   void operator()(const IN3dGeomParam &param)
   {
     AbcAttributeReadError error = process_typed_attribute(
-        config, CD_PROP_FLOAT3, param, sample_sel);
+        config, desc->mapping, CD_PROP_FLOAT3, param, sample_sel);
     handle_error(error, desc->prop_header.getName());
   }
 
   void operator()(const IP3fGeomParam &param)
   {
     AbcAttributeReadError error = process_typed_attribute(
-        config, CD_PROP_FLOAT3, param, sample_sel);
+        config, desc->mapping, CD_PROP_FLOAT3, param, sample_sel);
     handle_error(error, desc->prop_header.getName());
   }
 
   void operator()(const IP3dGeomParam &param)
   {
     AbcAttributeReadError error = process_typed_attribute(
-        config, CD_PROP_FLOAT3, param, sample_sel);
+        config, desc->mapping, CD_PROP_FLOAT3, param, sample_sel);
     handle_error(error, desc->prop_header.getName());
   }
 
@@ -1666,7 +1600,8 @@ struct AttributeReadOperator {
     const std::string &prop_name = desc->prop_header.getName();
     if (prop_name == propNameOriginalCoordinates) {
       if (attr_sel.original_coordinates_requested()) {
-        AbcAttributeReadError error = process_typed_attribute(config, CD_ORCO, param, sample_sel);
+        AbcAttributeReadError error = process_typed_attribute(
+            config, desc->mapping, CD_ORCO, param, sample_sel);
         handle_error(error, prop_name);
       }
     }
@@ -1677,7 +1612,7 @@ struct AttributeReadOperator {
     }
     else {
       AbcAttributeReadError error = process_typed_attribute(
-          config, CD_PROP_FLOAT3, param, sample_sel);
+          config, desc->mapping, CD_PROP_FLOAT3, param, sample_sel);
       handle_error(error, prop_name);
     }
   }
@@ -1688,7 +1623,8 @@ struct AttributeReadOperator {
     /* Some softaware may write ORCOs as doubles. */
     if (prop_name == propNameOriginalCoordinates) {
       if (attr_sel.original_coordinates_requested()) {
-        AbcAttributeReadError error = process_typed_attribute(config, CD_ORCO, param, sample_sel);
+        AbcAttributeReadError error = process_typed_attribute(
+            config, desc->mapping, CD_ORCO, param, sample_sel);
         handle_error(error, prop_name);
       }
     }
@@ -1700,7 +1636,7 @@ struct AttributeReadOperator {
     }
     else {
       AbcAttributeReadError error = process_typed_attribute(
-          config, CD_PROP_FLOAT3, param, sample_sel);
+          config, desc->mapping, CD_PROP_FLOAT3, param, sample_sel);
       handle_error(error, prop_name);
     }
   }
@@ -1724,7 +1660,7 @@ struct AttributeReadOperator {
     }
     else {
       AbcAttributeReadError error = process_typed_attribute(
-          config, CD_PROP_COLOR, param, sample_sel);
+          config, desc->mapping, CD_PROP_COLOR, param, sample_sel);
       handle_error(error, desc->prop_header.getName());
     }
   }
@@ -1748,7 +1684,7 @@ struct AttributeReadOperator {
     }
     else {
       AbcAttributeReadError error = process_typed_attribute(
-          config, CD_PROP_COLOR, param, sample_sel);
+          config, desc->mapping, CD_PROP_COLOR, param, sample_sel);
       handle_error(error, desc->prop_header.getName());
     }
   }
@@ -1854,13 +1790,8 @@ bool AttributeSelector::original_coordinates_requested() const
   return (read_flags & MOD_MESHSEQ_READ_VERT) != 0;
 }
 
-bool AttributeSelector::select_attribute(const BlenderScope bl_scope,
-                                         const std::string &attr_name) const
+bool AttributeSelector::select_attribute(const std::string &attr_name) const
 {
-  if (bl_scope == BlenderScope::UNKNOWN) {
-    return false;
-  }
-
   /* Empty names are invalid. Those beginning with a '.' are special and correspond to data
    * accessible through specific APIs (e.g. the vertices are named ".P") */
   if (attr_name.empty() || attr_name[0] == '.') {
