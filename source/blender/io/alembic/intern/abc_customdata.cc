@@ -603,8 +603,10 @@ template<typename T> struct value_type_converter {
 
   static float3 map_to_float3(const T *value)
   {
-    return {
+    float3 result{
         static_cast<float>(value[0]), static_cast<float>(value[1]), static_cast<float>(value[2])};
+    copy_zup_from_yup(result, result);
+    return result;
   }
 
   static ColorGeometry4f map_to_color_from_rgb(const T *ptr)
