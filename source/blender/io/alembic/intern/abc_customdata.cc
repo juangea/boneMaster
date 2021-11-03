@@ -579,12 +579,12 @@ static AttributeDomain attribute_domain_from_blender_scope(BlenderScope scope)
  * \{ */
 
 template<typename T> struct value_type_converter {
-  static float map_to_bool(const T *value)
+  static bool map_to_bool(const T *value)
   {
     return static_cast<bool>(value[0]);
   }
 
-  static float map_to_int32(const T *value)
+  static int32_t map_to_int32(const T *value)
   {
     return static_cast<int32_t>(value[0]);
   }
@@ -987,44 +987,6 @@ enum class AbcAttributeReadError {
    * vertex colors). */
   TOO_MANY_ATTRIBUTES,
 };
-
-/* Special function for velocities since we overwride the name. */
-template<typename TRAIT>
-static AbcAttributeReadError process_velocity_attribute(const CDStreamConfig &config,
-                                                        const ITypedGeomParam<TRAIT> &param,
-                                                        const ISampleSelector iss,
-                                                        const float velocity_scale)
-{
-  if (!config.id || velocity_scale == 0.0f) {
-    return AbcAttributeReadError::NO_ERROR;
-  }
-
-  if (!param.valid()) {
-    return AbcAttributeReadError::INVALID_ATTRIBUTE;
-  }
-
-  typename ITypedGeomParam<TRAIT>::Sample sample;
-  param.getIndexed(sample, iss);
-
-  if (!sample.valid()) {
-    return AbcAttributeReadError::INVALID_ATTRIBUTE;
-  }
-
-  const TypedArraySample<TRAIT> &values = *sample.getVals();
-
-  BlenderScope scope = to_blender_scope(param.getScope(), values.size(), config.scope_sizes);
-
-  if (scope != BlenderScope::POINT) {
-    return AbcAttributeReadError::INVALID_SCOPE;
-  }
-
-  using abc_type = typename TRAIT::value_type;
-  create_layer_for_scope<float3>(config, scope, CD_PROP_FLOAT3, "velocity", [&](size_t i) {
-    return value_type_converter<abc_type>::convert_value(values[i]) * velocity_scale;
-  });
-
-  return AbcAttributeReadError::NO_ERROR;
-}
 
 static CustomDataType custom_data_type_for_pod(PlainOldDataType pod_type, uint extent)
 {
