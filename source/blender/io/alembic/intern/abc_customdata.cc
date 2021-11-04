@@ -26,6 +26,7 @@
 
 #include <Alembic/AbcGeom/All.h>
 #include <algorithm>
+#include <optional>
 #include <unordered_map>
 
 #include "DNA_cachefile_types.h"
@@ -1108,7 +1109,7 @@ static std::optional<AbcAttributeMapping> determine_attribute_mapping(
     if (opt_final_mapping.has_value()) {
       /* Verify that the scope is valid, it may be that we cannot apply the desired mapping, or
        * that the data matches the default mapping, but that is also invalid. */
-      AbcAttributeMapping final_mapping = opt_final_mapping.value();
+      AbcAttributeMapping final_mapping = *opt_final_mapping;
       if (final_mapping.scope != BlenderScope::UNKNOWN) {
         return opt_final_mapping;
       }
@@ -1148,7 +1149,7 @@ static AbcAttributeReadError process_typed_attribute(const CDStreamConfig &confi
     return AbcAttributeReadError::MAPPING_IMPOSSIBLE;
   }
 
-  AbcAttributeMapping abc_mapping = opt_abc_mapping.value();
+  AbcAttributeMapping abc_mapping = *opt_abc_mapping;
   BlenderScope bl_scope = abc_mapping.scope;
 
   if (!attr_sel.select_attribute(param.getName())) {
