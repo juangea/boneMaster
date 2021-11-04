@@ -27,3 +27,6 @@ struct wmOperatorType;
 
 void CACHEFILE_OT_open(struct wmOperatorType *ot);
 void CACHEFILE_OT_reload(struct wmOperatorType *ot);
+
+void CACHEFILE_OT_attribute_mapping_add(struct wmOperatorType *ot);
+void CACHEFILE_OT_attribute_mapping_remove(struct wmOperatorType *ot);

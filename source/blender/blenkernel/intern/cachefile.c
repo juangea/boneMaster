@@ -85,6 +85,7 @@ static void cache_file_copy_data(Main *UNUSED(bmain),
   cache_file_dst->handle = NULL;
   cache_file_dst->handle_readers = NULL;
   BLI_duplicatelist(&cache_file_dst->object_paths, &cache_file_src->object_paths);
+  BLI_duplicatelist(&cache_file_dst->attribute_mappings, &cache_file_src->attribute_mappings);
 }
 
 static void cache_file_free_data(ID *id)
@@ -92,6 +93,7 @@ static void cache_file_free_data(ID *id)
   CacheFile *cache_file = (CacheFile *)id;
   cachefile_handle_free(cache_file);
   BLI_freelistN(&cache_file->object_paths);
+  BLI_freelistN(&cache_file->attribute_mappings);
 }
 
 static void cache_file_blend_write(BlendWriter *writer, ID *id, const void *id_address)
@@ -110,6 +112,11 @@ static void cache_file_blend_write(BlendWriter *writer, ID *id, const void *id_a
   if (cache_file->adt) {
     BKE_animdata_blend_write(writer, cache_file->adt);
   }
+
+  /* write attribute mappings */
+  LISTBASE_FOREACH (CacheAttributeMapping *, mapping, &cache_file->attribute_mappings) {
+    BLO_write_struct(writer, CacheAttributeMapping, mapping);
+  }
 }
 
 static void cache_file_blend_read_data(BlendDataReader *reader, ID *id)
@@ -123,6 +130,9 @@ static void cache_file_blend_read_data(BlendDataReader *reader, ID *id)
   /* relink animdata */
   BLO_read_data_address(reader, &cache_file->adt);
   BKE_animdata_blend_read_data(reader, cache_file->adt);
+
+  /* relink attribute mappings */
+  BLO_read_list(reader, &cache_file->attribute_mappings);
 }
 
 IDTypeInfo IDType_ID_CF = {
@@ -431,4 +441,10 @@ bool BKE_cache_file_uses_render_procedural(const CacheFile *cache_file,
   /* The render time procedural is only enabled during viewport rendering. */
   const bool is_final_render = (eEvaluationMode)dag_eval_mode == DAG_EVAL_RENDER;
   return cache_file->use_render_procedural && !is_final_render;
+}
+
+CacheAttributeMapping *BKE_cachefile_get_active_attribute_mapping(CacheFile *cache_file)
+{
+  /* BLI_findlink handles the out of bounds checks. */
+  return BLI_findlink(&cache_file->attribute_mappings, cache_file->active_attribute_mapping - 1);
 }

@@ -42,6 +42,7 @@ class AbcMeshReader final : public AbcObjectReader {
 
   struct Mesh *read_mesh(struct Mesh *existing_mesh,
                          const Alembic::Abc::ISampleSelector &sample_sel,
+                         const AttributeSelector *attribute_selector,
                          const int read_flag,
                          const char *velocity_name,
                          const float velocity_scale,
@@ -75,6 +76,7 @@ class AbcSubDReader final : public AbcObjectReader {
   void readObjectData(Main *bmain, const Alembic::Abc::ISampleSelector &sample_sel) override;
   struct Mesh *read_mesh(struct Mesh *existing_mesh,
                          const Alembic::Abc::ISampleSelector &sample_sel,
+                         const AttributeSelector *attribute_selector,
                          const int read_flag,
                          const char *velocity_name,
                          const float velocity_scale,
@@ -85,6 +87,9 @@ void read_mverts(MVert *mverts,
                  const Alembic::AbcGeom::P3fArraySamplePtr positions,
                  const Alembic::AbcGeom::N3fArraySamplePtr normals);
 
-CDStreamConfig get_config(struct Mesh *mesh, bool use_vertex_interpolation);
+CDStreamConfig get_config(struct Mesh *mesh,
+                          const AttributeSelector *attr_selector,
+                          const std::string &iobject_full_name,
+                          bool use_vertex_interpolation);
 
 }  // namespace blender::io::alembic

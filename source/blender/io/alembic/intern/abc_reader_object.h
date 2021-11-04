@@ -33,6 +33,8 @@ using Alembic::AbcCoreAbstract::chrono_t;
 
 namespace blender::io::alembic {
 
+class AttributeSelector;
+
 struct ImportSettings {
   bool do_convert_mat;
   float conversion_mat[4][4];
@@ -149,6 +151,7 @@ class AbcObjectReader {
 
   virtual struct Mesh *read_mesh(struct Mesh *mesh,
                                  const Alembic::Abc::ISampleSelector &sample_sel,
+                                 const AttributeSelector *attribute_selector,
                                  const int read_flag,
                                  const char *velocity_name,
                                  const float velocity_scale,

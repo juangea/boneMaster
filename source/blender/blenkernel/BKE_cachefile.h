@@ -27,6 +27,7 @@
 extern "C" {
 #endif
 
+struct CacheAttributeMapping;
 struct CacheFile;
 struct CacheReader;
 struct Depsgraph;
@@ -64,6 +65,9 @@ void BKE_cachefile_reader_free(struct CacheFile *cache_file, struct CacheReader 
 bool BKE_cache_file_uses_render_procedural(const struct CacheFile *cache_file,
                                            struct Scene *scene,
                                            const int dag_eval_mode);
+
+struct CacheAttributeMapping *BKE_cachefile_get_active_attribute_mapping(
+    struct CacheFile *cache_file);
 
 #ifdef __cplusplus
 }
