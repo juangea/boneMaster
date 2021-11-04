@@ -978,7 +978,7 @@ static void create_loop_layer_for_scope(const CDStreamConfig &config,
 
 enum class AbcAttributeReadError {
   /* Default value for success. */
-  NO_ERROR,
+  READ_SUCCESS,
   /* The attribute is invalid (e.g. corrupt file or data). */
   INVALID_ATTRIBUTE,
   /* We cannot determine the scope for the attribute, either from mismatching element size, or
@@ -1155,7 +1155,7 @@ static AbcAttributeReadError process_typed_attribute(const CDStreamConfig &confi
   if (!attr_sel.select_attribute(param.getName())) {
     /* Attribute is not meant to be read from here (e.g. velocity or generated coordinates),
      * not an error. */
-    return AbcAttributeReadError::NO_ERROR;
+    return AbcAttributeReadError::READ_SUCCESS;
   }
 
   using abc_type = typename TRAIT::value_type;
@@ -1172,28 +1172,28 @@ static AbcAttributeReadError process_typed_attribute(const CDStreamConfig &confi
           config, bl_scope, CD_PROP_BOOL, param.getName(), [&](size_t i) {
             return value_type_converter<abc_scalar_type>::map_to_bool(&input_data[i]);
           });
-      return AbcAttributeReadError::NO_ERROR;
+      return AbcAttributeReadError::READ_SUCCESS;
     }
     case CD_PROP_INT32: {
       create_loop_layer_for_scope<int32_t>(
           config, bl_scope, CD_PROP_INT32, param.getName(), [&](size_t i) {
             return value_type_converter<abc_scalar_type>::map_to_int32(&input_data[i]);
           });
-      return AbcAttributeReadError::NO_ERROR;
+      return AbcAttributeReadError::READ_SUCCESS;
     }
     case CD_PROP_FLOAT: {
       create_loop_layer_for_scope<float>(
           config, bl_scope, CD_PROP_FLOAT, param.getName(), [&](size_t i) {
             return value_type_converter<abc_scalar_type>::map_to_float(&input_data[i]);
           });
-      return AbcAttributeReadError::NO_ERROR;
+      return AbcAttributeReadError::READ_SUCCESS;
     }
     case CD_PROP_FLOAT2: {
       create_layer_for_scope<float2>(
           config, bl_scope, CD_PROP_FLOAT2, param.getName(), [&](size_t i) {
             return value_type_converter<abc_scalar_type>::map_to_float2(&input_data[i * 2]);
           });
-      return AbcAttributeReadError::NO_ERROR;
+      return AbcAttributeReadError::READ_SUCCESS;
     }
     case CD_ORCO:
     case CD_PROP_FLOAT3: {
@@ -1206,7 +1206,7 @@ static AbcAttributeReadError process_typed_attribute(const CDStreamConfig &confi
           config, bl_scope, abc_mapping.type, param_name, [&](size_t i) {
             return value_type_converter<abc_scalar_type>::map_to_float3(&input_data[i * 3]);
           });
-      return AbcAttributeReadError::NO_ERROR;
+      return AbcAttributeReadError::READ_SUCCESS;
     }
     case CD_PROP_COLOR: {
       if (abc_mapping.is_rgba) {
@@ -1223,7 +1223,7 @@ static AbcAttributeReadError process_typed_attribute(const CDStreamConfig &confi
                   &input_data[i * 3]);
             });
       }
-      return AbcAttributeReadError::NO_ERROR;
+      return AbcAttributeReadError::READ_SUCCESS;
     }
     case CD_MLOOPUV: {
       if (!can_add_uv_layer(config)) {
@@ -1236,7 +1236,7 @@ static AbcAttributeReadError process_typed_attribute(const CDStreamConfig &confi
             return value_type_converter<abc_scalar_type>::map_to_float2(&input_data[i * 2]);
           });
 
-      return AbcAttributeReadError::NO_ERROR;
+      return AbcAttributeReadError::READ_SUCCESS;
     }
     case CD_MCOL: {
       if (!can_add_vertex_color_layer(config)) {
@@ -1277,7 +1277,7 @@ static AbcAttributeReadError process_typed_attribute(const CDStreamConfig &confi
                 &input_data[loop_index * (3 + abc_mapping.is_rgba)]);
           });
 
-      return AbcAttributeReadError::NO_ERROR;
+      return AbcAttributeReadError::READ_SUCCESS;
     }
     case CD_BWEIGHT: {
       if (config.mesh) {
@@ -1288,10 +1288,10 @@ static AbcAttributeReadError process_typed_attribute(const CDStreamConfig &confi
               value_type_converter<abc_scalar_type>::map_to_float(&input_data[i]));
         }
       }
-      return AbcAttributeReadError::NO_ERROR;
+      return AbcAttributeReadError::READ_SUCCESS;
     }
   }
-  return AbcAttributeReadError::NO_ERROR;
+  return AbcAttributeReadError::READ_SUCCESS;
 }
 
 static AbcAttributeReadError read_mesh_uvs(const CDStreamConfig &config,
@@ -1335,7 +1335,7 @@ static AbcAttributeReadError read_mesh_uvs(const CDStreamConfig &config,
     return result;
   });
 
-  return AbcAttributeReadError::NO_ERROR;
+  return AbcAttributeReadError::READ_SUCCESS;
 }
 
 /* This structure holds data for an attribute found on the Alembic object. */
@@ -1476,10 +1476,10 @@ struct AttributeReadOperator {
 
   void handle_error(AbcAttributeReadError error, const std::string &attribute_name)
   {
-    has_error |= error != AbcAttributeReadError::NO_ERROR;
+    has_error |= error != AbcAttributeReadError::READ_SUCCESS;
 
     switch (error) {
-      case AbcAttributeReadError::NO_ERROR: {
+      case AbcAttributeReadError::READ_SUCCESS: {
         return;
       }
       case AbcAttributeReadError::TOO_MANY_ATTRIBUTES: {
