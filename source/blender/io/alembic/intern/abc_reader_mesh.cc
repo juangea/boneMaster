@@ -366,7 +366,7 @@ static void read_mesh_sample(ImportSettings *settings,
   }
 
   read_arbitrary_attributes(
-      config, schema.getArbGeomParams(), schema.getUVsParam(), selector, settings->velocity_scale);
+      config, schema, schema.getUVsParam(), selector, settings->velocity_scale);
 }
 
 CDStreamConfig get_config(Mesh *mesh,
@@ -739,7 +739,7 @@ static void read_subd_sample(ImportSettings *settings,
   }
 
   read_arbitrary_attributes(
-      config, schema.getArbGeomParams(), schema.getUVsParam(), selector, settings->velocity_scale);
+      config, schema, schema.getUVsParam(), selector, settings->velocity_scale);
 }
 
 /* ************************************************************************** */

@@ -173,8 +173,8 @@ class AttributeSelector {
 };
 
 void read_arbitrary_attributes(const CDStreamConfig &config,
-                               const ICompoundProperty &arb_geom_params,
-                               const Alembic::AbcGeom::v12::IV2fGeomParam &primary_uvs,
+                               const ICompoundProperty &schema,
+                               const Alembic::AbcGeom::IV2fGeomParam &primary_uvs,
                                const Alembic::Abc::ISampleSelector &sample_sel,
                                float velocity_scale);
 

@@ -200,8 +200,7 @@ void AbcPointsReader::read_geometry(GeometrySet &geometry_set,
   config.attr_selector = attribute_selector;
 
   /* Attributes */
-  ICompoundProperty arb_geom_params = m_schema.getArbGeomParams();
-  read_arbitrary_attributes(config, arb_geom_params, {}, sample_sel, velocity_scale);
+  read_arbitrary_attributes(config, m_schema, {}, sample_sel, velocity_scale);
 
   if (point_cloud != existing_point_cloud) {
     geometry_set.replace_pointcloud(point_cloud);

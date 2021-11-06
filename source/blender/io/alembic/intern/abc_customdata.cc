@@ -1153,8 +1153,6 @@ static AbcAttributeReadError process_typed_attribute(const CDStreamConfig &confi
   BlenderScope bl_scope = abc_mapping.scope;
 
   if (!attr_sel.select_attribute(param.getName())) {
-    /* Attribute is not meant to be read from here (e.g. velocity or generated coordinates),
-     * not an error. */
     return AbcAttributeReadError::READ_SUCCESS;
   }
 
@@ -1199,6 +1197,11 @@ static AbcAttributeReadError process_typed_attribute(const CDStreamConfig &confi
       std::string param_name = param.getName();
       if (param.getName() == attr_sel.velocity_name()) {
         param_name = "velocity";
+
+        /* Check that we indeed have an attribute on the points. */
+        if (bl_scope != BlenderScope::POINT) {
+          return AbcAttributeReadError::INVALID_SCOPE;
+        }
       }
 
       create_layer_for_scope<float3>(
@@ -1521,7 +1524,7 @@ struct AttributeReadOperator {
 };
 
 void read_arbitrary_attributes(const CDStreamConfig &config,
-                               const ICompoundProperty &arb_geom_params,
+                               const ICompoundProperty &schema,
                                const IV2fGeomParam &primary_uvs,
                                const ISampleSelector &sample_sel,
                                float velocity_scale)
@@ -1532,9 +1535,26 @@ void read_arbitrary_attributes(const CDStreamConfig &config,
     return;
   }
 
+  /* Manually extract the arbitrary geometry parameters. We do it this way to avoid complicating
+   * the code when dealing with schemas and default velocities which are not accessible via an
+   * IGeomParam as we would like for the sake of genericity, but as an IArrayProperty. */
+  const ICompoundProperty &arb_geom_params = ICompoundProperty(schema, ".arbGeomParams");
+  if (!arb_geom_params.valid()) {
+    return;
+  }
+
   const AttributeSelector &attr_sel = *config.attr_selector;
 
   Vector<ParsedAttributeDesc> attributes = parse_attributes(config.attr_selector, arb_geom_params);
+
+  /* At this point the velocities attribute should have the default, standard, attribute velocity
+   * name in Alembic. So we also expect any remapping to also use this name. If there is no
+   * attribute with the standard name, then either there are no velocities, or it has a different
+   * name which should have been set in the UI (both for the selection and the remapping). */
+  const PropertyHeader *velocity_prop_header = schema.getPropertyHeader(".velocities");
+  if (velocity_prop_header) {
+    attributes.append({schema, *velocity_prop_header, attr_sel.get_mapping(".velocities")});
+  }
 
   if (primary_uvs.valid() && attr_sel.uvs_requested()) {
     read_mesh_uvs(config, primary_uvs, sample_sel);
@@ -1629,12 +1649,7 @@ bool AttributeSelector::select_attribute(const std::string &attr_name) const
 {
   /* Empty names are invalid. Those beginning with a '.' are special and correspond to data
    * accessible through specific APIs (e.g. the vertices are named ".P") */
-  if (attr_name.empty() || attr_name[0] == '.') {
-    return false;
-  }
-
-  /* This is loaded separately. */
-  if (attr_name == velocity_attribute) {
+  if (attr_name.empty() || (attr_name[0] == '.' && attr_name != velocity_attribute)) {
     return false;
   }
 
