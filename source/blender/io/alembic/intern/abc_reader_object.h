@@ -24,10 +24,9 @@
 
 #include "DNA_ID.h"
 
-class GeometrySet;
-
 struct bTransformCacheConstraint;
 struct CacheFile;
+struct GeometrySet;
 struct Main;
 struct Mesh;
 struct Object;

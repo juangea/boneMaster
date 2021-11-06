@@ -23,13 +23,12 @@
 
 #ifdef __cplusplus
 extern "C" {
-
-class GeometrySet;
 #endif
 
 struct CacheArchiveHandle;
 struct CacheFile;
 struct CacheReader;
+struct GeometrySet;
 struct Mesh;
 struct Object;
 struct bContext;

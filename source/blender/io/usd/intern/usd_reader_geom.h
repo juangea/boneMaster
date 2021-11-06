@@ -21,7 +21,7 @@
 #include "usd.h"
 #include "usd_reader_xform.h"
 
-class GeometrySet;
+struct GeometrySet;
 struct Mesh;
 
 namespace blender::io::usd {

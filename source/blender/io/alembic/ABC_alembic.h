@@ -28,16 +28,13 @@ extern "C" {
 struct CacheArchiveHandle;
 struct CacheFileLayer;
 struct CacheReader;
+struct GeometrySet;
 struct ListBase;
 struct Main;
 struct Mesh;
 struct Object;
 struct Scene;
 struct bContext;
-
-#ifdef __cplusplus
-class GeometrySet;
-#endif
 
 int ABC_get_version(void);
 
