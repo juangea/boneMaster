@@ -1168,21 +1168,20 @@ static AbcAttributeReadError process_typed_attribute(const CDStreamConfig &confi
       return AbcAttributeReadError::MAPPING_IMPOSSIBLE;
     }
     case CD_PROP_BOOL: {
-      create_loop_layer_for_scope<bool>(
-          config, bl_scope, CD_PROP_BOOL, param.getName(), [&](size_t i) {
-            return value_type_converter<abc_scalar_type>::map_to_bool(&input_data[i]);
-          });
+      create_layer_for_scope<bool>(config, bl_scope, CD_PROP_BOOL, param.getName(), [&](size_t i) {
+        return value_type_converter<abc_scalar_type>::map_to_bool(&input_data[i]);
+      });
       return AbcAttributeReadError::READ_SUCCESS;
     }
     case CD_PROP_INT32: {
-      create_loop_layer_for_scope<int32_t>(
+      create_layer_for_scope<int32_t>(
           config, bl_scope, CD_PROP_INT32, param.getName(), [&](size_t i) {
             return value_type_converter<abc_scalar_type>::map_to_int32(&input_data[i]);
           });
       return AbcAttributeReadError::READ_SUCCESS;
     }
     case CD_PROP_FLOAT: {
-      create_loop_layer_for_scope<float>(
+      create_layer_for_scope<float>(
           config, bl_scope, CD_PROP_FLOAT, param.getName(), [&](size_t i) {
             return value_type_converter<abc_scalar_type>::map_to_float(&input_data[i]);
           });
