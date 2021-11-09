@@ -1034,12 +1034,9 @@ ccl_device void integrator_shade_volume(KernelGlobals kg,
       return;
     }
     else {
-      /* Hit a surface, continue with surface kernel unless terminated. */
-      const int shader = intersection_get_shader(kg, &isect);
-      const int flags = kernel_tex_fetch(__shaders, shader).flags;
-
-      integrator_intersect_shader_next_kernel<DEVICE_KERNEL_INTEGRATOR_SHADE_VOLUME>(
-          kg, state, &isect, shader, flags);
+      /* Continue to background, light or surface. */
+      integrator_intersect_next_kernel_after_volume<DEVICE_KERNEL_INTEGRATOR_SHADE_VOLUME>(
+        kg, state, &isect);
       return;
     }
   }
