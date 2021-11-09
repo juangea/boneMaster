@@ -1000,6 +1000,8 @@ static void create_loop_layer_for_scope(const CDStreamConfig &config,
 enum class AbcAttributeReadError {
   /* Default value for success. */
   READ_SUCCESS,
+  /* We do not support this attribute type. */
+  UNSUPPORTED_TYPE,
   /* The attribute is invalid (e.g. corrupt file or data). */
   INVALID_ATTRIBUTE,
   /* We cannot determine the scope for the attribute, either from mismatching element size, or
@@ -1484,7 +1486,7 @@ static auto abc_attribute_type_operation(const ICompoundProperty &parent_prop,
     return op(param);
   }
 
-  return op.default_handler_for_unsupported_attribute_type();
+  return op.default_handler_for_unsupported_attribute_type(prop.getName());
 }
 
 struct AttributeReadOperator {
@@ -1529,11 +1531,17 @@ struct AttributeReadOperator {
                   << "\" as the scope is invalid for the specific data type!\n";
         return;
       }
+      case AbcAttributeReadError::UNSUPPORTED_TYPE: {
+        std::cerr << "Cannot read attribute \"" << attribute_name << "\""
+                  << " as the data type is not supported!\n";
+        return;
+      }
     }
   }
 
-  void default_handler_for_unsupported_attribute_type()
+  void default_handler_for_unsupported_attribute_type(const std::string &param_name)
   {
+    handle_error(AbcAttributeReadError::UNSUPPORTED_TYPE, param_name);
   }
 
   template<typename GeomParamType> void operator()(const GeomParamType &param)
@@ -1595,7 +1603,7 @@ void read_arbitrary_attributes(const CDStreamConfig &config,
 }
 
 struct AnimatedAttributeOperator {
-  bool default_handler_for_unsupported_attribute_type()
+  bool default_handler_for_unsupported_attribute_type(const std::string & /*param_name*/)
   {
     return false;
   }
