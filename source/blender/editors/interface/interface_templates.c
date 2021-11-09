@@ -6428,64 +6428,139 @@ void uiTemplateNodeSocket(uiLayout *layout, bContext *UNUSED(C), float color[4])
 /** \name Cache File Template
  * \{ */
 
-void uiTemplateCacheFile(uiLayout *layout,
-                         const bContext *C,
-                         PointerRNA *ptr,
-                         const char *propname)
+static void cache_file_layer_item(uiList *UNUSED(ui_list),
+                                  bContext *UNUSED(C),
+                                  uiLayout *layout,
+                                  PointerRNA *UNUSED(dataptr),
+                                  PointerRNA *itemptr,
+                                  int UNUSED(icon),
+                                  PointerRNA *UNUSED(active_dataptr),
+                                  const char *UNUSED(active_propname),
+                                  int UNUSED(index),
+                                  int UNUSED(flt_flag))
 {
-  if (!ptr->data) {
-    return;
+  uiLayout *row = uiLayoutRow(layout, true);
+  uiItemR(row, itemptr, "hide_layer", UI_ITEM_R_NO_BG, "", ICON_NONE);
+  uiItemR(row, itemptr, "filepath", UI_ITEM_R_NO_BG, "", ICON_NONE);
+}
+
+uiListType *UI_UL_cache_file_layers()
+{
+  uiListType *list_type = (uiListType *)MEM_callocN(sizeof(*list_type), __func__);
+
+  BLI_strncpy(list_type->idname, "UI_UL_cache_file_layers", sizeof(list_type->idname));
+  list_type->draw_item = cache_file_layer_item;
+
+  return list_type;
+}
+
+static void cache_file_attribute_mapping_item(uiList *UNUSED(ui_list),
+                                              bContext *UNUSED(C),
+                                              uiLayout *layout,
+                                              PointerRNA *UNUSED(dataptr),
+                                              PointerRNA *itemptr,
+                                              int UNUSED(icon),
+                                              PointerRNA *UNUSED(active_dataptr),
+                                              const char *UNUSED(active_propname),
+                                              int UNUSED(index),
+                                              int UNUSED(flt_flag))
+{
+  uiLayout *row = uiLayoutRow(layout, true);
+  uiItemR(row, itemptr, "name", UI_ITEM_R_NO_BG, "", ICON_NONE);
+  uiItemR(row, itemptr, "mapping", UI_ITEM_R_NO_BG, "", ICON_NONE);
+  uiItemR(row, itemptr, "domain", UI_ITEM_R_NO_BG, "", ICON_NONE);
+}
+
+uiListType *UI_UL_cache_file_attribute_mappings()
+{
+  uiListType *list_type = (uiListType *)MEM_callocN(sizeof(*list_type), __func__);
+
+  BLI_strncpy(list_type->idname, "UI_UL_cache_file_attribute_mappings", sizeof(list_type->idname));
+  list_type->draw_item = cache_file_attribute_mapping_item;
+
+  return list_type;
+}
+
+void uiTemplateCacheFileVelocity(uiLayout *layout, PointerRNA *fileptr)
+{
+  /* Ensure that the context has a CacheFile as this may not be set inside of modifiers panels. */
+  uiLayoutSetContextPointer(layout, "edit_cachefile", fileptr);
+
+  uiItemR(layout, fileptr, "velocity_name", 0, NULL, ICON_NONE);
+  uiItemR(layout, fileptr, "velocity_unit", 0, NULL, ICON_NONE);
+}
+
+void uiTemplateCacheFileAttributeRemapping(uiLayout *layout,
+                                           const bContext *C,
+                                           PointerRNA *fileptr)
+{
+  /* Ensure that the context has a CacheFile as this may not be set inside of modifiers panels. */
+  uiLayoutSetContextPointer(layout, "edit_cachefile", fileptr);
+
+  uiLayout *row = uiLayoutRow(layout, false);
+  uiLayout *col = uiLayoutColumn(row, true);
+
+  uiTemplateList(col,
+                 (bContext *)C,
+                 "UI_UL_cache_file_attribute_mappings",
+                 "cache_file_attribute_mappings",
+                 fileptr,
+                 "attribute_mappings",
+                 fileptr,
+                 "active_attribute_mapping_index",
+                 "",
+                 1,
+                 5,
+                 UILST_LAYOUT_DEFAULT,
+                 1,
+                 UI_TEMPLATE_LIST_FLAG_NONE);
+
+  col = uiLayoutColumn(row, true);
+  uiItemO(col, "", ICON_ADD, "cachefile.attribute_mapping_add");
+  uiItemO(col, "", ICON_REMOVE, "cachefile.attribute_mapping_remove");
+}
+
+void uiTemplateCacheFileLayers(uiLayout *layout, const bContext *C, PointerRNA *fileptr)
+{
+  /* Ensure that the context has a CacheFile as this may not be set inside of modifiers panels. */
+  uiLayoutSetContextPointer(layout, "edit_cachefile", fileptr);
+
+  CacheFile *file = fileptr->data;
+  uiLayout *row = uiLayoutRow(layout, false);
+  uiLayout *col = uiLayoutColumn(row, true);
+
+  uiTemplateList(col,
+                 (bContext *)C,
+                 "UI_UL_cache_file_layers",
+                 "cache_file_layers",
+                 fileptr,
+                 "layers",
+                 fileptr,
+                 "active_index",
+                 "",
+                 1,
+                 5,
+                 UILST_LAYOUT_DEFAULT,
+                 1,
+                 UI_TEMPLATE_LIST_FLAG_NONE);
+
+  col = uiLayoutColumn(row, true);
+  uiItemO(col, "", ICON_ADD, "cachefile.layer_add");
+  uiItemO(col, "", ICON_REMOVE, "cachefile.layer_remove");
+
+  if (BLI_listbase_count(&file->layers) > 1) {
+    uiItemS_ex(col, 1.0f);
+    uiItemO(col, "", ICON_TRIA_UP, "cachefile.layer_move");
+    uiItemO(col, "", ICON_TRIA_DOWN, "cachefile.layer_move");
   }
+}
 
-  PropertyRNA *prop = RNA_struct_find_property(ptr, propname);
+void uiTemplateCacheFileProcedural(uiLayout *layout, const bContext *C, PointerRNA *fileptr)
+{
+  /* Ensure that the context has a CacheFile as this may not be set inside of modifiers panels. */
+  uiLayoutSetContextPointer(layout, "edit_cachefile", fileptr);
 
-  if (!prop) {
-    printf(
-        "%s: property not found: %s.%s\n", __func__, RNA_struct_identifier(ptr->type), propname);
-    return;
-  }
-
-  if (RNA_property_type(prop) != PROP_POINTER) {
-    printf("%s: expected pointer property for %s.%s\n",
-           __func__,
-           RNA_struct_identifier(ptr->type),
-           propname);
-    return;
-  }
-
-  PointerRNA fileptr = RNA_property_pointer_get(ptr, prop);
-  CacheFile *file = fileptr.data;
-
-  uiLayoutSetContextPointer(layout, "edit_cachefile", &fileptr);
-
-  uiTemplateID(layout,
-               C,
-               ptr,
-               propname,
-               NULL,
-               "CACHEFILE_OT_open",
-               NULL,
-               UI_TEMPLATE_ID_FILTER_ALL,
-               false,
-               NULL);
-
-  if (!file) {
-    return;
-  }
-
-  SpaceProperties *sbuts = CTX_wm_space_properties(C);
-
-  uiLayout *row, *sub, *subsub;
-
-  uiLayoutSetPropSep(layout, true);
-
-  row = uiLayoutRow(layout, true);
-  uiItemR(row, &fileptr, "filepath", 0, NULL, ICON_NONE);
-  sub = uiLayoutRow(row, true);
-  uiItemO(sub, "", ICON_FILE_REFRESH, "cachefile.reload");
-
-  row = uiLayoutRow(layout, false);
-  uiItemR(row, &fileptr, "is_sequence", 0, NULL, ICON_NONE);
+  uiLayout *row, *sub;
 
   /* Only enable render procedural option if the active engine supports it. */
   const struct RenderEngineType *engine_type = CTX_data_engine_type(C);
@@ -6512,39 +6587,122 @@ void uiTemplateCacheFile(uiLayout *layout,
 
   row = uiLayoutRow(layout, false);
   uiLayoutSetActive(row, engine_supports_procedural);
-  uiItemR(row, &fileptr, "use_render_procedural", 0, NULL, ICON_NONE);
+  uiItemR(row, fileptr, "use_render_procedural", 0, NULL, ICON_NONE);
 
-  const bool use_render_procedural = RNA_boolean_get(&fileptr, "use_render_procedural");
-  const bool use_prefetch = RNA_boolean_get(&fileptr, "use_prefetch");
+  const bool use_render_procedural = RNA_boolean_get(fileptr, "use_render_procedural");
+  const bool use_prefetch = RNA_boolean_get(fileptr, "use_prefetch");
 
   row = uiLayoutRow(layout, false);
   uiLayoutSetEnabled(row, use_render_procedural);
-  uiItemR(row, &fileptr, "use_prefetch", 0, NULL, ICON_NONE);
+  uiItemR(row, fileptr, "use_prefetch", 0, NULL, ICON_NONE);
 
   sub = uiLayoutRow(layout, false);
   uiLayoutSetEnabled(sub, use_prefetch && use_render_procedural);
-  uiItemR(sub, &fileptr, "prefetch_cache_size", 0, NULL, ICON_NONE);
+  uiItemR(sub, fileptr, "prefetch_cache_size", 0, NULL, ICON_NONE);
+}
+
+void uiTemplateCacheFileTimeSettings(uiLayout *layout, PointerRNA *fileptr)
+{
+  /* Ensure that the context has a CacheFile as this may not be set inside of modifiers panels. */
+  uiLayoutSetContextPointer(layout, "edit_cachefile", fileptr);
+
+  uiLayout *row, *sub, *subsub;
+
+  row = uiLayoutRow(layout, false);
+  uiItemR(row, fileptr, "is_sequence", 0, NULL, ICON_NONE);
 
   row = uiLayoutRowWithHeading(layout, true, IFACE_("Override Frame"));
   sub = uiLayoutRow(row, true);
   uiLayoutSetPropDecorate(sub, false);
-  uiItemR(sub, &fileptr, "override_frame", 0, "", ICON_NONE);
+  uiItemR(sub, fileptr, "override_frame", 0, "", ICON_NONE);
   subsub = uiLayoutRow(sub, true);
-  uiLayoutSetActive(subsub, RNA_boolean_get(&fileptr, "override_frame"));
-  uiItemR(subsub, &fileptr, "frame", 0, "", ICON_NONE);
-  uiItemDecoratorR(row, &fileptr, "frame", 0);
+  uiLayoutSetActive(subsub, RNA_boolean_get(fileptr, "override_frame"));
+  uiItemR(subsub, fileptr, "frame", 0, "", ICON_NONE);
+  uiItemDecoratorR(row, fileptr, "frame", 0);
 
   row = uiLayoutRow(layout, false);
-  uiItemR(row, &fileptr, "frame_offset", 0, NULL, ICON_NONE);
-  uiLayoutSetActive(row, !RNA_boolean_get(&fileptr, "is_sequence"));
+  uiItemR(row, fileptr, "frame_offset", 0, NULL, ICON_NONE);
+  uiLayoutSetActive(row, !RNA_boolean_get(fileptr, "is_sequence"));
+}
+
+bool uiTemplateCacheFilePointer(PointerRNA *ptr, const char *propname, PointerRNA *r_file_ptr)
+{
+  PropertyRNA *prop = RNA_struct_find_property(ptr, propname);
+
+  if (!prop) {
+    printf(
+        "%s: property not found: %s.%s\n", __func__, RNA_struct_identifier(ptr->type), propname);
+    return false;
+  }
+
+  if (RNA_property_type(prop) != PROP_POINTER) {
+    printf("%s: expected pointer property for %s.%s\n",
+           __func__,
+           RNA_struct_identifier(ptr->type),
+           propname);
+    return false;
+  }
+
+  *r_file_ptr = RNA_property_pointer_get(ptr, prop);
+  return true;
+}
+
+void uiTemplateCacheFile(uiLayout *layout,
+                         const bContext *C,
+                         PointerRNA *ptr,
+                         const char *propname)
+{
+  if (!ptr->data) {
+    return;
+  }
+
+  PointerRNA fileptr;
+  if (!uiTemplateCacheFilePointer(ptr, propname, &fileptr)) {
+    return;
+  }
+
+  CacheFile *file = fileptr.data;
+
+  uiLayoutSetContextPointer(layout, "edit_cachefile", &fileptr);
+
+  uiTemplateID(layout,
+               C,
+               ptr,
+               propname,
+               NULL,
+               "CACHEFILE_OT_open",
+               NULL,
+               UI_TEMPLATE_ID_FILTER_ALL,
+               false,
+               NULL);
+
+  if (!file) {
+    return;
+  }
+
+  SpaceProperties *sbuts = CTX_wm_space_properties(C);
+
+  uiLayout *row, *sub;
+
+  uiLayoutSetPropSep(layout, true);
+
+  row = uiLayoutRow(layout, true);
+  uiItemR(row, &fileptr, "filepath", 0, NULL, ICON_NONE);
+  sub = uiLayoutRow(row, true);
+  uiItemO(sub, "", ICON_FILE_REFRESH, "cachefile.reload");
 
   if (sbuts->mainb == BCONTEXT_CONSTRAINT) {
     row = uiLayoutRow(layout, false);
-    uiItemR(row, &fileptr, "scale", 0, IFACE_("Manual Scale"), ICON_NONE);
-  }
+    uiTemplateCacheFileLayers(row, C, &fileptr);
 
-  uiItemR(layout, &fileptr, "velocity_name", 0, NULL, ICON_NONE);
-  uiItemR(layout, &fileptr, "velocity_unit", 0, NULL, ICON_NONE);
+    uiTemplateCacheFileProcedural(layout, C, &fileptr);
+    uiTemplateCacheFileTimeSettings(layout, &fileptr);
+
+    row = uiLayoutRow(layout, false);
+    uiItemR(row, &fileptr, "scale", 0, IFACE_("Manual Scale"), ICON_NONE);
+
+    uiTemplateCacheFileVelocity(layout, &fileptr);
+  }
 
   /* TODO: unused for now, so no need to expose. */
 #if 0

@@ -36,7 +36,9 @@ class AbcEmptyReader final : public AbcObjectReader {
                            const Object *const ob,
                            const char **err_str) const override;
 
-  void readObjectData(Main *bmain, const Alembic::Abc::ISampleSelector &sample_sel) override;
+  void readObjectData(Main *bmain,
+                      const AbcReaderManager &manager,
+                      const Alembic::Abc::ISampleSelector &sample_sel) override;
 };
 
 }  // namespace blender::io::alembic

@@ -69,7 +69,9 @@ bool AbcEmptyReader::accepts_object_type(
   return true;
 }
 
-void AbcEmptyReader::readObjectData(Main *bmain, const ISampleSelector &UNUSED(sample_sel))
+void AbcEmptyReader::readObjectData(Main *bmain,
+                                    const AbcReaderManager & /*manager*/,
+                                    const ISampleSelector &UNUSED(sample_sel))
 {
   m_object = BKE_object_add_only_object(bmain, OB_EMPTY, m_object_name.c_str());
   m_object->data = nullptr;

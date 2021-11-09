@@ -836,12 +836,12 @@ static bool do_curve_implicit_mesh_conversion(const Curve *curve,
     return true;
   }
 
-  /* If a non-geometry-nodes modifier is enabled before a nodes modifier,
-   * force conversion to mesh, since only the nodes modifier supports curve data. */
+  /* If a modifier which does not support curve data is enabled before one that does,
+   * force conversion to mesh. */
   ModifierData *md = first_modifier;
   for (; md; md = md->next) {
     if (BKE_modifier_is_enabled(scene, md, required_mode)) {
-      if (md->type == eModifierType_Nodes) {
+      if (BKE_modifier_supports_curve_data(md)) {
         break;
       }
       return true;
@@ -898,7 +898,7 @@ static GeometrySet curve_calc_modifiers_post(Depsgraph *depsgraph,
       continue;
     }
 
-    if (md->type == eModifierType_Nodes) {
+    if (BKE_modifier_supports_curve_data(md)) {
       mti->modifyGeometrySet(md, &mectx_apply, &geometry_set);
       continue;
     }
