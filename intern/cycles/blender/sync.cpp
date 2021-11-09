@@ -589,13 +589,17 @@ static PassType get_blender_pass_type(BL::RenderPass &b_pass)
 static Pass *pass_add(Scene *scene,
                       PassType type,
                       const char *name,
-                      PassMode mode = PassMode::DENOISED)
+                      PassMode mode = PassMode::DENOISED,
+                      const char *lightgroup = nullptr)
 {
   Pass *pass = scene->create_node<Pass>();
 
   pass->set_type(type);
   pass->set_name(ustring(name));
   pass->set_mode(mode);
+  if (lightgroup) {
+    pass->set_lightgroup(ustring(lightgroup));
+  }
 
   return pass;
 }
@@ -723,6 +727,22 @@ void BlenderSync::sync_render_passes(BL::RenderLayer &b_rlay, BL::ViewLayer &b_v
       b_engine.add_pass(name.c_str(), 1, "X", b_view_layer.name().c_str());
       pass_add(scene, PASS_AOV_VALUE, name.c_str());
     }
+  }
+
+  /* Light Group passes. */
+  BL::ViewLayer::lightgroups_iterator b_lightgroup_iter;
+  for (b_view_layer.lightgroups.begin(b_lightgroup_iter);
+       b_lightgroup_iter != b_view_layer.lightgroups.end();
+       ++b_lightgroup_iter) {
+    BL::Lightgroup b_lightgroup(*b_lightgroup_iter);
+    if (!b_lightgroup.is_valid()) {
+      continue;
+    }
+
+    string name = string_printf("Combined_%s", b_lightgroup.name().c_str());
+
+    b_engine.add_pass(name.c_str(), 3, "RGB", b_view_layer.name().c_str());
+    pass_add(scene, PASS_COMBINED, name.c_str(), PassMode::NOISY, b_lightgroup.name().c_str());
   }
 
   scene->film->set_pass_alpha_threshold(b_view_layer.pass_alpha_threshold());

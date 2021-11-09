@@ -101,7 +101,7 @@ ccl_device_forceinline void integrate_surface_emission(KernelGlobals kg,
   }
 
   const float3 throughput = INTEGRATOR_STATE(state, path, throughput);
-  kernel_accum_emission(kg, state, throughput * L, render_buffer);
+  kernel_accum_emission(kg, state, throughput * L, render_buffer, object_lightgroup(kg, sd->object));
 }
 #endif /* __EMISSION__ */
 
@@ -479,7 +479,7 @@ ccl_device bool integrate_surface(KernelGlobals kg,
     if (!(path_flag & PATH_RAY_SUBSURFACE)) {
       const float probability = (path_flag & PATH_RAY_TERMINATE_ON_NEXT_SURFACE) ?
                                     0.0f :
-                                    INTEGRATOR_STATE(state, path, continuation_probability);
+                                    path_state_continuation_probability(kg, state, path_flag);
       if (probability == 0.0f) {
         return false;
       }

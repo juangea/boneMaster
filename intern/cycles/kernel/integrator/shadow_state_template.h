@@ -50,6 +50,8 @@ KERNEL_STRUCT_MEMBER(shadow_path,
 KERNEL_STRUCT_MEMBER(shadow_path, float3, diffuse_glossy_ratio, KERNEL_FEATURE_LIGHT_PASSES)
 /* Number of intersections found by ray-tracing. */
 KERNEL_STRUCT_MEMBER(shadow_path, uint16_t, num_hits, KERNEL_FEATURE_PATH_TRACING)
+/* Light group. */
+KERNEL_STRUCT_MEMBER(shadow_path, uint8_t, lightgroup, KERNEL_FEATURE_PATH_TRACING)
 KERNEL_STRUCT_END(shadow_path)
 
 /********************************** Shadow Ray *******************************/

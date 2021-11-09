@@ -190,6 +190,7 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
   kfilm->pass_volume_direct = PASS_UNUSED;
   kfilm->pass_volume_indirect = PASS_UNUSED;
   kfilm->pass_shadow = PASS_UNUSED;
+  kfilm->pass_lightgroup = PASS_UNUSED;
 
   /* Mark passes as unused so that the kernel knows the pass is inaccessible. */
   kfilm->pass_denoising_normal = PASS_UNUSED;
@@ -204,6 +205,7 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
   bool have_cryptomatte = false;
   bool have_aov_color = false;
   bool have_aov_value = false;
+  bool have_lightgroup = false;
 
   for (size_t i = 0; i < scene->passes.size(); i++) {
     const Pass *pass = scene->passes[i];
@@ -236,6 +238,15 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
     }
     else {
       assert(pass->get_type() <= PASS_CATEGORY_BAKE_END);
+    }
+
+    if (pass->get_lightgroup() != ustring()) {
+      if (!have_lightgroup) {
+        kfilm->pass_lightgroup = kfilm->pass_stride;
+        have_lightgroup = true;
+      }
+      kfilm->pass_stride += pass->get_info().num_components;
+      continue;
     }
 
     switch (pass->get_type()) {
@@ -427,6 +438,28 @@ int Film::get_aov_offset(Scene *scene, string name, bool &is_color)
   }
 
   return -1;
+}
+
+bool Film::update_lightgroups(Scene *scene)
+{
+  map<ustring, int> lightgroups;
+  int i = 0;
+  foreach (const Pass *pass, scene->passes) {
+    ustring lightgroup = pass->get_lightgroup();
+    if (lightgroup != ustring()) {
+      auto it = lightgroups.find(lightgroup);
+      if (it == lightgroups.end()) {
+        lightgroups[lightgroup] = i;
+        ++i;
+      }
+    }
+  }
+  if (scene->lightgroups != lightgroups) {
+    scene->lightgroups = lightgroups;
+    return true;
+  }
+
+  return false;
 }
 
 void Film::update_passes(Scene *scene, bool add_sample_count_pass)
