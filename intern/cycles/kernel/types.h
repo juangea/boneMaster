@@ -94,6 +94,7 @@ CCL_NAMESPACE_BEGIN
 #define __AO__
 #define __PASSES__
 #define __HAIR__
+#define __POINTCLOUD__
 #define __SVM__
 #define __EMISSION__
 #define __HOLDOUT__
@@ -133,6 +134,9 @@ CCL_NAMESPACE_BEGIN
 #  if !(__KERNEL_FEATURES & KERNEL_FEATURE_HAIR)
 #    undef __HAIR__
 #  endif
+#  if !(__KERNEL_FEATURES & KERNEL_FEATURE_POINTCLOUD)
+#    undef __POINTCLOUD__
+#endif
 #  if !(__KERNEL_FEATURES & KERNEL_FEATURE_VOLUME)
 #    undef __VOLUME__
 #  endif
@@ -534,19 +538,22 @@ typedef enum PrimitiveType {
   PRIMITIVE_MOTION_CURVE_THICK = (1 << 3),
   PRIMITIVE_CURVE_RIBBON = (1 << 4),
   PRIMITIVE_MOTION_CURVE_RIBBON = (1 << 5),
-  PRIMITIVE_VOLUME = (1 << 6),
-  PRIMITIVE_LAMP = (1 << 7),
+  PRIMITIVE_POINT = (1 << 6),
+  PRIMITIVE_MOTION_POINT = (1 << 7),
+  PRIMITIVE_VOLUME = (1 << 8),
+  PRIMITIVE_LAMP = (1 << 9),
 
   PRIMITIVE_ALL_TRIANGLE = (PRIMITIVE_TRIANGLE | PRIMITIVE_MOTION_TRIANGLE),
   PRIMITIVE_ALL_CURVE = (PRIMITIVE_CURVE_THICK | PRIMITIVE_MOTION_CURVE_THICK |
                          PRIMITIVE_CURVE_RIBBON | PRIMITIVE_MOTION_CURVE_RIBBON),
+  PRIMITIVE_ALL_POINT = (PRIMITIVE_POINT | PRIMITIVE_MOTION_POINT),
   PRIMITIVE_ALL_VOLUME = (PRIMITIVE_VOLUME),
   PRIMITIVE_ALL_MOTION = (PRIMITIVE_MOTION_TRIANGLE | PRIMITIVE_MOTION_CURVE_THICK |
-                          PRIMITIVE_MOTION_CURVE_RIBBON),
+                          PRIMITIVE_MOTION_CURVE_RIBBON | PRIMITIVE_MOTION_POINT),
   PRIMITIVE_ALL = (PRIMITIVE_ALL_TRIANGLE | PRIMITIVE_ALL_CURVE | PRIMITIVE_ALL_VOLUME |
-                   PRIMITIVE_LAMP),
+                   PRIMITIVE_LAMP | PRIMITIVE_ALL_POINT),
 
-  PRIMITIVE_NUM = 8,
+  PRIMITIVE_NUM = 10,
 } PrimitiveType;
 
 #define PRIMITIVE_PACK_SEGMENT(type, segment) ((segment << PRIMITIVE_NUM) | (type))
@@ -601,6 +608,7 @@ typedef enum AttributeStandard {
   ATTR_STD_CURVE_INTERCEPT,
   ATTR_STD_CURVE_LENGTH,
   ATTR_STD_CURVE_RANDOM,
+  ATTR_STD_POINT_RANDOM,
   ATTR_STD_PTEX_FACE_ID,
   ATTR_STD_PTEX_UV,
   ATTR_STD_VOLUME_DENSITY,
@@ -1235,6 +1243,7 @@ typedef struct KernelBVH {
   /* Custom BVH */
 #ifdef __KERNEL_OPTIX__
   OptixTraversableHandle scene;
+  // int pad4;
 #else
 #  ifdef __EMBREE__
   RTCScene scene;
@@ -1244,6 +1253,7 @@ typedef struct KernelBVH {
 #  else
   int scene, pad2;
 #  endif
+  // int pad3;
 #endif
 } KernelBVH;
 static_assert_align(KernelBVH, 16);
@@ -1597,6 +1607,9 @@ enum KernelFeatureFlag : unsigned int {
   KERNEL_FEATURE_AO_PASS = (1U << 25U),
   KERNEL_FEATURE_AO_ADDITIVE = (1U << 26U),
   KERNEL_FEATURE_AO = (KERNEL_FEATURE_AO_PASS | KERNEL_FEATURE_AO_ADDITIVE),
+
+  /* BVH/sampling Pointclouds */
+  KERNEL_FEATURE_POINTCLOUD = (1U << 27U),
 };
 
 /* Shader node feature mask, to specialize shader evaluation for kernels. */
