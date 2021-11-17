@@ -12,25 +12,31 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2016 Blender Foundation.
- * All rights reserved.
  */
 
 #pragma once
 
 /** \file
- * \ingroup editor/io
+ * \ingroup balembic
  */
 
-struct wmOperatorType;
+#include "abc_reader_object.h"
 
-void CACHEFILE_OT_open(struct wmOperatorType *ot);
-void CACHEFILE_OT_reload(struct wmOperatorType *ot);
+namespace blender::io::alembic {
 
-void CACHEFILE_OT_layer_add(struct wmOperatorType *ot);
-void CACHEFILE_OT_layer_remove(struct wmOperatorType *ot);
-void CACHEFILE_OT_layer_move(struct wmOperatorType *ot);
+class AbcInstanceReader final : public AbcObjectReader {
+ public:
+  AbcInstanceReader(const Alembic::Abc::IObject &object, ImportSettings &settings);
 
-void CACHEFILE_OT_attribute_mapping_add(struct wmOperatorType *ot);
-void CACHEFILE_OT_attribute_mapping_remove(struct wmOperatorType *ot);
+  bool valid() const override;
+
+  bool accepts_object_type(const Alembic::AbcCoreAbstract::ObjectHeader &alembic_header,
+                           const Object *const ob,
+                           const char **err_str) const override;
+
+  void readObjectData(Main *bmain,
+                      const AbcReaderManager &manager,
+                      const Alembic::Abc::ISampleSelector &sample_sel) override;
+};
+
+}  // namespace blender::io::alembic

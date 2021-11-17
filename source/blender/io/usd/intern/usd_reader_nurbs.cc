@@ -22,8 +22,10 @@
 #include "usd_reader_nurbs.h"
 
 #include "BKE_curve.h"
+#include "BKE_geometry_set.hh"
 #include "BKE_mesh.h"
 #include "BKE_object.h"
+#include "BKE_spline.hh"
 
 #include "BLI_listbase.h"
 
@@ -181,10 +183,33 @@ void USDNurbsReader::read_curve_sample(Curve *cu, const double motionSampleTime)
   }
 }
 
-Mesh *USDNurbsReader::read_mesh(struct Mesh * /* existing_mesh */,
-                                const double motionSampleTime,
-                                const int /* read_flag */,
-                                const char ** /* err_str */)
+static bool topology_changed(CurveEval *curve_eval, const pxr::VtIntArray &usdCounts)
+{
+  if (!curve_eval) {
+    return true;
+  }
+
+  if (curve_eval->splines().size() != usdCounts.size()) {
+    return true;
+  }
+
+  int curve_idx = 0;
+  for (const SplinePtr &spline : curve_eval->splines()) {
+    const int num_in_usd = usdCounts[curve_idx++];
+    const int num_in_blender = spline->positions().size();
+
+    if (num_in_usd != num_in_blender) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+void USDNurbsReader::read_geometry(GeometrySet &geometry_set,
+                                   double motionSampleTime,
+                                   int /* read_flag */,
+                                   const char ** /* err_str */)
 {
   pxr::UsdGeomCurves curve_prim_(prim_);
 
@@ -195,62 +220,36 @@ Mesh *USDNurbsReader::read_mesh(struct Mesh * /* existing_mesh */,
   pxr::VtIntArray usdCounts;
 
   vertexAttr.Get(&usdCounts, motionSampleTime);
-  int num_subcurves = usdCounts.size();
 
   pxr::VtVec3fArray usdPoints;
   pointsAttr.Get(&usdPoints, motionSampleTime);
 
   int vertex_idx = 0;
   int curve_idx;
-  Curve *curve = static_cast<Curve *>(object_->data);
+  CurveEval *curve_eval = geometry_set.get_curve_for_write();
 
-  const int curve_count = BLI_listbase_count(&curve->nurb);
-  bool same_topology = curve_count == num_subcurves;
-
-  if (same_topology) {
-    Nurb *nurbs = static_cast<Nurb *>(curve->nurb.first);
-    for (curve_idx = 0; nurbs; nurbs = nurbs->next, curve_idx++) {
-      const int num_in_usd = usdCounts[curve_idx];
-      const int num_in_blender = nurbs->pntsu;
-
-      if (num_in_usd != num_in_blender) {
-        same_topology = false;
-        break;
-      }
-    }
-  }
-
-  if (!same_topology) {
+  if (blender::io::usd::topology_changed(curve_eval, usdCounts)) {
+    Curve *curve = static_cast<Curve *>(object_->data);
     BKE_nurbList_free(&curve->nurb);
     read_curve_sample(curve, motionSampleTime);
+
+    std::unique_ptr<CurveEval> new_curve_eval = curve_eval_from_dna_curve(*curve);
+    geometry_set.replace_curve(new_curve_eval.release(), GeometryOwnershipType::Editable);
   }
   else {
-    Nurb *nurbs = static_cast<Nurb *>(curve->nurb.first);
-    for (curve_idx = 0; nurbs; nurbs = nurbs->next, curve_idx++) {
-      const int totpoint = usdCounts[curve_idx];
+    BLI_assert_msg(curve_eval, "curve_eval is null although the topology is the same !");
+    const int curve_count = curve_eval->splines().size();
+    for (curve_idx = 0; curve_idx < curve_count; curve_idx++) {
+      Spline *spline = curve_eval->splines()[curve_idx].get();
 
-      if (nurbs->bp) {
-        BPoint *point = nurbs->bp;
-
-        for (int i = 0; i < totpoint; i++, point++, vertex_idx++) {
-          point->vec[0] = usdPoints[vertex_idx][0];
-          point->vec[1] = usdPoints[vertex_idx][1];
-          point->vec[2] = usdPoints[vertex_idx][2];
-        }
-      }
-      else if (nurbs->bezt) {
-        BezTriple *bezier = nurbs->bezt;
-
-        for (int i = 0; i < totpoint; i++, bezier++, vertex_idx++) {
-          bezier->vec[1][0] = usdPoints[vertex_idx][0];
-          bezier->vec[1][1] = usdPoints[vertex_idx][1];
-          bezier->vec[1][2] = usdPoints[vertex_idx][2];
-        }
+      for (float3 &position : spline->positions()) {
+        position.x = usdPoints[vertex_idx][0];
+        position.y = usdPoints[vertex_idx][0];
+        position.z = usdPoints[vertex_idx][0];
+        vertex_idx++;
       }
     }
   }
-
-  return BKE_mesh_new_nomain_from_curve(object_);
 }
 
 }  // namespace blender::io::usd

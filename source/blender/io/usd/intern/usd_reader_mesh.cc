@@ -23,6 +23,7 @@
 #include "usd_reader_material.h"
 
 #include "BKE_customdata.h"
+#include "BKE_geometry_set.hh"
 #include "BKE_main.h"
 #include "BKE_material.h"
 #include "BKE_mesh.h"
@@ -850,6 +851,19 @@ Mesh *USDMeshReader::read_mesh(Mesh *existing_mesh,
   }
 
   return active_mesh;
+}
+
+void USDMeshReader::read_geometry(GeometrySet &geometry_set,
+                                  double motionSampleTime,
+                                  int read_flag,
+                                  const char **err_str)
+{
+  Mesh *existing_mesh = geometry_set.get_mesh_for_write();
+  Mesh *new_mesh = read_mesh(existing_mesh, motionSampleTime, read_flag, err_str);
+
+  if (new_mesh != existing_mesh) {
+    geometry_set.replace_mesh(new_mesh);
+  }
 }
 
 }  // namespace blender::io::usd

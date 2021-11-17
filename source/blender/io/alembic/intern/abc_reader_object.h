@@ -24,7 +24,9 @@
 
 #include "DNA_ID.h"
 
+struct bTransformCacheConstraint;
 struct CacheFile;
+struct GeometrySet;
 struct Main;
 struct Mesh;
 struct Object;
@@ -32,6 +34,9 @@ struct Object;
 using Alembic::AbcCoreAbstract::chrono_t;
 
 namespace blender::io::alembic {
+
+class AbcReaderManager;
+class AttributeSelector;
 
 struct ImportSettings {
   bool do_convert_mat;
@@ -51,7 +56,6 @@ struct ImportSettings {
   int read_flag;
 
   /* From CacheFile and MeshSeqCacheModifierData */
-  std::string velocity_name;
   float velocity_scale;
 
   bool validate_meshes;
@@ -69,7 +73,6 @@ struct ImportSettings {
         sequence_len(1),
         sequence_offset(0),
         read_flag(0),
-        velocity_name(""),
         velocity_scale(1.0f),
         validate_meshes(false),
         always_add_cache_reader(false),
@@ -145,16 +148,19 @@ class AbcObjectReader {
                                    const Object *const ob,
                                    const char **err_str) const = 0;
 
-  virtual void readObjectData(Main *bmain, const Alembic::Abc::ISampleSelector &sample_sel) = 0;
+  virtual void readObjectData(Main *bmain,
+                              const AbcReaderManager &manager,
+                              const Alembic::Abc::ISampleSelector &sample_sel) = 0;
 
-  virtual struct Mesh *read_mesh(struct Mesh *mesh,
-                                 const Alembic::Abc::ISampleSelector &sample_sel,
-                                 const int read_flag,
-                                 const char *velocity_name,
-                                 const float velocity_scale,
-                                 const char **err_str);
   virtual bool topology_changed(Mesh *existing_mesh,
                                 const Alembic::Abc::ISampleSelector &sample_sel);
+
+  virtual void read_geometry(GeometrySet &geometry_set,
+                             const Alembic::Abc::ISampleSelector &sample_sel,
+                             const AttributeSelector *attribute_selector,
+                             int read_flag,
+                             const float velocity_scale,
+                             const char **err_str);
 
   /** Reads the object matrix and sets up an object transform if animated. */
   void setupObjectTransform(const float time);
@@ -172,6 +178,9 @@ class AbcObjectReader {
 
  protected:
   void determine_inherits_xform();
+
+ private:
+  bTransformCacheConstraint *getOrCreateConstraint();
 };
 
 Imath::M44d get_matrix(const Alembic::AbcGeom::IXformSchema &schema, const float time);

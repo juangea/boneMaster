@@ -59,6 +59,55 @@ typedef struct CacheObjectPath {
   char path[4096];
 } CacheObjectPath;
 
+/* CacheFileLayer::flag */
+enum { CACHEFILE_LAYER_HIDDEN = (1 << 0) };
+
+typedef struct CacheFileLayer {
+  struct CacheFileLayer *next, *prev;
+
+  /** 1024 = FILE_MAX. */
+  char filepath[1024];
+  int flag;
+  int _pad;
+} CacheFileLayer;
+
+/* CacheAttributeMapping::mapping */
+enum {
+  /* Default mapping, so we do not make an arbitrary decision as to what is the default. Also used
+   * to mark the mapping as ignored. */
+  CACHEFILE_ATTRIBUTE_MAP_NONE,
+  CACHEFILE_ATTRIBUTE_MAP_TO_UVS,
+  CACHEFILE_ATTRIBUTE_MAP_TO_VERTEX_COLORS,
+  CACHEFILE_ATTRIBUTE_MAP_TO_WEIGHT_GROUPS,
+  CACHEFILE_ATTRIBUTE_MAP_TO_FLOAT2,
+  CACHEFILE_ATTRIBUTE_MAP_TO_FLOAT3,
+  CACHEFILE_ATTRIBUTE_MAP_TO_COLOR,
+};
+
+/* CacheAttributeMapping::domain */
+enum {
+  /* Try to automatically map the attribute to the right domain (default behavior without mapping.)
+   */
+  CACHEFILE_ATTR_MAP_DOMAIN_AUTO,
+  CACHEFILE_ATTR_MAP_DOMAIN_POINT,
+  CACHEFILE_ATTR_MAP_DOMAIN_FACE_CORNER,
+  CACHEFILE_ATTR_MAP_DOMAIN_FACE,
+};
+
+/* Custom data mapping for the attributes in the CacheFile. Since there might not be a standard way
+ * of expressing what an attribute should be (e.g. is this float2 attribute a UV map?), and since
+ * some software might write multi-dimensionnal data as arrays of 1D element (although the size of
+ * the array will be N-time its expected size were it written as N-D data), we delegate to the user
+ * the task of telling us what is supposed to be what through these mappings. */
+typedef struct CacheAttributeMapping {
+  struct CacheAttributeMapping *next, *prev;
+
+  char name[64];
+  char mapping;
+  char domain;
+  char _pad[6];
+} CacheAttributeMapping;
+
 /* CacheFile::velocity_unit
  * Determines what temporal unit is used to interpret velocity vectors for motion blur effects. */
 enum {
@@ -72,6 +121,8 @@ typedef struct CacheFile {
 
   /** Paths of the objects inside of the archive referenced by this CacheFile. */
   ListBase object_paths;
+
+  ListBase layers;
 
   /** 1024 = FILE_MAX. */
   char filepath[1024];
@@ -109,11 +160,19 @@ typedef struct CacheFile {
   /** Size in megabytes for the prefetch cache used by the Cycles Procedural. */
   int prefetch_cache_size;
 
-  char _pad2[7];
+  /** Index of the currently selected layer in the UI, starts at 1. */
+  char active_layer;
+
+  /** Index, starting at 1, of the active attribute mapping in the UI. */
+  char active_attribute_mapping;
+
+  char _pad2[5];
 
   char velocity_unit;
   /* Name of the velocity property in the archive. */
   char velocity_name[64];
+
+  ListBase attribute_mappings;
 
   /* Runtime */
   struct CacheArchiveHandle *handle;

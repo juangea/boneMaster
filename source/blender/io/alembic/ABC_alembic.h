@@ -26,7 +26,9 @@ extern "C" {
 #endif
 
 struct CacheArchiveHandle;
+struct CacheFileLayer;
 struct CacheReader;
+struct GeometrySet;
 struct ListBase;
 struct Main;
 struct Mesh;
@@ -102,6 +104,7 @@ bool ABC_import(struct bContext *C,
 
 struct CacheArchiveHandle *ABC_create_handle(struct Main *bmain,
                                              const char *filename,
+                                             const struct CacheFileLayer *layers,
                                              struct ListBase *object_paths);
 
 void ABC_free_handle(struct CacheArchiveHandle *handle);
@@ -111,15 +114,23 @@ void ABC_get_transform(struct CacheReader *reader,
                        float time,
                        float scale);
 
-/* Either modifies existing_mesh in-place or constructs a new mesh. */
-struct Mesh *ABC_read_mesh(struct CacheReader *reader,
-                           struct Object *ob,
-                           struct Mesh *existing_mesh,
-                           const float time,
-                           const char **err_str,
-                           const int read_flags,
-                           const char *velocity_name,
-                           const float velocity_scale);
+typedef struct ABCReadParams {
+  float time;
+  int read_flags;
+  const char *velocity_name;
+  float velocity_scale;
+
+  ListBase *mappings;
+} ABCReadParams;
+
+#ifdef __cplusplus
+/* Either modifies the existing geometry component, or create a new one. */
+void ABC_read_geometry(CacheReader *reader,
+                       Object *ob,
+                       GeometrySet &geometry_set,
+                       const ABCReadParams *params,
+                       const char **err_str);
+#endif
 
 bool ABC_mesh_topology_changed(struct CacheReader *reader,
                                struct Object *ob,

@@ -42,13 +42,16 @@ class AbcCurveReader final : public AbcObjectReader {
                            const Object *const ob,
                            const char **err_str) const override;
 
-  void readObjectData(Main *bmain, const Alembic::Abc::ISampleSelector &sample_sel) override;
-  struct Mesh *read_mesh(struct Mesh *existing_mesh,
-                         const Alembic::Abc::ISampleSelector &sample_sel,
-                         const int read_flag,
-                         const char *velocity_name,
-                         const float velocity_scale,
-                         const char **err_str) override;
+  void readObjectData(Main *bmain,
+                      const AbcReaderManager &manager,
+                      const Alembic::Abc::ISampleSelector &sample_sel) override;
+
+  void read_geometry(GeometrySet &geometry_set,
+                     const Alembic::Abc::ISampleSelector &sample_sel,
+                     const AttributeSelector *attribute_selector,
+                     int read_flag,
+                     const float velocity_scale,
+                     const char **err_str) override;
 
   void read_curve_sample(Curve *cu,
                          const Alembic::AbcGeom::ICurvesSchema &schema,

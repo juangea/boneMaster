@@ -164,22 +164,22 @@ Imath::M44d get_matrix(const IXformSchema &schema, const float time)
   return s0.getMatrix();
 }
 
-struct Mesh *AbcObjectReader::read_mesh(struct Mesh *existing_mesh,
-                                        const Alembic::Abc::ISampleSelector &UNUSED(sample_sel),
-                                        int UNUSED(read_flag),
-                                        const char *UNUSED(velocity_name),
-                                        const float UNUSED(velocity_scale),
-                                        const char **UNUSED(err_str))
-{
-  return existing_mesh;
-}
-
 bool AbcObjectReader::topology_changed(Mesh * /*existing_mesh*/,
                                        const Alembic::Abc::ISampleSelector & /*sample_sel*/)
 {
   /* The default implementation of read_mesh() just returns the original mesh, so never changes the
    * topology. */
   return false;
+}
+
+void AbcObjectReader::read_geometry(GeometrySet &UNUSED(geometry_set),
+                                    const Alembic::Abc::ISampleSelector &UNUSED(sample_sel),
+                                    const AttributeSelector *UNUSED(attribute_selector),
+                                    int UNUSED(read_flag),
+                                    const float UNUSED(velocity_scale),
+                                    const char **UNUSED(err_str))
+{
+  return;
 }
 
 void AbcObjectReader::setupObjectTransform(const float time)
@@ -200,14 +200,30 @@ void AbcObjectReader::setupObjectTransform(const float time)
   BKE_object_to_mat4(m_object, m_object->obmat);
 
   if (!is_constant || m_settings->always_add_cache_reader) {
-    bConstraint *con = BKE_constraint_add_for_object(
-        m_object, nullptr, CONSTRAINT_TYPE_TRANSFORM_CACHE);
-    bTransformCacheConstraint *data = static_cast<bTransformCacheConstraint *>(con->data);
-    BLI_strncpy(data->object_path, m_iobject.getFullName().c_str(), FILE_MAX);
-
-    data->cache_file = m_settings->cache_file;
-    id_us_plus(&data->cache_file->id);
+    bTransformCacheConstraint *constraint = getOrCreateConstraint();
+    BLI_strncpy(constraint->object_path, m_iobject.getFullName().c_str(), FILE_MAX);
   }
+}
+
+bTransformCacheConstraint *AbcObjectReader::getOrCreateConstraint()
+{
+  if (m_iobject.isInstanceRoot()) {
+    /* As this is an instance we may already have created a constraint when duplicating the source
+     * object, if so return it. Note that it is possible for an instance to have an animated
+     * transform, but not for the source object. */
+    bConstraint *constraint = static_cast<bConstraint *>(m_object->constraints.last);
+    if (constraint && constraint->type == CONSTRAINT_TYPE_TRANSFORM_CACHE) {
+      return static_cast<bTransformCacheConstraint *>(constraint->data);
+    }
+  }
+
+  /* Create a new constraint. */
+  bConstraint *constraint = BKE_constraint_add_for_object(
+      m_object, nullptr, CONSTRAINT_TYPE_TRANSFORM_CACHE);
+  bTransformCacheConstraint *data = static_cast<bTransformCacheConstraint *>(constraint->data);
+  data->cache_file = m_settings->cache_file;
+  id_us_plus(&data->cache_file->id);
+  return data;
 }
 
 Alembic::AbcGeom::IXform AbcObjectReader::xform()

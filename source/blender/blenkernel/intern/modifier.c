@@ -37,6 +37,7 @@
 #include "MEM_guardedalloc.h"
 
 #include "DNA_armature_types.h"
+#include "DNA_cachefile_types.h"
 #include "DNA_cloth_types.h"
 #include "DNA_dynamicpaint_types.h"
 #include "DNA_fluid_types.h"
@@ -1577,4 +1578,28 @@ void BKE_modifier_blend_read_lib(BlendLibReader *reader, Object *ob)
       mod->flag &= ~eModifierFlag_OverrideLibrary_Local;
     }
   }
+}
+
+bool BKE_modifier_supports_curve_data(const ModifierData *md)
+{
+  /* Sanity check. */
+  const ModifierTypeInfo *mti = BKE_modifier_get_info(md->type);
+  if (mti->modifyGeometrySet == NULL) {
+    return false;
+  }
+
+  if (md->type == eModifierType_Nodes) {
+    return true;
+  }
+
+  /* For the MeshSequenceCache, only the Alembic backend supports directly reading/modifying
+   * curves.
+   */
+  if (md->type == eModifierType_MeshSequenceCache) {
+    MeshSeqCacheModifierData *msmd = (MeshSeqCacheModifierData *)md;
+    CacheFile *cache_file = msmd->cache_file;
+    return cache_file && cache_file->type == CACHEFILE_TYPE_ALEMBIC;
+  }
+
+  return false;
 }

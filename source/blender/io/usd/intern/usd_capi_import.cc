@@ -436,20 +436,20 @@ static USDPrimReader *get_usd_reader(CacheReader *reader, Object * /* ob */, con
   return usd_reader;
 }
 
-struct Mesh *USD_read_mesh(struct CacheReader *reader,
-                           struct Object *ob,
-                           struct Mesh *existing_mesh,
-                           const float time,
-                           const char **err_str,
-                           const int read_flag)
+void USD_read_geometry(CacheReader *reader,
+                       Object *ob,
+                       GeometrySet &geometry_set,
+                       const float time,
+                       const char **err_str,
+                       const int read_flag)
 {
   USDGeomReader *usd_reader = dynamic_cast<USDGeomReader *>(get_usd_reader(reader, ob, err_str));
 
   if (usd_reader == nullptr) {
-    return nullptr;
+    return;
   }
 
-  return usd_reader->read_mesh(existing_mesh, time, read_flag, err_str);
+  return usd_reader->read_geometry(geometry_set, time, read_flag, err_str);
 }
 
 bool USD_mesh_topology_changed(

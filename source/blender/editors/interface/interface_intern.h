@@ -1262,6 +1262,9 @@ void UI_OT_eyedropper_gpencil_color(struct wmOperatorType *ot);
 /* interface_template_asset_view.cc */
 struct uiListType *UI_UL_asset_view(void);
 
+/* interface_templates.c */
+struct uiListType *UI_UL_cache_file_attribute_mappings(void);
+
 /**
  * For use with #ui_rna_collection_search_update_fn.
  */
@@ -1296,6 +1299,9 @@ uiTreeViewHandle *ui_block_view_find_matching_in_old_block(const uiBlock *new_bl
                                                            const uiTreeViewHandle *new_view);
 uiButTreeRow *ui_block_view_find_treerow_in_old_block(const uiBlock *new_block,
                                                       const uiTreeViewItemHandle *new_item_handle);
+
+/* interface_templates.c */
+struct uiListType *UI_UL_cache_file_layers(void);
 
 #ifdef __cplusplus
 }

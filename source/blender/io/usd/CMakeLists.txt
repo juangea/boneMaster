@@ -42,6 +42,7 @@ set(INC
   ../../bmesh
   ../../depsgraph
   ../../editors/include
+  ../../functions
   ../../makesdna
   ../../makesrna
   ../../windowmanager
