@@ -347,6 +347,9 @@ Object *BlenderSync::sync_object(BL::Depsgraph &b_depsgraph,
       object->set_random_id(hash_uint2(hash_string(object->name.c_str()), 0));
     }
 
+    /* lightgroup */
+    object->set_lightgroup(ustring(get_string(cobject, "lightgroup")));
+
     object->tag_update(scene);
   }
 

@@ -661,7 +661,7 @@ ccl_device_forceinline void volume_integrate_heterogeneous(
 
   /* Write accumulated emission. */
   if (!is_zero(accum_emission)) {
-    kernel_accum_emission(kg, state, accum_emission, render_buffer);
+    kernel_accum_emission(kg, state, accum_emission, render_buffer, object_lightgroup(kg, sd->object));
   }
 
 #  ifdef __DENOISING_FEATURES__
@@ -1024,10 +1024,22 @@ ccl_device void integrator_shade_volume(KernelGlobals kg,
     return;
   }
   else {
-    /* Continue to background, light or surface. */
-    integrator_intersect_next_kernel_after_volume<DEVICE_KERNEL_INTEGRATOR_SHADE_VOLUME>(
-        kg, state, &isect, render_buffer);
-    return;
+    if (isect.prim == PRIM_NONE) {
+      INTEGRATOR_PATH_NEXT(DEVICE_KERNEL_INTEGRATOR_SHADE_VOLUME,
+                           DEVICE_KERNEL_INTEGRATOR_SHADE_BACKGROUND);
+      return;
+    }
+    else if (isect.type & PRIMITIVE_LAMP) {
+      INTEGRATOR_PATH_NEXT(DEVICE_KERNEL_INTEGRATOR_SHADE_VOLUME,
+                           DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT);
+      return;
+    }
+    else {
+      /* Continue to background, light or surface. */
+      integrator_intersect_next_kernel_after_volume<DEVICE_KERNEL_INTEGRATOR_SHADE_VOLUME>(
+          kg, state, &isect, render_buffer);
+      return;
+    }
   }
 #endif /* __VOLUME__ */
 }

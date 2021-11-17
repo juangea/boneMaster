@@ -68,7 +68,7 @@ void AbcInstanceReader::readObjectData(Main *bmain,
       ID_NEW_SET(ob, BKE_object_duplicate(bmain, ob, dupflag, duplicate_options)));
 
   /* link own references to the newly duplicated data T26816. */
-  BKE_libblock_relink_to_newid(bmain, &m_object->id, 0);
+  BKE_libblock_relink_to_newid_new(bmain, &m_object->id);
 }
 
 }  // namespace blender::io::alembic

@@ -66,6 +66,7 @@ CCL_NAMESPACE_BEGIN
 #define LAMP_NONE (~0)
 #define ID_NONE (0.0f)
 #define PASS_UNUSED (~0)
+#define LIGHTGROUP_NONE (~0)
 
 #define INTEGRATOR_SHADOW_ISECT_SIZE_CPU 1024U
 #define INTEGRATOR_SHADOW_ISECT_SIZE_GPU 4U
@@ -1053,6 +1054,7 @@ typedef struct KernelFilm {
 
   int pass_aov_color;
   int pass_aov_value;
+  int pass_lightgroup;
 
   /* XYZ to rendering color space transform. float4 instead of float3 to
    * ensure consistent padding/alignment across devices. */
@@ -1137,8 +1139,10 @@ typedef struct KernelBackground {
 
   int use_mis;
 
+  int lightgroup;
+
   /* Padding */
-  int pad1, pad2, pad3;
+  int pad1, pad2;
 } KernelBackground;
 static_assert_align(KernelBackground, 16);
 
@@ -1305,8 +1309,12 @@ typedef struct KernelObject {
 
   float ao_distance;
 
+  int lightgroup;
+
   uint visibility;
   int primitive_type;
+  
+  int pad1, pad2, pad3;
 } KernelObject;
 static_assert_align(KernelObject, 16);
 
@@ -1358,7 +1366,8 @@ typedef struct KernelLight {
   float max_bounces;
   float random;
   float strength[3];
-  float pad1, pad2;
+  int lightgroup;
+  float pad1;
   Transform tfm;
   Transform itfm;
   union {

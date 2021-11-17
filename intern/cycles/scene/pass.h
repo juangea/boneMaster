@@ -66,6 +66,7 @@ class Pass : public Node {
   NODE_SOCKET_API(PassMode, mode)
   NODE_SOCKET_API(ustring, name)
   NODE_SOCKET_API(bool, include_albedo)
+  NODE_SOCKET_API(ustring, lightgroup)
 
   Pass();
 
@@ -85,7 +86,9 @@ class Pass : public Node {
   static const NodeEnum *get_type_enum();
   static const NodeEnum *get_mode_enum();
 
-  static PassInfo get_info(PassType type, const bool include_albedo = false);
+  static PassInfo get_info(PassType type,
+                           const bool include_albedo = false,
+                           const bool lightgroup = false);
 
   static bool contains(const vector<Pass *> &passes, PassType type);
 

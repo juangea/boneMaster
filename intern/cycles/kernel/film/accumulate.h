@@ -335,7 +335,8 @@ ccl_device_inline void kernel_accum_emission_or_background_pass(KernelGlobals kg
                                                                 float3 contribution,
                                                                 ccl_global float *ccl_restrict
                                                                     buffer,
-                                                                const int pass)
+                                                                const int pass,
+                                                                const int lightgroup = LIGHTGROUP_NONE)
 {
   if (!(kernel_data.film.light_pass_flag & PASS_ANY)) {
     return;
@@ -407,6 +408,11 @@ ccl_device_inline void kernel_accum_emission_or_background_pass(KernelGlobals kg
   /* Single write call for GPU coherence. */
   if (pass_offset != PASS_UNUSED) {
     kernel_write_pass_float3(buffer + pass_offset, contribution);
+  }
+
+  /* Write lightgroup pass. */
+  if (lightgroup != LIGHTGROUP_NONE && kernel_data.film.pass_lightgroup != PASS_UNUSED) {
+    kernel_write_pass_float3(buffer + kernel_data.film.pass_lightgroup + 3 * lightgroup, contribution);
   }
 #endif /* __PASSES__ */
 }
@@ -507,6 +513,12 @@ ccl_device_inline void kernel_accum_light(KernelGlobals kg,
                             kernel_data.film.pass_shadow_scale;
       kernel_write_pass_float3(buffer + kernel_data.film.pass_shadow, shadow);
     }
+
+    /* Write lightgroup pass. LIGHTGROUP_NONE is ~0 so decode from unsigned to signed */
+    const int lightgroup = (int)(INTEGRATOR_STATE(state, shadow_path, lightgroup)) - 1;
+    if (lightgroup != LIGHTGROUP_NONE && kernel_data.film.pass_lightgroup != PASS_UNUSED) {
+      kernel_write_pass_float3(buffer + kernel_data.film.pass_lightgroup + 3 * lightgroup, contribution);
+    }
   }
 #endif
 }
@@ -565,14 +577,15 @@ ccl_device_inline void kernel_accum_background(KernelGlobals kg,
         kg, path_flag, sample, contribution, transparent, buffer);
   }
   kernel_accum_emission_or_background_pass(
-      kg, state, contribution, buffer, kernel_data.film.pass_background);
+      kg, state, contribution, buffer, kernel_data.film.pass_background, kernel_data.background.lightgroup);
 }
 
 /* Write emission to render buffer. */
 ccl_device_inline void kernel_accum_emission(KernelGlobals kg,
                                              ConstIntegratorState state,
                                              const float3 L,
-                                             ccl_global float *ccl_restrict render_buffer)
+                                             ccl_global float *ccl_restrict render_buffer,
+                                             const int lightgroup = LIGHTGROUP_NONE)
 {
   float3 contribution = L;
   kernel_accum_clamp(kg, &contribution, INTEGRATOR_STATE(state, path, bounce) - 1);
@@ -583,7 +596,7 @@ ccl_device_inline void kernel_accum_emission(KernelGlobals kg,
 
   kernel_accum_combined_pass(kg, path_flag, sample, contribution, buffer);
   kernel_accum_emission_or_background_pass(
-      kg, state, contribution, buffer, kernel_data.film.pass_emission);
+      kg, state, contribution, buffer, kernel_data.film.pass_emission, lightgroup);
 }
 
 CCL_NAMESPACE_END
