@@ -18,10 +18,12 @@
 
 #include "scene/background.h"
 #include "scene/film.h"
+#include "scene/geometry.h"
 #include "scene/integrator.h"
 #include "scene/light.h"
 #include "scene/mesh.h"
 #include "scene/object.h"
+#include "scene/pointcloud.h"
 #include "scene/scene.h"
 #include "scene/shader.h"
 #include "scene/shader_graph.h"
@@ -248,7 +250,8 @@ void LightManager::test_enabled_lights(Scene *scene)
 bool LightManager::object_usable_as_light(Object *object)
 {
   Geometry *geom = object->get_geometry();
-  if (geom->geometry_type != Geometry::MESH && geom->geometry_type != Geometry::VOLUME) {
+  if (geom->geometry_type != Geometry::MESH && geom->geometry_type != Geometry::VOLUME
+        && geom->geometry_type != Geometry::POINTCLOUD) {
     return false;
   }
   /* Skip objects with NaNs */
@@ -282,6 +285,7 @@ void LightManager::device_update_distribution(Device *,
 
   /* count */
   size_t num_lights = 0;
+  size_t num_points = 0;
   size_t num_portals = 0;
   size_t num_background_lights = 0;
   size_t num_triangles = 0;
@@ -306,22 +310,39 @@ void LightManager::device_update_distribution(Device *,
       continue;
     }
 
-    /* Count triangles. */
-    Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
-    size_t mesh_num_triangles = mesh->num_triangles();
-    for (size_t i = 0; i < mesh_num_triangles; i++) {
-      int shader_index = mesh->get_shader()[i];
-      Shader *shader = (shader_index < mesh->get_used_shaders().size()) ?
-                           static_cast<Shader *>(mesh->get_used_shaders()[shader_index]) :
-                           scene->default_surface;
+    Geometry *geom = object->get_geometry();
+    if (geom->geometry_type == Geometry::MESH) {
+      /* Count triangles. */
+      Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
+      size_t mesh_num_triangles = mesh->num_triangles();
+      for (size_t i = 0; i < mesh_num_triangles; i++) {
+        int shader_index = mesh->get_shader()[i];
+        Shader *shader = (shader_index < mesh->get_used_shaders().size()) ?
+                             static_cast<Shader *>(mesh->get_used_shaders()[shader_index]) :
+                             scene->default_surface;
 
-      if (shader->get_use_mis() && shader->has_surface_emission) {
-        num_triangles++;
+        if (shader->get_use_mis() && shader->has_surface_emission) {
+          num_triangles++;
+        }
+      }
+    }
+    else if (geom->geometry_type == Geometry::POINTCLOUD) {
+      PointCloud *pointcloud = static_cast<PointCloud *>(object->get_geometry());
+      size_t pointcloud_num_points = pointcloud->num_points();
+      for (size_t i = 0; i < pointcloud_num_points; i++) {
+        int shader_index = pointcloud->get_shader()[i];
+        Shader *shader = (shader_index < pointcloud->get_used_shaders().size()) ?
+                             static_cast<Shader *>(pointcloud->get_used_shaders()[shader_index]) :
+                             scene->default_surface;
+
+        if (shader->get_use_mis() && shader->has_surface_emission) {
+          num_points++;
+        }
       }
     }
   }
 
-  size_t num_distribution = num_triangles + num_lights;
+  size_t num_distribution = num_triangles + num_lights + num_points;
   VLOG(1) << "Total " << num_distribution << " of light distribution primitives.";
 
   /* emission area */
@@ -341,8 +362,6 @@ void LightManager::device_update_distribution(Device *,
       continue;
     }
     /* Sum area. */
-    Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
-    bool transform_applied = mesh->transform_applied;
     Transform tfm = object->get_tfm();
     int object_id = j;
     int shader_flag = 0;
@@ -366,35 +385,61 @@ void LightManager::device_update_distribution(Device *,
       shader_flag |= SHADER_EXCLUDE_SHADOW_CATCHER;
     }
 
-    size_t mesh_num_triangles = mesh->num_triangles();
-    for (size_t i = 0; i < mesh_num_triangles; i++) {
-      int shader_index = mesh->get_shader()[i];
-      Shader *shader = (shader_index < mesh->get_used_shaders().size()) ?
-                           static_cast<Shader *>(mesh->get_used_shaders()[shader_index]) :
-                           scene->default_surface;
+    Geometry *geom = object->get_geometry();
+    if (geom->geometry_type == Geometry::MESH) {
+      Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
+      bool transform_applied = mesh->transform_applied;
 
-      if (shader->get_use_mis() && shader->has_surface_emission) {
-        distribution[offset].totarea = totarea;
-        distribution[offset].prim = i + mesh->prim_offset;
-        distribution[offset].mesh_light.shader_flag = shader_flag;
-        distribution[offset].mesh_light.object_id = object_id;
-        offset++;
+      size_t mesh_num_triangles = mesh->num_triangles();
+      for (size_t i = 0; i < mesh_num_triangles; i++) {
+        int shader_index = mesh->get_shader()[i];
+        Shader *shader = (shader_index < mesh->get_used_shaders().size()) ?
+                             static_cast<Shader *>(mesh->get_used_shaders()[shader_index]) :
+                             scene->default_surface;
 
-        Mesh::Triangle t = mesh->get_triangle(i);
-        if (!t.valid(&mesh->get_verts()[0])) {
-          continue;
+        if (shader->get_use_mis() && shader->has_surface_emission) {
+          distribution[offset].totarea = totarea;
+          distribution[offset].prim = i + mesh->prim_offset;
+          distribution[offset].mesh_light.shader_flag = shader_flag;
+          distribution[offset].mesh_light.object_id = object_id;
+          offset++;
+
+          Mesh::Triangle t = mesh->get_triangle(i);
+          if (!t.valid(&mesh->get_verts()[0])) {
+            continue;
+          }
+          float3 p1 = mesh->get_verts()[t.v[0]];
+          float3 p2 = mesh->get_verts()[t.v[1]];
+          float3 p3 = mesh->get_verts()[t.v[2]];
+
+          if (!transform_applied) {
+            p1 = transform_point(&tfm, p1);
+            p2 = transform_point(&tfm, p2);
+            p3 = transform_point(&tfm, p3);
+          }
+
+          totarea += triangle_area(p1, p2, p3);
         }
-        float3 p1 = mesh->get_verts()[t.v[0]];
-        float3 p2 = mesh->get_verts()[t.v[1]];
-        float3 p3 = mesh->get_verts()[t.v[2]];
+      }
+    } else if (geom->geometry_type == Geometry::POINTCLOUD) {
+      PointCloud *pointcloud = static_cast<PointCloud *>(object->get_geometry());
+      size_t pointcloud_num_points = pointcloud->num_points();
+      for (size_t i = 0; i < pointcloud_num_points; i++) {
+        int shader_index = pointcloud->get_shader()[i];
+        Shader *shader = (shader_index < pointcloud->get_used_shaders().size()) ?
+                             static_cast<Shader *>(pointcloud->get_used_shaders()[shader_index]) :
+                             scene->default_surface;
 
-        if (!transform_applied) {
-          p1 = transform_point(&tfm, p1);
-          p2 = transform_point(&tfm, p2);
-          p3 = transform_point(&tfm, p3);
+        if (shader->get_use_mis() && shader->has_surface_emission) {
+          distribution[offset].totarea = totarea;
+          distribution[offset].prim = i + pointcloud->prim_offset;
+          distribution[offset].mesh_light.shader_flag = shader_flag;
+          distribution[offset].mesh_light.object_id = object_id;
+          offset++;
+
+          float r1 = pointcloud->get_radius()[i];
+          totarea += r1 * r1;
         }
-
-        totarea += triangle_area(p1, p2, p3);
       }
     }
 
