@@ -5435,7 +5435,8 @@ void AttributeNode::attributes(Shader *shader, AttributeRequestSet *attributes)
 
   if (!color_out->links.empty() || !vector_out->links.empty() || !fac_out->links.empty() ||
       !alpha_out->links.empty()) {
-    attributes->add_standard(attribute);
+    // Unrestricted access to attributes vs add_standard.
+    attributes->add(attribute);
   }
 
   if (shader->has_volume) {
@@ -5452,7 +5453,8 @@ void AttributeNode::compile(SVMCompiler &compiler)
   ShaderOutput *fac_out = output("Fac");
   ShaderOutput *alpha_out = output("Alpha");
   ShaderNodeType attr_node = NODE_ATTR;
-  int attr = compiler.attribute_standard(attribute);
+  // Unrestricted access to attributes vs attribute_standard.
+  int attr = compiler.attribute(attribute);
 
   if (bump == SHADER_BUMP_DX)
     attr_node = NODE_ATTR_BUMP_DX;
@@ -5489,10 +5491,7 @@ void AttributeNode::compile(OSLCompiler &compiler)
   else
     compiler.parameter("bump_offset", "center");
 
-  if (Attribute::name_standard(attribute.c_str()) != ATTR_STD_NONE)
-    compiler.parameter("name", (string("geom:") + attribute.c_str()).c_str());
-  else
-    compiler.parameter("name", attribute.c_str());
+  compiler.parameter("name", attribute.c_str());
 
   compiler.add(this, "node_attribute");
 }

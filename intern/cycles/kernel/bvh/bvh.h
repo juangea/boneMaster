@@ -118,6 +118,7 @@ CCL_NAMESPACE_BEGIN
 #      define BVH_FUNCTION_FEATURES BVH_HAIR | BVH_MOTION
 #      include "kernel/bvh/shadow_all.h"
 #    endif
+
 #  endif /* __SHADOW_RECORD_ALL__ */
 
 /* Record all intersections - Volume BVH traversal. */

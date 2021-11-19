@@ -75,7 +75,14 @@ ccl_device_inline void shader_setup_from_ray(KernelGlobals kg,
   }
   else
 #endif
-      if (sd->type & PRIMITIVE_TRIANGLE) {
+#ifdef __POINTCLOUD__
+  if (sd->type & PRIMITIVE_ALL_POINT) {
+    /* point */
+    point_shader_setup(kg, sd, isect, ray);
+  }
+  else
+#endif
+  if (sd->type & PRIMITIVE_TRIANGLE) {
     /* static triangle */
     float3 Ng = triangle_normal(kg, sd);
     sd->shader = kernel_tex_fetch(__tri_shader, sd->prim);
