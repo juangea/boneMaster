@@ -344,6 +344,7 @@ extern StructRNA RNA_LayerObjects;
 extern StructRNA RNA_LengthGpencilModifier;
 extern StructRNA RNA_Library;
 extern StructRNA RNA_Light;
+extern StructRNA RNA_Lightgroup;
 extern StructRNA RNA_LightProbe;
 extern StructRNA RNA_LimitDistanceConstraint;
 extern StructRNA RNA_LimitLocationConstraint;

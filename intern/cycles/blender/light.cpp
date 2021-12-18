@@ -155,6 +155,10 @@ void BlenderSync::sync_light(BL::Object &b_parent,
   light->set_use_scatter((visibility & PATH_RAY_VOLUME_SCATTER) != 0);
   light->set_is_shadow_catcher(b_ob_info.real_object.is_shadow_catcher());
 
+  /* lightgroup */
+  PointerRNA cobject = RNA_pointer_get(&b_ob_info.real_object.ptr, "cycles");
+  light->set_lightgroup(ustring(get_string(cobject, "lightgroup")));
+
   /* tag */
   light->tag_update(scene);
 }
@@ -187,6 +191,7 @@ void BlenderSync::sync_background_light(BL::SpaceView3D &b_v3d, bool use_portal)
         light->set_shader(scene->default_background);
         light->set_use_mis(sample_as_light);
         light->set_max_bounces(get_int(cworld, "max_bounces"));
+        light->set_lightgroup(ustring(get_string(cworld, "lightgroup")));
 
         /* force enable light again when world is resynced */
         light->set_is_enabled(true);

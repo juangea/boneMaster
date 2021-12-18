@@ -1081,6 +1081,12 @@ class CyclesWorldSettings(bpy.types.PropertyGroup):
         default=1.0,
         min=0.0000001, max=100000.0, soft_min=0.1, soft_max=100.0, precision=4
     )
+    lightgroup: StringProperty(
+        name="Light Group",
+        description="Assign a lightgroup to the background, "
+        "note that the name needs to match to an accompanying pass",
+        default="",
+    )
 
     @classmethod
     def register(cls):
@@ -1233,6 +1239,13 @@ class CyclesObjectSettings(bpy.types.PropertyGroup):
         min=0.0,
         default=0.0,
         subtype='DISTANCE',
+    )
+
+    lightgroup: StringProperty(
+        name="Light Group",
+        description="Assign a lightgroup to the object or light, "
+        "note that the name needs to match to an accompanying pass",
+        default="",
     )
 
     @classmethod

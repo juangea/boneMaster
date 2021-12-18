@@ -1124,6 +1124,106 @@ void SCENE_OT_view_layer_remove_aov(wmOperatorType *ot)
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name View Layer Add Lightgroup Operator
+ * \{ */
+
+static int view_layer_add_lightgroup_exec(bContext *C, wmOperator *UNUSED(op))
+{
+  Scene *scene = CTX_data_scene(C);
+  ViewLayer *view_layer = CTX_data_view_layer(C);
+
+  BKE_view_layer_add_lightgroup(view_layer);
+
+  RenderEngineType *engine_type = RE_engines_find(scene->r.engine);
+  if (engine_type->update_render_passes) {
+    RenderEngine *engine = RE_engine_create(engine_type);
+    if (engine) {
+      BKE_view_layer_verify_lightgroup(engine, scene, view_layer);
+    }
+    RE_engine_free(engine);
+    engine = NULL;
+  }
+
+  if (scene->nodetree) {
+    ntreeCompositUpdateRLayers(scene->nodetree);
+  }
+
+  DEG_id_tag_update(&scene->id, 0);
+  DEG_relations_tag_update(CTX_data_main(C));
+  WM_event_add_notifier(C, NC_SCENE | ND_LAYER, scene);
+
+  return OPERATOR_FINISHED;
+}
+
+void SCENE_OT_view_layer_add_lightgroup(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Add Lightgroup";
+  ot->idname = "SCENE_OT_view_layer_add_lightgroup";
+  ot->description = "Add a Light Group";
+
+  /* api callbacks */
+  ot->exec = view_layer_add_lightgroup_exec;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name View Layer Remove Lightgroup Operator
+ * \{ */
+
+static int view_layer_remove_lightgroup_exec(bContext *C, wmOperator *UNUSED(op))
+{
+  Scene *scene = CTX_data_scene(C);
+  ViewLayer *view_layer = CTX_data_view_layer(C);
+
+  if (view_layer->active_lightgroup == NULL) {
+    return OPERATOR_FINISHED;
+  }
+
+  BKE_view_layer_remove_lightgroup(view_layer, view_layer->active_lightgroup);
+
+  RenderEngineType *engine_type = RE_engines_find(scene->r.engine);
+  if (engine_type->update_render_passes) {
+    RenderEngine *engine = RE_engine_create(engine_type);
+    if (engine) {
+      BKE_view_layer_verify_lightgroup(engine, scene, view_layer);
+    }
+    RE_engine_free(engine);
+    engine = NULL;
+  }
+
+  if (scene->nodetree) {
+    ntreeCompositUpdateRLayers(scene->nodetree);
+  }
+
+  DEG_id_tag_update(&scene->id, 0);
+  DEG_relations_tag_update(CTX_data_main(C));
+  WM_event_add_notifier(C, NC_SCENE | ND_LAYER, scene);
+
+  return OPERATOR_FINISHED;
+}
+
+void SCENE_OT_view_layer_remove_lightgroup(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Remove Lightgroup";
+  ot->idname = "SCENE_OT_view_layer_remove_lightgroup";
+  ot->description = "Remove Active Lightgroup";
+
+  /* api callbacks */
+  ot->exec = view_layer_remove_lightgroup_exec;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Light Cache Bake Operator
  * \{ */
 
