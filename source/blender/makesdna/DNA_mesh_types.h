@@ -74,7 +74,7 @@ struct MLoopTri_Store {
   int len_alloc;
 };
 
-/* Runtime data, not saved in files. */
+/** Runtime data, not saved in files. */
 typedef struct Mesh_Runtime {
   /* Evaluated mesh for objects which do not have effective modifiers.
    * This mesh is used as a result of modifier stack evaluation.
@@ -137,6 +137,15 @@ typedef struct Mesh_Runtime {
   int64_t cd_dirty_edge;
   int64_t cd_dirty_loop;
   int64_t cd_dirty_poly;
+
+  /**
+   * Settings for lazily evaluating the subdivision on the CPU if needed. These are
+   * set in the modifier when GPU subdivision can be performed.
+   */
+  char subsurf_apply_render;
+  char subsurf_use_optimal_display;
+  char _pad[2];
+  int subsurf_resolution;
 
 } Mesh_Runtime;
 
@@ -356,16 +365,17 @@ typedef enum eMeshWrapperType {
   ME_WRAPPER_TYPE_MDATA = 0,
   /** Use edit-mesh data (#Mesh.edit_mesh, #Mesh_Runtime.edit_data). */
   ME_WRAPPER_TYPE_BMESH = 1,
-  /* ME_WRAPPER_TYPE_SUBD = 2, */ /* TODO */
+  /** Use subdivision mesh data (#Mesh_Runtime.mesh_eval). */
+  ME_WRAPPER_TYPE_SUBD = 2,
 } eMeshWrapperType;
 
-/* texflag */
+/** #Mesh.texflag */
 enum {
   ME_AUTOSPACE = 1,
   ME_AUTOSPACE_EVALUATED = 2,
 };
 
-/* me->editflag */
+/** #Mesh.editflag */
 enum {
   ME_EDIT_MIRROR_VERTEX_GROUPS = 1 << 0,
   ME_EDIT_MIRROR_Y = 1 << 1, /* unused so far */
@@ -387,7 +397,7 @@ enum {
    ((_me)->editflag & ME_EDIT_PAINT_VERT_SEL) ? SCE_SELECT_VERTEX : \
                                                 0)
 
-/* me->flag */
+/** #Mesh.flag */
 enum {
   ME_FLAG_UNUSED_0 = 1 << 0,     /* cleared */
   ME_FLAG_UNUSED_1 = 1 << 1,     /* cleared */
@@ -407,26 +417,26 @@ enum {
   ME_REMESH_REPROJECT_SCULPT_FACE_SETS = 1 << 15,
 };
 
-/* me->cd_flag */
+/** #Mesh.cd_flag */
 enum {
   ME_CDFLAG_VERT_BWEIGHT = 1 << 0,
   ME_CDFLAG_EDGE_BWEIGHT = 1 << 1,
   ME_CDFLAG_EDGE_CREASE = 1 << 2,
 };
 
-/* me->remesh_mode */
+/** #Mesh.remesh_mode */
 enum {
   REMESH_VOXEL = 0,
   REMESH_QUAD = 1,
 };
 
-/* Subsurf Type */
+/** #SubsurfModifierData.subdivType */
 enum {
   ME_CC_SUBSURF = 0,
   ME_SIMPLE_SUBSURF = 1,
 };
 
-/* me->symmetry */
+/** #Mesh.symmetry */
 typedef enum eMeshSymmetryType {
   ME_SYMMETRY_X = 1 << 0,
   ME_SYMMETRY_Y = 1 << 1,

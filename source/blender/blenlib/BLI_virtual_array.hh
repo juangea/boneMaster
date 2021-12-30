@@ -44,7 +44,7 @@
 
 namespace blender {
 
-/* Forward declarations for generic virtual arrays. */
+/** Forward declarations for generic virtual arrays. */
 namespace fn {
 class GVArray;
 class GVMutableArray;
@@ -194,7 +194,7 @@ template<typename T> class VArrayImpl {
   }
 };
 
-/* Similar to #VArrayImpl, but adds methods that allow modifying the referenced elements. */
+/** Similar to #VArrayImpl, but adds methods that allow modifying the referenced elements. */
 template<typename T> class VMutableArrayImpl : public VArrayImpl<T> {
  public:
   using VArrayImpl<T>::VArrayImpl;
@@ -477,9 +477,9 @@ template<typename T> struct VArrayAnyExtraInfo {
   template<typename StorageT> static VArrayAnyExtraInfo get()
   {
     /* These are the only allowed types in the #Any. */
-    static_assert(std::is_base_of_v<VArrayImpl<T>, StorageT> ||
-                  std::is_same_v<StorageT, const VArrayImpl<T> *> ||
-                  std::is_same_v<StorageT, std::shared_ptr<const VArrayImpl<T>>>);
+    static_assert(
+        std::is_base_of_v<VArrayImpl<T>, StorageT> ||
+        is_same_any_v<StorageT, const VArrayImpl<T> *, std::shared_ptr<const VArrayImpl<T>>>);
 
     /* Depending on how the virtual array implementation is stored in the #Any, a different
      * #get_varray function is required. */

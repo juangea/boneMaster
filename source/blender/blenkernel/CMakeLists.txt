@@ -126,7 +126,7 @@ set(SRC
   intern/curve_eval.cc
   intern/curve_to_mesh_convert.cc
   intern/curveprofile.cc
-  intern/customdata.c
+  intern/customdata.cc
   intern/customdata_file.c
   intern/data_transfer.c
   intern/deform.c
@@ -156,7 +156,7 @@ set(SRC
   intern/gpencil_curve.c
   intern/gpencil_geom.cc
   intern/gpencil_modifier.c
-  intern/hair.c
+  intern/hair.cc
   intern/icons.cc
   intern/icons_rasterize.c
   intern/idprop.c
@@ -226,6 +226,7 @@ set(SRC
   intern/multires_versioning.c
   intern/nla.c
   intern/node.cc
+  intern/node_tree_update.cc
   intern/type_conversions.cc
   intern/object.cc
   intern/object_deform.c
@@ -274,6 +275,7 @@ set(SRC
   intern/subdiv_eval.c
   intern/subdiv_foreach.c
   intern/subdiv_mesh.c
+  intern/subdiv_modifier.c
   intern/subdiv_stats.c
   intern/subdiv_topology.c
   intern/subsurf_ccg.c
@@ -420,6 +422,7 @@ set(SRC
   BKE_multires.h
   BKE_nla.h
   BKE_node.h
+  BKE_node_tree_update.h
   BKE_object.h
   BKE_object_deform.h
   BKE_object_facemap.h
@@ -451,6 +454,7 @@ set(SRC
   BKE_subdiv_eval.h
   BKE_subdiv_foreach.h
   BKE_subdiv_mesh.h
+  BKE_subdiv_modifier.h
   BKE_subdiv_topology.h
   BKE_subsurf.h
   BKE_text.h
