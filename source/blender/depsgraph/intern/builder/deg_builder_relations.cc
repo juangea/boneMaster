@@ -1466,8 +1466,11 @@ void DepsgraphRelationBuilder::build_animdata_drivers(ID *id)
 
 void DepsgraphRelationBuilder::build_animation_images(ID *id)
 {
+  /* See #DepsgraphNodeBuilder::build_animation_images. */
+  const bool can_have_gpu_material = ELEM(GS(id->name), ID_MA, ID_WO);
+
   /* TODO: can we check for existence of node for performance? */
-  if (BKE_image_user_id_has_animation(id)) {
+  if (BKE_image_user_id_has_animation(id) || can_have_gpu_material) {
     OperationKey image_animation_key(
         id, NodeType::IMAGE_ANIMATION, OperationCode::IMAGE_ANIMATION);
     TimeSourceKey time_src_key;
@@ -1726,8 +1729,17 @@ void DepsgraphRelationBuilder::build_driver_id_property(ID *id, const char *rna_
     return;
   }
   const char *prop_identifier = RNA_property_identifier((PropertyRNA *)prop);
-  OperationKey id_property_key(
-      id, NodeType::PARAMETERS, OperationCode::ID_PROPERTY, prop_identifier);
+  /* Custom properties of bones are placed in their components to improve granularity. */
+  OperationKey id_property_key;
+  if (RNA_struct_is_a(ptr.type, &RNA_PoseBone)) {
+    const bPoseChannel *pchan = static_cast<const bPoseChannel *>(ptr.data);
+    id_property_key = OperationKey(
+        id, NodeType::BONE, pchan->name, OperationCode::ID_PROPERTY, prop_identifier);
+  }
+  else {
+    id_property_key = OperationKey(
+        id, NodeType::PARAMETERS, OperationCode::ID_PROPERTY, prop_identifier);
+  }
   OperationKey parameters_exit_key(id, NodeType::PARAMETERS, OperationCode::PARAMETERS_EXIT);
   add_relation(
       id_property_key, parameters_exit_key, "ID Property -> Done", RELATION_CHECK_BEFORE_ADD);
@@ -2518,8 +2530,13 @@ void DepsgraphRelationBuilder::build_nodetree(bNodeTree *ntree)
        * changed. The parent node group is currently explicitly tagged for update in
        * #ED_node_tree_propagate_change. In the future we could move this relation to the
        * depsgraph, but then the depsgraph has to do some more static analysis of the node tree to
-       * see which groups the output actually depends on. */
-      add_relation(group_output_key, ntree_output_key, "Group Node", RELATION_FLAG_NO_FLUSH);
+       * see which groups the output actually depends on.
+       *
+       * Furthermore, shader nodes currently depend on relations being created from e.g. objects to
+       * nodes. Geometry nodes do not depend on these relations, because they are explicitly
+       * created by the modifier (which is the thing that actually depends on the objects). */
+      const int relation_flag = (group_ntree->type == NTREE_SHADER) ? 0 : RELATION_FLAG_NO_FLUSH;
+      add_relation(group_output_key, ntree_output_key, "Group Node", relation_flag);
     }
     else {
       BLI_assert_msg(0, "Unknown ID type used for node");

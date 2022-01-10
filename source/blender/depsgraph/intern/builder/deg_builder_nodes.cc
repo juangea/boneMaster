@@ -199,9 +199,7 @@ IDNode *DepsgraphNodeBuilder::add_id_node(ID *id)
         nullptr, OperationCode::OPERATION, "", -1);
     /* Pin the node so that it and its relations are preserved by the unused nodes/relations
      * deletion. This is mainly to make it easier to debug visibility. */
-    /* NOTE: Keep un-pinned for the 3.0 release. This way we are more sure that side effects of the
-     * change is minimal outside of the dependency graph area. */
-    // visibility_operation->flag |= OperationFlag::DEPSOP_FLAG_PINNED;
+    visibility_operation->flag |= OperationFlag::DEPSOP_FLAG_PINNED;
     graph_->operations.append(visibility_operation);
   }
   return id_node;
@@ -269,6 +267,21 @@ OperationNode *DepsgraphNodeBuilder::add_operation_node(ID *id,
                                                         int name_tag)
 {
   return add_operation_node(id, comp_type, "", opcode, op, name, name_tag);
+}
+
+OperationNode *DepsgraphNodeBuilder::ensure_operation_node(ID *id,
+                                                           NodeType comp_type,
+                                                           const char *comp_name,
+                                                           OperationCode opcode,
+                                                           const DepsEvalOperationCb &op,
+                                                           const char *name,
+                                                           int name_tag)
+{
+  OperationNode *operation = find_operation_node(id, comp_type, comp_name, opcode, name, name_tag);
+  if (operation != nullptr) {
+    return operation;
+  }
+  return add_operation_node(id, comp_type, comp_name, opcode, op, name, name_tag);
 }
 
 OperationNode *DepsgraphNodeBuilder::ensure_operation_node(ID *id,
@@ -589,11 +602,7 @@ void DepsgraphNodeBuilder::build_id(ID *id)
     case ID_HA:
     case ID_PT:
     case ID_VO:
-      /* TODO(sergey): Get visibility from a "parent" somehow.
-       *
-       * NOTE: Similarly to above, we don't want false-positives on
-       * visibility. */
-      build_object_data_geometry_datablock(id, false);
+      build_object_data_geometry_datablock(id);
       break;
     case ID_SPK:
       build_speaker((Speaker *)id);
@@ -769,32 +778,28 @@ void DepsgraphNodeBuilder::build_object(int base_index,
   if (object->modifiers.first != nullptr) {
     BuilderWalkUserData data;
     data.builder = this;
-    data.is_parent_visible = is_visible;
     BKE_modifiers_foreach_ID_link(object, modifier_walk, &data);
   }
   /* Grease Pencil Modifiers. */
   if (object->greasepencil_modifiers.first != nullptr) {
     BuilderWalkUserData data;
     data.builder = this;
-    data.is_parent_visible = is_visible;
     BKE_gpencil_modifiers_foreach_ID_link(object, modifier_walk, &data);
   }
   /* Shader FX. */
   if (object->shader_fx.first != nullptr) {
     BuilderWalkUserData data;
     data.builder = this;
-    data.is_parent_visible = is_visible;
     BKE_shaderfx_foreach_ID_link(object, modifier_walk, &data);
   }
   /* Constraints. */
   if (object->constraints.first != nullptr) {
     BuilderWalkUserData data;
     data.builder = this;
-    data.is_parent_visible = is_visible;
     BKE_constraints_id_loop(&object->constraints, constraint_walk, &data);
   }
   /* Object data. */
-  build_object_data(object, is_visible);
+  build_object_data(object);
   /* Parameters, used by both drivers/animation and also to inform dependency
    * from object's data. */
   build_parameters(&object->id);
@@ -897,7 +902,7 @@ void DepsgraphNodeBuilder::build_object_instance_collection(Object *object, bool
   is_parent_collection_visible_ = is_current_parent_collection_visible;
 }
 
-void DepsgraphNodeBuilder::build_object_data(Object *object, bool is_object_visible)
+void DepsgraphNodeBuilder::build_object_data(Object *object)
 {
   if (object->data == nullptr) {
     return;
@@ -914,14 +919,14 @@ void DepsgraphNodeBuilder::build_object_data(Object *object, bool is_object_visi
     case OB_HAIR:
     case OB_POINTCLOUD:
     case OB_VOLUME:
-      build_object_data_geometry(object, is_object_visible);
+      build_object_data_geometry(object);
       break;
     case OB_ARMATURE:
       if (ID_IS_LINKED(object) && object->proxy_from != nullptr) {
-        build_proxy_rig(object, is_object_visible);
+        build_proxy_rig(object);
       }
       else {
-        build_rig(object, is_object_visible);
+        build_rig(object);
       }
       break;
     case OB_LAMP:
@@ -1121,7 +1126,14 @@ void DepsgraphNodeBuilder::build_animdata_nlastrip_targets(ListBase *strips)
 
 void DepsgraphNodeBuilder::build_animation_images(ID *id)
 {
-  if (BKE_image_user_id_has_animation(id)) {
+  /* GPU materials might use an animated image. However, these materials have no been built yet. We
+   * could scan the entire node tree recursively to check if any texture node has a video. That is
+   * quite expensive. For now just always add this operation node, because it is very fast. */
+  /* TODO: Add a more precise check when it is cheaper to iterate over all image nodes in a node
+   * tree. */
+  const bool can_have_gpu_material = ELEM(GS(id->name), ID_MA, ID_WO);
+
+  if (BKE_image_user_id_has_animation(id) || can_have_gpu_material) {
     ID *id_cow = get_cow_id(id);
     add_operation_node(
         id,
@@ -1201,8 +1213,16 @@ void DepsgraphNodeBuilder::build_driver_id_property(ID *id, const char *rna_path
     return;
   }
   const char *prop_identifier = RNA_property_identifier((PropertyRNA *)prop);
-  ensure_operation_node(
-      id, NodeType::PARAMETERS, OperationCode::ID_PROPERTY, nullptr, prop_identifier);
+  /* Custom properties of bones are placed in their components to improve granularity. */
+  if (RNA_struct_is_a(ptr.type, &RNA_PoseBone)) {
+    const bPoseChannel *pchan = static_cast<const bPoseChannel *>(ptr.data);
+    ensure_operation_node(
+        id, NodeType::BONE, pchan->name, OperationCode::ID_PROPERTY, nullptr, prop_identifier);
+  }
+  else {
+    ensure_operation_node(
+        id, NodeType::PARAMETERS, OperationCode::ID_PROPERTY, nullptr, prop_identifier);
+  }
 }
 
 void DepsgraphNodeBuilder::build_parameters(ID *id)
@@ -1465,7 +1485,7 @@ void DepsgraphNodeBuilder::build_shapekeys(Key *key)
 
 /* ObData Geometry Evaluation */
 /* XXX: what happens if the datablock is shared! */
-void DepsgraphNodeBuilder::build_object_data_geometry(Object *object, bool is_object_visible)
+void DepsgraphNodeBuilder::build_object_data_geometry(Object *object)
 {
   OperationNode *op_node;
   Scene *scene_cow = get_cow_datablock(scene_);
@@ -1487,7 +1507,7 @@ void DepsgraphNodeBuilder::build_object_data_geometry(Object *object, bool is_ob
   /* Point caches. */
   build_object_pointcache(object);
   /* Geometry. */
-  build_object_data_geometry_datablock((ID *)object->data, is_object_visible);
+  build_object_data_geometry_datablock((ID *)object->data);
   build_dimensions(object);
   /* Batch cache. */
   add_operation_node(
@@ -1497,7 +1517,7 @@ void DepsgraphNodeBuilder::build_object_data_geometry(Object *object, bool is_ob
       [object_cow](::Depsgraph *depsgraph) { BKE_object_select_update(depsgraph, object_cow); });
 }
 
-void DepsgraphNodeBuilder::build_object_data_geometry_datablock(ID *obdata, bool is_object_visible)
+void DepsgraphNodeBuilder::build_object_data_geometry_datablock(ID *obdata)
 {
   if (built_map_.checkIsBuiltAndTag(obdata)) {
     return;
@@ -1541,17 +1561,15 @@ void DepsgraphNodeBuilder::build_object_data_geometry_datablock(ID *obdata, bool
                                      BKE_curve_eval_geometry(depsgraph, (Curve *)obdata_cow);
                                    });
       op_node->set_as_entry();
-      /* Make sure objects used for bevel.taper are in the graph.
-       * NOTE: This objects might be not linked to the scene. */
       Curve *cu = (Curve *)obdata;
       if (cu->bevobj != nullptr) {
-        build_object(-1, cu->bevobj, DEG_ID_LINKED_INDIRECTLY, is_object_visible);
+        build_object(-1, cu->bevobj, DEG_ID_LINKED_INDIRECTLY, false);
       }
       if (cu->taperobj != nullptr) {
-        build_object(-1, cu->taperobj, DEG_ID_LINKED_INDIRECTLY, is_object_visible);
+        build_object(-1, cu->taperobj, DEG_ID_LINKED_INDIRECTLY, false);
       }
       if (cu->textoncurve != nullptr) {
-        build_object(-1, cu->textoncurve, DEG_ID_LINKED_INDIRECTLY, is_object_visible);
+        build_object(-1, cu->textoncurve, DEG_ID_LINKED_INDIRECTLY, false);
       }
       break;
     }
@@ -2114,10 +2132,7 @@ void DepsgraphNodeBuilder::modifier_walk(void *user_data,
   }
   switch (GS(id->name)) {
     case ID_OB:
-      /* Special case for object, so we take owner visibility into
-       * account. */
-      data->builder->build_object(
-          -1, (Object *)id, DEG_ID_LINKED_INDIRECTLY, data->is_parent_visible);
+      data->builder->build_object(-1, (Object *)id, DEG_ID_LINKED_INDIRECTLY, false);
       break;
     default:
       data->builder->build_id(id);
@@ -2137,10 +2152,7 @@ void DepsgraphNodeBuilder::constraint_walk(bConstraint * /*con*/,
   }
   switch (GS(id->name)) {
     case ID_OB:
-      /* Special case for object, so we take owner visibility into
-       * account. */
-      data->builder->build_object(
-          -1, (Object *)id, DEG_ID_LINKED_INDIRECTLY, data->is_parent_visible);
+      data->builder->build_object(-1, (Object *)id, DEG_ID_LINKED_INDIRECTLY, false);
       break;
     default:
       data->builder->build_id(id);

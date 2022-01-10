@@ -307,7 +307,7 @@ typedef struct bNode {
 
   char _pad1[4];
 
-  /** Entire boundbox (world-space). */
+  /** Entire bound-box (world-space). */
   rctf totr;
   /** Optional preview area. */
   rctf prvr;
@@ -922,6 +922,11 @@ typedef struct NodeColorspill {
   float limscale;
   float uspillr, uspillg, uspillb;
 } NodeColorspill;
+
+typedef struct NodeConvertColorSpace {
+  char from_color_space[64];
+  char to_color_space[64];
+} NodeConvertColorSpace;
 
 typedef struct NodeDilateErode {
   char falloff;
