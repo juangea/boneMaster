@@ -34,6 +34,7 @@
 #include "DNA_object_types.h"
 
 #include "BLI_compiler_compat.h"
+#include "BLI_index_range.hh"
 #include "BLI_listbase.h"
 #include "BLI_math_geom.h"
 
@@ -44,6 +45,7 @@
 #include "BKE_modifier.h"
 #include "BKE_object.h"
 
+using Alembic::Abc::FloatArraySamplePtr;
 using Alembic::Abc::Int32ArraySamplePtr;
 using Alembic::Abc::IV3fArrayProperty;
 using Alembic::Abc::P3fArraySamplePtr;
@@ -160,27 +162,26 @@ static void read_mverts(CDStreamConfig &config, const AbcMeshData &mesh_data)
     return;
   }
 
-  read_mverts(mverts, positions, nullptr);
+  read_mverts(*config.mesh, positions, nullptr);
 }
 
-void read_mverts(MVert *mverts, const P3fArraySamplePtr positions, const N3fArraySamplePtr normals)
+void read_mverts(Mesh &mesh, const P3fArraySamplePtr positions, const N3fArraySamplePtr normals)
 {
   for (int i = 0; i < positions->size(); i++) {
-    MVert &mvert = mverts[i];
+    MVert &mvert = mesh.mvert[i];
     Imath::V3f pos_in = (*positions)[i];
 
     copy_zup_from_yup(mvert.co, pos_in.getValue());
 
     mvert.bweight = 0;
-
-    if (normals) {
+  }
+  if (normals) {
+    float(*vert_normals)[3] = BKE_mesh_vertex_normals_for_write(&mesh);
+    for (const int i : IndexRange(normals->size())) {
       Imath::V3f nor_in = (*normals)[i];
-
-      short no[3];
-      normal_float_to_short_v3(no, nor_in.getValue());
-
-      copy_zup_from_yup(mvert.no, no);
+      copy_zup_from_yup(vert_normals[i], nor_in.getValue());
     }
+    BKE_mesh_vertex_normals_clear_dirty(&mesh);
   }
 }
 
@@ -910,6 +911,32 @@ static void read_subd_sample(const std::string &iobject_full_name,
   }
 }
 
+static void read_vertex_creases(Mesh *mesh,
+                                const Int32ArraySamplePtr &indices,
+                                const FloatArraySamplePtr &sharpnesses)
+{
+  if (!(indices && sharpnesses && indices->size() == sharpnesses->size() &&
+        indices->size() != 0)) {
+    return;
+  }
+
+  float *vertex_crease_data = (float *)CustomData_add_layer(
+      &mesh->vdata, CD_CREASE, CD_DEFAULT, nullptr, mesh->totvert);
+  const int totvert = mesh->totvert;
+
+  for (int i = 0, v = indices->size(); i < v; ++i) {
+    const int idx = (*indices)[i];
+
+    if (idx >= totvert) {
+      continue;
+    }
+
+    vertex_crease_data[idx] = (*sharpnesses)[i];
+  }
+
+  mesh->cd_flag |= ME_CDFLAG_VERT_CREASE;
+}
+
 /* ************************************************************************** */
 
 AbcSubDReader::AbcSubDReader(const IObject &object, ImportSettings &settings)
@@ -973,6 +1000,7 @@ void AbcSubDReader::readObjectData(Main *bmain, const Alembic::Abc::ISampleSelec
     return;
   }
 
+  /* Read egde creases. */
   Int32ArraySamplePtr indices = sample.getCreaseIndices();
   Alembic::Abc::FloatArraySamplePtr sharpnesses = sample.getCreaseSharpnesses();
 
@@ -1002,6 +1030,8 @@ void AbcSubDReader::readObjectData(Main *bmain, const Alembic::Abc::ISampleSelec
 
     mesh->cd_flag |= ME_CDFLAG_EDGE_CREASE;
   }
+
+  read_vertex_creases(mesh, sample.getCornerIndices(), sample.getCornerSharpnesses());
 
   if (m_settings->validate_meshes) {
     BKE_mesh_validate(mesh, false, false);

@@ -495,7 +495,7 @@ float UI_text_clip_middle_ex(const struct uiFontStyle *fstyle,
                              char *str,
                              float okwidth,
                              float minwidth,
-                             const size_t max_len,
+                             size_t max_len,
                              char rpart_sep);
 
 /**
@@ -2426,6 +2426,13 @@ void uiTemplateCacheFileProcedural(uiLayout *layout,
  */
 void uiTemplateCacheFileTimeSettings(uiLayout *layout, struct PointerRNA *fileptr);
 
+/**
+ * Draw the override layers related properties of the CacheFile.
+ */
+void uiTemplateCacheFileLayers(uiLayout *layout,
+                               const struct bContext *C,
+                               struct PointerRNA *fileptr);
+
 /* Default UIList class name, keep in sync with its declaration in bl_ui/__init__.py */
 #define UI_UL_DEFAULT_CLASS_NAME "UI_UL_list"
 enum uiTemplateListFlags {
@@ -2957,15 +2964,17 @@ void UI_fontstyle_set(const struct uiFontStyle *fs);
 void UI_fontstyle_draw_ex(const struct uiFontStyle *fs,
                           const struct rcti *rect,
                           const char *str,
+                          size_t str_len,
                           const uchar col[4],
                           const struct uiFontStyleDraw_Params *fs_params,
-                          size_t len,
                           int *r_xofs,
                           int *r_yofs,
                           struct ResultBLF *r_info);
+
 void UI_fontstyle_draw(const struct uiFontStyle *fs,
                        const struct rcti *rect,
                        const char *str,
+                       size_t str_len,
                        const uchar col[4],
                        const struct uiFontStyleDraw_Params *fs_params);
 /**

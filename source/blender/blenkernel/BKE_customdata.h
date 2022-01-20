@@ -323,7 +323,7 @@ void CustomData_bmesh_copy_data_exclude_by_type(const struct CustomData *source,
                                                 struct CustomData *dest,
                                                 void *src_block,
                                                 void **dest_block,
-                                                const CustomDataMask mask_exclude);
+                                                CustomDataMask mask_exclude);
 
 /**
  * Copies data of a single layer of a given type.
@@ -496,7 +496,7 @@ void CustomData_bmesh_free_block_data(struct CustomData *data, void *block);
  */
 void CustomData_bmesh_free_block_data_exclude_by_type(struct CustomData *data,
                                                       void *block,
-                                                      const CustomDataMask mask_exclude);
+                                                      CustomDataMask mask_exclude);
 
 /**
  * Copy custom data to/from layers as in mesh/derived-mesh, to edit-mesh
@@ -746,6 +746,14 @@ void CustomData_blend_write(struct BlendWriter *writer,
                             CustomDataMask cddata_mask,
                             struct ID *id);
 void CustomData_blend_read(struct BlendDataReader *reader, struct CustomData *data, int count);
+
+#ifndef NDEBUG
+struct DynStr;
+/** Use to inspect mesh data when debugging. */
+void CustomData_debug_info_from_layers(const struct CustomData *data,
+                                       const char *indent,
+                                       struct DynStr *dynstr);
+#endif /* NDEBUG */
 
 #ifdef __cplusplus
 }

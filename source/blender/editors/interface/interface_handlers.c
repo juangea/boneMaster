@@ -3762,7 +3762,12 @@ static void ui_do_but_textedit(
       case EVT_VKEY:
       case EVT_XKEY:
       case EVT_CKEY:
-        if (IS_EVENT_MOD(event, ctrl, oskey)) {
+#if defined(__APPLE__)
+        if ((event->oskey && !IS_EVENT_MOD(event, shift, alt, ctrl)) ||
+            (event->ctrl && !IS_EVENT_MOD(event, shift, alt, oskey))) {
+#else
+        if (event->ctrl && !IS_EVENT_MOD(event, shift, alt, oskey)) {
+#endif
           if (event->type == EVT_VKEY) {
             changed = ui_textedit_copypaste(but, data, UI_TEXTEDIT_PASTE);
           }
@@ -5479,7 +5484,7 @@ static int ui_do_but_NUM(
                                 log10f(number_but->step_size));
         }
         else {
-          value_step = (double)number_but->step_size * UI_PRECISION_FLOAT_SCALE;
+          value_step = (double)(number_but->step_size * UI_PRECISION_FLOAT_SCALE);
         }
         BLI_assert(value_step > 0.0f);
         const double value_test = (but->drawflag & UI_BUT_ACTIVE_LEFT) ?

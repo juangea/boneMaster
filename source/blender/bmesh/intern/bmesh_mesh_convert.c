@@ -122,6 +122,17 @@ void BM_mesh_cd_flag_apply(BMesh *bm, const char cd_flag)
     }
   }
 
+  if (cd_flag & ME_CDFLAG_VERT_CREASE) {
+    if (!CustomData_has_layer(&bm->vdata, CD_CREASE)) {
+      BM_data_layer_add(bm, &bm->vdata, CD_CREASE);
+    }
+  }
+  else {
+    if (CustomData_has_layer(&bm->vdata, CD_CREASE)) {
+      BM_data_layer_free(bm, &bm->vdata, CD_CREASE);
+    }
+  }
+
   if (cd_flag & ME_CDFLAG_EDGE_BWEIGHT) {
     if (!CustomData_has_layer(&bm->edata, CD_BWEIGHT)) {
       BM_data_layer_add(bm, &bm->edata, CD_BWEIGHT);
@@ -150,6 +161,9 @@ char BM_mesh_cd_flag_from_bmesh(BMesh *bm)
   char cd_flag = 0;
   if (CustomData_has_layer(&bm->vdata, CD_BWEIGHT)) {
     cd_flag |= ME_CDFLAG_VERT_BWEIGHT;
+  }
+  if (CustomData_has_layer(&bm->vdata, CD_CREASE)) {
+    cd_flag |= ME_CDFLAG_VERT_CREASE;
   }
   if (CustomData_has_layer(&bm->edata, CD_BWEIGHT)) {
     cd_flag |= ME_CDFLAG_EDGE_BWEIGHT;
@@ -206,6 +220,14 @@ void BM_mesh_bm_from_me(BMesh *bm, const Mesh *me, const struct BMeshFromMeshPar
       CustomData_bmesh_init_pool(&bm->pdata, me->totpoly, BM_FACE);
     }
     return; /* Sanity check. */
+  }
+
+  /* Only copy normals to the new BMesh if they are not already dirty. This avoids unnecessary
+   * work, but also accessing normals on an incomplete mesh, for example when restoring undo steps
+   * in edit mode. */
+  const float(*vert_normals)[3] = NULL;
+  if (!BKE_mesh_vertex_normals_are_dirty(me)) {
+    vert_normals = BKE_mesh_vertex_normals_ensure(me);
   }
 
   if (is_new) {
@@ -307,13 +329,20 @@ void BM_mesh_bm_from_me(BMesh *bm, const Mesh *me, const struct BMeshFromMeshPar
     CustomData_bmesh_init_pool(&bm->edata, me->totedge, BM_EDGE);
     CustomData_bmesh_init_pool(&bm->ldata, me->totloop, BM_LOOP);
     CustomData_bmesh_init_pool(&bm->pdata, me->totpoly, BM_FACE);
-
-    BM_mesh_cd_flag_apply(bm, me->cd_flag);
   }
+  BM_mesh_cd_flag_apply(bm, me->cd_flag | (is_new ? 0 : BM_mesh_cd_flag_from_bmesh(bm)));
 
-  const int cd_vert_bweight_offset = CustomData_get_offset(&bm->vdata, CD_BWEIGHT);
-  const int cd_edge_bweight_offset = CustomData_get_offset(&bm->edata, CD_BWEIGHT);
-  const int cd_edge_crease_offset = CustomData_get_offset(&bm->edata, CD_CREASE);
+  /* Only copy these values over if the source mesh is flagged to be using them.
+   * Even if `bm` has these layers, they may have been added from another mesh, when `!is_new`. */
+  const int cd_vert_bweight_offset = (me->cd_flag & ME_CDFLAG_VERT_BWEIGHT) ?
+                                         CustomData_get_offset(&bm->vdata, CD_BWEIGHT) :
+                                         -1;
+  const int cd_edge_bweight_offset = (me->cd_flag & ME_CDFLAG_EDGE_BWEIGHT) ?
+                                         CustomData_get_offset(&bm->edata, CD_BWEIGHT) :
+                                         -1;
+  const int cd_edge_crease_offset = (me->cd_flag & ME_CDFLAG_EDGE_CREASE) ?
+                                        CustomData_get_offset(&bm->edata, CD_CREASE) :
+                                        -1;
   const int cd_shape_key_offset = tot_shape_keys ? CustomData_get_offset(&bm->vdata, CD_SHAPEKEY) :
                                                    -1;
   const int cd_shape_keyindex_offset = is_new && (tot_shape_keys || params->add_key_index) ?
@@ -334,7 +363,9 @@ void BM_mesh_bm_from_me(BMesh *bm, const Mesh *me, const struct BMeshFromMeshPar
       BM_vert_select_set(bm, v, true);
     }
 
-    normal_short_to_float_v3(v->no, mvert->no);
+    if (vert_normals) {
+      copy_v3_v3(v->no, vert_normals[i]);
+    }
 
     /* Copy Custom Data */
     CustomData_to_bmesh_block(&me->vdata, &bm->vdata, i, &v->head.data, true);
@@ -639,6 +670,10 @@ void BM_mesh_bm_to_me(Main *bmain, BMesh *bm, Mesh *me, const struct BMeshToMesh
   CustomData_add_layer(&me->ldata, CD_MLOOP, CD_ASSIGN, mloop, me->totloop);
   CustomData_add_layer(&me->pdata, CD_MPOLY, CD_ASSIGN, mpoly, me->totpoly);
 
+  /* There is no way to tell if BMesh normals are dirty or not. Instead of calculating the normals
+   * on the BMesh possibly unnecessarily, just tag them dirty on the resulting mesh. */
+  BKE_mesh_normals_tag_dirty(me);
+
   me->cd_flag = BM_mesh_cd_flag_from_bmesh(bm);
 
   /* This is called again, 'dotess' arg is used there. */
@@ -647,7 +682,6 @@ void BM_mesh_bm_to_me(Main *bmain, BMesh *bm, Mesh *me, const struct BMeshToMesh
   i = 0;
   BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
     copy_v3_v3(mvert->co, v->co);
-    normal_float_to_short_v3(mvert->no, v->no);
 
     mvert->flag = BM_vert_flag_to_mflag(v);
 
@@ -1041,6 +1075,8 @@ void BM_mesh_bm_to_me_for_eval(BMesh *bm, Mesh *me, const CustomData_MeshMasks *
   const int cd_edge_bweight_offset = CustomData_get_offset(&bm->edata, CD_BWEIGHT);
   const int cd_edge_crease_offset = CustomData_get_offset(&bm->edata, CD_CREASE);
 
+  BKE_mesh_normals_tag_dirty(me);
+
   me->runtime.deformed_only = true;
 
   /* Don't add origindex layer if one already exists. */
@@ -1054,8 +1090,6 @@ void BM_mesh_bm_to_me_for_eval(BMesh *bm, Mesh *me, const CustomData_MeshMasks *
     copy_v3_v3(mv->co, eve->co);
 
     BM_elem_index_set(eve, i); /* set_inline */
-
-    normal_float_to_short_v3(mv->no, eve->no);
 
     mv->flag = BM_vert_flag_to_mflag(eve);
 

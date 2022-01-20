@@ -105,6 +105,7 @@ extern StructRNA RNA_BuildModifier;
 extern StructRNA RNA_ByteColorAttribute;
 extern StructRNA RNA_ByteColorAttributeValue;
 extern StructRNA RNA_CacheFile;
+extern StructRNA RNA_CacheFileLayer;
 extern StructRNA RNA_Camera;
 extern StructRNA RNA_CameraDOFSettings;
 extern StructRNA RNA_CastModifier;
@@ -185,6 +186,7 @@ extern StructRNA RNA_CompositorNodeRGBToBW;
 extern StructRNA RNA_CompositorNodeRLayers;
 extern StructRNA RNA_CompositorNodeRotate;
 extern StructRNA RNA_CompositorNodeScale;
+extern StructRNA RNA_CompositorNodeSceneTime;
 extern StructRNA RNA_CompositorNodeSepHSVA;
 extern StructRNA RNA_CompositorNodeSepRGBA;
 extern StructRNA RNA_CompositorNodeSepYCCA;
@@ -1743,7 +1745,7 @@ bool RNA_struct_override_matches(struct Main *bmain,
                                  struct PointerRNA *ptr_local,
                                  struct PointerRNA *ptr_reference,
                                  const char *root_path,
-                                 const size_t root_path_len,
+                                 size_t root_path_len,
                                  struct IDOverrideLibrary *override,
                                  eRNAOverrideMatch flags,
                                  eRNAOverrideMatchResult *r_report_flags);

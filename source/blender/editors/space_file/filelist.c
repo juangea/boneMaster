@@ -852,7 +852,8 @@ static bool is_filtered_hidden(const char *filename,
 
 /**
  * Apply the filter string as file path matching pattern.
- * \return true when the file should be in the result set, false if it should be filtered out. */
+ * \return true when the file should be in the result set, false if it should be filtered out.
+ */
 static bool is_filtered_file_relpath(const FileListInternEntry *file, const FileListFilter *filter)
 {
   if (filter->filter_search[0] == '\0') {
@@ -1876,8 +1877,6 @@ FileList *filelist_new(short type)
   p->filelist.nbr_entries = FILEDIR_NBR_ENTRIES_UNSET;
   filelist_settype(p, type);
 
-  p->indexer = &file_indexer_noop;
-
   return p;
 }
 
@@ -1889,6 +1888,7 @@ void filelist_settype(FileList *filelist, short type)
 
   filelist->type = type;
   filelist->tags = 0;
+  filelist->indexer = &file_indexer_noop;
   switch (filelist->type) {
     case FILE_MAIN:
       filelist->check_dir_fn = filelist_checkdir_main;
@@ -2064,7 +2064,7 @@ static char *fileentry_uiname(const char *root,
     BLI_join_dirfile(abspath, sizeof(abspath), root, relpath);
     name = BLF_display_name_from_file(abspath);
     if (name) {
-      /* Allocated string, so no need to BLI_strdup.*/
+      /* Allocated string, so no need to #BLI_strdup. */
       return name;
     }
   }
@@ -3661,7 +3661,7 @@ static void filelist_readjob_recursive_dir_add_items(const bool do_lib,
         list_lib_options |= LIST_LIB_RECURSIVE;
       }
       /* Only load assets when browsing an asset library. For normal file browsing we return all
-       * entries. `FLF_ASSETS_ONLY` filter can be enabled/disabled by the user.*/
+       * entries. `FLF_ASSETS_ONLY` filter can be enabled/disabled by the user. */
       if (filelist->asset_library_ref) {
         list_lib_options |= LIST_LIB_ASSETS_ONLY;
       }

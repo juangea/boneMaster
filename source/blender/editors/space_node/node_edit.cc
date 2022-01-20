@@ -661,11 +661,6 @@ void ED_node_set_active(
 
     /* tree specific activate calls */
     if (ntree->type == NTREE_SHADER) {
-      /* when we select a material, active texture is cleared, for buttons */
-      if (node->id && ELEM(GS(node->id->name), ID_MA, ID_LA, ID_WO)) {
-        nodeClearActiveID(ntree, ID_TE);
-      }
-
       if (ELEM(node->type,
                SH_NODE_OUTPUT_MATERIAL,
                SH_NODE_OUTPUT_WORLD,
@@ -1386,7 +1381,7 @@ void NODE_OT_duplicate(wmOperatorType *ot)
       ot->srna, "keep_inputs", false, "Keep Inputs", "Keep the input links to duplicated nodes");
 }
 
-bool ED_node_select_check(const ListBase *lb)
+static bool node_select_check(const ListBase *lb)
 {
   LISTBASE_FOREACH (const bNode *, node, lb) {
     if (node->flag & NODE_SELECT) {
@@ -1397,10 +1392,10 @@ bool ED_node_select_check(const ListBase *lb)
   return false;
 }
 
-void ED_node_select_all(ListBase *lb, int action)
+void node_select_all(ListBase *lb, int action)
 {
   if (action == SEL_TOGGLE) {
-    if (ED_node_select_check(lb)) {
+    if (node_select_check(lb)) {
       action = SEL_DESELECT;
     }
     else {
@@ -2045,18 +2040,15 @@ void NODE_OT_output_file_move_active_socket(wmOperatorType *ot)
 
 static int node_copy_color_exec(bContext *C, wmOperator *UNUSED(op))
 {
-  SpaceNode *snode = CTX_wm_space_node(C);
-  bNodeTree *ntree = snode->edittree;
+  SpaceNode &snode = *CTX_wm_space_node(C);
+  bNodeTree &ntree = *snode.edittree;
 
-  if (!ntree) {
-    return OPERATOR_CANCELLED;
-  }
-  bNode *node = nodeGetActive(ntree);
+  bNode *node = nodeGetActive(&ntree);
   if (!node) {
     return OPERATOR_CANCELLED;
   }
 
-  LISTBASE_FOREACH (bNode *, node_iter, &ntree->nodes) {
+  LISTBASE_FOREACH (bNode *, node_iter, &ntree.nodes) {
     if (node_iter->flag & NODE_SELECT && node_iter != node) {
       if (node->flag & NODE_CUSTOM_COLOR) {
         node_iter->flag |= NODE_CUSTOM_COLOR;
@@ -2068,7 +2060,7 @@ static int node_copy_color_exec(bContext *C, wmOperator *UNUSED(op))
     }
   }
 
-  ED_node_sort(ntree);
+  node_sort(ntree);
   WM_event_add_notifier(C, NC_NODE | ND_DISPLAY, nullptr);
 
   return OPERATOR_FINISHED;

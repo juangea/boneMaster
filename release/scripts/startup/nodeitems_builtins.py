@@ -501,6 +501,7 @@ compositor_node_categories = [
         NodeItem("CompositorNodeTexture"),
         NodeItem("CompositorNodeBokehImage"),
         NodeItem("CompositorNodeTime"),
+        NodeItem("CompositorNodeSceneTime"),
         NodeItem("CompositorNodeTrackPos"),
     ]),
     CompositorNodeCategory("CMP_OUTPUT", "Output", items=[
@@ -756,6 +757,7 @@ geometry_node_categories = [
     ]),
     GeometryNodeCategory("GEO_UTILITIES", "Utilities", items=[
         NodeItem("GeometryNodeAccumulateField"),
+        NodeItem("GeometryNodeFieldAtIndex"),
         NodeItem("ShaderNodeMapRange"),
         NodeItem("ShaderNodeFloatCurve"),
         NodeItem("ShaderNodeClamp"),

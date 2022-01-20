@@ -240,6 +240,7 @@ static void file_draw_string(int sx,
   UI_fontstyle_draw(&fs,
                     &rect,
                     fname,
+                    sizeof(fname),
                     col,
                     &(struct uiFontStyleDraw_Params){
                         .align = align,
@@ -289,12 +290,12 @@ static void file_draw_string_multiline(int sx,
   UI_fontstyle_draw_ex(&style->widget,
                        &rect,
                        string,
+                       len,
                        text_col,
                        &(struct uiFontStyleDraw_Params){
                            .align = UI_STYLE_TEXT_LEFT,
                            .word_wrap = true,
                        },
-                       len,
                        NULL,
                        NULL,
                        &result);
@@ -402,19 +403,19 @@ static void file_draw_preview(const SpaceFile *sfile,
   }
 
   IMMDrawPixelsTexState state = immDrawPixelsTexSetup(GPU_SHADER_2D_IMAGE_COLOR);
-  immDrawPixelsTexScaled(&state,
-                         (float)xco,
-                         (float)yco,
-                         imb->x,
-                         imb->y,
-                         GPU_RGBA8,
-                         true,
-                         imb->rect,
-                         scale,
-                         scale,
-                         1.0f,
-                         1.0f,
-                         col);
+  immDrawPixelsTexTiled_scaling(&state,
+                                (float)xco,
+                                (float)yco,
+                                imb->x,
+                                imb->y,
+                                GPU_RGBA8,
+                                true,
+                                imb->rect,
+                                scale,
+                                scale,
+                                1.0f,
+                                1.0f,
+                                col);
 
   GPU_blend(GPU_BLEND_ALPHA);
 

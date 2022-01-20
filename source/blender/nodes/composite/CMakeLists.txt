@@ -33,6 +33,9 @@ set(INC
   ../../render
   ../../windowmanager
   ../../../../intern/guardedalloc
+
+  # dna_type_offsets.h
+  ${CMAKE_CURRENT_BINARY_DIR}/../../makesdna/intern
 )
 
 
@@ -122,6 +125,7 @@ set(SRC
   nodes/node_composite_vec_blur.cc
   nodes/node_composite_viewer.cc
   nodes/node_composite_zcombine.cc
+  nodes/node_composite_scene_time.cc
 
   node_composite_tree.cc
   node_composite_util.cc
@@ -149,3 +153,11 @@ if(WITH_OPENIMAGEDENOISE)
 endif()
 
 blender_add_lib(bf_nodes_composite "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
+
+if(WITH_UNITY_BUILD)
+  set_target_properties(bf_nodes_composite PROPERTIES UNITY_BUILD ON)
+  set_target_properties(bf_nodes_composite PROPERTIES UNITY_BUILD_BATCH_SIZE 10)
+endif()
+
+# Needed so we can use dna_type_offsets.h for defaults initialization.
+add_dependencies(bf_nodes_composite bf_dna)

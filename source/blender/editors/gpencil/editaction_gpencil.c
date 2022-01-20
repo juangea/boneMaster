@@ -46,6 +46,8 @@
 
 #include "WM_api.h"
 
+#include "DEG_depsgraph.h"
+
 /* ***************************************** */
 /* NOTE ABOUT THIS FILE:
  * This file contains code for editing Grease Pencil data in the Action Editor
@@ -453,6 +455,9 @@ bool ED_gpencil_anim_copybuf_paste(bAnimContext *ac, const short offset_mode)
       /* get frame to copy data into (if no frame returned, then just ignore) */
       gpf = BKE_gpencil_layer_frame_get(gpld, gpfs->framenum, GP_GETFRAME_ADD_NEW);
       if (gpf) {
+        /* Ensure to use same keyframe type. */
+        gpf->key_type = gpfs->key_type;
+
         bGPDstroke *gps, *gpsn;
 
         /* This should be the right frame... as it may be a pre-existing frame,
@@ -479,6 +484,9 @@ bool ED_gpencil_anim_copybuf_paste(bAnimContext *ac, const short offset_mode)
       /* unapply offset from buffer-frame */
       gpfs->framenum -= offset;
     }
+
+    /* Tag destination datablock. */
+    DEG_id_tag_update(ale->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
   }
 
   /* clean up */

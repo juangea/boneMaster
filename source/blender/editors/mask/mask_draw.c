@@ -722,8 +722,8 @@ void ED_mask_draw_region(
   /* find window pixel coordinates of origin */
   UI_view2d_view_to_region(&region->v2d, 0.0f, 0.0f, &x, &y);
 
-  /* w = BLI_rctf_size_x(&v2d->tot); */
-  /* h = BLI_rctf_size_y(&v2d->tot); */
+  // w = BLI_rctf_size_x(&v2d->tot);
+  // h = BLI_rctf_size_y(&v2d->tot);
 
   zoomx = (float)(BLI_rcti_size_x(&region->winrct) + 1) / BLI_rctf_size_x(&region->v2d.cur);
   zoomy = (float)(BLI_rcti_size_y(&region->winrct) + 1) / BLI_rctf_size_y(&region->v2d.cur);
@@ -768,7 +768,8 @@ void ED_mask_draw_region(
     IMMDrawPixelsTexState state = immDrawPixelsTexSetup(GPU_SHADER_2D_IMAGE_SHUFFLE_COLOR);
     GPU_shader_uniform_vector(
         state.shader, GPU_shader_get_uniform(state.shader, "shuffle"), 4, 1, red);
-    immDrawPixelsTex(&state, 0.0f, 0.0f, width, height, GPU_R16F, false, buffer, 1.0f, 1.0f, NULL);
+    immDrawPixelsTexTiled(
+        &state, 0.0f, 0.0f, width, height, GPU_R16F, false, buffer, 1.0f, 1.0f, NULL);
 
     GPU_matrix_pop();
 
@@ -835,7 +836,7 @@ void ED_mask_draw_frames(
        mask_layer_shape = mask_layer_shape->next) {
     int frame = mask_layer_shape->frame;
 
-    /* draw_keyframe(i, CFRA, sfra, framelen, 1); */
+    // draw_keyframe(i, CFRA, sfra, framelen, 1);
     int height = (frame == cfra) ? 22 : 10;
     int x = (frame - sfra) * framelen;
     immVertex2i(pos, x, region_bottom);

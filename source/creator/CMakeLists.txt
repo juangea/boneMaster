@@ -18,8 +18,6 @@
 # All rights reserved.
 # ***** END GPL LICENSE BLOCK *****
 
-setup_libdirs()
-
 blender_include_dirs(
   ../../intern/clog
   ../../intern/glew-mx
@@ -73,8 +71,8 @@ endif()
 
 if(WITH_TBB)
   blender_include_dirs(${TBB_INCLUDE_DIRS})
-  if(NOT APPLE)
-    # APPLE platform uses full paths for linking libraries.
+  if(WIN32)
+    # For pragma that links tbbmalloc_proxy.lib
     link_directories(${LIBDIR}/tbb/lib)
   endif()
 endif()
@@ -658,11 +656,11 @@ if(UNIX AND NOT APPLE)
         # Install to the same directory as the source, so debian-like
         # distros are happy with their policy.
         set(_suffix "site-packages")
-        if(${PYTHON_NUMPY_PATH} MATCHES "dist-packages")
+        if(${PYTHON_ZSTANDARD_PATH} MATCHES "dist-packages")
           set(_suffix "dist-packages")
         endif()
         install(
-          DIRECTORY ${PYTHON_NUMPY_PATH}/zstandard
+          DIRECTORY ${PYTHON_ZSTANDARD_PATH}/zstandard
           DESTINATION ${TARGETDIR_VER}/python/${_target_LIB}/python${PYTHON_VERSION}/${_suffix}
           PATTERN ".svn" EXCLUDE
           PATTERN "__pycache__" EXCLUDE           # * any cache *

@@ -84,7 +84,8 @@ typedef struct MeshRenderData {
   const float (*bm_poly_centers)[3];
 
   int *v_origindex, *e_origindex, *p_origindex;
-  int crease_ofs;
+  int edge_crease_ofs;
+  int vert_crease_ofs;
   int bweight_ofs;
   int freestyle_edge_ofs;
   int freestyle_face_ofs;
@@ -100,8 +101,9 @@ typedef struct MeshRenderData {
   BMFace *efa_act_uv;
   /* Data created on-demand (usually not for #BMesh based data). */
   MLoopTri *mlooptri;
+  const float (*vert_normals)[3];
+  const float (*poly_normals)[3];
   float (*loop_normals)[3];
-  float (*poly_normals)[3];
   int *lverts, *ledges;
 
   struct {
@@ -222,9 +224,16 @@ typedef void(ExtractInitSubdivFn)(const struct DRWSubdivCache *subdiv_cache,
                                   struct MeshBatchCache *cache,
                                   void *buf,
                                   void *data);
-typedef void(ExtractIterSubdivFn)(const struct DRWSubdivCache *subdiv_cache,
-                                  const MeshRenderData *mr,
-                                  void *data);
+typedef void(ExtractIterSubdivBMeshFn)(const struct DRWSubdivCache *subdiv_cache,
+                                       const MeshRenderData *mr,
+                                       void *data,
+                                       uint subdiv_quad_index,
+                                       const BMFace *coarse_quad);
+typedef void(ExtractIterSubdivMeshFn)(const struct DRWSubdivCache *subdiv_cache,
+                                      const MeshRenderData *mr,
+                                      void *data,
+                                      uint subdiv_quad_index,
+                                      const MPoly *coarse_quad);
 typedef void(ExtractFinishSubdivFn)(const struct DRWSubdivCache *subdiv_cache,
                                     const MeshRenderData *mr,
                                     struct MeshBatchCache *cache,
@@ -249,7 +258,8 @@ typedef struct MeshExtract {
   ExtractFinishFn *finish;
   /** Executed on main thread for subdivision evaluation. */
   ExtractInitSubdivFn *init_subdiv;
-  ExtractIterSubdivFn *iter_subdiv;
+  ExtractIterSubdivBMeshFn *iter_subdiv_bm;
+  ExtractIterSubdivMeshFn *iter_subdiv_mesh;
   ExtractFinishSubdivFn *finish_subdiv;
   /** Used to request common data. */
   eMRDataType data_type;
@@ -299,6 +309,8 @@ void mesh_render_data_update_looptris(MeshRenderData *mr,
 typedef struct EditLoopData {
   uchar v_flag;
   uchar e_flag;
+  /* This is used for both vertex and edge creases. The edge crease value is stored in the bottom 4
+   * bits, while the vertex crease is stored in the upper 4 bits. */
   uchar crease;
   uchar bweight;
 } EditLoopData;

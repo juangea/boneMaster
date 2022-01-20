@@ -383,9 +383,6 @@ static void node_area_listener(const wmSpaceTypeListenerParams *params)
         else if (wmn->data == ND_SHADING_LINKS) {
           ED_area_tag_refresh(area);
         }
-        else if (wmn->action == NA_ADDED && snode->edittree) {
-          nodeSetActiveID(snode->edittree, ID_MA, (ID *)wmn->reference);
-        }
       }
       break;
     case NC_TEXTURE:
@@ -1053,8 +1050,6 @@ void ED_spacetype_node()
   art->init = node_toolbar_region_init;
   art->draw = node_toolbar_region_draw;
   BLI_addhead(&st->regiontypes, art);
-
-  node_toolbar_register(art);
 
   BKE_spacetype_register(st);
 }

@@ -3070,7 +3070,6 @@ static bool rna_NodeSocket_is_output_get(PointerRNA *ptr)
 
 static void rna_NodeSocket_link_limit_set(PointerRNA *ptr, int value)
 {
-  /* Does not have any effect if the link limit is defined in the socket type. */
   bNodeSocket *sock = ptr->data;
   sock->limit = (value == 0 ? 0xFFF : value);
 }
@@ -9489,7 +9488,12 @@ static void def_geo_triangulate(StructRNA *srna)
        "SHORTEST_DIAGONAL",
        0,
        "Shortest Diagonal",
-       "Split the quads based on the distance between the vertices"},
+       "Split the quads along their shortest diagonal"},
+      {GEO_NODE_TRIANGULATE_QUAD_LONGEDGE,
+       "LONGEST_DIAGONAL",
+       0,
+       "Longest Diagonal",
+       "Split the quads along their longest diagonal"},
       {0, NULL, 0, NULL, NULL},
   };
 
@@ -11370,6 +11374,24 @@ static void def_geo_realize_instances(StructRNA *srna)
   RNA_def_property_boolean_sdna(prop, NULL, "custom1", GEO_NODE_REALIZE_INSTANCES_LEGACY_BEHAVIOR);
   RNA_def_property_ui_text(
       prop, "Legacy Behavior", "Behave like before instance attributes existed");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_GeometryNode_socket_update");
+}
+
+static void def_geo_field_at_index(StructRNA *srna)
+{
+  PropertyRNA *prop;
+
+  prop = RNA_def_property(srna, "domain", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, NULL, "custom1");
+  RNA_def_property_enum_items(prop, rna_enum_attribute_domain_items);
+  RNA_def_property_ui_text(prop, "Domain", "Domain the field is evaluated in");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_GeometryNode_socket_update");
+
+  prop = RNA_def_property(srna, "data_type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, NULL, "custom2");
+  RNA_def_property_enum_items(prop, rna_enum_attribute_type_items);
+  RNA_def_property_enum_funcs(prop, NULL, NULL, "rna_GeometryNodeAttributeFill_type_itemf");
+  RNA_def_property_ui_text(prop, "Data Type", "");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_GeometryNode_socket_update");
 }
 

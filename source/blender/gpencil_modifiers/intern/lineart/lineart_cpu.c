@@ -1777,7 +1777,7 @@ static void lineart_geometry_object_load(LineartObjectInfo *obi, LineartRenderBu
   if (orig_ob->lineart.flags & OBJECT_LRT_OWN_CREASE) {
     use_crease = cosf(M_PI - orig_ob->lineart.crease_threshold);
   }
-  if (obi->original_me->flag & ME_AUTOSMOOTH) {
+  else if (obi->original_me->flag & ME_AUTOSMOOTH) {
     use_crease = cosf(obi->original_me->smoothresh);
     use_auto_smooth = true;
   }
@@ -4363,8 +4363,15 @@ static void lineart_gpencil_generate(LineartCache *cache,
       continue;
     }
     if (orig_col && ec->object_ref) {
-      if (!BKE_collection_has_object_recursive_instanced(orig_col, (Object *)ec->object_ref)) {
-        continue;
+      if (BKE_collection_has_object_recursive_instanced(orig_col, (Object *)ec->object_ref)) {
+        if (modifier_flags & LRT_GPENCIL_INVERT_COLLECTION) {
+          continue;
+        }
+      }
+      else {
+        if (!(modifier_flags & LRT_GPENCIL_INVERT_COLLECTION)) {
+          continue;
+        }
       }
     }
     if (mask_switches & LRT_GPENCIL_MATERIAL_MASK_ENABLE) {

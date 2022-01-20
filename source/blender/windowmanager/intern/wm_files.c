@@ -193,7 +193,6 @@ bool wm_file_or_session_data_has_unsaved_changes(const Main *bmain, const wmWind
 static void wm_window_match_init(bContext *C, ListBase *wmlist)
 {
   *wmlist = G_MAIN->wm;
-  BLI_listbase_clear(&G_MAIN->wm);
 
   wmWindow *active_win = CTX_wm_window(C);
 
@@ -219,6 +218,8 @@ static void wm_window_match_init(bContext *C, ListBase *wmlist)
       wm->message_bus = NULL;
     }
   }
+
+  BLI_listbase_clear(&G_MAIN->wm);
 
   /* reset active window */
   CTX_wm_window_set(C, active_win);
@@ -1520,11 +1521,29 @@ static void wm_history_file_update(void)
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Save Main Blend-File (internal) Screen-Shot
+/** \name Thumbnail Generation: Screen-Shot / Camera View
  *
- * Screen-shot the active window.
+ * Thumbnail Sizes
+ * ===============
+ *
+ * - `PREVIEW_RENDER_LARGE_HEIGHT * 2` is used to render a large thumbnail,
+ *   giving some over-sampling when scaled down:
+ *
+ * - There are two outputs for this thumbnail:
+ *
+ *   - An image is saved to the thumbnail cache, sized at #PREVIEW_RENDER_LARGE_HEIGHT.
+ *
+ *   - A smaller thumbnail is stored in the `.blend` file it's self, sized at #BLEN_THUMB_SIZE.
+ *     The size is kept small to prevent thumbnails bloating the size of `.blend` files.
+ *
+ *     The this thumbnail will be extracted if the file is shared or the local thumbnail cache
+ *     is cleared. see: `blendthumb_extract.cc` for logic that extracts the thumbnail.
+ *
  * \{ */
 
+/**
+ * Screen-shot the active window.
+ */
 static ImBuf *blend_file_thumb_from_screenshot(bContext *C, BlendThumbnail **r_thumb)
 {
   *r_thumb = NULL;
@@ -1570,15 +1589,11 @@ static ImBuf *blend_file_thumb_from_screenshot(bContext *C, BlendThumbnail **r_t
   return ibuf;
 }
 
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name Save Main Blend-File (internal) Camera View
- *
+/**
  * Render the current scene with the active camera.
- * \{ */
-
-/* screen can be NULL */
+ *
+ * \param screen: can be NULL.
+ */
 static ImBuf *blend_file_thumb_from_camera(const bContext *C,
                                            Scene *scene,
                                            bScreen *screen,
@@ -1616,7 +1631,6 @@ static ImBuf *blend_file_thumb_from_camera(const bContext *C,
     return NULL;
   }
 
-  /* gets scaled to BLEN_THUMB_SIZE */
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
 
   /* Note that with scaling, this ends up being 0.5,
@@ -1687,6 +1701,12 @@ static ImBuf *blend_file_thumb_from_camera(const bContext *C,
 
   return ibuf;
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Write Main Blend-File (internal)
+ * \{ */
 
 bool write_crash_blend(void)
 {
@@ -2016,7 +2036,7 @@ void wm_autosave_delete(void)
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Initialize WM_OT_open_xxx properties
+/** \name Initialize `WM_OT_open_*` Properties
  *
  * Check if load_ui was set by the caller.
  * Fall back to user preference when file flags not specified.
