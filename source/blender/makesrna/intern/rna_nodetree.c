@@ -300,9 +300,33 @@ const EnumPropertyItem rna_enum_node_vec_math_items[] = {
 };
 
 const EnumPropertyItem rna_enum_node_boolean_math_items[] = {
-    {NODE_BOOLEAN_MATH_AND, "AND", 0, "And", "Outputs true only when both inputs are true"},
-    {NODE_BOOLEAN_MATH_OR, "OR", 0, "Or", "Outputs or when at least one of the inputs is true"},
-    {NODE_BOOLEAN_MATH_NOT, "NOT", 0, "Not", "Outputs the opposite of the input"},
+    {NODE_BOOLEAN_MATH_AND, "AND", 0, "And", "True when both inputs are true"},
+    {NODE_BOOLEAN_MATH_OR, "OR", 0, "Or", "True when at least one input is true"},
+    {NODE_BOOLEAN_MATH_NOT, "NOT", 0, "Not", "Opposite of the input"},
+    {0, "", ICON_NONE, NULL, NULL},
+    {NODE_BOOLEAN_MATH_NAND, "NAND", 0, "Not And", "True when at least one input is false"},
+    {NODE_BOOLEAN_MATH_NOR, "NOR", 0, "Nor", "True when both inputs are false"},
+    {NODE_BOOLEAN_MATH_XNOR,
+     "XNOR",
+     0,
+     "Equal",
+     "True when both inputs are equal (exclusive nor)"},
+    {NODE_BOOLEAN_MATH_XOR,
+     "XOR",
+     0,
+     "Not Equal",
+     "True when both inputs are different (exclusive or)"},
+    {0, "", ICON_NONE, NULL, NULL},
+    {NODE_BOOLEAN_MATH_IMPLY,
+     "IMPLY",
+     0,
+     "Imply",
+     "True unless the first input is true and the second is false"},
+    {NODE_BOOLEAN_MATH_NIMPLY,
+     "NIMPLY",
+     0,
+     "Subtract",
+     "True when the first input is true and the second is false (not imply)"},
     {0, NULL, 0, NULL, NULL},
 };
 
@@ -631,6 +655,7 @@ static const EnumPropertyItem rna_node_geometry_attribute_input_type_items_no_bo
 #  include "NOD_geometry.h"
 #  include "NOD_shader.h"
 #  include "NOD_socket.h"
+#  include "NOD_texture.h"
 
 #  include "RE_engine.h"
 #  include "RE_pipeline.h"
@@ -9894,6 +9919,27 @@ static void def_geo_point_distribute(StructRNA *srna)
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_socket_update");
 }
 
+static void def_geo_extrude_mesh(StructRNA *srna)
+{
+  PropertyRNA *prop;
+
+  static const EnumPropertyItem mode_items[] = {
+      {GEO_NODE_EXTRUDE_MESH_VERTICES, "VERTICES", 0, "Vertices", ""},
+      {GEO_NODE_EXTRUDE_MESH_EDGES, "EDGES", 0, "Edges", ""},
+      {GEO_NODE_EXTRUDE_MESH_FACES, "FACES", 0, "Faces", ""},
+      {0, NULL, 0, NULL, NULL},
+  };
+
+  RNA_def_struct_sdna_from(srna, "NodeGeometryExtrudeMesh", "storage");
+
+  prop = RNA_def_property(srna, "mode", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, NULL, "mode");
+  RNA_def_property_enum_items(prop, mode_items);
+  RNA_def_property_enum_default(prop, GEO_NODE_EXTRUDE_MESH_FACES);
+  RNA_def_property_ui_text(prop, "Mode", "");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+}
+
 static void def_geo_distribute_points_on_faces(StructRNA *srna)
 {
   PropertyRNA *prop;
@@ -10132,6 +10178,33 @@ static void def_geo_curve_primitive_circle(StructRNA *srna)
   PropertyRNA *prop;
 
   RNA_def_struct_sdna_from(srna, "NodeGeometryCurvePrimitiveCircle", "storage");
+
+  prop = RNA_def_property(srna, "mode", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, mode_items);
+  RNA_def_property_ui_text(prop, "Mode", "Method used to determine radius and placement");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_socket_update");
+}
+
+static void def_geo_curve_primitive_arc(StructRNA *srna)
+{
+  static const EnumPropertyItem mode_items[] = {
+
+      {GEO_NODE_CURVE_PRIMITIVE_ARC_TYPE_POINTS,
+       "POINTS",
+       ICON_NONE,
+       "Points",
+       "Define arc by 3 points on circle. Arc is calculated between start and end points"},
+      {GEO_NODE_CURVE_PRIMITIVE_ARC_TYPE_RADIUS,
+       "RADIUS",
+       ICON_NONE,
+       "Radius",
+       "Define radius with a float"},
+      {0, NULL, 0, NULL, NULL},
+  };
+
+  PropertyRNA *prop;
+
+  RNA_def_struct_sdna_from(srna, "NodeGeometryCurvePrimitiveArc", "storage");
 
   prop = RNA_def_property(srna, "mode", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_items(prop, mode_items);
@@ -11392,6 +11465,53 @@ static void def_geo_field_at_index(StructRNA *srna)
   RNA_def_property_enum_items(prop, rna_enum_attribute_type_items);
   RNA_def_property_enum_funcs(prop, NULL, NULL, "rna_GeometryNodeAttributeFill_type_itemf");
   RNA_def_property_ui_text(prop, "Data Type", "");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_GeometryNode_socket_update");
+}
+
+static void def_geo_scale_elements(StructRNA *srna)
+{
+  PropertyRNA *prop;
+
+  static const EnumPropertyItem domain_items[] = {
+      {ATTR_DOMAIN_FACE,
+       "FACE",
+       ICON_NONE,
+       "Face",
+       "Scale individual faces or neighboring face islands"},
+      {ATTR_DOMAIN_EDGE,
+       "EDGE",
+       ICON_NONE,
+       "Edge",
+       "Scale individual edges or neighboring edge islands"},
+      {0, NULL, 0, NULL, NULL},
+  };
+
+  static const EnumPropertyItem scale_mode_items[] = {
+      {GEO_NODE_SCALE_ELEMENTS_UNIFORM,
+       "UNIFORM",
+       ICON_NONE,
+       "Uniform",
+       "Scale elements by the same factor in every direction"},
+      {GEO_NODE_SCALE_ELEMENTS_SINGLE_AXIS,
+       "SINGLE_AXIS",
+       ICON_NONE,
+       "Single Axis",
+       "Scale elements in a single direction"},
+      {0, NULL, 0, NULL, NULL},
+
+  };
+
+  prop = RNA_def_property(srna, "domain", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, NULL, "custom1");
+  RNA_def_property_enum_items(prop, domain_items);
+  RNA_def_property_enum_default(prop, ATTR_DOMAIN_FACE);
+  RNA_def_property_ui_text(prop, "Domain", "Element type to transform");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_GeometryNode_socket_update");
+
+  prop = RNA_def_property(srna, "scale_mode", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, NULL, "custom2");
+  RNA_def_property_enum_items(prop, scale_mode_items);
+  RNA_def_property_ui_text(prop, "Scale Mode", "");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_GeometryNode_socket_update");
 }
 

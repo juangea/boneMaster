@@ -63,7 +63,10 @@ enum class Type {
 };
 
 enum class BuiltinBits {
-  /** Allow getting barycentic coordinates inside the fragment shader. NOTE: emulated on OpenGL. */
+  /**
+   * Allow getting barycentric coordinates inside the fragment shader.
+   * \note Emulated on OpenGL.
+   */
   BARYCENTRIC_COORD = (1 << 0),
   FRAG_COORD = (1 << 2),
   FRONT_FACING = (1 << 4),
@@ -223,8 +226,6 @@ struct ShaderCreateInfo {
    * Only for names used by gpu::ShaderInterface.
    */
   size_t interface_names_size_ = 0;
-  /** Only for compute shaders. */
-  int local_group_size_[3] = {0, 0, 0};
 
   struct VertIn {
     int index;
@@ -241,6 +242,14 @@ struct ShaderCreateInfo {
     int max_vertices = -1;
   };
   GeometryStageLayout geometry_layout_;
+
+  struct ComputeStageLayout {
+    int local_size_x = -1;
+    int local_size_y = -1;
+    int local_size_z = -1;
+  };
+
+  ComputeStageLayout compute_layout_;
 
   struct FragOut {
     int index;
@@ -366,7 +375,20 @@ struct ShaderCreateInfo {
     return *(Self *)this;
   }
 
-  /* Only needed if geometry shader is enabled. */
+  Self &local_group_size(int local_size_x = -1, int local_size_y = -1, int local_size_z = -1)
+  {
+    compute_layout_.local_size_x = local_size_x;
+    compute_layout_.local_size_y = local_size_y;
+    compute_layout_.local_size_z = local_size_z;
+    return *(Self *)this;
+  }
+
+  /**
+   * Only needed if geometry shader is enabled.
+   * IMPORTANT: Input and output instance name will have respectively "_in" and "_out" suffix
+   * appended in the geometry shader IF AND ONLY IF the vertex_out interface instance name matches
+   * the geometry_out interface instance name.
+   */
   Self &geometry_out(StageInterfaceInfo &interface)
   {
     geometry_out_interfaces_.append(&interface);
@@ -504,20 +526,6 @@ struct ShaderCreateInfo {
   /** \} */
 
   /* -------------------------------------------------------------------- */
-  /** \name Compute shaders Local Group Size
-   * \{ */
-
-  Self &local_group_size(int x, int y = 1, int z = 1)
-  {
-    local_group_size_[0] = x;
-    local_group_size_[1] = y;
-    local_group_size_[2] = z;
-    return *(Self *)this;
-  }
-
-  /** \} */
-
-  /* -------------------------------------------------------------------- */
   /** \name Defines
    * \{ */
 
@@ -551,7 +559,9 @@ struct ShaderCreateInfo {
                         StringRefNull info_name1 = "",
                         StringRefNull info_name2 = "",
                         StringRefNull info_name3 = "",
-                        StringRefNull info_name4 = "")
+                        StringRefNull info_name4 = "",
+                        StringRefNull info_name5 = "",
+                        StringRefNull info_name6 = "")
   {
     additional_infos_.append(info_name0);
     if (!info_name1.is_empty()) {
@@ -565,6 +575,12 @@ struct ShaderCreateInfo {
     }
     if (!info_name4.is_empty()) {
       additional_infos_.append(info_name4);
+    }
+    if (!info_name5.is_empty()) {
+      additional_infos_.append(info_name5);
+    }
+    if (!info_name6.is_empty()) {
+      additional_infos_.append(info_name6);
     }
     return *(Self *)this;
   }
@@ -596,6 +612,9 @@ struct ShaderCreateInfo {
 
   /* WARNING: Recursive. */
   void finalize();
+
+  /** Error detection that some backend compilers do not complain about. */
+  void validate(const ShaderCreateInfo &other_info);
 
   /** \} */
 };

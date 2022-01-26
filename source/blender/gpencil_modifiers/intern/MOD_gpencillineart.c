@@ -409,6 +409,7 @@ static void options_panel_draw(const bContext *UNUSED(C), Panel *panel)
   uiItemR(col, ptr, "use_clip_plane_boundaries", 0, NULL, ICON_NONE);
   uiItemR(col, ptr, "use_crease_on_smooth", 0, IFACE_("Crease On Smooth"), ICON_NONE);
   uiItemR(col, ptr, "use_crease_on_sharp", 0, IFACE_("Crease On Sharp"), ICON_NONE);
+  uiItemR(col, ptr, "use_back_face_culling", 0, NULL, ICON_NONE);
 }
 
 static void style_panel_draw(const bContext *UNUSED(C), Panel *panel)
@@ -580,6 +581,7 @@ static void face_mark_panel_draw(const bContext *UNUSED(C), Panel *panel)
 
   uiItemR(layout, ptr, "use_face_mark_invert", 0, NULL, ICON_NONE);
   uiItemR(layout, ptr, "use_face_mark_boundaries", 0, NULL, ICON_NONE);
+  uiItemR(layout, ptr, "use_face_mark_keep_contour", 0, NULL, ICON_NONE);
 }
 
 static void chaining_panel_draw(const bContext *UNUSED(C), Panel *panel)
@@ -607,6 +609,7 @@ static void chaining_panel_draw(const bContext *UNUSED(C), Panel *panel)
   uiItemR(col, ptr, "use_fuzzy_all", 0, NULL, ICON_NONE);
   uiItemR(col, ptr, "use_loose_edge_chain", 0, IFACE_("Loose Edges"), ICON_NONE);
   uiItemR(col, ptr, "use_loose_as_contour", 0, NULL, ICON_NONE);
+  uiItemR(col, ptr, "use_detail_preserve", 0, NULL, ICON_NONE);
   uiItemR(col, ptr, "use_geometry_space_chain", 0, IFACE_("Geometry Space"), ICON_NONE);
 
   uiItemR(layout,

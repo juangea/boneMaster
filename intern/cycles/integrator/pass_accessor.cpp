@@ -146,6 +146,7 @@ bool PassAccessor::get_render_tile_pixels(const RenderBuffers *render_buffers,
   const PassMode mode = pass_access_info_.mode;
   const PassInfo pass_info = Pass::get_info(
       type, pass_access_info_.include_albedo, pass_access_info_.lightgroup);
+  int num_written_components = pass_info.num_components;
 
   if (pass_info.num_components == 1) {
     /* Single channel passes. */
@@ -193,8 +194,10 @@ bool PassAccessor::get_render_tile_pixels(const RenderBuffers *render_buffers,
     else if ((pass_info.divide_type != PASS_NONE || pass_info.direct_type != PASS_NONE ||
               pass_info.indirect_type != PASS_NONE) &&
              mode != PassMode::DENOISED) {
-      /* RGB lighting passes that need to divide out color and/or sum direct and indirect. */
+      /* RGB lighting passes that need to divide out color and/or sum direct and indirect.
+       * These can also optionally write alpha like the combined pass. */
       get_pass_light_path(render_buffers, buffer_params, destination);
+      num_written_components = 4;
     }
     else {
       /* Passes that need no special computation, or denoised passes that already
@@ -220,7 +223,7 @@ bool PassAccessor::get_render_tile_pixels(const RenderBuffers *render_buffers,
     }
   }
 
-  pad_pixels(buffer_params, destination, pass_info.num_components);
+  pad_pixels(buffer_params, destination, num_written_components);
 
   return true;
 }

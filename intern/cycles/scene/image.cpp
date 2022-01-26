@@ -576,13 +576,13 @@ bool ImageManager::file_load_image(Image *img, int texture_limit)
         pixels[i * 4 + 3] = one;
       }
     }
+  }
 
-    if (img->metadata.colorspace != u_colorspace_raw &&
-        img->metadata.colorspace != u_colorspace_srgb) {
-      /* Convert to scene linear. */
-      ColorSpaceManager::to_scene_linear(
-          img->metadata.colorspace, pixels, num_pixels, img->metadata.compress_as_srgb);
-    }
+  if (img->metadata.colorspace != u_colorspace_raw &&
+      img->metadata.colorspace != u_colorspace_srgb) {
+    /* Convert to scene linear. */
+    ColorSpaceManager::to_scene_linear(
+        img->metadata.colorspace, pixels, num_pixels, is_rgba, img->metadata.compress_as_srgb);
   }
 
   /* Make sure we don't have buggy values. */
@@ -891,6 +891,10 @@ void ImageManager::device_free(Device *device)
 void ImageManager::collect_statistics(RenderStats *stats)
 {
   foreach (const Image *image, images) {
+    if (!image) {
+      /* Image may have been freed due to lack of users. */
+      continue;
+    }
     stats->image.textures.add_entry(
         NamedSizeEntry(image->loader->name(), image->mem->memory_size()));
   }
