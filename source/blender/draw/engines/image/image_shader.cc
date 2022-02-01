@@ -29,50 +29,33 @@
 #include "image_engine.h"
 #include "image_private.hh"
 
-extern "C" {
-extern char datatoc_common_colormanagement_lib_glsl[];
-extern char datatoc_common_globals_lib_glsl[];
-extern char datatoc_common_view_lib_glsl[];
-
-extern char datatoc_engine_image_frag_glsl[];
-extern char datatoc_engine_image_vert_glsl[];
-}
-
 namespace blender::draw::image_engine {
 
 struct IMAGE_Shaders {
-  GPUShader *image_sh[2];
+  GPUShader *image_sh;
+  GPUShader *depth_sh;
 };
 
 static struct {
   IMAGE_Shaders shaders;
-  DRWShaderLibrary *lib;
-} e_data = {{{nullptr}}}; /* Engine data */
+} e_data = {{nullptr}}; /* Engine data */
 
-void IMAGE_shader_library_ensure()
+GPUShader *IMAGE_shader_image_get()
 {
-  if (e_data.lib == nullptr) {
-    e_data.lib = DRW_shader_library_create();
-    /* NOTE: These need to be ordered by dependencies. */
-    DRW_SHADER_LIB_ADD(e_data.lib, common_colormanagement_lib);
-    DRW_SHADER_LIB_ADD(e_data.lib, common_globals_lib);
-    DRW_SHADER_LIB_ADD(e_data.lib, common_view_lib);
+  IMAGE_Shaders *sh_data = &e_data.shaders;
+  if (sh_data->image_sh == nullptr) {
+    sh_data->image_sh = GPU_shader_create_from_info_name("image_engine_color_shader");
   }
+  return sh_data->image_sh;
 }
 
-GPUShader *IMAGE_shader_image_get(bool is_tiled_image)
+GPUShader *IMAGE_shader_depth_get()
 {
-  const int index = is_tiled_image ? 1 : 0;
   IMAGE_Shaders *sh_data = &e_data.shaders;
-  if (sh_data->image_sh[index] == nullptr) {
-    sh_data->image_sh[index] = DRW_shader_create_with_shaderlib(
-        datatoc_engine_image_vert_glsl,
-        nullptr,
-        datatoc_engine_image_frag_glsl,
-        e_data.lib,
-        is_tiled_image ? "#define TILED_IMAGE\n" : nullptr);
+  if (sh_data->depth_sh == nullptr) {
+    sh_data->depth_sh = GPU_shader_create_from_info_name("image_engine_depth_shader");
   }
-  return sh_data->image_sh[index];
+  return sh_data->depth_sh;
 }
 
 void IMAGE_shader_free()
@@ -81,8 +64,6 @@ void IMAGE_shader_free()
   for (int i = 0; i < (sizeof(IMAGE_Shaders) / sizeof(GPUShader *)); i++) {
     DRW_SHADER_FREE_SAFE(sh_data_as_array[i]);
   }
-
-  DRW_SHADER_LIB_FREE_SAFE(e_data.lib);
 }
 
 }  // namespace blender::draw::image_engine

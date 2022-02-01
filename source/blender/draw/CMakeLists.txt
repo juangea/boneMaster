@@ -45,6 +45,7 @@ set(INC
   ../../../intern/glew-mx
   ../../../intern/guardedalloc
   ../../../intern/opensubdiv
+  ../../../intern/clog
 
   # dna_type_offsets.h
   ${CMAKE_CURRENT_BINARY_DIR}/../makesdna/intern
@@ -227,11 +228,17 @@ set(SRC
   engines/eevee/eevee_lut.h
   engines/eevee/eevee_private.h
   engines/external/external_engine.h
-  engines/image/image_drawing_mode_image_space.hh
+  engines/image/image_batches.hh
+  engines/image/image_drawing_mode.hh
   engines/image/image_engine.h
+  engines/image/image_instance_data.hh
+  engines/image/image_partial_updater.hh
   engines/image/image_private.hh
+  engines/image/image_shader_params.hh
   engines/image/image_space_image.hh
   engines/image/image_space_node.hh
+  engines/image/image_space.hh
+  engines/image/image_wrappers.hh
   engines/workbench/workbench_engine.h
   engines/workbench/workbench_private.h
   engines/workbench/workbench_shader_shared.h
@@ -512,8 +519,10 @@ set(GLSL_SRC
   engines/overlay/shaders/wireframe_frag.glsl
   engines/overlay/shaders/xray_fade_frag.glsl
 
-  engines/image/shaders/engine_image_frag.glsl
-  engines/image/shaders/engine_image_vert.glsl
+  engines/image/shaders/image_engine_color_frag.glsl
+  engines/image/shaders/image_engine_color_vert.glsl
+  engines/image/shaders/image_engine_depth_frag.glsl
+  engines/image/shaders/image_engine_depth_vert.glsl
 )
 
 set(GLSL_C)
@@ -531,7 +540,7 @@ set(GLSL_SOURCE_CONTENT "")
 foreach(GLSL_FILE ${GLSL_SRC})
   get_filename_component(GLSL_FILE_NAME ${GLSL_FILE} NAME)
   string(REPLACE "." "_" GLSL_FILE_NAME_UNDERSCORES ${GLSL_FILE_NAME})
-  string(APPEND GLSL_SOURCE_CONTENT "SHADER_SOURCE\(datatoc_${GLSL_FILE_NAME_UNDERSCORES}, \"${GLSL_FILE_NAME}\"\)\n")
+  string(APPEND GLSL_SOURCE_CONTENT "SHADER_SOURCE\(datatoc_${GLSL_FILE_NAME_UNDERSCORES}, \"${GLSL_FILE_NAME}\", \"${GLSL_FILE}\"\)\n")
 endforeach()
 
 set(glsl_source_list_file "${CMAKE_CURRENT_BINARY_DIR}/glsl_draw_source_list.h")

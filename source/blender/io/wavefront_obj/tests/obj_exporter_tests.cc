@@ -193,7 +193,7 @@ static std::string read_temp_file_in_string(const std::string &file_path)
   std::string res;
   size_t buffer_len;
   void *buffer = BLI_file_read_text_as_mem(file_path.c_str(), 0, &buffer_len);
-  if (buffer != NULL) {
+  if (buffer != nullptr) {
     res.assign((const char *)buffer, buffer_len);
     MEM_freeN(buffer);
   }
@@ -398,6 +398,18 @@ TEST_F(obj_exporter_regression_test, cube_all_data_triangulated)
   _export.params.export_triangulated_mesh = true;
   compare_obj_export_to_golden("io_tests/blend_geometry/cube_all_data.blend",
                                "io_tests/obj/cube_all_data_triangulated.obj",
+                               "",
+                               _export.params);
+}
+
+TEST_F(obj_exporter_regression_test, cube_normal_edit)
+{
+  OBJExportParamsDefault _export;
+  _export.params.forward_axis = OBJ_AXIS_Y_FORWARD;
+  _export.params.up_axis = OBJ_AXIS_Z_UP;
+  _export.params.export_materials = false;
+  compare_obj_export_to_golden("io_tests/blend_geometry/cube_normal_edit.blend",
+                               "io_tests/obj/cube_normal_edit.obj",
                                "",
                                _export.params);
 }

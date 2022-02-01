@@ -1829,3 +1829,23 @@ void BLI_path_slash_native(char *path)
   BLI_str_replace_char(path + BLI_path_unc_prefix_len(path), ALTSEP, SEP);
 #endif
 }
+
+int BLI_path_cmp_normalized(const char *p1, const char *p2)
+{
+  BLI_assert_msg(!BLI_path_is_rel(p1) && !BLI_path_is_rel(p2), "Paths arguments must be absolute");
+
+  /* Normalize the paths so we can compare them. */
+  char norm_p1[FILE_MAX];
+  char norm_p2[FILE_MAX];
+
+  BLI_strncpy(norm_p1, p1, sizeof(norm_p1));
+  BLI_strncpy(norm_p2, p2, sizeof(norm_p2));
+
+  BLI_path_slash_native(norm_p1);
+  BLI_path_slash_native(norm_p2);
+
+  BLI_path_normalize(NULL, norm_p1);
+  BLI_path_normalize(NULL, norm_p2);
+
+  return BLI_path_cmp(norm_p1, norm_p2);
+}

@@ -107,6 +107,10 @@ class ShaderInterface {
   {
     return input_lookup(inputs_ + attr_len_ + ubo_len_ + uniform_len_, ssbo_len_, name);
   }
+  inline const ShaderInput *ssbo_get(const int binding) const
+  {
+    return input_lookup(inputs_ + attr_len_ + ubo_len_ + uniform_len_, ssbo_len_, binding);
+  }
 
   inline const char *input_name_get(const ShaderInput *input) const
   {
@@ -191,9 +195,9 @@ inline const char *ShaderInterface::builtin_uniform_name(GPUUniformBuiltin u)
     case GPU_UNIFORM_BASE_INSTANCE:
       return "gpu_BaseInstance";
     case GPU_UNIFORM_RESOURCE_CHUNK:
-      return "resourceChunk";
+      return "drw_resourceChunk";
     case GPU_UNIFORM_RESOURCE_ID:
-      return "resourceId";
+      return "drw_ResourceID";
     case GPU_UNIFORM_SRGB_TRANSFORM:
       return "srgbTarget";
 

@@ -409,18 +409,19 @@ std::string GLShader::resources_declare(const ShaderCreateInfo &info) const
   }
   ss << "\n/* Push Constants. */\n";
   for (const ShaderCreateInfo::PushConst &uniform : info.push_constants_) {
-    if (GLContext::explicit_location_support) {
-      ss << "layout(location = " << uniform.index << ") ";
-    }
     ss << "uniform " << to_string(uniform.type) << " " << uniform.name;
     if (uniform.array_size > 0) {
       ss << "[" << uniform.array_size << "]";
     }
     ss << ";\n";
   }
+#if 0 /* T95278: This is not be enough to prevent some compilers think it is recursive. */
   for (const ShaderCreateInfo::PushConst &uniform : info.push_constants_) {
-    ss << "#define " << uniform.name << " (" << uniform.name << ")\n";
+    /* T95278: Double macro to avoid some compilers think it is recursive. */
+    ss << "#define " << uniform.name << "_ " << uniform.name << "\n";
+    ss << "#define " << uniform.name << " (" << uniform.name << "_)\n";
   }
+#endif
   ss << "\n";
   return ss.str();
 }
@@ -501,7 +502,7 @@ std::string GLShader::geometry_layout_declare(const ShaderCreateInfo &info) cons
 static StageInterfaceInfo *find_interface_by_name(const Vector<StageInterfaceInfo *> &ifaces,
                                                   const StringRefNull &name)
 {
-  for (auto iface : ifaces) {
+  for (auto *iface : ifaces) {
     if (iface->name == name) {
       return iface;
     }
