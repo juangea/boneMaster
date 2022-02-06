@@ -616,6 +616,35 @@ static void lib_override_linked_group_tag_recursive(LibOverrideGroupTagData *dat
   }
 }
 
+static bool lib_override_linked_group_tag_collections_keep_tagged_check_recursive(
+    LibOverrideGroupTagData *data, Collection *collection)
+{
+  /* NOTE: Collection's object cache (using bases, as returned by #BKE_collection_object_cache_get)
+   * is not usable here, as it may have become invalid from some previous operation and it should
+   * not be updated here. So instead only use collections' reliable 'raw' data to check if some
+   * object in the hierarchy of the given collection is still tagged for override. */
+  for (CollectionObject *collection_object = collection->gobject.first; collection_object != NULL;
+       collection_object = collection_object->next) {
+    Object *object = collection_object->ob;
+    if (object == NULL) {
+      continue;
+    }
+    if ((object->id.tag & data->tag) != 0) {
+      return true;
+    }
+  }
+
+  for (CollectionChild *collection_child = collection->children.first; collection_child != NULL;
+       collection_child = collection_child->next) {
+    if (lib_override_linked_group_tag_collections_keep_tagged_check_recursive(
+            data, collection_child->collection)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 static void lib_override_linked_group_tag_clear_boneshapes_objects(LibOverrideGroupTagData *data)
 {
   Main *bmain = data->bmain;
@@ -638,15 +667,8 @@ static void lib_override_linked_group_tag_clear_boneshapes_objects(LibOverrideGr
     if ((collection->id.tag & data->tag) == 0) {
       continue;
     }
-    bool keep_tagged = false;
-    const ListBase object_bases = BKE_collection_object_cache_get(collection);
-    LISTBASE_FOREACH (Base *, base, &object_bases) {
-      if ((base->object->id.tag & data->tag) != 0) {
-        keep_tagged = true;
-        break;
-      }
-    }
-    if (!keep_tagged) {
+
+    if (!lib_override_linked_group_tag_collections_keep_tagged_check_recursive(data, collection)) {
       collection->id.tag &= ~data->tag;
     }
   }
@@ -1085,23 +1107,29 @@ static void lib_override_library_proxy_convert_do(Main *bmain,
 void BKE_lib_override_library_main_proxy_convert(Main *bmain, BlendFileReadReport *reports)
 {
   LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
-    FOREACH_SCENE_OBJECT_BEGIN (scene, object) {
-      if (object->proxy_group == NULL) {
-        continue;
-      }
+    LinkNodePair proxy_objects = {NULL};
 
-      lib_override_library_proxy_convert_do(bmain, scene, object, reports);
+    FOREACH_SCENE_OBJECT_BEGIN (scene, object) {
+      if (object->proxy_group != NULL) {
+        BLI_linklist_append(&proxy_objects, object);
+      }
     }
     FOREACH_SCENE_OBJECT_END;
 
     FOREACH_SCENE_OBJECT_BEGIN (scene, object) {
-      if (object->proxy == NULL) {
-        continue;
+      if (object->proxy != NULL && object->proxy_group == NULL) {
+        BLI_linklist_append(&proxy_objects, object);
       }
-
-      lib_override_library_proxy_convert_do(bmain, scene, object, reports);
     }
     FOREACH_SCENE_OBJECT_END;
+
+    for (LinkNode *proxy_object_iter = proxy_objects.list; proxy_object_iter != NULL;
+         proxy_object_iter = proxy_object_iter->next) {
+      Object *proxy_object = proxy_object_iter->link;
+      lib_override_library_proxy_convert_do(bmain, scene, proxy_object, reports);
+    }
+
+    BLI_linklist_free(proxy_objects.list, NULL);
   }
 
   LISTBASE_FOREACH (Object *, object, &bmain->objects) {
@@ -2979,10 +3007,6 @@ void BKE_lib_override_library_main_update(Main *bmain)
 
 bool BKE_lib_override_library_id_is_user_deletable(struct Main *bmain, struct ID *id)
 {
-  if (!(ID_IS_LINKED(id) || ID_IS_OVERRIDE_LIBRARY(id))) {
-    return true;
-  }
-
   /* The only strong known case currently are objects used by override collections. */
   /* TODO: There are most likely other cases... This may need to be addressed in a better way at
    * some point. */
