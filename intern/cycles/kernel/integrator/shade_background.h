@@ -114,6 +114,14 @@ ccl_device_inline void integrate_background(KernelGlobals kg,
 #endif
   }
 
+  if (INTEGRATOR_STATE(state, path, mnee) & PATH_MNEE_CULL_LIGHT_CONNECTION) {
+    /* this path should have been resolved with mnee, it will
+     * generate a firefly for small lights since it is improbable */
+    const ccl_global KernelLight *klight = &kernel_tex_fetch(__lights, 0);
+    if (klight->use_caustics)
+      eval_background = false;
+  }
+
   /* Evaluate background shader. */
   float3 L = (eval_background) ? integrator_eval_background_shader(kg, state, render_buffer) :
                                  zero_float3();
@@ -152,6 +160,14 @@ ccl_device_inline void integrate_distant_lights(KernelGlobals kg,
           return;
       }
 #endif
+
+      if (INTEGRATOR_STATE(state, path, mnee) & PATH_MNEE_CULL_LIGHT_CONNECTION) {
+        /* this path should have been resolved with mnee, it will
+         * generate a firefly for small lights since it is improbable */
+        const ccl_global KernelLight *klight = &kernel_tex_fetch(__lights, lamp);
+        if (klight->use_caustics)
+          return;
+      }
 
       /* Evaluate light shader. */
       /* TODO: does aliasing like this break automatic SoA in CUDA? */
