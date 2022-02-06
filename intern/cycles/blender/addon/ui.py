@@ -1156,6 +1156,22 @@ class CYCLES_OBJECT_PT_lightgroup(CyclesButtonsPanel, Panel):
         col = layout.column(align=True)
         col.prop_search(cob, "lightgroup", view_layer, "lightgroups", text="Light Group")
 
+class CYCLES_OBJECT_PT_shading_caustics(CyclesButtonsPanel, Panel):
+    bl_label = "Caustics"
+    bl_parent_id = "CYCLES_OBJECT_PT_shading"
+    bl_context = "object"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+
+        col = layout.column()
+
+        ob = context.object
+        cob = ob.cycles
+        col.prop(cob, "is_caustics_caster")
+        col.prop(cob, "is_caustics_receiver")
 
 class CYCLES_OBJECT_PT_visibility(CyclesButtonsPanel, Panel):
     bl_label = "Visibility"
@@ -1332,6 +1348,7 @@ class CYCLES_LIGHT_PT_light(CyclesButtonsPanel, Panel):
         sub.active = not (light.type == 'AREA' and clamp.is_portal)
         sub.prop(clamp, "cast_shadow")
         sub.prop(clamp, "use_multiple_importance_sampling", text="Multiple Importance")
+        sub.prop(clamp, "is_caustics_light", text="Shadow Caustics")
 
         if light.type == 'AREA':
             col.prop(clamp, "is_portal", text="Portal")
@@ -1533,6 +1550,8 @@ class CYCLES_WORLD_PT_settings_surface(CyclesButtonsPanel, Panel):
         subsub.active = cworld.sampling_method == 'MANUAL'
         subsub.prop(cworld, "sample_map_resolution")
         sub.prop(cworld, "max_bounces")
+        sub.prop(cworld, "is_caustics_light", text="Shadow Caustics")
+
 
 
 class CYCLES_WORLD_PT_settings_volume(CyclesButtonsPanel, Panel):
@@ -2231,6 +2250,7 @@ classes = (
     CYCLES_OBJECT_PT_shading_shadow_terminator,
     CYCLES_OBJECT_PT_shading_gi_approximation,
     CYCLES_OBJECT_PT_lightgroup,
+    CYCLES_OBJECT_PT_shading_caustics,
     CYCLES_OBJECT_PT_visibility,
     CYCLES_OBJECT_PT_visibility_ray_visibility,
     CYCLES_OBJECT_PT_visibility_culling,

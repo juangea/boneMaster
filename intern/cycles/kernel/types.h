@@ -307,6 +307,13 @@ enum PathRayFlag : uint32_t {
   PATH_RAY_SHADOW_CATCHER_BACKGROUND = (1U << 31U),
 };
 
+// 8bit enum, just in case we need to move more variables in it
+enum PathRayMNEE {
+  PATH_MNEE_VALID = (1U << 0U),
+  PATH_MNEE_RECEIVER_ANCESTOR = (1U << 1U),
+  PATH_MNEE_CULL_LIGHT_CONNECTION = (1U << 2U),
+};
+
 /* Configure ray visibility bits for rays and objects respectively,
  * to make shadow catchers work.
  *
@@ -663,6 +670,17 @@ typedef struct AttributeDescriptor {
 #  define MAX_CLOSURE __MAX_CLOSURE__
 #endif
 
+/* For manifold next event estimation, we need space to store and evaluate
+ * 2 closures (with extra data) on the refractive interfaces, in addition
+ * to keeping the full sd at the current shading point. We need 4 because a
+ * refractive bsdf is instanced with a companion reflection bsdf, even though
+ * we only need the refractive one, and each of them requires 2 slots. */
+#ifndef __CAUSTICS_MAX_CLOSURE__
+#  define CAUSTICS_MAX_CLOSURE 4
+#else
+#  define CAUSTICS_MAX_CLOSURE __CAUSTICS_MAX_CLOSURE__
+#endif
+
 #ifndef __MAX_VOLUME_STACK_SIZE__
 #  define MAX_VOLUME_STACK_SIZE 32
 #else
@@ -793,11 +811,18 @@ enum ShaderDataObjectFlag {
   SD_OBJECT_SHADOW_CATCHER = (1 << 7),
   /* object has volume attributes */
   SD_OBJECT_HAS_VOLUME_ATTRIBUTES = (1 << 8),
+  /* object is caustics caster */
+  SD_OBJECT_CAUSTICS_CASTER = (1 << 9),
+  /* object is caustics receiver */
+  SD_OBJECT_CAUSTICS_RECEIVER = (1 << 10),
+
+  /* object is using caustics */
+  SD_OBJECT_CAUSTICS = (SD_OBJECT_CAUSTICS_CASTER | SD_OBJECT_CAUSTICS_RECEIVER),
 
   SD_OBJECT_FLAGS = (SD_OBJECT_HOLDOUT_MASK | SD_OBJECT_MOTION | SD_OBJECT_TRANSFORM_APPLIED |
                      SD_OBJECT_NEGATIVE_SCALE_APPLIED | SD_OBJECT_HAS_VOLUME |
                      SD_OBJECT_INTERSECTS_VOLUME | SD_OBJECT_SHADOW_CATCHER |
-                     SD_OBJECT_HAS_VOLUME_ATTRIBUTES)
+                     SD_OBJECT_HAS_VOLUME_ATTRIBUTES | SD_OBJECT_CAUSTICS)
 };
 
 typedef struct ccl_align(16) ShaderData
@@ -896,6 +921,15 @@ typedef struct ccl_align(16) ShaderDataTinyStorage
   char pad[sizeof(ShaderData) - sizeof(ShaderClosure) * MAX_CLOSURE];
 }
 ShaderDataTinyStorage;
+
+/* ShaderDataCausticsStorage needs the same alignment as ShaderData, or else
+ * the pointer cast in AS_SHADER_DATA invokes undefined behavior. */
+typedef struct ccl_align(16) ShaderDataCausticsStorage
+{
+  char pad[sizeof(ShaderData) - sizeof(ShaderClosure) * (MAX_CLOSURE - CAUSTICS_MAX_CLOSURE)];
+}
+ShaderDataCausticsStorage;
+
 #define AS_SHADER_DATA(shader_data_tiny_storage) \
   ((ccl_private ShaderData *)shader_data_tiny_storage)
 
@@ -1218,6 +1252,9 @@ typedef struct KernelIntegrator {
   /* mis */
   int use_lamp_mis;
 
+  /* caustics */
+  int use_caustics;
+
   /* sampler */
   int sampling_pattern;
 
@@ -1236,7 +1273,7 @@ typedef struct KernelIntegrator {
   int direct_light_sampling_type;
 
   /* padding */
-  int pad1, pad2;
+  int pad1;
 } KernelIntegrator;
 static_assert_align(KernelIntegrator, 16);
 
@@ -1403,7 +1440,7 @@ typedef struct KernelLight {
   float random;
   float strength[3];
   int lightgroup;
-  float pad1;
+  int use_caustics;
   Transform tfm;
   Transform itfm;
   union {
