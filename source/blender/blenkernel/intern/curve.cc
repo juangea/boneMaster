@@ -32,6 +32,7 @@
 #include "BLI_ghash.h"
 #include "BLI_index_range.hh"
 #include "BLI_math.h"
+#include "BLI_math_vec_types.hh"
 #include "BLI_utildefines.h"
 
 #include "BLT_translation.h"
@@ -59,6 +60,7 @@
 #include "BKE_lib_query.h"
 #include "BKE_main.h"
 #include "BKE_object.h"
+#include "BKE_spline.hh"
 #include "BKE_vfont.h"
 
 #include "DEG_depsgraph.h"
@@ -68,6 +70,7 @@
 
 #include "BLO_read_write.h"
 
+using blender::float3;
 using blender::IndexRange;
 
 /* globals */
@@ -503,7 +506,10 @@ BoundBox *BKE_curve_boundbox_get(Object *ob)
     float min[3], max[3];
 
     INIT_MINMAX(min, max);
-    BKE_curve_minmax(cu, true, min, max);
+    if (!BKE_curve_minmax(cu, true, min, max)) {
+      copy_v3_fl(min, -1.0f);
+      copy_v3_fl(max, 1.0f);
+    }
 
     if (ob->runtime.bb == nullptr) {
       ob->runtime.bb = (BoundBox *)MEM_mallocN(sizeof(*ob->runtime.bb), __func__);
