@@ -328,6 +328,7 @@ DeviceInfo Device::get_multi_device(const vector<DeviceInfo> &subdevices,
   info.has_osl = true;
   info.has_profiling = true;
   info.has_peer_memory = false;
+  info.use_metalrt = false;
   info.denoisers = DENOISER_ALL;
 
   foreach (const DeviceInfo &device, subdevices) {
@@ -335,7 +336,7 @@ DeviceInfo Device::get_multi_device(const vector<DeviceInfo> &subdevices,
     if (device.type == DEVICE_CPU && subdevices.size() > 1) {
       if (background) {
         int orig_cpu_threads = (threads) ? threads : TaskScheduler::max_concurrency();
-        int cpu_threads = max(orig_cpu_threads - (subdevices.size() - 1), 0);
+        int cpu_threads = max(orig_cpu_threads - (subdevices.size() - 1), size_t(0));
 
         VLOG(1) << "CPU render threads reduced from " << orig_cpu_threads << " to " << cpu_threads
                 << ", to dedicate to GPU.";
@@ -374,6 +375,7 @@ DeviceInfo Device::get_multi_device(const vector<DeviceInfo> &subdevices,
     info.has_osl &= device.has_osl;
     info.has_profiling &= device.has_profiling;
     info.has_peer_memory |= device.has_peer_memory;
+    info.use_metalrt |= device.use_metalrt;
     info.denoisers &= device.denoisers;
   }
 
