@@ -365,6 +365,9 @@ ccl_device_inline void kernel_accum_emission_or_background_pass(KernelGlobals kg
     /* Directly visible, write to emission or background pass. */
     pass_offset = pass;
   }
+  else if (lightgroup != LIGHTGROUP_NONE && kernel_data.film.pass_lightgroup != PASS_UNUSED) {
+    kernel_write_pass_float3(buffer + kernel_data.film.pass_lightgroup + 3 * lightgroup, contribution);
+  }
   else if (kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_PASSES) {
     if (path_flag & PATH_RAY_SURFACE_PASS) {
       /* Indirectly visible through reflection. */
@@ -412,11 +415,6 @@ ccl_device_inline void kernel_accum_emission_or_background_pass(KernelGlobals kg
   if (pass_offset != PASS_UNUSED) {
     kernel_write_pass_float3(buffer + pass_offset, contribution);
   }
-
-  /* Write lightgroup pass. */
-  if (lightgroup != LIGHTGROUP_NONE && kernel_data.film.pass_lightgroup != PASS_UNUSED) {
-    kernel_write_pass_float3(buffer + kernel_data.film.pass_lightgroup + 3 * lightgroup, contribution);
-  }
 #endif /* __PASSES__ */
 }
 
@@ -455,6 +453,12 @@ ccl_device_inline void kernel_accum_light(KernelGlobals kg,
 #ifdef __PASSES__
   if (kernel_data.film.light_pass_flag & PASS_ANY) {
     const uint32_t path_flag = INTEGRATOR_STATE(state, shadow_path, flag);
+
+    /* Write lightgroup pass. LIGHTGROUP_NONE is ~0 so decode from unsigned to signed */
+    const int lightgroup = (int)(INTEGRATOR_STATE(state, shadow_path, lightgroup)) - 1;
+    if (lightgroup != LIGHTGROUP_NONE && kernel_data.film.pass_lightgroup != PASS_UNUSED) {
+      kernel_write_pass_float3(buffer + kernel_data.film.pass_lightgroup + 3 * lightgroup, contribution);
+    }
 
     if (kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_PASSES) {
       int pass_offset = PASS_UNUSED;
@@ -515,12 +519,6 @@ ccl_device_inline void kernel_accum_light(KernelGlobals kg,
       const float3 shadow = safe_divide_float3_float3(shadowed_throughput, unshadowed_throughput) *
                             kernel_data.film.pass_shadow_scale;
       kernel_write_pass_float3(buffer + kernel_data.film.pass_shadow, shadow);
-    }
-
-    /* Write lightgroup pass. LIGHTGROUP_NONE is ~0 so decode from unsigned to signed */
-    const int lightgroup = (int)(INTEGRATOR_STATE(state, shadow_path, lightgroup)) - 1;
-    if (lightgroup != LIGHTGROUP_NONE && kernel_data.film.pass_lightgroup != PASS_UNUSED) {
-      kernel_write_pass_float3(buffer + kernel_data.film.pass_lightgroup + 3 * lightgroup, contribution);
     }
   }
 #endif
