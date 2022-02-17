@@ -607,6 +607,67 @@ void draw_subdiv_cache_free(DRWSubdivCache *cache)
      SUBDIV_COARSE_FACE_FLAG_ACTIVE) \
     << SUBDIV_COARSE_FACE_FLAG_OFFSET)
 
+static uint32_t compute_coarse_face_flag(BMFace *f, BMFace *efa_act)
+{
+  if (f == nullptr) {
+    /* May happen during mapped extraction. */
+    return 0;
+  }
+
+  uint32_t flag = 0;
+  if (BM_elem_flag_test(f, BM_ELEM_SMOOTH)) {
+    flag |= SUBDIV_COARSE_FACE_FLAG_SMOOTH;
+  }
+  if (BM_elem_flag_test(f, BM_ELEM_SELECT)) {
+    flag |= SUBDIV_COARSE_FACE_FLAG_SELECT;
+  }
+  if (f == efa_act) {
+    flag |= SUBDIV_COARSE_FACE_FLAG_ACTIVE;
+  }
+  const int loopstart = BM_elem_index_get(f->l_first);
+  return (uint)(loopstart) | (flag << SUBDIV_COARSE_FACE_FLAG_OFFSET);
+}
+
+static void draw_subdiv_cache_extra_coarse_face_data_bm(BMesh *bm,
+                                                        BMFace *efa_act,
+                                                        uint32_t *flags_data)
+{
+  BMFace *f;
+  BMIter iter;
+
+  BM_ITER_MESH (f, &iter, bm, BM_FACES_OF_MESH) {
+    const int index = BM_elem_index_get(f);
+    flags_data[index] = compute_coarse_face_flag(f, efa_act);
+  }
+}
+
+static void draw_subdiv_cache_extra_coarse_face_data_mesh(Mesh *mesh, uint32_t *flags_data)
+{
+  for (int i = 0; i < mesh->totpoly; i++) {
+    uint32_t flag = 0;
+    if ((mesh->mpoly[i].flag & ME_SMOOTH) != 0) {
+      flag = SUBDIV_COARSE_FACE_FLAG_SMOOTH;
+    }
+    flags_data[i] = (uint)(mesh->mpoly[i].loopstart) | (flag << SUBDIV_COARSE_FACE_FLAG_OFFSET);
+  }
+}
+
+static void draw_subdiv_cache_extra_coarse_face_data_mapped(Mesh *mesh,
+                                                            BMesh *bm,
+                                                            MeshRenderData *mr,
+                                                            uint32_t *flags_data)
+{
+  if (bm == nullptr) {
+    draw_subdiv_cache_extra_coarse_face_data_mesh(mesh, flags_data);
+    return;
+  }
+
+  for (int i = 0; i < mesh->totpoly; i++) {
+    BMFace *f = bm_original_face_get(mr, i);
+    flags_data[i] = compute_coarse_face_flag(f, mr->efa_act);
+  }
+}
+
 static void draw_subdiv_cache_update_extra_coarse_face_data(DRWSubdivCache *cache,
                                                             Mesh *mesh,
                                                             MeshRenderData *mr)
@@ -626,56 +687,13 @@ static void draw_subdiv_cache_update_extra_coarse_face_data(DRWSubdivCache *cach
   uint32_t *flags_data = (uint32_t *)(GPU_vertbuf_get_data(cache->extra_coarse_face_data));
 
   if (mr->extract_type == MR_EXTRACT_BMESH) {
-    BMesh *bm = cache->bm;
-    BMFace *f;
-    BMIter iter;
-
-    /* Ensure all current elements follow new customdata layout. */
-    BM_ITER_MESH (f, &iter, bm, BM_FACES_OF_MESH) {
-      const int index = BM_elem_index_get(f);
-      uint32_t flag = 0;
-      if (BM_elem_flag_test(f, BM_ELEM_SMOOTH)) {
-        flag |= SUBDIV_COARSE_FACE_FLAG_SMOOTH;
-      }
-      if (BM_elem_flag_test(f, BM_ELEM_SELECT)) {
-        flag |= SUBDIV_COARSE_FACE_FLAG_SELECT;
-      }
-      if (f == mr->efa_act) {
-        flag |= SUBDIV_COARSE_FACE_FLAG_ACTIVE;
-      }
-      const int loopstart = BM_elem_index_get(f->l_first);
-      flags_data[index] = (uint)(loopstart) | (flag << SUBDIV_COARSE_FACE_FLAG_OFFSET);
-    }
+    draw_subdiv_cache_extra_coarse_face_data_bm(cache->bm, mr->efa_act, flags_data);
   }
   else if (mr->extract_type == MR_EXTRACT_MAPPED) {
-    for (int i = 0; i < mesh->totpoly; i++) {
-      BMFace *f = bm_original_face_get(mr, i);
-      uint32_t flag = 0;
-
-      if (f) {
-        if (BM_elem_flag_test(f, BM_ELEM_SMOOTH)) {
-          flag |= SUBDIV_COARSE_FACE_FLAG_SMOOTH;
-        }
-        if (BM_elem_flag_test(f, BM_ELEM_SELECT)) {
-          flag |= SUBDIV_COARSE_FACE_FLAG_SELECT;
-        }
-        if (f == mr->efa_act) {
-          flag |= SUBDIV_COARSE_FACE_FLAG_ACTIVE;
-        }
-        const int loopstart = BM_elem_index_get(f->l_first);
-        flag = (uint)(loopstart) | (flag << SUBDIV_COARSE_FACE_FLAG_OFFSET);
-      }
-      flags_data[i] = flag;
-    }
+    draw_subdiv_cache_extra_coarse_face_data_mapped(mesh, cache->bm, mr, flags_data);
   }
   else {
-    for (int i = 0; i < mesh->totpoly; i++) {
-      uint32_t flag = 0;
-      if ((mesh->mpoly[i].flag & ME_SMOOTH) != 0) {
-        flag = SUBDIV_COARSE_FACE_FLAG_SMOOTH;
-      }
-      flags_data[i] = (uint)(mesh->mpoly[i].loopstart) | (flag << SUBDIV_COARSE_FACE_FLAG_OFFSET);
-    }
+    draw_subdiv_cache_extra_coarse_face_data_mesh(mesh, flags_data);
   }
 
   /* Make sure updated data is re-uploaded. */
@@ -1355,8 +1373,9 @@ void draw_subdiv_interp_custom_data(const DRWSubdivCache *cache,
 
   drw_subdiv_compute_dispatch(cache, shader, 0, dst_offset, cache->num_subdiv_quads);
 
-  /* This generates a vertex buffer, so we need to put a barrier on the vertex attribute array. */
-  GPU_memory_barrier(GPU_BARRIER_VERTEX_ATTRIB_ARRAY);
+  /* This generates a vertex buffer, so we need to put a barrier on the vertex attribute array. Put
+   * a barrier on the shader storage as we may use the result in another compute shader. */
+  GPU_memory_barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_VERTEX_ATTRIB_ARRAY);
 
   /* Cleanup. */
   GPU_shader_unbind();
@@ -1425,6 +1444,28 @@ void draw_subdiv_finalize_normals(const DRWSubdivCache *cache,
   GPU_vertbuf_bind_as_ssbo(vertex_normals, binding_point++);
   GPU_vertbuf_bind_as_ssbo(subdiv_loop_subdiv_vert_index, binding_point++);
   GPU_vertbuf_bind_as_ssbo(pos_nor, binding_point++);
+
+  drw_subdiv_compute_dispatch(cache, shader, 0, 0, cache->num_subdiv_quads);
+
+  /* This generates a vertex buffer, so we need to put a barrier on the vertex attribute array.
+   * We also need it for subsequent compute shaders, so a barrier on the shader storage is also
+   * needed. */
+  GPU_memory_barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_VERTEX_ATTRIB_ARRAY);
+
+  /* Cleanup. */
+  GPU_shader_unbind();
+}
+
+void draw_subdiv_finalize_custom_normals(const DRWSubdivCache *cache,
+                                         GPUVertBuf *src_custom_normals,
+                                         GPUVertBuf *pos_nor)
+{
+  GPUShader *shader = get_subdiv_shader(SHADER_BUFFER_NORMALS_FINALIZE, "#define CUSTOM_NORMALS");
+  GPU_shader_bind(shader);
+
+  GPU_vertbuf_bind_as_ssbo(src_custom_normals, 0);
+  /* outputPosNor is bound at index 2 in the base shader. */
+  GPU_vertbuf_bind_as_ssbo(pos_nor, 2);
 
   drw_subdiv_compute_dispatch(cache, shader, 0, 0, cache->num_subdiv_quads);
 
@@ -1827,6 +1868,11 @@ static bool draw_subdiv_create_requested_buffers(const Scene *scene,
   draw_cache->num_subdiv_triangles = tris_count_from_number_of_loops(draw_cache->num_subdiv_loops);
   /* We can only evaluate limit normals if the patches are adaptive. */
   draw_cache->do_limit_normals = settings.is_adaptive;
+
+  draw_cache->use_custom_loop_normals = (smd->flags & eSubsurfModifierFlag_UseCustomNormals) &&
+                                        (mesh_eval->flag & ME_AUTOSMOOTH) &&
+                                        CustomData_has_layer(&mesh_eval->ldata,
+                                                             CD_CUSTOMLOOPNORMAL);
 
   if (DRW_ibo_requested(mbc->buff.ibo.tris)) {
     draw_subdiv_cache_ensure_mat_offsets(draw_cache, mesh_eval, batch_cache->mat_len);
